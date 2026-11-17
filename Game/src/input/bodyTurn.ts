@@ -50,7 +50,7 @@ export const TURN = {
   /** How long the look's turning speed is read over (a thumb on a screen moves in small jumps). */
   lookSmooth: 0.1,
   /** Her torso and arms follow her head: about this long to cover most of the way. */
-  torsoLag: 0.12,
+  torsoLag: 0.09,
   /** THIRD PERSON: how fast her head turns to a target, each second. */
   headSpeed: 360 * DEG,
   /** THIRD PERSON: the fastest her top half pulls her legs round after it, each second. */

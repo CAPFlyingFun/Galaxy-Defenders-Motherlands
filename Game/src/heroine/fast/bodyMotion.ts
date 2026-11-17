@@ -121,6 +121,12 @@ export interface StrideTable {
    * (0..1), when there is such a moment (a run); null when a foot is always down (a walk).
    */
   readonly flightAt: number | null;
+  /**
+   * The moment of a stride that is nearest to standing (0..1): her feet side by side under her, her left foot on
+   * its way forward. A walk STARTS here, so her first step is a foot going forward from where it stood (starting
+   * anywhere else, a foot would first have to slide to its place in the stride).
+   */
+  readonly startAt: number;
 }
 /** How many moments of a stride are measured. */
 export const STRIDE_SAMPLES = 240;
@@ -287,7 +293,8 @@ export class BodyMotion {
     const ease = 1 - Math.exp(-dt / WALK_BLEND_SECONDS);
     this.walkBlend += ((walking ? 1 : 0) - this.walkBlend) * ease;
     if (walking && this.walkBlend > 0.999) this.walkBlend = 1;
-    if (!walking && this.walkBlend < 0.001) { this.walkBlend = 0; this.stridePhase = 0; this.running = false; this.runBlend = 0; }
+    // (standing again: her next walk starts from the moment of a stride that is nearest to standing)
+    if (!walking && this.walkBlend < 0.001) { this.walkBlend = 0; this.stridePhase = this.strides?.walk.startAt ?? 0; this.running = false; this.runBlend = 0; }
     // walking or running, eased the same way
     if (this.running ? speed < RUN_BACK : speed > RUN_FROM) this.running = !this.running;
     this.runBlend += ((this.running ? 1 : 0) - this.runBlend) * (1 - Math.exp(-dt / RUN_BLEND_SECONDS));
@@ -449,17 +456,25 @@ export class BodyMotion {
         needMost = Math.max(needMost, need);
         needLeast = Math.min(needLeast, need);
       }
+      // (nearest to standing: her right foot planted, her left swinging forward past it)
+      let startAt = 0, closest = Infinity;
+      for (let k = 0; k < N; k++) {
+        if (planted[0][k] === 1 || planted[1][k] === 0 || pace(0, k) <= 0) continue;
+        const apart = Math.abs(along[0][k] - along[1][k]);
+        if (apart < closest) { closest = apart; startAt = k / N; }
+      }
       // (both feet off the ground: from her left foot leaving to her right foot landing, if that is a gap at all)
       const gap = (landsAt[1] - leavesAt[0] + 1) % 1;
       const flightAt = flight > 0 && gap < 0.5 ? (leavesAt[0] + gap / 2) % 1 : null;
       return {
         stride: count > 0 ? sum / count : 0, share: count / (2 * N), along, lift, planted, landsAt, leavesAt,
-        needMost, needLeast: Number.isFinite(needLeast) ? needLeast : 0, flightAt,
+        needMost, needLeast: Number.isFinite(needLeast) ? needLeast : 0, flightAt, startAt,
       };
     };
     // (her sway eases off with her speed, so each is measured at a speed of its own: a walk, a run)
     this.strides = { walk: table('walk', WALK_EASE.fullAt), run: table('run', 3.8) };
     this.measuredBelly = belly;
+    if (this.walkBlend === 0) this.stridePhase = this.strides.walk.startAt;
   }
 
   /** Put every bone back as the file has it (for when she is taken apart). */

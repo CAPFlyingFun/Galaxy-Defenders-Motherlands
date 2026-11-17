@@ -12,9 +12,14 @@
 //
 // The twelve blocks nearest the plaza each carry a rooftop TURRET PAD, one per
 // dome section, marked with a glowing "+".
+//
+// The buildings are SOLID to the heroine. This file only says where each one
+// stands on the ground (its "footprint": `cityFootprints`); stopping her at
+// their walls is done in collision.ts.
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import type { Footprint } from './collision';
 import {
   CITY_PITCH,
   DOME_RADIUS,
@@ -42,6 +47,8 @@ export interface City {
   readonly turretPads: readonly TurretPad[];
   /** How many buildings (boxes) were placed, for the debug readout. */
   readonly boxCount: number;
+  /** Where every building stands on the ground, for what she cannot walk through (src/world/collision.ts). */
+  readonly footprints: readonly Footprint[];
   dispose(): void;
 }
 
@@ -151,6 +158,30 @@ function planCity(): { boxes: Box[][]; pads: TurretPad[] } {
 
   pads.sort((a, b) => a.section - b.section);
   return { boxes, pads };
+}
+
+/**
+ * The footprints of a plan's buildings: the box each one covers on the ground. Only boxes that stand ON the ground
+ * count; a narrower upper tier sits on a roof, inside the footprint of the building under it.
+ */
+function footprintsOf(boxes: Box[][]): Footprint[] {
+  const footprints: Footprint[] = [];
+  for (const list of boxes) {
+    for (const box of list) {
+      if (box.base > 0) continue;
+      footprints.push({ minX: box.x - box.width / 2, maxX: box.x + box.width / 2, minZ: box.z - box.depth / 2, maxZ: box.z + box.depth / 2 });
+    }
+  }
+  return footprints;
+}
+
+/**
+ * Where every building of the city stands on the ground, worked out without drawing anything (plain numbers).
+ * The city is laid out the same way every time, so these are exactly the buildings `createCity()` draws:
+ * handy for checking the map by itself (is there a way on foot from the plaza to the dome?).
+ */
+export function cityFootprints(): Footprint[] {
+  return footprintsOf(planCity().boxes);
 }
 
 const BUILDING_VERTEX = /* glsl */ `
@@ -350,6 +381,7 @@ export function createCity(): City {
     group,
     turretPads: pads,
     boxCount,
+    footprints: footprintsOf(boxes),
     dispose() {
       for (const child of group.children) (child as THREE.InstancedMesh).dispose();
       boxGeometry.dispose();

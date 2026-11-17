@@ -5,8 +5,13 @@
 //               her, up toward the sky. Dragging turns the view, pinching
 //               zooms. It turns around a point above her head (the "pivot"),
 //               which keeps her in the lower part of the screen with the sky
-//               over her. It never dips under the ground and never leaves the
-//               air above the plaza, so it cannot poke into a building.
+//               over her. The pivot goes wherever she goes, anywhere under
+//               the dome, and the camera stays on the side of her the player
+//               dragged it to: it never turns by itself. It never dips under
+//               the ground. Nothing else stops it for now (Joshua knows,
+//               2026-11-17): it can pass through a building, and when she
+//               stands with her back to the dome it looks in at her through
+//               the glass from just outside.
 // FIRST PERSON  The camera sits at her eyes (heroine.eye()). Dragging looks
 //               around; she can look straight down at her belly and almost
 //               straight up.
@@ -17,7 +22,6 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { HeroineBody } from '../core/contracts';
-import { PLAZA_RADIUS } from '../world/config';
 
 export type ViewMode = 'third' | 'first';
 
@@ -35,8 +39,6 @@ const PIVOT_NEAR = 2.1; // height of the pivot at zoom 0
 const PIVOT_FAR = 9; // ...and at zoom 1: zooming out also lifts the camera, to see over the plaza
 /** The camera never goes lower than this. */
 const MIN_CAMERA_HEIGHT = 0.4;
-/** The camera stays inside this circle around the plaza centre, clear of every building. */
-const CAMERA_LIMIT = PLAZA_RADIUS - 0.5;
 /** How quickly the camera settles (bigger = snappier). */
 const SMOOTHING = 14;
 
@@ -109,11 +111,6 @@ export class CameraRig {
     this.zoom = clamp(this.zoom + amount * 0.55, 0, 1);
   }
 
-  /** Turn the view by an angle, used to swing the camera round the plaza with her as she runs the ring. */
-  swing(angle: number): void {
-    this.yaw += angle;
-  }
-
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */
   update(dt: number, heroine: HeroineBody): void {
     if (this.mode === 'first') {
@@ -129,7 +126,8 @@ export class CameraRig {
     this.easedPitch += (this.pitch - this.easedPitch) * ease;
     this.easedZoom += (this.zoom - this.easedZoom) * ease;
 
-    // The pivot follows a point above her head.
+    // The pivot follows a point above her head, wherever on the map she is. Only the pivot moves with her: the
+    // two angles are the player's alone, so the camera keeps the side of her it was dragged to while she runs.
     const feet = heroine.root.position;
     const pivotHeight = PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * this.easedZoom;
     if (this.pivotPlaced) {
@@ -149,18 +147,11 @@ export class CameraRig {
     // her; when it would go under, it slides closer along its line instead.
     if (this.look.y > 0.001) distance = Math.min(distance, (pivotHeight - MIN_CAMERA_HEIGHT) / this.look.y);
 
-    // Rule 2: stay over the plaza. Walk back from the pivot until the edge of
-    // the allowed circle and go no further. (Where a line from inside a circle
-    // leaves it: solve |pivot + back * t| = radius for t.)
-    const flat = Math.hypot(this.look.x, this.look.z);
-    if (flat > 0.001) {
-      const backX = -this.look.x / flat;
-      const backZ = -this.look.z / flat;
-      const along = this.pivot.x * backX + this.pivot.z * backZ;
-      const inside = CAMERA_LIMIT * CAMERA_LIMIT - (this.pivot.x * this.pivot.x + this.pivot.z * this.pivot.z);
-      const reach = -along + Math.sqrt(Math.max(0, along * along + inside));
-      distance = Math.min(distance, Math.max(0.5, reach / flat));
-    }
+    // (There used to be a Rule 2 here, "stay over the plaza", which held the camera inside a circle round the
+    // plaza centre so it could not poke into a building. She goes anywhere now, so that rule is gone: the camera
+    // simply keeps its distance behind the pivot. It may pass through a building, and with her back to the dome
+    // it ends up just outside the glass, looking in past her at the city. Stopping the camera at walls is a
+    // later job; `CityWalls` in src/world/collision.ts is where the walls are known.)
 
     this.camera.position.copy(this.pivot).addScaledVector(this.look, -distance);
   }
@@ -168,6 +159,22 @@ export class CameraRig {
   /** A point `range` metres along the line the camera looks down: what first person aims at. */
   aimPoint(range: number, out: THREE.Vector3): THREE.Vector3 {
     return out.copy(this.camera.position).addScaledVector(this.look, range);
+  }
+
+  /**
+   * Where the line the camera looks down meets a ball of `radius` metres round the plaza centre: the part of
+   * the dome it is looking toward, wherever under the dome the camera is. (A point a fixed way ahead only told
+   * that from near the plaza; from the far side of the map it would land in the middle of the city.)
+   */
+  aimPointOnBall(radius: number, out: THREE.Vector3): THREE.Vector3 {
+    // Where a line leaves a ball: solve |camera + look * t| = radius for t, and take the further answer (the
+    // way out), which is also right when the camera has swung just outside the glass and looks back in.
+    const from = this.camera.position;
+    const along = from.dot(this.look);
+    const under = along * along + radius * radius - from.lengthSq();
+    // (a camera outside the ball whose line misses it altogether: then just a point `radius` ahead)
+    const reach = under >= 0 ? Math.max(0, -along + Math.sqrt(under)) : radius;
+    return out.copy(from).addScaledVector(this.look, reach);
   }
 
   /** The compass direction the camera really looks right now (after easing). */

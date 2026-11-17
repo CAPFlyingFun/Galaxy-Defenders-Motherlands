@@ -1,10 +1,10 @@
 // ============================================================================
 // hud.ts -- the on-screen controls, built from ordinary HTML elements.
 //
-//   bottom left    moving: two arrow buttons (ring track) OR a stick (free walk)
+//   bottom left    the MOVE stick (every view) and, in first person, the CAMERA stick beside it
 //   bottom right   the view switch (first / third person) and, in first person, FIRE
 //   centre         the first-person crosshair
-//   top right      the settings gear and its panel (free walk, how the heroine is drawn, the test tools)
+//   top right      the settings gear and its panel (how the heroine is drawn, the test tools)
 //   top left       with ?debug=1: FPS, draw calls and buttons to hurt the dome
 //
 // The buttons and stick do not move the heroine themselves. They only write
@@ -26,9 +26,6 @@ export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all';
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
   debug: boolean;
-  /** Whether "Free walk in third person" starts ticked. */
-  freeWalk: boolean;
-  onFreeWalkChange(on: boolean): void;
   /** The "Show FPS and test tools" tick box in Settings was changed. */
   onDebugChange(on: boolean): void;
   /** How the heroine is drawn, as the game started with it (src/heroine/heroineSettings.ts). */
@@ -75,9 +72,40 @@ function holdButton(button: HTMLElement, change: (down: boolean) => void): void 
   button.addEventListener('lostpointercapture', () => set(false));
 }
 
+/** A click that arrives this soon after a finger landed on the same button is that finger's own click, already answered. */
+const SAME_TAP_MS = 700;
+
+/**
+ * Make `button` a TAP button that answers the instant a finger (or the mouse) lands on it, whatever else is
+ * being held at the time.
+ *
+ * Joshua, 2026-11-17: "While moving holding the joystick forward, I can't switch between cameras. I have to stop
+ * and release the stick to switch".
+ *
+ * WHY NOT JUST LISTEN FOR "click"? A phone only sends a click for a tap made with ONE finger on the screen. With
+ * a thumb already holding the MOVE stick, a second finger's tap is not a click at all, so the button never
+ * heard it. "pointerdown" is sent for every finger by itself, whatever the other fingers are doing.
+ *
+ * After an ordinary one-finger tap the phone still sends its click a moment later; that one is ignored (the tap
+ * has already been answered). A click with NO finger behind it is answered: the keyboard (Enter or Space on
+ * the button), or another part of the game pressing the button for the player (the control editor's
+ * "Switch view": src/ui/layoutEditor.ts).
+ */
+function tapButton(button: HTMLElement, tap: () => void): void {
+  let answeredAt = -Infinity;
+  button.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return; // only the mouse's main button
+    answeredAt = performance.now();
+    tap();
+  });
+  button.addEventListener('click', (event) => {
+    // `detail` counts the presses of a real tap or mouse click (1, 2...); it is 0 for a click nothing pressed.
+    if (event.detail === 0 && performance.now() - answeredAt > SAME_TAP_MS) tap();
+  });
+}
+
 export class Hud {
   private readonly root: HTMLElement;
-  private readonly ringButtons: HTMLElement;
   private readonly stick: HTMLElement;
   private readonly stickKnob: HTMLElement;
   private readonly stickRings: HTMLElement[];
@@ -88,6 +116,8 @@ export class Hud {
   private readonly lookStick: HTMLElement;
   private readonly lookStickKnob: HTMLElement;
   private readonly viewButton: HTMLElement;
+  /** The big word on the view button ("1st" or "3rd"): the view it switches TO. */
+  private readonly viewName: HTMLElement;
   private readonly fireButton: HTMLElement;
   private readonly crosshair: HTMLElement;
   private readonly readout: HTMLElement | null = null;
@@ -98,15 +128,9 @@ export class Hud {
 
     // ---- Bottom left: moving ------------------------------------------------
     const move = element('div', 'gd-move', this.root);
-    this.ringButtons = element('div', 'gd-ring-buttons', move);
-    const left = element('button', 'gd-button', this.ringButtons, '◀'); // a left-pointing triangle
-    const right = element('button', 'gd-button', this.ringButtons, '▶'); // a right-pointing triangle
-    left.setAttribute('aria-label', 'Run left');
-    right.setAttribute('aria-label', 'Run right');
-    holdButton(left, (down) => (controls.buttonLeft = down));
-    holdButton(right, (down) => (controls.buttonRight = down));
 
-    // The WALK stick (first person, and third person with "free walk" on).
+    // The MOVE stick, in every view: she walks freely, anywhere under the dome (Joshua, 2026-11-17: "Remove the
+    // fixed moving ring, and let it be free movement"). The two arrow buttons of the old ring track are gone.
     this.stick = element('div', 'gd-stick gd-walk-stick', move);
     element('span', 'gd-stick-label', this.stick, 'MOVE');
     // THE FIVE RINGS (src/input/pace.ts): four circles drawn on the stick, one where each ring begins, so the thumb
@@ -141,7 +165,12 @@ export class Hud {
     // ---- Bottom right: view switch and fire ----------------------------------
     const actions = element('div', 'gd-actions', this.root);
     this.viewButton = element('button', 'gd-button gd-view', actions);
-    this.viewButton.addEventListener('click', () => options.onToggleView());
+    this.viewButton.setAttribute('aria-label', 'Switch view');
+    // (its two lines of text are made once; only the big word changes, so the button a finger is on is never rebuilt)
+    this.viewName = element('span', '', this.viewButton);
+    element('small', '', this.viewButton, 'PERSON');
+    // It answers as the finger LANDS, so the view can be switched while a thumb holds the MOVE stick (tapButton above).
+    tapButton(this.viewButton, () => options.onToggleView());
     this.fireButton = element('button', 'gd-button gd-fire', actions, 'FIRE');
     holdButton(this.fireButton, (down) => (controls.buttonFire = down));
 
@@ -154,13 +183,8 @@ export class Hud {
     const settings = element('div', 'gd-settings', this.root);
     settings.hidden = true;
     element('h2', '', settings, 'SETTINGS');
-    const row = element('label', '', settings);
-    const freeWalk = element('input', '', row);
-    freeWalk.type = 'checkbox';
-    freeWalk.checked = options.freeWalk;
-    element('span', '', row, 'Free walk in third person');
-    freeWalk.addEventListener('change', () => options.onFreeWalkChange(freeWalk.checked));
-    // A second tick box: the FPS readout and the dome test buttons, so they can be turned on from a phone
+    // (The "Free walk in third person" tick box used to be here. She always walks freely now, so it is gone.)
+    // A tick box for the FPS readout and the dome test buttons, so they can be turned on from a phone
     // without typing "?debug=1" into the address.
     const debugRow = element('label', '', settings);
     const debugBox = element('input', '', debugRow);
@@ -168,7 +192,8 @@ export class Hud {
     debugBox.checked = options.debug;
     element('span', '', debugRow, 'Show FPS and test tools');
     debugBox.addEventListener('change', () => options.onDebugChange(debugBox.checked));
-    gear.addEventListener('click', () => (settings.hidden = !settings.hidden));
+    // (the gear answers as the finger lands too, so Settings opens even while the MOVE stick is held)
+    tapButton(gear, () => (settings.hidden = !settings.hidden));
 
     // ---- Settings: how the heroine is drawn -----------------------------------
     // Each row is a label with a drop-down list. `choices` pairs what is shown with what is kept.
@@ -214,28 +239,28 @@ export class Hud {
       add('Repair all', 'repair-all');
     }
 
-    this.setView('third', options.freeWalk);
+    this.setView('third');
   }
 
-  /** Show the controls that belong to the current view and way of moving. */
-  setView(mode: ViewMode, freeWalk: boolean): void {
+  /** Show the controls that belong to the current view. */
+  setView(mode: ViewMode): void {
     const first = mode === 'first';
-    // The MOVE stick is used in every view now (Joshua, 2026-11-17: the ring stick sets her pace). On the ring
-    // track only its left and right count. The two arrow buttons it replaced stay hidden.
-    void freeWalk;
-    this.ringButtons.hidden = true;
-    this.stick.hidden = false;
+    // The MOVE stick is there in every view; the CAMERA stick, FIRE and the crosshair only in first person.
     this.lookStick.hidden = !first;
     this.fireButton.hidden = !first;
     this.crosshair.hidden = !first;
     // The button names the view it switches TO.
-    this.viewButton.innerHTML = first ? '3rd<small>PERSON</small>' : '1st<small>PERSON</small>';
+    this.viewName.textContent = first ? '3rd' : '1st';
 
-    // Whatever is now hidden cannot be let go of, so let go of everything.
-    this.controls.buttonLeft = false;
-    this.controls.buttonRight = false;
-    this.controls.buttonFire = false;
-    this.releaseStick();
+    // THE MOVE STICK IS NOT LET GO OF (Joshua, 2026-11-17: he wants to change view while moving). It is in both
+    // views and the thumb is still on it, so it keeps what the thumb is telling it and her pace carries straight
+    // through the switch. (It used to be zeroed here, which stopped her dead each time the view changed.)
+    // Only what is now hidden is let go of, because a hidden control cannot be let go of by a finger.
+    if (!first) {
+      this.controls.buttonFire = false;
+      this.fireButton.classList.remove('is-down');
+      this.releaseLookStick();
+    }
   }
 
   /** The FPS / draw call text (debug only). */
@@ -286,7 +311,10 @@ export class Hud {
       move(event);
     });
     stick.addEventListener('pointermove', (event) => {
-      if (stick.hasPointerCapture(event.pointerId)) move(event);
+      // A HIDDEN stick does nothing. The view can be switched while a thumb is on the CAMERA stick, which hides
+      // it under the thumb; the thumb still "has" the stick until it lifts, and a hidden stick has no place on the
+      // screen to measure from, so without this it read as pushed hard over and spun the third-person view.
+      if (stick.hasPointerCapture(event.pointerId) && !stick.hidden) move(event);
     });
     stick.addEventListener('pointerup', release);
     stick.addEventListener('pointercancel', release);
@@ -311,12 +339,9 @@ export class Hud {
   }
   private slot: HTMLElement | null = null;
 
-  /** Let go of both sticks (used when the view changes and a stick may be hidden under a thumb). */
-  private releaseStick(): void {
-    this.stickKnob.style.transform = '';
+  /** Let go of the CAMERA stick (used when the view changes and it is hidden, perhaps under a thumb). */
+  private releaseLookStick(): void {
     this.lookStickKnob.style.transform = '';
-    this.controls.stickX = 0;
-    this.controls.stickY = 0;
     this.controls.lookStickX = 0;
     this.controls.lookStickY = 0;
   }

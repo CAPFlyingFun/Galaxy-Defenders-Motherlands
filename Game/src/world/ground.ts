@@ -1,16 +1,18 @@
 // ============================================================================
-// ground.ts -- the ground: plaza, ring track, street grid and the land outside.
+// ground.ts -- the ground: plaza, painted ring, street grid and the land outside.
 //
-// It is ONE flat disc. Everything painted on it (the plaza, the glowing ring
-// track, kerbs, dashed street lines, the rim of the dome) is worked out by the
+// It is ONE flat disc. Everything painted on it (the plaza, its glowing ring,
+// kerbs, dashed street lines, the line at the foot of the dome) is worked out by the
 // shader from each pixel's position in the world, so there are no textures to
 // download and the whole ground is a single draw call.
 //
 // The heroine's soft shadow is painted here too: the game tells the shader
-// where she stands and it darkens the ground under her.
+// where she stands and it darkens the ground under her. Because the whole
+// ground is this one disc, that works wherever on the map she is.
 // ============================================================================
 import * as THREE from 'three';
-import { CITY_PITCH, DOME_RADIUS, PALETTE, PLAZA_RADIUS, RING_RADIUS, RING_WIDTH, STREET_WIDTH } from './config';
+import { DOME_WALL_DISTANCE } from './collision';
+import { CITY_PITCH, DOME_SECTIONS, PALETTE, PLAZA_RADIUS, RING_RADIUS, RING_WIDTH, STREET_WIDTH } from './config';
 
 /** The ground reaches well past the dome so the horizon is never empty. */
 const GROUND_RADIUS = 600;
@@ -43,7 +45,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   const float PLAZA = ${PLAZA_RADIUS.toFixed(1)};
   const float RING = ${RING_RADIUS.toFixed(1)};
   const float RING_HALF = ${(RING_WIDTH / 2).toFixed(2)};
-  const float DOME = ${DOME_RADIUS.toFixed(1)};
+  const float DOME_SIDE = ${DOME_WALL_DISTANCE.toFixed(3)};                       // from the centre to the middle of one of the dome's flat sides
+  const float DOME_SLICE = ${((Math.PI * 2) / DOME_SECTIONS).toFixed(6)};   // the angle one dome section spans
   const float PI = 3.14159265;
 
   // 1 on a line of half-width "width" around distance 0, smooth at the edges.
@@ -52,14 +55,26 @@ const FRAGMENT_SHADER = /* glsl */ `
     return 1.0 - smoothstep(width - pixel, width + pixel, abs(distance));
   }
 
+  // How far a point of the ground is OUTSIDE the dome's glass, in metres (negative = inside).
+  // The glass is twelve flat panels between corner posts, so seen from above the dome is a twelve-sided shape and
+  // not a circle: in the middle of a panel the glass is four metres nearer the centre than at the posts. This
+  // measures to the panel the point is in front of, so the paint on the ground meets the glass exactly, which is
+  // also exactly where the heroine is stopped (src/world/collision.ts).
+  float pastDome(vec2 p) {
+    float fromPanelMiddle = mod(atan(p.x, p.y), DOME_SLICE) - DOME_SLICE * 0.5;   // the point's compass direction, measured from the middle of that panel
+    return length(p) * cos(fromPanelMiddle) - DOME_SIDE;
+  }
+
   void main() {
     vec2 p = vGround;
     float r = length(p);
+    // (in the plaza nothing is anywhere near the dome, and the very centre has no compass direction to measure from)
+    float outside = r > PLAZA ? pastDome(p) : r - DOME_SIDE;
     // Fine patterns fade out far away, where they would only flicker.
     float detail = 1.0 - smoothstep(60.0, 160.0, vDepth);
     vec3 color;
 
-    if (r > DOME) {
+    if (outside > 0.0) {
       // --- Outside the dome: dark, empty land -----------------------------
       color = uDeep * 0.8;
     } else if (r < PLAZA) {
@@ -70,7 +85,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       float paving = max(line(fract(r / 2.0) - 0.5, 0.012), line(fract(angle / PI * 12.0) - 0.5, 0.02 / max(r, 1.0)));
       color += uNavyLight * paving * 0.5 * step(2.6, r);
 
-      // The ring track she runs on: a lighter band with glowing edges and a dashed middle line.
+      // The painted ring (once the track she ran round; she walks anywhere now): a lighter band with glowing
+      // edges and a dashed middle line.
       float fromRing = r - RING;
       float band = 1.0 - smoothstep(RING_HALF - 0.05, RING_HALF + 0.05, abs(fromRing));
       color = mix(color, uNavyLight * 1.25, band * 0.8);
@@ -114,9 +130,10 @@ const FRAGMENT_SHADER = /* glsl */ `
         color = uNavy * 0.6;
       }
 
-      // The gold rim of the plaza, and a teal line where the dome meets the ground.
+      // The gold rim of the plaza, and a teal line where the dome meets the ground: just inside the glass,
+      // straight along each of its twelve sides.
       color += uGold * (line(r - PLAZA, 0.12) + exp(-abs(r - PLAZA) * 3.0) * 0.15);
-      color += uTeal * (line(r - DOME + 0.6, 0.5) + exp(-abs(r - DOME) * 0.35) * 0.25);
+      color += uTeal * (line(outside + 0.6, 0.5) + exp(-abs(outside) * 0.35) * 0.25);
     }
 
     // Her soft shadow.

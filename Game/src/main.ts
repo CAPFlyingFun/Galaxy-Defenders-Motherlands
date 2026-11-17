@@ -12,6 +12,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { Hand, HeroineBody } from './core/contracts';
+import { keepLandscape, onStageResize } from './core/orientation';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
 import { Controls } from './input/controls';
@@ -90,7 +91,9 @@ function saveFreeWalk(on: boolean): void {
 async function start(): Promise<void> {
   const host = document.getElementById('app');
   const uiHost = document.getElementById('ui');
-  if (!host || !uiHost) throw new Error('the page has no #app or #ui');
+  const stage = document.getElementById('stage');
+  if (!host || !uiHost || !stage) throw new Error('the page has no #stage, #app or #ui');
+  keepLandscape(stage); // the game is always drawn wide, turning itself on an upright phone (src/core/orientation.ts)
   preventPageZoom(); // no double-tap or pinch zoom of the page itself (src/input/noZoom.ts)
   // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
   let debugRemembered = false;
@@ -133,7 +136,7 @@ async function start(): Promise<void> {
   // ---- Heroine, camera, controls -----------------------------------------------
   // A line of text in the middle of the screen while she loads (a character appears dressed, all at once).
   const loading = document.createElement('div');
-  loading.style.cssText = 'position:fixed;left:0;right:0;top:45%;text-align:center;font-size:15px;letter-spacing:.08em;color:#5ee8c8;pointer-events:none;text-shadow:0 0 8px #04060d;';
+  loading.style.cssText = 'position:absolute;left:0;right:0;top:45%;text-align:center;font-size:15px;letter-spacing:.08em;color:#5ee8c8;pointer-events:none;text-shadow:0 0 8px #04060d;';
   uiHost.appendChild(loading);
   const heroine = await createHeroine(renderer, scene, (text) => { loading.textContent = text; });
   loading.remove();
@@ -201,7 +204,7 @@ async function start(): Promise<void> {
     sky.setPixelRatio(pixelRatio);
     rig.resize(width, height);
   };
-  window.addEventListener('resize', fit);
+  onStageResize(fit); // the stage tells us when the screen was turned or resized
   fit();
 
   if (debug) {

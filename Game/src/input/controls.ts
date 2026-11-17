@@ -16,6 +16,8 @@
 // The game loop calls sample() once per frame and then reads the results.
 // ============================================================================
 
+import { toGameX, toGameY } from '../core/orientation';
+
 /** A drag shorter than this many pixels counts as a click. */
 const CLICK_SLOP = 6;
 
@@ -138,8 +140,12 @@ export class Controls {
   private readonly onPointerMove = (event: PointerEvent): void => {
     const pointer = this.pointers.get(event.pointerId);
     if (!pointer) return;
-    const dx = event.clientX - pointer.x;
-    const dy = event.clientY - pointer.y;
+    // How far the finger moved on the SCREEN, turned into how far it moved in the GAME (the game may be
+    // drawn turned a quarter turn: src/core/orientation.ts).
+    const screenDx = event.clientX - pointer.x;
+    const screenDy = event.clientY - pointer.y;
+    const dx = toGameX(screenDx, screenDy);
+    const dy = toGameY(screenDx, screenDy);
     pointer.x = event.clientX;
     pointer.y = event.clientY;
 

@@ -11,6 +11,7 @@
 // what the player is doing into the Controls object (input/controls.ts); the
 // game loop reads it from there, the same as it reads the keyboard.
 // ============================================================================
+import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
@@ -203,8 +204,11 @@ export class Hud {
     const move = (event: PointerEvent) => {
       // How far the finger is from the middle of the stick, limited to the knob's travel.
       const box = stick.getBoundingClientRect();
-      let dx = event.clientX - (box.left + box.width / 2);
-      let dy = event.clientY - (box.top + box.height / 2);
+      // (measured on the screen, then turned into the game's own right and down: src/core/orientation.ts)
+      const screenDx = event.clientX - (box.left + box.width / 2);
+      const screenDy = event.clientY - (box.top + box.height / 2);
+      let dx = toGameX(screenDx, screenDy);
+      let dy = toGameY(screenDx, screenDy);
       const length = Math.hypot(dx, dy);
       if (length > STICK_TRAVEL) {
         dx *= STICK_TRAVEL / length;

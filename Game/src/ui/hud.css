@@ -5,7 +5,7 @@
    (move on the left, view and fire on the right). Everything else (settings,
    the debug readout) sits along the top.
 
-   env(safe-area-inset-*) is the space an iPhone keeps for its notch, rounded
+   --safe-left / right / top / bottom (set on #stage in index.html) are the space an iPhone keeps for its notch, rounded
    corners and home bar; adding it to every edge keeps the controls clear of
    them in portrait and in landscape.
    ============================================================================ */
@@ -48,8 +48,8 @@
 /* ---- Bottom left: moving -------------------------------------------------- */
 .gd-move {
   position: absolute;
-  left: calc(env(safe-area-inset-left, 0px) + var(--edge));
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--edge) + 6px);
+  left: calc(var(--safe-left) + var(--edge));
+  bottom: calc(var(--safe-bottom) + var(--edge) + 6px);
 }
 .gd-move { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .gd-move [hidden] { display: none; }
@@ -81,8 +81,8 @@
 /* ---- Bottom right: view switch and fire ----------------------------------- */
 .gd-actions {
   position: absolute;
-  right: calc(env(safe-area-inset-right, 0px) + var(--edge));
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--edge) + 6px);
+  right: calc(var(--safe-right) + var(--edge));
+  bottom: calc(var(--safe-bottom) + var(--edge) + 6px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -99,10 +99,8 @@
 }
 .gd-fire.is-down { background: rgba(255, 95, 162, 0.45); border-color: var(--pink); }
 
-/* In landscape the screen is short: put the two right-hand buttons side by side. */
-@media (orientation: landscape) and (max-height: 500px) {
-  .gd-actions { flex-direction: row; align-items: flex-end; }
-}
+/* On a phone the stage is short (src/core/orientation.ts marks it is-short): put the two right-hand buttons side by side. */
+#stage.is-short .gd-actions { flex-direction: row; align-items: flex-end; }
 
 /* ---- Centre: the first-person crosshair ----------------------------------- */
 .gd-crosshair {
@@ -125,16 +123,16 @@
 /* ---- Top right: settings -------------------------------------------------- */
 .gd-gear {
   position: absolute;
-  right: calc(env(safe-area-inset-right, 0px) + 12px);
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: calc(var(--safe-right) + 12px);
+  top: calc(var(--safe-top) + 12px);
   width: 44px;
   height: 44px;
   font-size: 22px;
 }
 .gd-settings {
   position: absolute;
-  right: calc(env(safe-area-inset-right, 0px) + 12px);
-  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  right: calc(var(--safe-right) + 12px);
+  top: calc(var(--safe-top) + 64px);
   min-width: 230px;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -148,8 +146,8 @@
 /* ---- Top left: debug readout and dome test buttons (only with ?debug=1) ---- */
 .gd-debug {
   position: absolute;
-  left: calc(env(safe-area-inset-left, 0px) + 12px);
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(var(--safe-left) + 12px);
+  top: calc(var(--safe-top) + 12px);
   max-width: calc(100% - 90px);
   padding: 6px 9px;
   border-radius: 8px;
@@ -185,7 +183,5 @@
 .gd-look-stick .gd-stick-knob { background: rgba(255, 95, 162, 0.55); }
 /* When both sticks show (first person), the walk stick is a little smaller to leave the screen clear. */
 .gd-walk-stick:has(+ .gd-look-stick:not([hidden])) { width: 104px; height: 104px; }
-/* In landscape the screen is short: put the two sticks side by side, camera stick in the corner. */
-@media (orientation: landscape) and (max-height: 500px) {
-  .gd-move { flex-direction: row-reverse; align-items: flex-end; }
-}
+/* On a short stage put the two sticks side by side, camera stick in the corner. */
+#stage.is-short .gd-move { flex-direction: row-reverse; align-items: flex-end; }

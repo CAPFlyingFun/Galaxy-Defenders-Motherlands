@@ -24,6 +24,7 @@ import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
 import { BodyTurn } from './input/bodyTurn';
 import { Hud, type DomeDebugAction } from './ui/hud';
+import { VERSION_NUMBER } from './ui/versionTag';
 import { createCity } from './world/city';
 import { CityWalls } from './world/collision';
 import { DOME_RADIUS, PALETTE, SECTION_MAX_HP } from './world/config';
@@ -460,22 +461,29 @@ async function start(): Promise<void> {
       readoutFrames++;
       if (readoutTimer >= 0.5) {
         const fps = Math.round(readoutFrames / readoutTimer);
-        // the whole frame, then the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
+        // THE READOUT IS KEPT IN SHORT LINES, about 30 letters at most, so that on a phone held sideways it fits
+        // in the top left corner beside her vitals card and stays clear of the gear and the MOVE stick.
+        // (Joshua, 2026-11-17: two long lines added here had made it grow over the gear and the view switch.)
+        // The game's version is beside the FPS, so it can be read without opening Settings.
+        const lines = [`${fps} FPS · ${VERSION_NUMBER}`, `${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} tris`];
+        // the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
         const her = heroine.stats?.();
-        const herLine = her
-          ? `\nher: ${her.triangles.toLocaleString()} tris in ${her.drawCalls} draws` + (her.detail !== undefined ? ` · detail ${her.detail}%${her.auto ? ' auto' : ''}` : '') + ` · ${her.updateMs.toFixed(2)} ms CPU`
-          : '';
+        if (her) {
+          lines.push(`her ${her.triangles.toLocaleString()} tris · ${her.drawCalls} draws`);
+          lines.push((her.detail !== undefined ? `detail ${her.detail}%${her.auto ? ' auto' : ''} · ` : '') + `${her.updateMs.toFixed(2)} ms CPU`);
+        }
         // (the hidden live body: what its step costs each frame, and whether her baby is kicking)
         const liveNow = heroine.liveInfo?.();
-        const liveLine = liveNow ? `\nlive body: ${liveNow.stepMs.toFixed(1)} ms a frame${liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''}` : liveNote ? `\n${liveNote}` : '';
-        // (her feet: her measured stride walking and running, how far she is lowered onto them now, how far each
-        //  planted foot is being held from where her pose has it, and which way she faces: body North, head, feet)
+        if (liveNow) lines.push(`live body ${liveNow.stepMs.toFixed(1)} ms` + (liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''));
+        else if (liveNote) lines.push(liveNote);
+        // (her feet: her measured stride walking / running, and how fast she is really going; then which way she
+        //  faces: body North and her head, and in third person whether her auto-aim has a target she can turn to)
         const strides = heroine.strideInfo?.(), feet = heroine.feetInfo?.();
-        const feetLine = strides && feet
-          ? `\nfeet: stride ${strides.walk.stride.toFixed(2)} / ${strides.run.stride.toFixed(2)} m · down ${(feet.drop * 100).toFixed(1)} cm · held ${(feet.held[0] * 100).toFixed(1)} / ${(feet.held[1] * 100).toFixed(1)} cm · ${feet.speed.toFixed(1)} m/s`
-            + `\nfacing: body north ${Math.round(turn.base * 57.3)}° · head ${Math.round(turn.head * 57.3)}° · feet ${Math.round(turn.feet * 57.3)}°${rig.mode === 'third' ? (turn.aimed ? ' · aimed' : ' · not aimed') : ''}`
-          : '';
-        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}${liveLine}${feetLine}`);
+        if (strides && feet) {
+          lines.push(`stride ${strides.walk.stride.toFixed(2)}/${strides.run.stride.toFixed(2)} m · ${feet.speed.toFixed(1)} m/s`);
+          lines.push(`north ${Math.round(turn.base * 57.3)}° · head ${Math.round(turn.head * 57.3)}°` + (rig.mode === 'third' && turn.aimed ? ' · aimed' : ''));
+        }
+        hud.setReadout(lines.join('\n'));
         readoutTimer = 0;
         readoutFrames = 0;
       }

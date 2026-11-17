@@ -5,7 +5,9 @@
 //   bottom right   the view switch (first / third person) and, in first person, FIRE
 //   centre         the first-person crosshair
 //   top right      the settings gear and its panel (how the heroine is drawn, the test tools)
-//   top left       with ?debug=1: FPS, draw calls and buttons to hurt the dome
+//   top middle     her vitals card (put there by main.ts: topSlot)
+//   top left       with ?debug=1 (or the tick box in Settings): the readout (FPS, triangles...) and buttons to
+//                  hurt the dome. It is only read: it never takes a touch and never covers a control.
 //
 // The buttons and stick do not move the heroine themselves. They only write
 // what the player is doing into the Controls object (input/controls.ts); the
@@ -43,6 +45,10 @@ const STICK_TRAVEL = 40;
  * (Joshua, 2026-11-17: "every 20 pixels is 1/5"). hud.css draws the stick to match (.gd-walk-stick).
  */
 const MOVE_TRAVEL = 100;
+/** The space kept between the readout and her vitals card, in pixels. */
+const READOUT_GAP = 8;
+/** The narrowest the readout is worth showing BESIDE her vitals card; with less room than this it goes under the card. */
+const READOUT_LEAST = 190;
 
 /** Make an element with a class, optionally with text, inside `parent`. */
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement, text = ''): HTMLElementTagNameMap[K] {
@@ -122,9 +128,30 @@ export class Hud {
   private readonly crosshair: HTMLElement;
   private readonly readout: HTMLElement | null = null;
   private readonly domeLabel: HTMLElement | null = null;
+  /** The box the readout and the dome test buttons are in (null when they are not shown). */
+  private readonly debugPanel: HTMLElement | null = null;
 
   constructor(host: HTMLElement, private readonly controls: Controls, options: HudOptions) {
     this.root = element('div', 'gd-hud', host);
+
+    // ---- Top left: the readout and the dome test buttons ----------------------
+    // MADE FIRST, BEFORE EVERY CONTROL, ON PURPOSE. What is made later is drawn on top, so the gear, the view
+    // switch, the sticks and her vitals card are all drawn over the readout and none of them can be hidden by
+    // it. (Joshua, 2026-11-17: it used to be made last; when two more lines made it bigger it lay over the gear
+    // and the view switch and caught the finger, so Settings could not be opened.) hud.css also lets a touch
+    // pass straight through it: only its three buttons take one.
+    if (options.debug) {
+      const debug = element('div', 'gd-debug', this.root);
+      this.debugPanel = debug;
+      this.readout = element('pre', '', debug);
+      this.domeLabel = element('pre', '', debug);
+      const buttons = element('div', 'gd-debug-row', debug);
+      const add = (label: string, action: DomeDebugAction) =>
+        element('button', '', buttons, label).addEventListener('click', () => options.onDomeDebug(action));
+      add('Hit -25', 'hit');
+      add('Shatter', 'shatter');
+      add('Repair all', 'repair-all');
+    }
 
     // ---- Bottom left: moving ------------------------------------------------
     const move = element('div', 'gd-move', this.root);
@@ -226,19 +253,6 @@ export class Hud {
       if (list) list.disabled = !on;
     }
 
-    // ---- Top left: debug -----------------------------------------------------
-    if (options.debug) {
-      const debug = element('div', 'gd-debug', this.root);
-      this.readout = element('pre', '', debug);
-      this.domeLabel = element('pre', '', debug);
-      const buttons = element('div', 'gd-debug-row', debug);
-      const add = (label: string, action: DomeDebugAction) =>
-        element('button', '', buttons, label).addEventListener('click', () => options.onDomeDebug(action));
-      add('Hit -25', 'hit');
-      add('Shatter', 'shatter');
-      add('Repair all', 'repair-all');
-    }
-
     this.setView('third');
   }
 
@@ -263,7 +277,7 @@ export class Hud {
     }
   }
 
-  /** The FPS / draw call text (debug only). */
+  /** The readout's text: FPS, triangles and the rest, one short line each (debug only). */
   setReadout(text: string): void {
     if (this.readout) this.readout.textContent = text;
   }
@@ -335,9 +349,45 @@ export class Hud {
 
   /** Where a card (her vitals) can be put: along the top edge, in the middle. */
   topSlot(): HTMLElement {
-    return (this.slot ??= element('div', 'gd-top-slot', this.root));
+    if (!this.slot) {
+      this.slot = element('div', 'gd-top-slot', this.root);
+      // The readout keeps clear of whatever is put here. A "ResizeObserver" tells us whenever the screen or the
+      // card changes size (the phone is turned, the card is first filled in), and the readout is placed again.
+      if (this.debugPanel && typeof ResizeObserver !== 'undefined') {
+        const watch = new ResizeObserver(() => this.placeReadout());
+        watch.observe(this.root);
+        watch.observe(this.slot);
+      }
+    }
+    return this.slot;
   }
   private slot: HTMLElement | null = null;
+
+  /**
+   * Keep the readout clear of her vitals card, which sits in the middle of the top edge: BESIDE it (in the top left
+   * corner, no wider than the room there) when there is room, and UNDER it when there is not (a small or upright
+   * screen).
+   *
+   * "offsetLeft / offsetWidth / offsetTop" are an element's place and size as the page laid it out, in the HUD's own
+   * pixels, so this works the same whichever way the stage is turned.
+   */
+  private placeReadout(): void {
+    const panel = this.debugPanel, slot = this.slot;
+    if (!panel || !slot) return;
+    // (the card is centred: the slot's box is as wide as the card, and its middle is the middle of the screen)
+    const cardLeft = (this.root.clientWidth - slot.offsetWidth) / 2;
+    const room = cardLeft - panel.offsetLeft - READOUT_GAP;
+    if (slot.offsetWidth === 0) {
+      panel.style.maxWidth = '';
+      panel.style.top = '';
+    } else if (room >= READOUT_LEAST) {
+      panel.style.maxWidth = `${Math.floor(room)}px`;
+      panel.style.top = ''; // (back to the top corner, where hud.css puts it)
+    } else {
+      panel.style.maxWidth = '';
+      panel.style.top = `${slot.offsetTop + slot.offsetHeight + READOUT_GAP}px`;
+    }
+  }
 
   /** Let go of the CAMERA stick (used when the view changes and it is hidden, perhaps under a thumb). */
   private releaseLookStick(): void {

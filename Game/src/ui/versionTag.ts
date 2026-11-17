@@ -20,6 +20,8 @@ declare const __GDM_VERSION__: string;
 declare const __GDM_COMMIT__: string;
 declare const __GDM_BUILT__: string;
 
+/** Just the version number ("v0.2.10"): shown beside the FPS in the readout, so it can be read without opening Settings. */
+export const VERSION_NUMBER = `v${__GDM_VERSION__}`;
 /** The version as text, also handy in the browser's console: type `gdmVersion`. */
 export const VERSION_TEXT = `v${__GDM_VERSION__} · ${__GDM_COMMIT__} · built ${__GDM_BUILT__}`;
 (window as unknown as { gdmVersion: string }).gdmVersion = VERSION_TEXT;

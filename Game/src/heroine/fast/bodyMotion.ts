@@ -16,6 +16,10 @@
 //   * one heroine, not a crowd, so nothing here is per-person bookkeeping;
 //   * a short BLEND between standing and walking (the DEV Room's people only
 //     ever walked; the game starts and stops her all the time);
+//   * HER STRIDE IS MEASURED FROM HER OWN FOOT BONES (`measureStrides`) and
+//     turned by the distance she really covers, backward when she backs up
+//     (Joshua, 2026-11-17). Standing her on the floor, and holding each planted
+//     foot to its spot, is footGround.ts;
 //   * her fingers are curled round her guns' grips. Finding her fingers in the
 //     skeleton is ported from the builder's room (SarahLabScene.ts
 //     `findFingers`, which that file does not export).

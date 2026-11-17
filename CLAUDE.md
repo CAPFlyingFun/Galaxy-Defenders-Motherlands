@@ -21,10 +21,16 @@ use the game's single copy of three.js.
 - World: Joshua's `Half_Sphere.obj` dome (12 slices = 12 dome sections, each with its own HP; a section at zero
   shatters and lets enemies through) over a simple grid city; the heroine in a central plaza. The dome is reused
   for later themes (island, countryside).
-- Cameras: third person (default: drag to rotate, pinch to zoom, auto-aim, she runs left/right on a ring track
-  round the plaza and the camera swings with her) and first person (camera at her head bone, offset so looking
-  down shows her belly, as in Beyond Extinction; free walk in the plaza; manual aim and fire). Settings has a
-  toggle for free walk in third person. No jumping.
+- Cameras: third person (default: drag to rotate, pinch to zoom, auto-aim) and first person (camera at her head
+  bone, offset so looking down shows her belly, as in Beyond Extinction; manual aim and fire). No jumping.
+- Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
+  set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
+  setting were removed. Buildings are solid and the dome wall stops her.
+- Her feet drive her (Joshua, 2026-11-17): her stride is measured from her foot bones and turned by the distance she
+  really covers; a planted foot is held to the spot it landed on (`Game/src/heroine/fast/footGround.ts`).
+- Her top half and bottom half (Joshua, 2026-11-17; `Game/src/input/bodyTurn.ts`): head, arms and torso turn up to 45
+  degrees from her hips and legs; past that her legs are pulled round 45 behind; when the looking stops her legs come
+  round to match in 4 seconds. First person the look is the camera; third person it is her auto-aim target.
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
 - Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces

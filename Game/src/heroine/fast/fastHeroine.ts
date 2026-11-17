@@ -22,6 +22,9 @@
 //   * AUTO detail lowers her detail only when the frame rate needs it, and
 //     never where it could be seen                                             (autoDetail.ts)
 //   * she stands, breathes and walks by the builder's own posing code          (bodyMotion.ts)
+//   * her feet drive her: her stride is measured from her foot bones and
+//     turned by the ground she covers; planted feet are held to their spot     (footGround.ts)
+//   * her head and torso turn apart from her legs, by the game's rule          (`setUpperYaw`; input/bodyTurn.ts)
 //
 // She is an ordinary object in the game's scene (no hidden room, no second
 // scene drawn inside the first): `root` holds her skeleton, her skin, her hair
@@ -713,8 +716,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   return heroine;
 
   // WHAT THE FAST HEROINE DOES NOT HAVE (the "Visual" body does):
-  //   * the builder's skin-level breathing, face movement (blinks), and its pose-by-pose skin corrections at her
-  //     hips and knees: she breathes and walks by her bones alone;
+  //   * the builder's face movement (blinks), and its pose-by-pose skin corrections at her hips and knees;
+  //   * the builder's own foot lock (actor/humanFeet.ts: heels that rise, feet that follow slopes): she has a small
+  //     one of her own for flat ground (footGround.ts);
   //   * painted edges that re-draw themselves as her belly changes (they are baked at her look's belly);
   //   * a cloth-simulated tee (her painted outfits and their baked pieces only).
 }

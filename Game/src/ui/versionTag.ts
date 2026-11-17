@@ -14,13 +14,14 @@
 // the page and adds its line there, so nothing else needs to know about it.
 // ============================================================================
 
-// Filled in by the build (vite.config.ts, `define`).
-declare const __APP_VERSION__: string;
-declare const __APP_COMMIT__: string;
-declare const __APP_BUILT__: string;
+// Filled in by the build (vite.config.ts, `define`). Named GDM (Galaxy Defenders: Motherlands) so they cannot be
+// mistaken for the Character Builder's own build constants, which the same build also sets for its code.
+declare const __GDM_VERSION__: string;
+declare const __GDM_COMMIT__: string;
+declare const __GDM_BUILT__: string;
 
 /** The version as text, also handy in the browser's console: type `gdmVersion`. */
-export const VERSION_TEXT = `v${__APP_VERSION__} · ${__APP_COMMIT__} · built ${__APP_BUILT__}`;
+export const VERSION_TEXT = `v${__GDM_VERSION__} · ${__GDM_COMMIT__} · built ${__GDM_BUILT__}`;
 (window as unknown as { gdmVersion: string }).gdmVersion = VERSION_TEXT;
 
 /** Add the version line to the Settings panel, once. */

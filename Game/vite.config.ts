@@ -239,9 +239,9 @@ const appBuilt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago',
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-    __APP_COMMIT__: JSON.stringify(appCommit),
-    __APP_BUILT__: JSON.stringify(appBuilt),
+    __GDM_VERSION__: JSON.stringify(appVersion),
+    __GDM_COMMIT__: JSON.stringify(appCommit),
+    __GDM_BUILT__: JSON.stringify(appBuilt),
   },
   // Relative paths, so the same build works at capflyingfun.github.io/Galaxy-Defenders-Motherlands/ and locally.
   base: './',

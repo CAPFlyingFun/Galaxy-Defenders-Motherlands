@@ -186,7 +186,7 @@ export class Hud {
       return line;
     };
     element('h2', 'gd-settings-part', settings, 'HEROINE');
-    choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body. Visual: the Character Builder\'s own. Changing it reloads the game.');
+    choiceRow('Body', 'body', [['Visual', 'visual'], ['Performance', 'performance']], 'Visual: the Character Builder\'s own, her outfit at its best. Performance: the fast body (her outfit is not as good yet). Changing it reloads the game.');
     const fast = options.graphics.body === 'performance';
     // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)
     const detailRow = choiceRow('Detail', 'detail', [['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);

@@ -79,7 +79,10 @@ const asSkin = (text: string | null): SkinChoice | null => (text === 'light' || 
 /** The settings in force: what the address says, else what is remembered, else the defaults. */
 export function loadHeroineSettings(address: URLSearchParams = new URLSearchParams(location.search)): HeroineSettings {
   const asked = address.get('heroine');
-  const body: BodyMode = asked === 'fast' ? 'performance' : asked === 'room' ? 'visual' : read(SETTING_KEYS.body) === 'visual' ? 'visual' : 'performance';
+  const body: BodyMode = asked === 'fast' ? 'performance' : asked === 'room' ? 'visual' : read(SETTING_KEYS.body) === 'performance' ? 'performance' : 'visual';
+  // (VISUAL IS THE DEFAULT AGAIN. Joshua, 2026-11-17, of the fast body's saved-picture suit: "That's not the higher
+  // quality outfit look... has issues with the look of it". Until the fast body's suit matches the builder's own,
+  // the game opens with the builder's; Performance is a choice in Settings.)
   return {
     body,
     detail: asDetail(address.get('detail')) ?? asDetail(read(SETTING_KEYS.detail)) ?? 100,   // (100 %: as Joshua ran the DEV Room with one person; Auto is still in Settings)

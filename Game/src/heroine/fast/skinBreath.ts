@@ -34,6 +34,7 @@ import * as THREE from 'three';
 import { BREATH_GLSL, breathVolumes, createBreathUniforms, layBreathTable, type BreathUniforms } from '@charb/sarahlab/breathSkin';
 import { breathFlare, chestShare } from '@charb/actor/vitals';
 import { stomachGiveMl } from '@charb/actor/abdominalOrgans';
+import { KICKS } from '@charb/sarahlab/softBody';
 import v2Pelvis from '@charb/data/pelvis/v2.json';
 import v2Thorax from '@charb/data/thorax/v2.json';
 
@@ -58,6 +59,13 @@ export class SkinBreath {
   /** Her mesh's units to her rest frame (metres), and directions back again. */
   private readonly toRest = { value: new THREE.Matrix4() };
   private readonly toUnits = { value: new THREE.Matrix3() };
+  /**
+   * HER BABY'S KICKS (liveBody.ts): up to three at once. Each: where on her skin (x, y, z in her rest frame) and how
+   * far out (w, metres; 0 = no kick), and its way out (x, y, z) and how wide it is (w, metres). The builder's own
+   * numbers, shown the builder's own way: a smooth bump round the point.
+   */
+  private readonly kickAt = { value: Array.from({ length: KICKS }, () => new THREE.Vector4()) };
+  private readonly kickDir = { value: Array.from({ length: KICKS }, () => new THREE.Vector4(0, 0, 1, 0.03)) };
   /** How much room each move sweeps at 1 metre (square metres): her chest's, her belly's, her full belly's. */
   private swept = { chest: 0, belly: 0, full: 0 };
   /** Each point's share on her arms' bones (found once). */
@@ -114,7 +122,7 @@ export class SkinBreath {
    */
   patch(material: THREE.Material): void {
     const before = material.onBeforeCompile, key = material.customProgramCacheKey;
-    const u = this.uniforms, toRest = this.toRest, toUnits = this.toUnits;
+    const u = this.uniforms, toRest = this.toRest, toUnits = this.toUnits, kickAt = this.kickAt, kickDir = this.kickDir;
     material.onBeforeCompile = function (shader, renderer) {
       before.call(this, shader, renderer);
       shader.uniforms.uBreath = u.breath;
@@ -123,10 +131,23 @@ export class SkinBreath {
       shader.uniforms.uBreathSlices = u.breathSlices;
       shader.uniforms.uBreathRest = toRest;
       shader.uniforms.uBreathUnits = toUnits;
+      shader.uniforms.uKickAt = kickAt;
+      shader.uniforms.uKickDir = kickDir;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nuniform mat4 uBreathRest;\nuniform mat3 uBreathUnits;\n${BREATH_GLSL}`)
+        .replace('#include <common>', `#include <common>\nuniform mat4 uBreathRest;\nuniform mat3 uBreathUnits;\nuniform vec4 uKickAt[${KICKS}];\nuniform vec4 uKickDir[${KICKS}];\n${BREATH_GLSL}`)
         // (after her body shapes are added, before her bones move her)
-        .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\ntransformed += uBreathUnits * breathMove((uBreathRest * vec4(transformed, 1.0)).xyz);');
+        .replace('#include <morphtarget_vertex>', `#include <morphtarget_vertex>
+{
+  vec3 restPoint = (uBreathRest * vec4(transformed, 1.0)).xyz;
+  vec3 restMove = breathMove(restPoint);
+  // her baby's kicks: a smooth bump round each point (the builder's own sum, softBody.ts)
+  for (int k = 0; k < ${KICKS}; k++) {
+    if (uKickAt[k].w <= 0.0) continue;
+    vec3 kd = restPoint - uKickAt[k].xyz;
+    restMove += uKickDir[k].xyz * (uKickAt[k].w * exp(-dot(kd, kd) / (uKickDir[k].w * uKickDir[k].w)));
+  }
+  transformed += uBreathUnits * restMove;
+}`);
     };
     material.customProgramCacheKey = function () { return `${key.call(this)}|breath`; };
     material.needsUpdate = true;
@@ -144,6 +165,11 @@ export class SkinBreath {
     } else { B.x = 0; B.y = 0; }
     // what her stomach holds beyond its room, as room her belly's skin gives for
     this.uniforms.breathFull.value = s.full > 0 ? (stomachGiveMl(now.stomachMl) * 1e-6) / s.full : 0;
+  }
+
+  /** This frame's kicks, from the hidden live body (liveBody.ts). */
+  setKicks(at: readonly THREE.Vector4[], dir: readonly THREE.Vector4[]): void {
+    for (let k = 0; k < KICKS; k++) { if (at[k]) this.kickAt.value[k].copy(at[k]); if (dir[k]) this.kickDir.value[k].copy(dir[k]); }
   }
 
   /** How far her belly stands out now for her stomach, where it stands out most, millimetres (for a readout). */

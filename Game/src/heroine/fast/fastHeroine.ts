@@ -46,6 +46,7 @@ import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
+import type { LiveBody } from './liveBody';
 import { weekForBump } from '@charb/sarahlab/baby';
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 
@@ -123,6 +124,13 @@ export interface FastHeroine extends HeroineBody {
   stats(): FastHeroineStats;
   /** Change her detail: 'auto' or a fixed level. Takes effect as soon as the level is ready (at once if it was made before). */
   setDetail(detail: DetailChoice): void;
+  /**
+   * Attach THE LIVE BODY (liveBody.ts): the builder's whole hidden room, run each frame and never drawn. Her baby's
+   * kicks then show on her skin. Null takes it away again.
+   */
+  attachLive(live: LiveBody | null): void;
+  /** The live body's cost and state, for the debug readout: milliseconds a step (smoothed), kicks showing; null if none. */
+  liveInfo(): { stepMs: number; kicks: number } | null;
   /** Change the frame rate AUTO detail holds. */
   setTargetFps(target: TargetFps): void;
   /**
@@ -334,6 +342,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   for (const mesh of pieces.meshes) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) breath.patch(material);
   /** Her vitals as the game last gave them; until it does, a quiet breath at rest (14 a minute, half a litre). */
   let vitals: BodyVitals | null = null;
+  /** The hidden live body, once it has been opened and attached; and how long its steps take, milliseconds, smoothed. */
+  let live: LiveBody | null = null, liveMs = 0;
   /** A clock that runs at the speed of her breathing, for her bones' own small breathing move (the builder's stand). */
   let breathClock = 0;
 
@@ -503,6 +513,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); },
     setVitals(now: BodyVitals): void { vitals = now; },
+    attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
+    liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
       const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
       return { chestMm: m.chest, bellyMm: m.belly, fullMm: breath.fullMillimetres, trunk: [mid.x, mid.y, mid.z, mid.w] };
@@ -517,6 +529,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
       if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); }
+
+      // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
+      if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
 
       // Her breath: her skin's move from her vitals (or a quiet breath at rest), and her bones' at the same pace.
       // (the builder's stand breathes fifteen times a minute by its clock: the clock is run faster or slower)

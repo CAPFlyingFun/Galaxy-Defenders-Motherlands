@@ -38,6 +38,9 @@ type GameHeroine = HeroineBody & {
   /** The fast heroine only: change her detail and the frame rate Auto holds, while the game runs. */
   setDetail?: (detail: HeroineSettings['detail']) => void;
   setTargetFps?: (target: HeroineSettings['targetFps']) => void;
+  /** The fast heroine only: the hidden live body (heroine/fast/liveBody.ts), and what it costs. */
+  attachLive?: (live: import('./heroine/fast/liveBody').LiveBody | null) => void;
+  liveInfo?: () => { stepMs: number; kicks: number } | null;
 };
 
 /**
@@ -215,6 +218,24 @@ async function start(): Promise<void> {
     scene.traverse((node) => { const m = (node as THREE.Mesh).material; if (m) for (const one of Array.isArray(m) ? m : [m]) one.needsUpdate = true; });
   };
   applyShadows();
+  // THE LIVE BODY (Joshua, 2026-11-17: "everything enabled but only the skin drawn"): the Character Builder's whole
+  // room for her (baby, womb, organs and the rest) opened out of sight and run every frame, never drawn. It is slow
+  // to open, so it is opened now that she is on screen and attached when it is ready; the game is playable meanwhile.
+  let liveNote = graphics.liveBody === 'on' && heroine.attachLive ? 'live body: loading…' : '';
+  if (graphics.liveBody === 'on' && heroine.attachLive) {
+    void (async () => {
+      try {
+        const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
+        const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look'))]);
+        heroine.attachLive?.(live);
+        liveNote = '';
+      } catch (error) {
+        console.error('The live body could not be opened; she carries on without it.', error);
+        liveNote = 'live body: could not open';
+      }
+    })();
+  }
+
   const motion = new PlayerMotion();
   const rig = new CameraRig();
   const controls = new Controls(renderer.domElement);
@@ -435,7 +456,10 @@ async function start(): Promise<void> {
         const herLine = her
           ? `\nher: ${her.triangles.toLocaleString()} tris in ${her.drawCalls} draws` + (her.detail !== undefined ? ` · detail ${her.detail}%${her.auto ? ' auto' : ''}` : '') + ` · ${her.updateMs.toFixed(2)} ms CPU`
           : '';
-        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}`);
+        // (the hidden live body: what its step costs each frame, and whether her baby is kicking)
+        const liveNow = heroine.liveInfo?.();
+        const liveLine = liveNow ? `\nlive body: ${liveNow.stepMs.toFixed(1)} ms a frame${liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''}` : liveNote ? `\n${liveNote}` : '';
+        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}${liveLine}`);
         readoutTimer = 0;
         readoutFrames = 0;
       }

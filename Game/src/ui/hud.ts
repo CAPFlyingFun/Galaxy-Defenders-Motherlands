@@ -192,6 +192,7 @@ export class Hud {
     const detailRow = choiceRow('Detail', 'detail', [['Auto live', 'autoLive'], ['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
     const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: from 30% down to 1% by the frame rate, all her body shapes live. Auto: up to 100%, lighter only if the frame rate needs it.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
+    choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {

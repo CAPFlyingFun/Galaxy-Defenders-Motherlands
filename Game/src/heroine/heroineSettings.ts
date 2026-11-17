@@ -36,6 +36,8 @@ export interface HeroineSettings {
   skin: SkinChoice;
   /** Real shadows: she casts her own shadow on the plaza (the DEV Room's "Shadows: on"). */
   shadows: ShadowChoice;
+  /** The live body: her baby, womb, organs and the rest kept and run but not drawn (fast/liveBody.ts). */
+  liveBody: ShadowChoice;
 }
 
 /** The keys the choices are remembered under on this device. */
@@ -46,6 +48,7 @@ export const SETTING_KEYS = Object.freeze({
   sharpness: 'gdm.sharpness',
   skin: 'gdm.skin',
   shadows: 'gdm.shadows',
+  liveBody: 'gdm.liveBody',
 });
 
 function read(key: string): string | null {
@@ -94,5 +97,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     sharpness: asSharpness(address.get('sharp')) ?? asSharpness(read(SETTING_KEYS.sharpness)) ?? 2,
     skin: asSkin(address.get('body')) ?? asSkin(read(SETTING_KEYS.skin)) ?? deviceSkin(),
     shadows: (address.get('shadows') ?? read(SETTING_KEYS.shadows)) === 'off' ? 'off' : 'on',
+    liveBody: (address.get('live') ?? read(SETTING_KEYS.liveBody)) === 'off' ? 'off' : 'on',
   };
 }

@@ -74,6 +74,12 @@ export function connectSplash(meter: LoadMeter): Splash {
   const writeStep = writer(step);
   const writePercent = writer(percent);
   const writeTime = writer(time);
+  // The same, on the "rotate your device" cover, for a phone held upright while loading (index.html .rotate-loading).
+  const coverFill = document.getElementById('rotate-fill');
+  const coverStep = document.getElementById('rotate-step'), coverPercent = document.getElementById('rotate-percent'), coverTime = document.getElementById('rotate-time');
+  const writeCoverStep = coverStep ? writer(coverStep) : (): void => {};
+  const writeCoverPercent = coverPercent ? writer(coverPercent) : (): void => {};
+  const writeCoverTime = coverTime ? writer(coverTime) : (): void => {};
   let shownWidth = '';
   let request = 0;
 
@@ -88,13 +94,17 @@ export function connectSplash(meter: LoadMeter): Splash {
     if (width !== shownWidth) {
       shownWidth = width;
       fill.style.width = width;
+      if (coverFill) coverFill.style.width = width;
       bar?.setAttribute('aria-valuenow', String(whole));
     }
     writePercent(`${whole}%`);
-    if (meter.label) writeStep(meter.label);
+    writeCoverPercent(`${whole}%`);
+    if (meter.label) { writeStep(meter.label); writeCoverStep(meter.label); }
     // The time left, when it can be told. If it cannot: on a first load the line says why; otherwise it says nothing.
     const left = meter.secondsLeft();
-    writeTime(left !== null ? timeLeftText(left) : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '');
+    const timeText = left !== null ? timeLeftText(left) : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '';
+    writeTime(timeText);
+    writeCoverTime(timeText);
   };
   const loop = (): void => {
     show();

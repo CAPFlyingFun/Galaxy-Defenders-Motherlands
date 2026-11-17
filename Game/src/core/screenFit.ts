@@ -35,6 +35,16 @@
 //
 // A computer with a mouse is never "upright": its game box simply follows the
 // window.
+//
+// THE 2 SECOND HOLD (Joshua, 2026-11-17: "a 2s delay before the screen
+// rotates and it holds that same position like having rotation lock enabled,
+// as it still flashes and looks weird between the transitions"). When the phone
+// is turned, the page itself is turned by the phone; for 2 seconds everything is
+// turned BACK (one CSS rotation on the page's body), so what was on screen stays
+// where it was on the glass, as with rotation lock. Then the new layout takes
+// over behind a quick fade. Turned back within the 2 seconds: nothing changes.
+// (The phone's own spin animation cannot be stopped by a web page: only its real
+// rotation lock can. What this stops is the game's own jumping about.)
 // ============================================================================
 
 /** Where the landscape size is kept on this device. */
@@ -94,6 +104,21 @@ let landscape: ScreenPair = (() => {
 
 const listeners: Array<(upright: boolean) => void> = [];
 
+/** GAME TUNING: how long the old layout is held after a turn, and the fade into the new one (milliseconds). */
+const HOLD_MS = 2000;
+const FADE_MS = 160;
+/** The phone's angle, degrees (0 upright; 90 / -90 or 270 on its side), or null if it cannot say. */
+function angleNow(): number | null {
+  try { const a = screen.orientation?.angle; if (typeof a === 'number') return a; } catch { /* the older way */ }
+  const degrees = (window as unknown as { orientation?: number }).orientation;
+  return typeof degrees === 'number' ? degrees : null;
+}
+/** The angle of the layout that is SHOWN (it lags the phone during a hold). */
+let shownAngle = angleNow();
+let holdTimer = 0;
+/** The angle the phone was turned to when the current hold began. */
+let holdAngle: number | null = null;
+
 /** Write the sizes onto the page (index.html sizes the stage, the splash and the cover by them). */
 function apply(): void {
   const root = document.documentElement.style;
@@ -118,6 +143,16 @@ function apply(): void {
  * the browser gives, and a few times after each (the iPhone's size can arrive late).
  */
 function check(): void {
+  // A TURN: hold the old layout first (see the top of this file).
+  const angle = angleNow();
+  // (turned back to where the shown layout already is, within the hold: the hold ends, nothing changes)
+  if (holdTimer && angle === shownAngle) { endHold(false); return; }
+  if (touch() && angle !== null && shownAngle !== null && angle !== shownAngle) {
+    // (the browser says "changed" several times for one turn: the hold is started once, not restarted each time)
+    if (!holdTimer || angle !== holdAngle) hold(angle);
+    return;
+  }
+  if (holdTimer) return; // (held: nothing else changes until the hold is over)
   const nowUpright = readUpright();
   if (!touch()) {
     // a computer: the game box follows the window
@@ -136,6 +171,44 @@ function check(): void {
   // (back on its side: the page may have been left scrolled by the old layout)
   if (turned && !upright) window.scrollTo(0, 0);
   if (turned) for (const fn of listeners) fn(upright);
+}
+
+/**
+ * Turn everything back by the change in the phone's angle, so it stays put on the glass, for HOLD_MS. The body is made
+ * the size of the OLD screen, centred on the new one, and turned (its fixed children are placed inside it then).
+ */
+function hold(angle: number): void {
+  const body = document.body;
+  // (the phone turned back to where the shown layout is: the hold simply ends, nothing to change)
+  const turnBy = ((((shownAngle as number) - angle) % 360) + 540) % 360 - 180;
+  if (turnBy === 0) { endHold(false); return; }
+  const wasUpright = upright;
+  const oldW = wasUpright ? landscape.height : landscape.width, oldH = wasUpright ? landscape.width : landscape.height;
+  const newW = wasUpright ? landscape.width : landscape.height, newH = wasUpright ? landscape.height : landscape.width;
+  // (a half turn, 180: the same shape, simply upside down)
+  const sideways = Math.abs(turnBy) === 90;
+  const w = sideways ? oldW : newW, h = sideways ? oldH : newH;
+  body.style.cssText += `;position:fixed;left:${(newW - w) / 2}px;top:${(newH - h) / 2}px;width:${w}px;height:${h}px;transform:rotate(${turnBy}deg);transform-origin:50% 50%;`;
+  window.clearTimeout(holdTimer);
+  holdAngle = angle;
+  holdTimer = window.setTimeout(() => endHold(true), HOLD_MS);
+}
+
+/** The hold is over: the new layout takes over behind a quick fade (or at once, when nothing is to change). */
+function endHold(fade: boolean): void {
+  window.clearTimeout(holdTimer);
+  holdTimer = 0;
+  const body = document.body;
+  const swap = (): void => {
+    for (const p of ['position', 'left', 'top', 'width', 'height', 'transform', 'transform-origin']) body.style.removeProperty(p);
+    shownAngle = angleNow();
+    check();
+    if (fade) requestAnimationFrame(() => { body.style.opacity = '1'; });
+  };
+  if (!fade) { swap(); return; }
+  body.style.transition = `opacity ${FADE_MS}ms ease`;
+  body.style.opacity = '0';
+  window.setTimeout(swap, FADE_MS);
 }
 
 const timers: number[] = [];

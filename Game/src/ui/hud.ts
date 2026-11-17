@@ -47,8 +47,6 @@ const STICK_TRAVEL = 40;
 const MOVE_TRAVEL = 100;
 /** The space kept between the readout and her vitals card, in pixels. */
 const READOUT_GAP = 8;
-/** The narrowest the readout is worth showing BESIDE her vitals card; with less room than this it goes under the card. */
-const READOUT_LEAST = 190;
 
 /** Make an element with a class, optionally with text, inside `parent`. */
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement, text = ''): HTMLElementTagNameMap[K] {
@@ -357,6 +355,9 @@ export class Hud {
         const watch = new ResizeObserver(() => this.placeReadout());
         watch.observe(this.root);
         watch.observe(this.slot);
+        // (the space the phone keeps at its edges changes when it is turned, while no size changes: placed again then)
+        window.addEventListener('orientationchange', () => window.setTimeout(() => this.placeReadout(), 400));
+        window.addEventListener('resize', () => this.placeReadout());
       }
     }
     return this.slot;
@@ -364,9 +365,9 @@ export class Hud {
   private slot: HTMLElement | null = null;
 
   /**
-   * Keep the readout clear of her vitals card, which sits in the middle of the top edge: BESIDE it (in the top left
-   * corner, no wider than the room there) when there is room, and UNDER it when there is not (a small or upright
-   * screen).
+   * Keep the readout clear of her vitals card, which sits in the middle of the top edge: always BESIDE it, in the top
+   * left corner, no wider than the room there (its lines wrap if they must). (It used to drop UNDER the card when the
+   * room looked small; on Joshua's phone, narrower than the test screen, it did, and sat over the MOVE stick.)
    *
    * "offsetLeft / offsetWidth / offsetTop" are an element's place and size as the page laid it out, in the HUD's own
    * pixels, so this works the same whichever way the stage is turned.
@@ -377,16 +378,7 @@ export class Hud {
     // (the card is centred: the slot's box is as wide as the card, and its middle is the middle of the screen)
     const cardLeft = (this.root.clientWidth - slot.offsetWidth) / 2;
     const room = cardLeft - panel.offsetLeft - READOUT_GAP;
-    if (slot.offsetWidth === 0) {
-      panel.style.maxWidth = '';
-      panel.style.top = '';
-    } else if (room >= READOUT_LEAST) {
-      panel.style.maxWidth = `${Math.floor(room)}px`;
-      panel.style.top = ''; // (back to the top corner, where hud.css puts it)
-    } else {
-      panel.style.maxWidth = '';
-      panel.style.top = `${slot.offsetTop + slot.offsetHeight + READOUT_GAP}px`;
-    }
+    panel.style.maxWidth = slot.offsetWidth === 0 ? '' : `${Math.max(120, Math.floor(room))}px`;
   }
 
   /** Let go of the CAMERA stick (used when the view changes and it is hidden, perhaps under a thumb). */

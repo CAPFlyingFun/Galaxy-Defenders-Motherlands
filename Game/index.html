@@ -121,6 +121,7 @@
   .rotate-note { margin: 18px 0 0; font-size: 12px; line-height: 1.5; color: #8fa3c8; }
   /* Two sets of words: while loading ("rotate your device") and while playing ("paused"). */
   .rotate-play, .rotate-pause { display: none; }
+  .rotate-loading { margin-top: 26px; text-align: left; }
   html.gd-playing .rotate-play { display: block; }
   html.gd-playing .rotate-pause { display: block; }
   html.gd-playing .rotate-load { display: none; }
@@ -171,6 +172,13 @@
     <div class="rotate-phone"></div>
     <div class="rotate-title rotate-load">ROTATE YOUR DEVICE</div>
     <p class="rotate-hint rotate-load">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
+    <!-- LOADING, UPRIGHT (Joshua, 2026-11-17: let it load at first launch in portrait for a head start). It does load
+         behind this cover; this shows how far along it is (filled in by src/ui/splash.ts, the same as the splash). -->
+    <div class="rotate-loading rotate-load">
+      <div class="splash-bar"><div class="splash-fill" id="rotate-fill"></div></div>
+      <div class="splash-line"><span class="splash-step" id="rotate-step">Starting…</span><span class="splash-percent" id="rotate-percent">0%</span></div>
+      <div class="splash-time" id="rotate-time"></div>
+    </div>
     <div class="rotate-title rotate-play">PAUSED</div>
     <p class="rotate-hint rotate-play">Turn your phone on its side to keep playing.</p>
     <p class="rotate-note">Nothing happening? Switch off rotation lock.</p>

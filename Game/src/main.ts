@@ -27,11 +27,39 @@ import { Tracers } from './world/tracers';
 
 /**
  * THE ONE PLACE THE HEROINE IS MADE.
- * Everything else only knows her as a HeroineBody (core/contracts.ts), so to
- * swap the stand-in for the real Character Builder body, change this one line.
+ * Everything else only knows her as a HeroineBody (core/contracts.ts).
+ *
+ * By default she is BLAZE: the real Character Builder body, wearing the look Joshua saved for her
+ * (src/heroine/looks/blaze.ts). Her files are large, so the builder's code is fetched only when it is needed
+ * (the `import()` below), and a line of text says she is loading.
+ *
+ *   ?heroine=standin   the simple stand-in figure (loads at once; useful to compare frame rates)
+ *   ?body=full|light   the builder's full or light skin (left out, the builder chooses by device)
+ *
+ * If her files cannot be loaded, the stand-in takes her place, so the game always starts.
  */
-function createHeroine(): HeroineBody {
-  return createStandInHeroine();
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, say: (text: string) => void): Promise<HeroineBody> {
+  const asked = new URLSearchParams(location.search);
+  if (asked.get('heroine') === 'standin') return createStandInHeroine();
+  try {
+    say('Loading Blaze…');
+    const [{ createBuilderHeroine }, { BLAZE_LOOK }] = await Promise.all([
+      import('./heroine/builderHeroine'),
+      import('./heroine/looks/blaze'),
+    ]);
+    const body = asked.get('body');
+    return await createBuilderHeroine({
+      renderer,
+      scene,
+      look: BLAZE_LOOK,
+      lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
+      groundShadow: false, // the ground paints her shadow itself (src/world/ground.ts)
+      onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
+    });
+  } catch (error) {
+    console.error('The Character Builder heroine could not be loaded; using the stand-in.', error);
+    return createStandInHeroine();
+  }
 }
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
@@ -96,7 +124,12 @@ async function start(): Promise<void> {
   scene.add(keyLight);
 
   // ---- Heroine, camera, controls -----------------------------------------------
-  const heroine = createHeroine();
+  // A line of text in the middle of the screen while she loads (a character appears dressed, all at once).
+  const loading = document.createElement('div');
+  loading.style.cssText = 'position:fixed;left:0;right:0;top:45%;text-align:center;font-size:15px;letter-spacing:.08em;color:#5ee8c8;pointer-events:none;text-shadow:0 0 8px #04060d;';
+  uiHost.appendChild(loading);
+  const heroine = await createHeroine(renderer, scene, (text) => { loading.textContent = text; });
+  loading.remove();
   scene.add(heroine.root);
   const motion = new PlayerMotion();
   const rig = new CameraRig();

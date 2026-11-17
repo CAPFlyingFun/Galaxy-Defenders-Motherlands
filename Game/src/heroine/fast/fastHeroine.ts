@@ -261,7 +261,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     }
     crownOverFloor = (top - lowest) * scale;
     fit.position.y = -lowest * scale;
-    if (back > front) fit.rotation.y = Math.PI;
+    // WHICH WAY SHE FACES is read from her skeleton: with her left shoulder on one side and "up" above her, forward is
+    // the third direction (left x up). Her belly's reach was used before, and got it wrong for a body without the
+    // builder's baked shape, whose bottom reaches further back than her belly reaches forward of her pelvis bone:
+    // she stood back to front, her arms aiming behind her (Joshua, 2026-11-17: "the arms are facing backwards").
+    {
+      const left = skin.skeleton.bones[motion.measure.joints.shoulderL].getWorldPosition(new THREE.Vector3());
+      const right = skin.skeleton.bones[motion.measure.joints.shoulderR].getWorldPosition(new THREE.Vector3());
+      const forward = left.sub(right).cross(new THREE.Vector3(0, 1, 0));
+      // (her belly's vote is kept only for a skeleton whose shoulders tell nothing)
+      if (forward.lengthSq() > 1e-10 ? forward.z < 0 : back > front) fit.rotation.y = Math.PI;
+    }
     root.updateMatrixWorld(true);
     // (her stride is measured in her skeleton's own units against the world, so it is measured again at her real size)
     motion.dispose();

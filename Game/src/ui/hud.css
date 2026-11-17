@@ -228,3 +228,11 @@
 /* FIRE sits in from the right edge (Joshua, 2026-11-17: "move the Fire button to the left"), about two button
    widths, where the right thumb lands naturally; the view switch stays out in the corner above it. */
 .gd-fire { margin-right: 170px; }
+
+/* THE BOXES THAT HOLD THE CONTROLS LET TOUCHES THROUGH (Joshua, 2026-11-17: dragging on the right of the picture had
+   stopped turning the view in first person). The box round the view switch and FIRE reaches to the screen's edge
+   (FIRE sits 170px in from it), and the box round the two sticks is as wide as both. A box is invisible, but it
+   was catching the finger, so a drag that began in its empty part never reached the game. Now only the buttons
+   and sticks themselves take a touch; the empty space round them belongs to the picture. */
+.gd-hud > .gd-move, .gd-hud > .gd-actions { pointer-events: none; }
+.gd-move > *, .gd-actions > * { pointer-events: auto; }

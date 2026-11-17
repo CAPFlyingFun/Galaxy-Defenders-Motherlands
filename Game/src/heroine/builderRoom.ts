@@ -33,6 +33,8 @@ import { sanitizeBook, type CharacterBook } from '@charb/sarahlab/characterSaves
 import { UNITS_PER_METRE } from '@charb/sarahlab/units';
 import type { AppScene, RoomRenderer } from '@charb/app/Scene';
 import type { HeroineLook } from './heroineLook';
+import { PAINT_ATTRIBUTE } from '@charb/sarahlab/bodyPaint';
+import { findPaintedSkin, finishMask, maskText, measureSkin, type MaskPainter } from './paintMask';
 
 /** The builder's units in one metre (it draws her in centimetres). */
 export const ROOM_UNITS = UNITS_PER_METRE;
@@ -85,6 +87,17 @@ export interface BuilderRoom {
    * BELLY, 0-200 %). False if the room has no such slider.
    */
   setSlider(field: string, value: number): boolean;
+  /**
+   * Paint the look's code-painted layers again, on her skin as it is shaped NOW (call it after her belly has
+   * changed). Does nothing for a look without such layers.
+   *
+   * Why: a code-painted shape is measured on her skin as she is shaped when it is painted (paintMask.ts), and a
+   * different belly slides the skin of her hips and upper thighs, which would leave small teeth in an edge there.
+   * NOTE: this one step is the game's own and is NOT part of the builder's saved-character format. Her layer first
+   * goes on through a saved character, the builder's own way; this refresh writes the same numbers straight into the
+   * builder's paint on her skin (its `fabricPaint` values), the way the builder's own brush does.
+   */
+  repaintMasks(): void;
   /** Free everything the room made (GPU memory included). */
   dispose(): void;
 }
@@ -248,6 +261,40 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
 
   const model = findModel();
   if (!model) throw new Error('[heroine] the Character Builder room has no model in it');
+
+  // ---- 5b. Paint layers painted by code (paintMask.ts) ---------------------------------------------------------
+  // A look may ask for a paint layer that is neither a template nor painted by hand, but painted by a function (for
+  // example Blaze's curved leg panels). Such a mask is one number for every point of her skin, so it can only be made
+  // now that the skin she wears is here. It is then written into her saved character as an ordinary hand-painted mask
+  // and she is loaded again through the builder's own save card: the builder itself puts the layer on her.
+  const painters = options.look.maskPainters ?? [];
+  /** Her skin and the layers painted by code, kept for `repaintMasks`. */
+  let codePainted: { readonly skin: THREE.SkinnedMesh; readonly layers: readonly { readonly layer: number; readonly painter: MaskPainter }[] } | null = null;
+  if (painters.some((painter) => painter)) {
+    say('painting her panels');
+    try {
+      const skin = findPaintedSkin(model);
+      const lookClothes = options.look.clothes as { layers?: readonly unknown[] } | null;
+      if (!skin || !lookClothes || !Array.isArray(lookClothes.layers)) throw new Error('the look has code-painted layers but no painted clothes for them to go on');
+      const surface = measureSkin(skin);
+      const layers = lookClothes.layers.map((layer, i) => {
+        const painter = painters[i];
+        if (!painter) return layer;
+        if (!layer || typeof layer !== 'object') throw new Error(`paint layer ${i + 1} has a painter but no fabric written for it`);
+        // (the layer keeps its fabric and detail from the look; a hand-painted layer has no template)
+        return { ...(layer as object), template: null, mask: maskText(painter, surface) };
+      });
+      book = sanitizeBook({ version: 1, characters: [{ ...options.look, clothes: { ...lookClothes, layers }, savedAt: new Date(0).toISOString() }], outfits: [] });
+      if (!press(CHARACTER_ACTION.load(options.look.name))) throw new Error('her save card could not be pressed a second time');
+      // a few frames for the builder to lay the new layer on her
+      for (let k = 0; k < 8; k++) { step(HIDDEN_STEP); await nextFrame(); }
+      codePainted = { skin, layers: painters.flatMap((painter, layer) => (painter ? [{ layer, painter }] : [])) };
+    } catch (error) {
+      disposed = true;
+      scene.dispose();
+      throw new Error(`[heroine] her code-painted layers could not be made: ${String((error as Error)?.message ?? error)}`);
+    }
+  }
   say('ready');
 
   // ---- 6. The room's sliders -------------------------------------------------------------------------------------
@@ -272,6 +319,20 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
       // (the room listens for the same event a finger on the slider makes)
       input.dispatchEvent(new Event('input'));
       return true;
+    },
+    repaintMasks(): void {
+      if (disposed || !codePainted) return;
+      const paint = codePainted.skin.geometry.getAttribute(PAINT_ATTRIBUTE) as THREE.BufferAttribute | undefined;
+      if (!paint) return;
+      // her skin measured again as it is shaped now, and each layer's numbers worked out again on it
+      const surface = measureSkin(codePainted.skin);
+      for (const { layer, painter } of codePainted.layers) {
+        const bytes = finishMask(painter(surface));
+        // (through bytes, so the values are exactly what a saved mask would hold)
+        for (let v = 0; v < bytes.length && v < paint.count; v++) paint.setComponent(v, layer, bytes[v] / 255);
+      }
+      // tell three.js to send the new numbers to the graphics card (the builder's own extra skin patch sees it too)
+      paint.needsUpdate = true;
     },
     dispose(): void {
       if (disposed) return;

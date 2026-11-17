@@ -11,13 +11,17 @@
 // Open it with `npm run dev` at /heroine-lab.html. Address options:
 //   ?body=full | light    her full or light skin (default: chosen as the builder does, by device)
 //   ?outfit=<name>        one of the builder's built-in outfits, e.g. ?outfit=painted long-sleeve tee + leggings
-//   ?belly=<0-200>        her belly to start with
+//   ?look=blaze           Joshua's Blaze exactly as he exported her from the Character Room (all pink)
+//   ?look=blazeSuit       Blaze in pink and black: his export with black, edging and painted panels added
+//   ?belly=<0-200>        her belly to start with (the default heroine only: a look brings its own belly)
 //   ?hold                 start with the page's own frame loop stopped (for scripts; see below)
 //
 // For scripts (screenshots without waiting on a slow software renderer): `window.heroineLab` has `hold(true)` to
 // stop the page's own frame loop, `advance(frames, dt)` to run frames by hand, and `picture()` to get the canvas.
 // ============================================================================
 import { BLAZE_LOOK } from './heroine/looks/blaze';
+import { BLAZE_SUIT_LOOK } from './heroine/looks/blazeSuit';
+import { DEFAULT_BELLY, type HeroineLook } from './heroine/heroineLook';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FrameInfo, Hand } from './core/contracts';
@@ -70,13 +74,18 @@ async function start(): Promise<void> {
   // ---- the heroine -------------------------------------------------------------------------------------------------
   const began = performance.now();
   const body = asked.get('body');
+  // The saved looks this page can show, by the name in the address (?look=blaze, ?look=blazeSuit).
+  const looks: Record<string, HeroineLook> = { blaze: BLAZE_LOOK, blazeSuit: BLAZE_SUIT_LOOK };
+  const look: HeroineLook | undefined = looks[asked.get('look') ?? ''];
+  // The belly she starts with: a look's own (Blaze is 100), else the address's ?belly, else the default heroine's.
+  const startBelly = look ? look.body.bump : asked.has('belly') ? Number(asked.get('belly')) : DEFAULT_BELLY;
   const heroine: BuilderHeroine = await createBuilderHeroine({
     renderer,
     scene,
     belly: asked.has('belly') ? Number(asked.get('belly')) : undefined,
     outfit: asked.get('outfit') ?? undefined,
-    // ?look=blaze: Joshua's saved Blaze (src/heroine/looks/blaze.ts) in place of the default heroine
-    look: asked.get('look') === 'blaze' ? BLAZE_LOOK : undefined,
+    // ?look=...: one of the saved looks in place of the default heroine
+    look,
     lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
     onProgress: (stage) => { status.textContent = `Loading the heroine: ${stage}…`; },
   });
@@ -117,7 +126,7 @@ async function start(): Promise<void> {
     camera.fov = state.firstPerson ? 70 : 40; camera.updateProjectionMatrix(); });
   const bellyLabel = document.createElement('label');
   const bellySlider = document.createElement('input');
-  bellySlider.type = 'range'; bellySlider.min = '0'; bellySlider.max = '200'; bellySlider.value = String(asked.get('belly') ?? 70);
+  bellySlider.type = 'range'; bellySlider.min = '0'; bellySlider.max = '200'; bellySlider.value = String(Math.max(0, Math.min(200, Math.round(startBelly))));   // (the slider and its label start at the belly she really has)
   const bellyText = document.createElement('span');
   const showBelly = () => { bellyText.textContent = `BELLY ${bellySlider.value}%`; };
   bellySlider.addEventListener('input', () => { heroine.setBelly(Number(bellySlider.value)); showBelly(); });

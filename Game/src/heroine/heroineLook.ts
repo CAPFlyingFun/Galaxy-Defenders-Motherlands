@@ -12,6 +12,7 @@
 // Character Room can be brought into the game by pasting her exported entry
 // here -- nothing about her is re-made by hand.
 // ============================================================================
+import type { MaskPainter } from './paintMask';
 
 /** One character as the Character Builder's EXPORT writes her (the parts the game uses). */
 export interface HeroineLook {
@@ -38,6 +39,15 @@ export interface HeroineLook {
    * layer off", so a half-written entry would undress her.
    */
   readonly clothes: unknown | null;
+  /**
+   * PAINT LAYERS PAINTED BY CODE (paintMask.ts), one entry for each of the builder's three paint layers, bottom layer
+   * first; null (or left out) for a layer the look's clothes describe themselves. Where a painter is given, the
+   * clothes' layer at that place must be written as a HAND-PAINTED layer with its mask left empty
+   * (`"template": null, "mask": ""`): once she is loaded the game works the mask out on the skin she is wearing and
+   * fills it in (builderRoom.ts). This is the only part of a look that is not text from an export, because a mask
+   * is a number for every point of her skin and her full and light skins have different points.
+   */
+  readonly maskPainters?: readonly (MaskPainter | null)[];
 }
 
 /** The belly the game's heroine starts with, percent (the builder's slider runs 0-200). */

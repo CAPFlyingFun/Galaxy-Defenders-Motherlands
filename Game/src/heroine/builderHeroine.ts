@@ -49,6 +49,8 @@ const WALK_FROM = 0.05;
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
 const GRIP_CURL = 55;
+/** After her belly moves, the builder reshapes her skin on its next frame; code-painted panels are redone this many frames later. */
+const REPAINT_AFTER_FRAMES = 2;
 /** Her head bone's size while it is hidden in first person (not zero: a bone of no size has no inverse). */
 const HIDDEN_HEAD = 0.001;
 
@@ -266,6 +268,8 @@ export async function createBuilderHeroine(options: BuilderHeroineOptions): Prom
   // ---- one step of the builder's room, with the game's extras round it -------------------------------------------
   let walking = false;
   let belly = look.body.bump, bellyWanted = belly, bellyWait = 0;
+  /** Frames left until the look's code-painted panels are painted again (0: nothing waiting). */
+  let repaintIn = 0;
   let updateMs = 0;
   let disposed = false;
   const inverseRoot = new THREE.Matrix4();
@@ -353,7 +357,7 @@ export async function createBuilderHeroine(options: BuilderHeroineOptions): Prom
       const began = performance.now();
       // Her belly follows the slider, a step at a time (each step reshapes her skin, and re-cuts a cloth tee).
       bellyWait -= frame.dt;
-      if (bellyWanted !== belly && bellyWait <= 0) { belly = bellyWanted; bellyWait = BELLY_EVERY; room.setSlider(SARAH_LAB_FIELD.bump, belly); }
+      if (bellyWanted !== belly && bellyWait <= 0) { belly = bellyWanted; bellyWait = BELLY_EVERY; room.setSlider(SARAH_LAB_FIELD.bump, belly); repaintIn = REPAINT_AFTER_FRAMES; }
       // The target, moved from the game's world into the room's own space (centimetres, her feet at its origin, facing +Z).
       hasTargetInRoom = target !== null;
       if (target) {
@@ -362,6 +366,9 @@ export async function createBuilderHeroine(options: BuilderHeroineOptions): Prom
       }
       aim.advance(frame.dt, target !== null);
       stepRoom(frame.dt);
+      // A look's code-painted panels (paintMask.ts) are laid again on her newly shaped skin, a frame or two after
+      // her belly moved, so their edges stay smooth at every belly size.
+      if (repaintIn > 0 && --repaintIn === 0) room.repaintMasks();
       updateMs += (performance.now() - began - updateMs) / 20;
     },
 

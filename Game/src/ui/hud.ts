@@ -41,6 +41,11 @@ export interface HudOptions {
 
 /** How far the stick's knob can travel from its middle, in pixels. */
 const STICK_TRAVEL = 40;
+/**
+ * The MOVE stick's travel: 100 pixels from its middle to its edge, so each of its five rings is 20 pixels deep
+ * (Joshua, 2026-11-17: "every 20 pixels is 1/5"). hud.css draws the stick to match (.gd-walk-stick).
+ */
+const MOVE_TRAVEL = 100;
 
 /** Make an element with a class, optionally with text, inside `parent`. */
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement, text = ''): HTMLElementTagNameMap[K] {
@@ -109,7 +114,7 @@ export class Hud {
     // outer = build quickly. Each circle is as wide as the knob's middle travels at that ring's push.
     this.stickRings = PACE_TUNING.ringsFrom.map((from) => {
       const ring = element('div', 'gd-stick-ring', this.stick);
-      const across = from * STICK_TRAVEL * 2;
+      const across = from * MOVE_TRAVEL * 2;
       ring.style.width = ring.style.height = `${across}px`;
       ring.style.margin = `${-across / 2}px 0 0 ${-across / 2}px`;
       return ring;
@@ -120,7 +125,7 @@ export class Hud {
     this.wireStick(this.stick, this.stickKnob, (x, y) => {
       controls.stickX = x;
       controls.stickY = y;
-    });
+    }, MOVE_TRAVEL);
 
     // The CAMERA stick (first person only; Joshua, 2026-11-16: "fire with your right hand and move the camera
     // around in 1st person with your left"). It sits in the bottom-left corner under the walk stick, so the left
@@ -252,7 +257,7 @@ export class Hud {
    * STICK_TRAVEL pixels from the middle) and `write` is told where it is, each direction -1..1
    * (right is +x, UP on the screen is +y). Letting go writes 0, 0 and the knob springs back.
    */
-  private wireStick(stick: HTMLElement, knob: HTMLElement, write: (x: number, y: number) => void): void {
+  private wireStick(stick: HTMLElement, knob: HTMLElement, write: (x: number, y: number) => void, travel = STICK_TRAVEL): void {
     const release = () => {
       knob.style.transform = '';
       write(0, 0);
@@ -266,12 +271,12 @@ export class Hud {
       let dx = toGameX(screenDx, screenDy);
       let dy = toGameY(screenDx, screenDy);
       const length = Math.hypot(dx, dy);
-      if (length > STICK_TRAVEL) {
-        dx *= STICK_TRAVEL / length;
-        dy *= STICK_TRAVEL / length;
+      if (length > travel) {
+        dx *= travel / length;
+        dy *= travel / length;
       }
       knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      write(dx / STICK_TRAVEL, -dy / STICK_TRAVEL); // up on the screen is +
+      write(dx / travel, -dy / travel); // up on the screen is +
     };
     stick.addEventListener('pointerdown', (event) => {
       // "Capture" keeps the drag coming to this stick even when the thumb slides outside its circle.

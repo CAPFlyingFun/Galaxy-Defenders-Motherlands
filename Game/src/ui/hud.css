@@ -269,3 +269,11 @@
   transform: translateX(-50%);
   pointer-events: none;
 }
+
+/* THE MOVE STICK IS BIGGER THAN THE CAMERA STICK (Joshua, 2026-11-17: "a little bit bigger so each 1/5 had a little
+   more space... every 20 pixels is 1/5"): 200px across, so from its middle to its edge is 100px and each of its
+   five rings is 20px deep (hud.ts MOVE_TRAVEL). In first person the CAMERA stick keeps its size and sits beside
+   it, level with its bottom. */
+.gd-walk-stick, .gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { width: 200px; height: 200px; }
+.gd-move:has(.gd-look-stick:not([hidden])) { width: calc(200px + var(--gap) + var(--stick)); height: 200px; }
+.gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(200px + var(--gap)); }

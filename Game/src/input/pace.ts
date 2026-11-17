@@ -37,7 +37,8 @@ export const PACES = [
 /** Everything about the pace that is a choice. GAME TUNING. */
 export const PACE_TUNING = {
   /** Where each ring begins, as a share of the stick's full push: rings 1, 2, 3 and 4. Below the first is the centre. */
-  ringsFrom: [0.15, 0.4, 0.65, 0.88] as const,
+  // (even fifths: on the MOVE stick, 100 pixels from middle to edge, each ring is 20 pixels deep)
+  ringsFrom: [0.2, 0.4, 0.6, 0.8] as const,
   /** Seconds to change by one whole pace: easing down (ring 1), building slowly (ring 3), building quickly (ring 4). */
   downSeconds: 2,
   slowUpSeconds: 5,

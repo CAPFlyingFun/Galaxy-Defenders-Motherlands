@@ -52,6 +52,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { STRIDE_SAMPLES, type BodyMotion } from './bodyMotion';
+import { turnInWorld } from './boneTurn';
 
 /** GAME TUNING for her feet on the floor. Lengths in metres, times in seconds, unless they say otherwise. */
 export const FOOT_GROUND = {
@@ -116,18 +117,6 @@ const hipAt = new THREE.Vector3(), kneeAt = new THREE.Vector3(), ankleAt = new T
 const line = new THREE.Vector3(), bend = new THREE.Vector3(), ahead = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3();
 const parentQ = new THREE.Quaternion(), turn = new THREE.Quaternion(), footQ = new THREE.Quaternion();
 const UPRIGHT = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3();
-
-/**
- * Turn a bone by a rotation given in WORLD space, then bring the world matrices of the bone and everything hanging
- * from it up to date (so the next bone down the leg starts from where this one now is).
- */
-function turnInWorld(bone: THREE.Bone, worldTurn: THREE.Quaternion): void {
-  if (!bone.parent) return;
-  bone.parent.getWorldQuaternion(parentQ);
-  // local' = parent⁻¹ · turn · parent · local   (the same turn, seen from inside the parent's frame)
-  bone.quaternion.premultiply(parentQ).premultiply(worldTurn).premultiply(parentQ.invert());
-  bone.updateMatrixWorld(true);
-}
 
 /** One foot's memory between frames. */
 interface Foot {

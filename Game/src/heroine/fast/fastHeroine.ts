@@ -24,6 +24,8 @@
 //   * she stands, breathes and walks by the builder's own posing code          (bodyMotion.ts)
 //   * her feet drive her: her stride is measured from her foot bones and
 //     turned by the ground she covers; planted feet are held to their spot     (footGround.ts)
+//   * her arms keep clear of her belly and her breasts: they stop at them,
+//     or go over them                                                         (armClear.ts)
 //   * each part of her turns its own way, by the game's rule: her head, her
 //     shoulders, her belly and hips, her upper legs, her lower legs and feet   (`setFacing`; input/bodyTurn.ts)
 //
@@ -45,6 +47,7 @@ import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type Paint
 import { loadBodyFile } from './bodyFile';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist } from './footGround';
+import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -67,11 +70,12 @@ const JUMP_METRES = 1.5;
 /**
  * EACH PART OF HER TURNED ITS OWN WAY (`setFacing`; Joshua's five bands). Her hips are turned with her belly
  * (footGround.ts does that, with her legs). Above them, the further turn from her belly to her shoulders is shared
- * out up her back, from her lower spine to her chest: little of it low down, where her belly is, most of it under
- * and at her bust, so her bust goes with her shoulders. And the turn from her shoulders to her head is shared
- * between her neck and her skull. GAME TUNING.
+ * out up her back, from her lower spine to her chest: most of it on her lower spine's bone, because that is the bone
+ * that carries her bust (four fifths of it, as measured on her skin), and her bust goes with her shoulders in
+ * Joshua's picture; her belly is carried by her hips' bone and stays with it. And the turn from her shoulders to her
+ * head is shared between her neck and her skull. GAME TUNING.
  */
-const BACK_TURN_SHARES = [0.1, 0.5, 0.4];
+const BACK_TURN_SHARES = [0.8, 0.1, 0.1];
 const HEAD_TURN_SHARES = [0.4, 0.6];
 /**
  * Guards (the game's rule keeps well within these): the most her hips, her upper legs and her feet are turned from
@@ -161,6 +165,10 @@ export interface FastHeroine extends HeroineBody {
   treadmill(speed: number): void;
   /** Her feet on the floor this frame, for a readout and the tests: how far she is lowered, which feet are planted, how far each was raised by bending its knee (metres). */
   feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number };
+  /** Her belly's and her breasts' measured shapes, and how far each arm was moved to keep it clear of them this frame (armClear.ts), for the tests. */
+  armInfo(): { eggs: readonly Egg[]; moved: readonly [number, number] };
+  /** FOR THE LAB: switch the arm and belly collision off (her arms are left as her pose and aim have them) or on again. */
+  keepArmsClear(on: boolean): void;
   /** Her stride as measured from her own foot bones, walking and running (bodyMotion.ts), for a readout and the tests. */
   strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null;
   /**
@@ -362,12 +370,12 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // Her skin's own units to her REST FRAME: metres, her soles on the floor, facing +z. That is the heroine's root as
   // she stands here, so it is "her skin's place in the world, seen from her root". (The builder's `restOfMesh`: her
   // skin's bind, carried by her first bone, in her mesh's place.)
-  const breath = (() => {
+  const meshToRest = (() => {
     const first = skin.skeleton.bones[0];
     const held = new THREE.Matrix4().copy(skin.bindMatrixInverse).multiply(first.matrixWorld).multiply(skin.skeleton.boneInverses[0]).multiply(skin.bindMatrix);
-    const meshToRest = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(skin.matrixWorld).multiply(held);
-    return new SkinBreath(meshToRest, look.manifest.weeks ?? weekForBump(body.belly));
+    return new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(skin.matrixWorld).multiply(held);
   })();
+  const breath = new SkinBreath(meshToRest, look.manifest.weeks ?? weekForBump(body.belly));
   const layBreath = (): void => breath.lay(body.points, fullIndex, skin, holdIndex, holdWeight);
   layBreath();
   breath.patch(materials.fine);
@@ -428,6 +436,27 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
   /** How her hips and legs are turned this frame (one object, rewritten each frame: footGround.ts reads it). */
   const legTwist: LegTwist = { hipsBone, hips: 0, upperLegs: 0, feet: 0 };
+
+  // HER ARMS KEEP CLEAR OF HER BELLY AND HER BREASTS (armClear.ts; Joshua, 2026-11-17: "a simple collision to prevent
+  // the arms from crossing into the belly", "don't forget about the breasts"). Her belly and each breast are measured
+  // from her own skin as egg shapes, here and again whenever her belly's size changes; each rides on the bone that
+  // carries most of it. Made now, while she stands.
+  root.updateMatrixWorld(true);
+  const armClear = new ArmClear(root, bones, arms.left, arms.right);
+  const measureEggs = ((): (() => Egg[]) => {
+    // (her trunk's bones: her hips and her back, not her arms or legs; and the heights her belly and bust lie between)
+    const isTrunk = new Uint8Array(bones.length);
+    for (const b of [hipsBone, pelvisBone, ...backBones]) { const k = bones.indexOf(b); if (k >= 0) isTrunk[k] = 1; }
+    const inFrame = (b: THREE.Bone): THREE.Vector3 => root.worldToLocal(b.getWorldPosition(new THREE.Vector3()));
+    const hips = Math.min(inFrame(bone(joints.hipL)).y, inFrame(bone(joints.hipR)).y);
+    const underBust = inFrame(backBones[Math.max(0, backBones.length - 2)]).y, lowerSpine = inFrame(backBones[0]).z;
+    const shoulders = Math.max(inFrame(bone(joints.shoulderL)).y, inFrame(bone(joints.shoulderR)).y);
+    return () => {
+      const skinNow = { points: body.points, toFrame: meshToRest, skinIndex: holdIndex, skinWeight: holdWeight, isTrunk };
+      return [fitBelly(skinNow, hips, underBust, lowerSpine), ...fitBreasts(skinNow, underBust - 0.01, shoulders)];
+    };
+  })();
+  armClear.setEggs(measureEggs());
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
   const turnUpright = (b: THREE.Bone, angle: number): void => {
@@ -605,6 +634,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
+    armInfo() { return { eggs: armClear.eggs, moved: armClear.moved }; },
+    keepArmsClear(on: boolean): void { armClear.on = on; },
     feetInfo() { return { drop: ground.drop, planted: ground.planted, raised: ground.raised, held: ground.held, stepFoot: ground.stepFoot, phase: motion.phase, walk: motion.walkBlend, run: motion.runBlend, speed: motion.speed, sway: motion.sway }; },
     breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
       const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
@@ -619,7 +650,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); armClear.setEggs(measureEggs()); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
@@ -675,11 +706,15 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       // (her shoulders face `shouldersYaw`: her arms point from there, as far to each side as arms go)
       aim.advance(frame.dt, target !== null);
+      root.updateMatrixWorld(true);
       if (aim.weight > 0) {
-        root.updateMatrixWorld(true);
         aim.facing = bellyYaw + backTurn;
         aim.apply(target);
       }
+
+      // Her arms kept clear of her belly and her breasts (armClear.ts): after everything that poses them, so it
+      // corrects all of it.
+      armClear.update();
 
       // Her detail level: the fixed one asked for, or AUTO's.
       // AUTO LIVE: Smart FPS turns her detail, from 30 % down to 1 %, by the frame rate alone.

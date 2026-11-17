@@ -27,9 +27,17 @@ use the game's single copy of three.js.
   toggle for free walk in third person. No jumping.
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
+- Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces
+  locked to a bone (helmet and visor, shoulder pads, forearm guards, knee and shin armor, boots, guns); plates
+  that follow the skin, made from her own skin surface pushed outward so they grow with her belly and breath
+  (chest, hip and thigh plates, Tessa's and Aurora's belly shells); and only a thin painted under-suit beneath,
+  so no bare skin shows where plates meet. A piece that must match an image exactly can later be a Meshy model.
 - Enemies come from all around the dome sky; rooftop turrets cover sections of it. Cards, waves, tech tree,
   quests, missions and bosses carry over from the HTML version. Economy starts fresh, saved locally.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
+- Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
+  TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of
+  Duty's large map is its small maps put together. So each location is built as a self-contained section.
 - Lessons from the games that inspired it: no paywalls, free 2x speed, a smooth difficulty curve checked by
   simulation, new turret cards useful at once, bosses beatable in a few tries; reuse bullets and enemies
   (object pools) so long sessions never get choppy.

@@ -65,6 +65,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
+const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const FREE_WALK_KEY = 'gdm.freeWalkThirdPerson'; // where the setting is remembered on this device
 const DEBUG_KEY = 'gdm.debug'; // "Show FPS and test tools" in Settings, remembered the same way
@@ -228,7 +229,11 @@ async function start(): Promise<void> {
 
     // 1. What is the player doing?
     controls.sample();
-    rig.applyLook(controls.takeLookX(), controls.takeLookY());
+    // Looking around: a drag on the picture, plus the camera stick (first person). The stick's push is squared
+    // (keeping its sign) so a small push aims finely and a full push turns quickly.
+    const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;
+    const stickLookY = controls.lookStickY * Math.abs(controls.lookStickY) * LOOK_STICK_SPEED * dt;
+    rig.applyLook(controls.takeLookX() + stickLookX, controls.takeLookY() - stickLookY); // stick up looks up
     const zoom = controls.takeZoom();
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
@@ -297,6 +302,17 @@ async function start(): Promise<void> {
     }
   };
   requestAnimationFrame(frame);
+}
+
+// THE GAME AS AN APP: in the published game (not while developing), start the service worker the build wrote
+// (dist/sw.js; see pwa() in vite.config.ts). It keeps the game's files on the device, so after the first visit
+// the game opens quickly and works with no signal, and "Add to Home Screen" makes it a full-screen app.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((error: unknown) => {
+      console.warn('The game could not be kept on this device (service worker not registered).', error);
+    });
+  });
 }
 
 start().catch((error: unknown) => {

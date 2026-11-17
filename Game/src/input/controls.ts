@@ -6,6 +6,7 @@
 //   ringDir         run along the ring track: -1 left, +1 right, 0 stand
 //   fireHeld        the fire button or key is down
 //   look / zoom     how far the view was dragged or pinched since last asked
+//   lookStickX / Y  the CAMERA stick (first person), each -1..1 (right and up are +)
 //
 // The canvas itself is the "look" surface: one finger (or the mouse) drags the
 // view, two fingers pinch to zoom, the wheel zooms. The on-screen buttons and
@@ -25,6 +26,9 @@ export class Controls {
   // ---- Written by the HUD's on-screen controls ------------------------------
   stickX = 0;
   stickY = 0;
+  /** The camera stick (first person): turns the view while the right thumb stays on FIRE. */
+  lookStickX = 0;
+  lookStickY = 0;
   buttonLeft = false;
   buttonRight = false;
   buttonFire = false;

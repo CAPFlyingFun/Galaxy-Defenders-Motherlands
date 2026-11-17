@@ -66,6 +66,8 @@ export class Hud {
   private readonly ringButtons: HTMLElement;
   private readonly stick: HTMLElement;
   private readonly stickKnob: HTMLElement;
+  private readonly lookStick: HTMLElement;
+  private readonly lookStickKnob: HTMLElement;
   private readonly viewButton: HTMLElement;
   private readonly fireButton: HTMLElement;
   private readonly crosshair: HTMLElement;
@@ -85,9 +87,25 @@ export class Hud {
     holdButton(left, (down) => (controls.buttonLeft = down));
     holdButton(right, (down) => (controls.buttonRight = down));
 
-    this.stick = element('div', 'gd-stick', move);
+    // The WALK stick (first person, and third person with "free walk" on).
+    this.stick = element('div', 'gd-stick gd-walk-stick', move);
+    element('span', 'gd-stick-label', this.stick, 'MOVE');
     this.stickKnob = element('div', 'gd-stick-knob', this.stick);
-    this.wireStick();
+    this.wireStick(this.stick, this.stickKnob, (x, y) => {
+      controls.stickX = x;
+      controls.stickY = y;
+    });
+
+    // The CAMERA stick (first person only; Joshua, 2026-11-16: "fire with your right hand and move the camera
+    // around in 1st person with your left"). It sits in the bottom-left corner under the walk stick, so the left
+    // thumb aims while the right thumb holds FIRE. Dragging on the picture still looks around as before.
+    this.lookStick = element('div', 'gd-stick gd-look-stick', move);
+    element('span', 'gd-stick-label', this.lookStick, 'CAMERA');
+    this.lookStickKnob = element('div', 'gd-stick-knob', this.lookStick);
+    this.wireStick(this.lookStick, this.lookStickKnob, (x, y) => {
+      controls.lookStickX = x;
+      controls.lookStickY = y;
+    });
 
     // ---- Bottom right: view switch and fire ----------------------------------
     const actions = element('div', 'gd-actions', this.root);
@@ -143,6 +161,7 @@ export class Hud {
     const useStick = first || freeWalk;
     this.ringButtons.hidden = useStick;
     this.stick.hidden = !useStick;
+    this.lookStick.hidden = !first;
     this.fireButton.hidden = !first;
     this.crosshair.hidden = !first;
     // The button names the view it switches TO.
@@ -171,10 +190,19 @@ export class Hud {
 
   // ---- The stick ---------------------------------------------------------------
 
-  private wireStick(): void {
+  /**
+   * Make `stick` a thumb stick: while a finger drags inside it, its `knob` follows the finger (up to
+   * STICK_TRAVEL pixels from the middle) and `write` is told where it is, each direction -1..1
+   * (right is +x, UP on the screen is +y). Letting go writes 0, 0 and the knob springs back.
+   */
+  private wireStick(stick: HTMLElement, knob: HTMLElement, write: (x: number, y: number) => void): void {
+    const release = () => {
+      knob.style.transform = '';
+      write(0, 0);
+    };
     const move = (event: PointerEvent) => {
       // How far the finger is from the middle of the stick, limited to the knob's travel.
-      const box = this.stick.getBoundingClientRect();
+      const box = stick.getBoundingClientRect();
       let dx = event.clientX - (box.left + box.width / 2);
       let dy = event.clientY - (box.top + box.height / 2);
       const length = Math.hypot(dx, dy);
@@ -182,25 +210,29 @@ export class Hud {
         dx *= STICK_TRAVEL / length;
         dy *= STICK_TRAVEL / length;
       }
-      this.stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-      this.controls.stickX = dx / STICK_TRAVEL;
-      this.controls.stickY = -dy / STICK_TRAVEL; // up on the screen is "forward"
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      write(dx / STICK_TRAVEL, -dy / STICK_TRAVEL); // up on the screen is +
     };
-    this.stick.addEventListener('pointerdown', (event) => {
-      this.stick.setPointerCapture(event.pointerId);
+    stick.addEventListener('pointerdown', (event) => {
+      // "Capture" keeps the drag coming to this stick even when the thumb slides outside its circle.
+      stick.setPointerCapture(event.pointerId);
       move(event);
     });
-    this.stick.addEventListener('pointermove', (event) => {
-      if (this.stick.hasPointerCapture(event.pointerId)) move(event);
+    stick.addEventListener('pointermove', (event) => {
+      if (stick.hasPointerCapture(event.pointerId)) move(event);
     });
-    this.stick.addEventListener('pointerup', () => this.releaseStick());
-    this.stick.addEventListener('pointercancel', () => this.releaseStick());
-    this.stick.addEventListener('lostpointercapture', () => this.releaseStick());
+    stick.addEventListener('pointerup', release);
+    stick.addEventListener('pointercancel', release);
+    stick.addEventListener('lostpointercapture', release);
   }
 
+  /** Let go of both sticks (used when the view changes and a stick may be hidden under a thumb). */
   private releaseStick(): void {
     this.stickKnob.style.transform = '';
+    this.lookStickKnob.style.transform = '';
     this.controls.stickX = 0;
     this.controls.stickY = 0;
+    this.controls.lookStickX = 0;
+    this.controls.lookStickY = 0;
   }
 }

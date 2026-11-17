@@ -15,7 +15,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, sep } from 'node:path';
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -143,10 +143,91 @@ function charb(): Plugin {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// THE GAME AS AN APP (a PWA; Joshua, 2026-11-16: "save it as an app ... almost everything already held locally").
+//
+// After the build, this writes dist/sw.js: a small "service worker", a script the browser keeps running beside the
+// page, which answers the page's requests for files from a store ON THE DEVICE instead of the network.
+//
+// Two stores, each named after a fingerprint of what it holds, so a store is replaced only when its files change:
+//   gdm-app-<fingerprint>    the game's own pages, code and small files. Fetched and kept as the app installs.
+//   gdm-charb-<fingerprint>  the Character Builder's files (her body, skin, hair: about 34 MB). Kept the first time
+//                            each is asked for. A push that only changes game code leaves this store alone, so her
+//                            big files are NOT downloaded again.
+// The page itself (index.html) is asked from the network first, so a new version shows the next time the app is
+// opened online; with no signal the stored page is used and the game still starts.
+// ---------------------------------------------------------------------------------------------------------------------
+function pwa(): Plugin {
+  /** Every file under `dir`, as paths relative to it with forward slashes. */
+  const walk = (dir: string, prefix = ''): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name), `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`]);
+  return {
+    name: 'gdm-pwa',
+    apply: 'build',
+    enforce: 'post', // after charb() has copied the builder's files into dist/charb/
+    closeBundle() {
+      const dist = here('./dist');
+      if (!existsSync(dist)) return;
+      const files = walk(dist).filter((f) => f !== 'sw.js');
+      const fingerprint = (list: string[]) => {
+        const hash = createHash('sha256');
+        for (const f of [...list].sort()) hash.update(f).update(readFileSync(join(dist, f)));
+        return hash.digest('hex').slice(0, 12);
+      };
+      const app = files.filter((f) => !f.startsWith('charb/'));
+      const charbFiles = files.filter((f) => f.startsWith('charb/'));
+      const sw = `// Written by the build (vite.config.ts, pwa()). Do not edit: it is replaced on every build.
+const APP = 'gdm-app-${fingerprint(app)}';
+const CHARB = 'gdm-charb-${fingerprint(charbFiles)}';
+const APP_FILES = ${JSON.stringify(['./', ...app.filter((f) => f !== 'index.html')])};
+
+// Installing: fetch the game's own files and keep them. (Her big files are kept later, as they are first used.)
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(APP).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
+});
+
+// Taking over: throw away the stores of older versions of THIS game (other sites' stores are left alone).
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.keys().then((names) => Promise.all(
+    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB)).map((n) => caches.delete(n)),
+  )).then(() => self.clients.claim()));
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL('./', self.location).pathname)) return;
+
+  // A page: the network first (so a new version arrives), the stored page when there is no signal.
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).then((response) => {
+      const copy = response.clone();
+      caches.open(APP).then((cache) => cache.put(request, copy));
+      return response;
+    }).catch(() => caches.match(request, { ignoreSearch: true }).then((hit) => hit || caches.match('./'))));
+    return;
+  }
+
+  // Everything else: the stored copy if there is one; otherwise the network, and keep what comes back.
+  const store = url.pathname.includes('/charb/') ? CHARB : APP;
+  event.respondWith(caches.open(store).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
+    if (response.ok && response.status === 200) cache.put(request, response.clone());
+    return response;
+  }))));
+});
+`;
+      writeFileSync(join(dist, 'sw.js'), sw);
+      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install, ${charbFiles.length} builder files kept on first use`);
+    },
+  };
+}
+
 export default defineConfig({
   // Relative paths, so the same build works at capflyingfun.github.io/Galaxy-Defenders-Motherlands/ and locally.
   base: './',
-  plugins: [charb()],
+  plugins: [charb(), pwa()],
   resolve: {
     alias: [
       { find: /^@charb\//, replacement: here('../Char_B/src') + '/' },

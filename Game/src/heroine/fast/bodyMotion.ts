@@ -43,6 +43,20 @@ const SLOWEST_PACE = 0.7;
  * little lower, so a speed hovering at the line does not flick between the two.
  */
 const RUN_FROM = 1.9, RUN_BACK = 1.6;
+/**
+ * HER BOB AND SWAY EASE OFF AS SHE SPEEDS UP (Joshua, 2026-11-17: "normal walking the Bob/Sway is at 200%, but the
+ * faster she moves, it lowers the amount"). At a walk (`fullAt`, metres a second) she has all of her look's Bob and
+ * Sway; by a sprint (`leastAt`) she has `least` of them (half: her 200 % becomes 100 %), evenly in between.
+ * GAME TUNING.
+ */
+export const WALK_EASE = { fullAt: 1.1, leastAt: 5.5, least: 0.5 } as const;
+/** The share of her look's Bob and Sway she has at a ground speed (see WALK_EASE). */
+export function walkEase(speed: number): number {
+  const t = Math.min(1, Math.max(0, (speed - WALK_EASE.fullAt) / (WALK_EASE.leastAt - WALK_EASE.fullAt)));
+  return 1 - (1 - WALK_EASE.least) * t;
+}
+/** How much she moves as she walks, percent of the builder's own tuning (her look's body settings). */
+export interface MotionSettings { readonly walkBob: number; readonly walkSway: number; readonly breastBounce: number }
 /** A walk eases into a run (and back) over about this long, seconds. */
 const RUN_BLEND_SECONDS = 0.22;
 /** Standing eases into walking (and back) over about this long, seconds. */
@@ -112,6 +126,8 @@ export class BodyMotion {
   readonly measure: HumanMeasure;
   /** This frame's weights for her four motion shapes, in shapedBody.ts's MOTION_SHAPES order. */
   readonly weights = [0, 0, 0, 0];
+  /** Her look's Bob, percent (read by the heroine, who lifts and lowers her by it: fastHeroine.ts). */
+  get walkBob(): number { return this.settings.walkBob; }
   /** 0 standing, 1 walking, in between while she starts or stops. */
   walkBlend = 0;
 
@@ -144,7 +160,7 @@ export class BodyMotion {
    * @param skin       her skin: its skeleton's bones are the ones posed
    * @param gripCurl   how far her fingers are closed, percent (the builder's FINGERS slider)
    */
-  constructor(model: THREE.Object3D, skin: THREE.SkinnedMesh, gripCurl: number) {
+  constructor(model: THREE.Object3D, skin: THREE.SkinnedMesh, gripCurl: number, private readonly settings: MotionSettings = { walkBob: 100, walkSway: 100, breastBounce: 100 }) {
     this.rig = new HumanRig(model);
     this.bones = skin.skeleton.bones;
     this.measure = measureHuman(this.rig.bind);
@@ -218,7 +234,8 @@ export class BodyMotion {
       const poseAs = (stance: 'walk' | 'run'): void => {
         gait.stance = stance;
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
-        this.rig.apply(weighWalk(measure, steps, walkWeight(phase, stance), this.weighedTurns));
+        // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
+        this.rig.apply(weighWalk(measure, steps, walkWeight(phase, stance, (this.settings.walkSway / 100) * walkEase(speed)), this.weighedTurns));
       };
       if (run <= 0) poseAs('walk');
       else if (run >= 1) poseAs('run');
@@ -251,7 +268,7 @@ export class BodyMotion {
     this.weights[0] = (sizeTiltDeg(belly) * (Math.PI / 180)) / BELLY_MOTION.tiltRad + swing * BOUNCE_TILT * bob; // bellyTilt
     this.weights[1] = swing * bob;                                       // bellyBob
     this.weights[2] = swing * (this.belly.x / BELLY_MOTION.bobM);        // bellySway
-    this.weights[3] = breastBobWeight(belly, this.breast);               // breastBob
+    this.weights[3] = breastBobWeight(belly, this.breast) * (this.settings.breastBounce / 100); // breastBob, by her look's BOUNCE
   }
 
   /** Put every bone back as the file has it (for when she is taken apart). */

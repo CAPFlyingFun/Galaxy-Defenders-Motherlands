@@ -39,13 +39,14 @@ import { AutoDetail, type TargetFps } from './autoDetail';
 import { loadBakedLook, type BakedLook } from './bakedLook';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { loadBodyFile } from './bodyFile';
-import { BodyMotion } from './bodyMotion';
+import { BodyMotion, walkEase } from './bodyMotion';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
+import { WALK_WEIGHT } from '@charb/actor/walkWeight';
 import type { LiveBody } from './liveBody';
 import { weekForBump } from '@charb/sarahlab/baby';
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
@@ -141,6 +142,8 @@ export interface FastHeroine extends HeroineBody {
   breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] };
   /** Megabytes downloaded for her, and seconds she took to load. */
   readonly loaded: { readonly megabytes: number; readonly seconds: number };
+  /** The week of pregnancy her belly stands for, off her own chart (0: not pregnant). Her vitals take it into account. */
+  readonly weeks: number;
   /** How long each lighter detail level took to work out, milliseconds (only levels made so far). */
   levelTimes(): Record<number, number>;
 }
@@ -276,7 +279,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   }
 
   // ---- 7. her skeleton and how she moves ---------------------------------------------------------------------------
-  let motion = new BodyMotion(file.scene, skin, GRIP_CURL);
+  let motion = new BodyMotion(file.scene, skin, GRIP_CURL, look.manifest.motion);
   /** The top of her bare head over the floor as she stands (her sneakers' soles under her), metres. */
   let crownOverFloor = look.manifest.barefootHeightMetres;
   // One frame of standing, then she is measured as she stands: how tall, where her soles are, which way she faces.
@@ -319,7 +322,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     root.updateMatrixWorld(true);
     // (her stride is measured in her skeleton's own units against the world, so it is measured again at her real size)
     motion.dispose();
-    motion = new BodyMotion(file.scene, skin, GRIP_CURL);
+    motion = new BodyMotion(file.scene, skin, GRIP_CURL, look.manifest.motion);
     motion.update(0, 0, 0, body.belly);
     root.updateMatrixWorld(true);
   }
@@ -332,7 +335,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     const first = skin.skeleton.bones[0];
     const held = new THREE.Matrix4().copy(skin.bindMatrixInverse).multiply(first.matrixWorld).multiply(skin.skeleton.boneInverses[0]).multiply(skin.bindMatrix);
     const meshToRest = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(skin.matrixWorld).multiply(held);
-    return new SkinBreath(meshToRest, weekForBump(body.belly));
+    return new SkinBreath(meshToRest, look.manifest.weeks ?? weekForBump(body.belly));
   })();
   const layBreath = (): void => breath.lay(body.points, fullIndex, skin, holdIndex, holdWeight);
   layBreath();
@@ -348,6 +351,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let breathClock = 0;
 
   const bones = skin.skeleton.bones, joints = motion.measure.joints;
+  // HER WALK'S BOB (the builder's WALK Bob: actor/walkWeight.ts `bobDrop`). Her pose alone leaves her feet a little
+  // off the floor through each step, because her root does not move. So each frame her lower ankle is measured
+  // against where it is when she stands: that is how far she must come down for the foot to be on the ground.
+  // With no bob she stays at the lowest of those all the way through her stride (hips level); her look's Bob brings
+  // her that share of the way back up at each moment, which is her hips rising and falling with each step.
+  const ankleL = bones[joints.ankleL], ankleR = bones[joints.ankleR];
+  const fitFloorY = fit.position.y;
+  root.updateMatrixWorld(true);
+  const ankleStandY = Math.min(ankleL.matrixWorld.elements[13], ankleR.matrixWorld.elements[13]) - root.position.y;
+  /** The most her lower foot has been off the floor lately (it forgets slowly), and her bob's offset now, metres. */
+  let liftMost = 0, bobNow = 0;
   const bone = (index: number): THREE.Bone => bones[index];
   const arm = (side: number, shoulder: number, elbow: number, wrist: number): ArmBones => ({
     side, upper: bone(shoulder), fore: bone(elbow), hand: bone(wrist), knuckles: findKnuckles(bone(wrist)),
@@ -472,6 +486,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     height,
     get ready() { return !disposed; },
     loaded: { megabytes, seconds },
+    weeks: look.manifest.weeks ?? weekForBump(body.belly),
 
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
@@ -545,6 +560,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
       // (the same four on a live level, where they sit among all her other shapes)
       for (let i = 0; i < 4; i++) if (liveMotionAt[i] >= 0) liveInfluences[liveMotionAt[i]] = motion.weights[i];
+
+      // Her walk's bob: her lower foot's height against standing, and her look's share of the way up from her lowest.
+      fit.position.y = fitFloorY;
+      if (motion.walkBlend > 0) {
+        root.updateMatrixWorld(true);
+        const lift = Math.min(ankleL.matrixWorld.elements[13], ankleR.matrixWorld.elements[13]) - root.position.y - ankleStandY;
+        liftMost = Math.max(lift, liftMost - 0.02 * frame.dt);
+        const share = Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(speedNow));
+        bobNow = (-liftMost + share * (liftMost - lift)) * motion.walkBlend;
+        fit.position.y = fitFloorY + bobNow;
+      } else { liftMost = 0; bobNow = 0; }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       aim.advance(frame.dt, target !== null);

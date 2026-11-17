@@ -1,12 +1,18 @@
 {
   "version": 1,
   "look": "blaze",
-  "bakedAt": "2026-11-17T08:38:07.899Z",
+  "bakedAt": "2026-11-17T15:31:54.027Z",
   "builderVersion": "0.9.40",
   "belly": 100,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.69825854272895,
+  "barefootHeightMetres": 1.6982279970778071,
   "navel": 20,
+  "motion": {
+    "walkBob": 200,
+    "walkSway": 200,
+    "breastBounce": 200
+  },
+  "weeks": 37.2,
   "normalScale": [
     1,
     -1
@@ -43,11 +49,11 @@
     ],
     "lowestPointOverTheFloorMetres": 0.0005551650727082213,
     "solesOverTheFloorMetres": 0.01787195453670562,
-    "crownOverTheFloorMetres": 1.7161304972656557,
-    "pointsTheBuilderMoved": 50765,
-    "movedMostGeometryUnits": 0.03866983083626385,
+    "crownOverTheFloorMetres": 1.7160999516145128,
+    "pointsTheBuilderMoved": 51177,
+    "movedMostGeometryUnits": 0.03924997026333249,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16339184491224937,
+    "restSkinSpread": 0.16335546913083757,
     "captureMissing": {
       "position": 0,
       "normal": 0

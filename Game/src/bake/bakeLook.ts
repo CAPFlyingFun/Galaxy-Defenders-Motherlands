@@ -32,6 +32,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { captureVertices, restSkinMatrix, toBase64 } from '@charb/sarahlab/storyBake';
 import { normaliseHead } from '@charb/sarahlab/headLook';
+import { herWeek } from '@charb/sarahlab/baby';
+import { readPregnancy } from '@charb/sarahlab/pregnancy';
 import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
 import { ROOM_UNITS, openBuilderRoom } from '../heroine/builderRoom';
 import { findPaintedSkin } from '../heroine/paintMask';
@@ -198,7 +200,12 @@ async function start(): Promise<void> {
   const head = normaliseHead(look.body.head);
   // her NAVEL control's setting: one of the numbers in her look's body shape (the builder's own text)
   let navel = 0;
-  try { navel = Number((JSON.parse(look.body.shape) as { shape?: { navel?: number } }).shape?.navel ?? 0) || 0; } catch { /* no shape text: the default navel */ }
+  let settings: Record<string, number> = {};
+  try { settings = (JSON.parse(look.body.shape) as { shape?: Record<string, number> }).shape ?? {}; navel = Number(settings.navel ?? 0) || 0; } catch { /* no shape text: the defaults */ }
+  const percent = (key: string): number => (Number.isFinite(settings[key]) ? Number(settings[key]) : 100);
+  // the week her belly stands for, off her own chart (her look's pregnancy numbers), or 0 when she is not pregnant
+  const pregnancy = readPregnancy((look.body as { pregnancy?: unknown }).pregnancy);
+  const weeks = pregnancy.pregnant ? herWeek(look.body.bump, 1, pregnancy) : 0;
   const roomMaterial = (Array.isArray(skin.material) ? skin.material[0] : skin.material) as THREE.MeshStandardMaterial;
   const manifest: BakedLookManifest = {
     version: 1,
@@ -209,6 +216,8 @@ async function start(): Promise<void> {
     vertexCount: count,
     barefootHeightMetres: (top - bottom) / ROOM_UNITS,
     navel,
+    motion: { walkBob: percent('walkBob'), walkSway: percent('walkSway'), breastBounce: percent('breastBounce') },
+    weeks,
     normalScale: [roomMaterial.normalScale?.x ?? 1, roomMaterial.normalScale?.y ?? 1],
     hair: head.hair.style === HAIR_STYLE_NONE ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
     files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null },

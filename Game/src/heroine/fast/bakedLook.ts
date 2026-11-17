@@ -41,6 +41,13 @@ export interface BakedLookManifest {
   readonly navel: number;
   /** The builder's setting for how strongly her surface-detail picture is read (x, y): the baked picture is read back with it. */
   readonly normalScale: readonly [number, number];
+  /**
+   * How much she moves as she walks, from her look's body settings (the builder's WALK Bob and Sway and her breasts'
+   * Bounce, percent: 100 is the builder's own tuning). Left out of a look baked before 2026-11-17: 100 each.
+   */
+  readonly motion?: { readonly walkBob: number; readonly walkSway: number; readonly breastBounce: number };
+  /** The week of pregnancy her belly stands for, off her own chart (the builder's `herWeek`); 0 if she is not pregnant. */
+  readonly weeks?: number;
   /** Her hair: the builder's style id, its colour ('#rrggbb', or null for the file's own copper) and length (0 shortest - 1). Null: no hair. */
   readonly hair: { readonly style: string; readonly colour: string | null; readonly length: number } | null;
   /** File names, beside look.json. */

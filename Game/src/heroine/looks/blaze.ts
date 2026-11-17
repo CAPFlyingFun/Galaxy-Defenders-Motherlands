@@ -21,7 +21,9 @@ export const BLAZE_LOOK: HeroineLook = {
   body: {
     "model": "v2-body",
     "bump": 100,
-    "shape": "{\"version\":1,\"shape\":{\"navel\":20}}",
+    // (Joshua's export of 2026-11-17 09:24: "I updated a few stats for Blaze". Her BODY is his new one; her outfit
+    // below is left as it was: "leave the same outfit".)
+    "shape": "{\"version\":1,\"shape\":{\"bellyLower\":5,\"navel\":20,\"babyKicks\":200,\"milk\":50,\"breastBounce\":200,\"walkBob\":200,\"walkSway\":200,\"legGap\":1.5}}",
     "refine": false,
     "random": {
       "rules": {},
@@ -32,7 +34,7 @@ export const BLAZE_LOOK: HeroineLook = {
       "week": null,
       "weekAtBump": null,
       "firstWeekBump": 25,
-      "deliveryBump": 130,
+      "deliveryBump": 150,
       "deliveryWeek": 41,
       "afterBump": null,
       "births": null

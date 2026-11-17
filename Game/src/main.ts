@@ -41,6 +41,8 @@ type GameHeroine = HeroineBody & {
   /** The fast heroine only: the hidden live body (heroine/fast/liveBody.ts), and what it costs. */
   attachLive?: (live: import('./heroine/fast/liveBody').LiveBody | null) => void;
   liveInfo?: () => { stepMs: number; kicks: number } | null;
+  /** The week of pregnancy her belly stands for, off her own chart (the fast heroine knows it from her look). */
+  weeks?: number;
 };
 
 /**
@@ -252,11 +254,12 @@ async function start(): Promise<void> {
   // HER PACE AND HER VITALS.
   // Her pace (walk, jog, run, sprint) comes from how far the MOVE stick is pushed (src/input/pace.ts).
   // Her vitals (heart, breath, stamina, health, food, water) follow what she does (src/vitals/heroineVitals.ts):
-  // Blaze is 28, and her belly (100 %) is week 40 by the Character Builder's chart, which its model of her breath
+  // Blaze is 28, and the week her belly stands for comes off her own chart in the Character Builder (her look's
+  // pregnancy numbers; week 40 for a body that does not say), which its model of her breath
   // and heart takes into account. Her body shows them (she breathes faster and deeper after a run), and so does
   // the card along the top of the screen.
   const pace = new Pace();
-  const vitals = new HeroineVitals({ age: 28, weeks: 40 });
+  const vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
   const vitalsPanel = new VitalsPanel();
   /** What her body allows this frame (her stamina, her share of full speed), from last frame's vitals. */
   let limits: PaceLimits = NO_LIMITS;

@@ -44,7 +44,8 @@ const CONTROLS = [
   { id: 'camera', selector: '.gd-look-stick', label: 'CAMERA stick' },
   { id: 'fire', selector: '.gd-fire', label: 'FIRE' },
   { id: 'view', selector: '.gd-view', label: 'View switch' },
-  { id: 'run', selector: '.gd-ring-buttons', label: 'Run left / right' },
+  // (The "Run left / right" arrow buttons of the old ring track were listed here; they are gone from the game.
+  //  A place saved for them on a device is simply never read again.)
 ] as const;
 type ControlId = (typeof CONTROLS)[number]['id'];
 

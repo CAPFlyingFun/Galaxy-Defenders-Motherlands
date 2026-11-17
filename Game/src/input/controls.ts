@@ -3,15 +3,14 @@
 //
 // Touch, mouse and keyboard all end up as the same few numbers:
 //   moveX / moveY   the walk stick, each -1..1 (right and forward are +)
-//   ringDir         run along the ring track: -1 left, +1 right, 0 stand
 //   fireHeld        the fire button or key is down
 //   look / zoom     how far the view was dragged or pinched since last asked
 //   lookStickX / Y  the CAMERA stick (first person), each -1..1 (right and up are +)
 //
 // The canvas itself is the "look" surface: one finger (or the mouse) drags the
 // view, two fingers pinch to zoom, the wheel zooms. The on-screen buttons and
-// the stick live in ui/hud.ts and write their state into the public fields
-// here (stickX, stickY, buttonLeft, buttonRight, buttonFire).
+// the sticks live in ui/hud.ts and write their state into the public fields
+// here (stickX, stickY, lookStickX, lookStickY, buttonFire).
 //
 // The game loop calls sample() once per frame and then reads the results.
 // ============================================================================
@@ -31,14 +30,11 @@ export class Controls {
   /** The camera stick (first person): turns the view while the right thumb stays on FIRE. */
   lookStickX = 0;
   lookStickY = 0;
-  buttonLeft = false;
-  buttonRight = false;
   buttonFire = false;
 
   // ---- Read by the game after sample() --------------------------------------
   moveX = 0;
   moveY = 0;
-  ringDir = 0;
   fireHeld = false;
 
   /** In first person a mouse click on the view fires one shot; in third person it does nothing. */
@@ -72,7 +68,7 @@ export class Controls {
     window.addEventListener('blur', this.onBlur);
   }
 
-  /** Once per frame: turn the raw keys, stick and buttons into moveX, moveY, ringDir and fireHeld. */
+  /** Once per frame: turn the raw keys, stick and buttons into moveX, moveY and fireHeld. */
   sample(): void {
     const left = this.keys.has('a') || this.keys.has('arrowleft');
     const right = this.keys.has('d') || this.keys.has('arrowright');
@@ -83,7 +79,6 @@ export class Controls {
 
     this.moveX = Math.max(-1, Math.min(1, this.stickX + keyX));
     this.moveY = Math.max(-1, Math.min(1, this.stickY + keyY));
-    this.ringDir = Math.max(-1, Math.min(1, keyX + (this.buttonRight ? 1 : 0) - (this.buttonLeft ? 1 : 0)));
     this.fireHeld = this.buttonFire || this.keys.has(' ');
   }
 

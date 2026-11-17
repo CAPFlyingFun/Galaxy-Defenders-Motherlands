@@ -24,7 +24,8 @@ import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { createCity } from './world/city';
-import { DOME_RADIUS, PALETTE, PLAZA_RADIUS, SECTION_MAX_HP } from './world/config';
+import { CityWalls } from './world/collision';
+import { DOME_RADIUS, PALETTE, SECTION_MAX_HP } from './world/config';
 import { Dome } from './world/dome';
 import { createGround } from './world/ground';
 import { createSky } from './world/sky';
@@ -114,25 +115,8 @@ const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
-const FREE_WALK_KEY = 'gdm.freeWalkThirdPerson'; // where the setting is remembered on this device
-const DEBUG_KEY = 'gdm.debug'; // "Show FPS and test tools" in Settings, remembered the same way
-
-/** Read the remembered "free walk" setting (private browsing may refuse; then it is simply off). */
-function loadFreeWalk(): boolean {
-  try {
-    return localStorage.getItem(FREE_WALK_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function saveFreeWalk(on: boolean): void {
-  try {
-    localStorage.setItem(FREE_WALK_KEY, on ? '1' : '0');
-  } catch {
-    // Not being able to remember a setting is not worth stopping the game for.
-  }
-}
+const SHADOW_FLOOR_RADIUS = 4; // metres: the patch of ground round her feet that can show her real shadow
+const DEBUG_KEY = 'gdm.debug'; // "Show FPS and test tools" in Settings, remembered on this device
 
 async function start(): Promise<void> {
   const host = document.getElementById('app');
@@ -185,16 +169,20 @@ async function start(): Promise<void> {
   // REAL SHADOWS (Joshua, 2026-11-17: "Allow real shadows"; the DEV Room's "Shadows: on", with its own numbers: a
   // 2048-pixel shadow picture, softened). The key light draws her once more, from where it stands, into a picture of
   // depths; anything that "receives" shadows then darkens where that picture says she is in the way.
-  // The plaza's own ground glows by itself and ignores lights, so a see-through disc lies just over it whose only
+  // The ground glows by itself and ignores lights, so a see-through disc lies just over it whose only
   // job is to show her shadow (three.js's ShadowMaterial: invisible but for the shadow on it).
-  // The light's shadow box is small (6 m across) and follows her each frame, so the picture stays sharp.
+  // The light's shadow box is small (6 m across) and follows her each frame, so the picture stays sharp. The disc
+  // is small too (a few metres round her feet) and goes with her, so her shadow shows anywhere on the map and
+  // not only in the plaza. (Both are moved in the loop below, where she is moved.)
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   keyLight.shadow.mapSize.set(2048, 2048);
   const shadowBox = keyLight.shadow.camera;
   shadowBox.left = -3; shadowBox.right = 3; shadowBox.top = 3; shadowBox.bottom = -3; shadowBox.near = 1; shadowBox.far = 30;
   shadowBox.updateProjectionMatrix();
   keyLight.shadow.bias = -0.0005;
-  const shadowFloor = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_RADIUS + 2, 48), new THREE.ShadowMaterial({ opacity: 0.5 }));
+  // (depthWrite off: the disc only darkens what is under it. Left on, it hid the foot of the dome's glass wherever
+  // it reached the dome wall, which showed as a thin black line along the bottom of the glass.)
+  const shadowFloor = new THREE.Mesh(new THREE.CircleGeometry(SHADOW_FLOOR_RADIUS, 32), new THREE.ShadowMaterial({ opacity: 0.5, depthWrite: false }));
   shadowFloor.rotation.x = -Math.PI / 2;   // laid flat
   shadowFloor.position.y = 0.012;          // a centimetre over the ground, so the two never flicker
   shadowFloor.receiveShadow = true;
@@ -238,17 +226,15 @@ async function start(): Promise<void> {
     })();
   }
 
-  const motion = new PlayerMotion();
+  // WHERE SHE CAN GO: anywhere under the dome (Joshua, 2026-11-17: "so I can like run from one end of the map to
+  // the other"). The buildings are solid and the dome's glass stops her: `walls` knows both (src/world/collision.ts)
+  // and `motion` asks it where each step really ends.
+  const walls = new CityWalls(city.footprints);
+  const motion = new PlayerMotion(walls);
   const rig = new CameraRig();
   const controls = new Controls(renderer.domElement);
 
-  let freeWalk = loadFreeWalk();
-  /** When a run along the ring starts, this remembers whether left and right must be swapped (see below). */
-  let ringFlip = 1;
-  let wasRunning = false;
-  /** Which way she last ran on the ring (-1 left, +1 right): kept while she slows to a stop after the stick is let go. */
-  let ringHeading = 0;
-  /** The stick's direction last frame (free walk), to notice her turning right round. */
+  /** The stick's direction last frame, to notice her turning right round. */
   let lastMoveX = 0, lastMoveY = 0;
 
   // HER PACE AND HER VITALS.
@@ -270,12 +256,16 @@ async function start(): Promise<void> {
     rig.setMode(rig.mode === 'third' ? 'first' : 'third');
     heroine.setFirstPerson(rig.mode === 'first');
     controls.clickMode = rig.mode === 'first' ? 'click-fires' : 'look-only';
-    hud.setView(rig.mode, freeWalk);
+    // (the HUD keeps hold of the MOVE stick through this, so she goes on at the pace she had: src/ui/hud.ts)
+    hud.setView(rig.mode);
   };
 
-  /** The dome section the camera is looking toward: the one the debug buttons act on. */
+  /**
+   * The dome section the camera is looking toward: the one the debug buttons act on. Found where the line of
+   * sight meets the dome itself, so it is right from anywhere on the map and not only from the plaza.
+   */
   const aim = new THREE.Vector3();
-  const sectionInView = () => dome.sectionAtPoint(rig.aimPoint(DOME_RADIUS, aim));
+  const sectionInView = () => dome.sectionAtPoint(rig.aimPointOnBall(DOME_RADIUS, aim));
 
   const domeDebug = (action: DomeDebugAction) => {
     if (action === 'hit') sectionInView().damage(25);
@@ -283,18 +273,16 @@ async function start(): Promise<void> {
     else dome.repairAll();
   };
 
+  // (The "Free walk in third person" switch is gone: she always walks freely now. What a device remembered for
+  // it is no longer read, so it is forgotten.)
+  try { localStorage.removeItem('gdm.freeWalkThirdPerson'); } catch { /* private browsing: nothing was remembered */ }
+
   const hud = new Hud(uiHost, controls, {
     debug,
-    freeWalk,
     onDebugChange(on) {
       // The readout is built when the game starts, so remember the choice and start again.
       try { localStorage.setItem(DEBUG_KEY, on ? '1' : '0'); } catch { /* cannot remember it: nothing to do */ }
       location.reload();
-    },
-    onFreeWalkChange(on) {
-      freeWalk = on;
-      saveFreeWalk(on);
-      hud.setView(rig.mode, freeWalk);
     },
     graphics,
     onGraphicsChange(key, value) {
@@ -337,7 +325,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets, pace, vitals };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets, pace, vitals, walls };
   }
 
   // ---- The loop --------------------------------------------------------------------
@@ -369,39 +357,27 @@ async function start(): Promise<void> {
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
     // 2. Move the heroine.
-    // How far the stick is pushed sets her pace; where it points steers her.
+    // She walks freely in every view (Joshua, 2026-11-17: "Remove the fixed moving ring, and let it be free
+    // movement"). How far the stick is pushed sets her pace; where it points steers her.
     const push = Math.min(1, Math.hypot(controls.moveX, controls.moveY));
-    if (rig.mode === 'first' || freeWalk) {
-      // (turning right round, the stick pointing more than about 120 degrees from where it pointed: she loses a pace)
-      if (push > PACE_TUNING.ringsFrom[0]) {
-        const x = controls.moveX / push, y = controls.moveY / push;
-        if (x * lastMoveX + y * lastMoveY < -0.5) pace.turnedBack();
-        lastMoveX = x; lastMoveY = y;
-      }
-      pace.step(dt, push, limits);
-      if (rig.mode === 'first') motion.updateFree(dt, controls.moveX, controls.moveY, rig.yaw, true, pace.speed);
-      else motion.updateFree(dt, controls.moveX, controls.moveY, rig.viewYaw, false, pace.speed);
-    } else {
-      // "Left" must mean left ON SCREEN. If the player has dragged the view round to
-      // look back at her, screen-left is the other way along the ring, so swap. The
-      // choice is made once, when a run starts, so it never flips mid-run.
-      // On the ring only the stick's left and right count: which side it is on is her direction, how far it is
-      // pushed is her pace, as everywhere else.
-      const direction = Math.abs(controls.moveX) >= PACE_TUNING.ringsFrom[0] ? Math.sign(controls.moveX) : 0;
-      const running = direction !== 0;
-      if (running && !wasRunning && pace.speed < 0.05) ringFlip = Math.cos(rig.yaw - motion.ringAngle) >= 0 ? 1 : -1;
-      wasRunning = running;
-      if (running) {
-        if (ringHeading !== 0 && direction !== ringHeading) pace.turnedBack(); // she turned right round
-        ringHeading = direction;
-      }
-      pace.step(dt, running ? push : 0, limits);
-      // The camera swings round the plaza by the same angle she ran. (Let go, she slows to a stop the way she was going.)
-      rig.swing(motion.updateRing(dt, ringHeading * ringFlip, pace.speed));
+    // (turning right round, the stick pointing more than about 120 degrees from where it pointed: she loses a pace)
+    if (push > PACE_TUNING.ringsFrom[0]) {
+      const x = controls.moveX / push, y = controls.moveY / push;
+      if (x * lastMoveX + y * lastMoveY < -0.5) pace.turnedBack();
+      lastMoveX = x; lastMoveY = y;
     }
-    // (the key light and its shadow box go with her)
+    pace.step(dt, push, limits);
+    // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right.
+    //   first person  she faces where she looks;
+    //   third person  she turns to face the way she goes, and the camera keeps the side of her it was dragged to.
+    // (Her facing is decided in one place: PlayerMotion.update, src/input/playerMotion.ts. The walls stop her there too.)
+    if (rig.mode === 'first') motion.update(dt, controls.moveX, controls.moveY, rig.yaw, true, pace.speed);
+    else motion.update(dt, controls.moveX, controls.moveY, rig.viewYaw, false, pace.speed);
+    // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     keyLight.position.set(motion.x - 4, 10, motion.z + 6);
     keyLight.target.position.set(motion.x, 0, motion.z);
+    shadowFloor.position.x = motion.x;
+    shadowFloor.position.z = motion.z;
     heroine.setPosition(motion.x, motion.z);
     heroine.setYaw(motion.yaw);
     heroine.setWalk(motion.speed);

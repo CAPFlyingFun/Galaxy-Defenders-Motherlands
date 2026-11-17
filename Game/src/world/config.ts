@@ -25,10 +25,14 @@ export const DOME_OPACITY = 0.2;
 /** The round plaza the heroine defends from. */
 export const PLAZA_RADIUS = 14;
 
-/** The ring track she runs on in third person. */
+/**
+ * The ring painted on the plaza: how far out from the middle it lies. She used to run round it on a fixed track;
+ * since 2026-11-17 she walks anywhere (Joshua: "Remove the fixed moving ring, and let it be free movement"), and
+ * the ring is only paint on the ground.
+ */
 export const RING_RADIUS = 9;
 
-/** Width of the painted ring track. */
+/** Width of the painted ring. */
 export const RING_WIDTH = 1.8;
 
 /** The city grid: one block plus one street is CITY_PITCH wide. */

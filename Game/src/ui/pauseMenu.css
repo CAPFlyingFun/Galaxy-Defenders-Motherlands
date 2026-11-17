@@ -1,0 +1,67 @@
+/* ============================================================================
+   pauseMenu.css -- the look of the PAUSE MENU (src/ui/pauseMenu.ts).
+
+   It is a dim sheet over the whole game with a small card in the middle:
+   PAUSED, Resume, Settings. The colours are the controls' own (hud.css).
+
+   The sheet takes every touch, so nothing under it (the sticks, FIRE, the
+   picture) reacts while the game is paused. It covers the bottom corners too:
+   they belong to the player's controls while PLAYING, and nothing is played
+   while this is up.
+   ============================================================================ */
+
+.gd-pause {
+  position: absolute;
+  inset: 0;
+  z-index: 40; /* over the controls; under the control editor (50) and, of course, the rotate cover */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 6, 13, 0.62);
+  color: #eaf2ff;
+  font-size: 15px;
+  pointer-events: auto; /* (the layer it sits in lets touches through: index.html #ui) */
+  touch-action: none;
+}
+.gd-pause[hidden] { display: none; }
+
+.gd-pause-card {
+  box-sizing: border-box;
+  width: 230px;
+  padding: 18px 20px 20px;
+  border: 1px solid rgba(94, 232, 200, 0.55);
+  border-radius: 14px;
+  background: rgba(4, 6, 13, 0.93);
+  box-shadow: 0 0 44px rgba(94, 232, 200, 0.14);
+  text-align: center;
+}
+.gd-pause-card h2 {
+  margin: 0 -0.3em 6px 0; /* (the right margin takes back the space after the last spaced-out letter) */
+  font-size: 16px;
+  letter-spacing: 0.3em;
+  color: #ffd56b;
+}
+.gd-pause-card button {
+  display: block;
+  width: 100%;
+  min-height: 46px; /* a comfortable size for a thumb */
+  margin-top: 12px;
+  border-radius: 10px;
+  color: #eaf2ff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  touch-action: manipulation;
+}
+/* Resume is the button to press: filled and bright. Settings is quieter. */
+.gd-pause-resume { border: 2px solid #5ee8c8; background: rgba(94, 232, 200, 0.24); }
+.gd-pause-settings { border: 1px solid rgba(94, 232, 200, 0.55); background: #101a2e; }
+.gd-pause-card button:active { background: rgba(94, 232, 200, 0.4); }
+
+/* SETTINGS, OPENED FROM THE PAUSE MENU. It is the game's ordinary Settings panel (hud.ts, hud.css), which sits in
+   the top right corner under the gear. While the game is paused it is lifted over the dim sheet so it can be used,
+   and the card moves to the middle of the room that is left beside it, so the two never overlap on a small phone.
+   (About 300 pixels are taken to be the panel's; the card is 230 wide, so half of it is 115.) */
+#stage.is-paused .gd-settings { z-index: 45; }
+.gd-pause.has-settings { justify-content: flex-start; }
+.gd-pause.has-settings .gd-pause-card { margin-left: max(var(--safe-left) + 12px, (100% - 300px) / 2 - 115px); }

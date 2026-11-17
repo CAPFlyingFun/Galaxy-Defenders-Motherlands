@@ -24,6 +24,15 @@
 // way to be "held sideways", so the game just uses the window's shape.
 // ============================================================================
 
+// TURNING THE PHONE WHILE THE GAME IS OPEN (Joshua, 2026-11-17). With the phone's rotation lock OFF, turning the
+// phone makes iOS spin the whole page, and a moment later the game un-turns its own stage to match: for that
+// moment the picture is seen spinning and snapping back, though it ends up looking exactly as it did. So while
+// that happens the game is hidden behind a plain dark COVER: it drops the instant the phone reports it is being
+// turned, stays until the screen has stopped changing for COVER_HOLD_MS, and then fades away. The game the player
+// sees before and after is the same landscape picture; the flip between is never shown.
+const COVER_HOLD_MS = 900; // how long after the LAST change of screen shape the cover stays (iOS's spin takes about half a second)
+const COVER_FADE_MS = 250; // how long the cover takes to fade away
+
 /** True while the stage is turned a quarter turn (a touch screen taller than it is wide). */
 let rotated = false;
 const listeners: Array<() => void> = [];
@@ -57,9 +66,34 @@ export function keepLandscape(stage: HTMLElement): void {
   // "coarse" = the main way of pointing is a finger. Asked once: it does not change while the game runs.
   const touchScreen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+  // The cover: a dark sheet over the whole screen (outside the stage, so it is never turned), normally invisible.
+  const cover = document.createElement('div');
+  cover.style.cssText = `position:fixed;inset:0;z-index:1000;background:#04060d;opacity:0;pointer-events:none;transition:opacity ${COVER_FADE_MS}ms ease`;
+  document.body.appendChild(cover);
+  let coverTimer = 0;
+  /** Drop the cover at once (no fade in), and lift it once the screen has been still for COVER_HOLD_MS. */
+  const coverUp = () => {
+    cover.style.transition = 'none';
+    cover.style.opacity = '1';
+    window.clearTimeout(coverTimer);
+    coverTimer = window.setTimeout(() => {
+      cover.style.transition = `opacity ${COVER_FADE_MS}ms ease`;
+      cover.style.opacity = '0';
+    }, COVER_HOLD_MS);
+  };
+
+  let first = true;
+  let lastWide = window.innerWidth > window.innerHeight;
   const layout = () => {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    // Has the screen gone from tall to wide or back (the phone was turned)? Then hide the flip. Not the first
+    // time (nothing has been shown yet), and not for ordinary resizing that keeps the same shape (a computer's
+    // window being dragged, the phone's address bar sliding away).
+    const wide = width > height;
+    if (!first && touchScreen && wide !== lastWide) coverUp();
+    first = false;
+    lastWide = wide;
     rotated = touchScreen && height > width;
 
     if (rotated) {
@@ -82,6 +116,11 @@ export function keepLandscape(stage: HTMLElement): void {
   };
 
   window.addEventListener('resize', layout);
-  window.addEventListener('orientationchange', layout);
+  // "orientationchange" arrives as the phone starts to turn, before the screen's new size is known: the cover
+  // drops straight away, and the layout follows when the size arrives (the resize above).
+  window.addEventListener('orientationchange', () => {
+    if (touchScreen) coverUp();
+    layout();
+  });
   layout();
 }

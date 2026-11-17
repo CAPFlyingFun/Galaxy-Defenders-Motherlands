@@ -31,11 +31,12 @@ import { Tracers } from './world/tracers';
  * THE ONE PLACE THE HEROINE IS MADE.
  * Everything else only knows her as a HeroineBody (core/contracts.ts).
  *
- * By default she is BLAZE: the real Character Builder body, wearing the look Joshua saved for her
- * (src/heroine/looks/blaze.ts). Her files are large, so the builder's code is fetched only when it is needed
+ * By default she is BLAZE: the real Character Builder body in her pink-and-black suit
+ * (src/heroine/looks/blazeSuit.ts, built on the look Joshua saved for her in src/heroine/looks/blaze.ts). Her files are large, so the builder's code is fetched only when it is needed
  * (the `import()` below), and a line of text says she is loading.
  *
  *   ?heroine=standin   the simple stand-in figure (loads at once; useful to compare frame rates)
+ *   ?look=blaze        Joshua's own export (the all-pink two-piece), in place of the suit
  *   ?body=full|light   the builder's full or light skin (left out, the builder chooses by device)
  *
  * If her files cannot be loaded, the stand-in takes her place, so the game always starts.
@@ -45,15 +46,16 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   if (asked.get('heroine') === 'standin') return createStandInHeroine();
   try {
     say('Loading Blaze…');
-    const [{ createBuilderHeroine }, { BLAZE_LOOK }] = await Promise.all([
+    const [{ createBuilderHeroine }, { BLAZE_LOOK }, { BLAZE_SUIT_LOOK }] = await Promise.all([
       import('./heroine/builderHeroine'),
       import('./heroine/looks/blaze'),
+      import('./heroine/looks/blazeSuit'),
     ]);
     const body = asked.get('body');
     return await createBuilderHeroine({
       renderer,
       scene,
-      look: BLAZE_LOOK,
+      look: asked.get('look') === 'blaze' ? BLAZE_LOOK : BLAZE_SUIT_LOOK,
       lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
       groundShadow: false, // the ground paints her shadow itself (src/world/ground.ts)
       onProgress: (stage) => say(`Loading Blaze: ${stage}…`),

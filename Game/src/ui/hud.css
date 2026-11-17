@@ -165,7 +165,7 @@
   font: inherit;
 }
 
-/* ---- The two sticks in first person: MOVE in the corner, CAMERA up and right of it ---- */
+/* ---- The two sticks in first person: MOVE in the corner, CAMERA beside it ---- */
 .gd-stick-label {
   position: absolute;
   left: 0;
@@ -181,22 +181,26 @@
 /* The camera stick is tinted pink so the two are easy to tell apart at a glance. */
 .gd-look-stick { border-color: rgba(255, 95, 162, 0.7); }
 .gd-look-stick .gd-stick-knob { background: rgba(255, 95, 162, 0.55); }
-/* FIRST PERSON, both sticks showing (Joshua, 2026-11-17): the two sticks are the SAME size; MOVE sits in the
-   bottom-left corner and CAMERA sits up and to the right of it, on the 45-degree diagonal, where the thumb
-   reaches by rolling up from the move stick. The box that holds them is made big enough for both, and each
-   stick is placed inside it by hand: --stick is their size, --step how far the camera stick is moved along
-   each of "right" and "up" (far enough that the two circles just clear each other). */
+/* FIRST PERSON, both sticks showing (Joshua, 2026-11-17): the two sticks are the SAME size and sit side by
+   side along the bottom, MOVE in the bottom-left corner and CAMERA just to the right of it, level with it.
+   The box that holds them is made wide enough for both, and each stick is placed inside it by hand:
+   --stick is their size, --gap the space between the two circles. */
 .gd-move:has(.gd-look-stick:not([hidden])) {
   --stick: 112px;
-  --step: 86px;
+  --gap: 16px;
   display: block;
-  width: calc(var(--stick) + var(--step));
-  height: calc(var(--stick) + var(--step));
+  width: calc(var(--stick) * 2 + var(--gap));
+  height: var(--stick);
 }
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-stick {
   position: absolute;
+  bottom: 0;
   width: var(--stick);
   height: var(--stick);
 }
-.gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { left: 0; bottom: 0; }
-.gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: var(--step); bottom: var(--step); }
+.gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { left: 0; }
+.gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(var(--stick) + var(--gap)); }
+
+/* FIRE sits in from the right edge (Joshua, 2026-11-17: "move the Fire button to the left"), about two button
+   widths, where the right thumb lands naturally; the view switch stays out in the corner above it. */
+.gd-fire { margin-right: 170px; }

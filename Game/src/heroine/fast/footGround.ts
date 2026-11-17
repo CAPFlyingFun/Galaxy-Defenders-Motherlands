@@ -36,6 +36,14 @@
 //      she steps round as she turns (Joshua, 2026-11-17: "the feet move around
 //      in the turn").
 //
+//   7. HER LEGS TURNED UNDER HER (Joshua's five bands, 2026-11-17: when her head
+//      turns, her belly and hips turn 60 % of the way, her upper legs 40 %, her
+//      lower legs and feet 20 %; the rule itself is input/bodyTurn.ts). Her hips
+//      are turned here, which carries her hip joints round; each foot stays
+//      where her pose stands it and only pivots on its spot; and each leg is
+//      reached from its hip, where that now is, to its foot, with its thigh and
+//      its shin each turned to face the way its band does.
+//
 // The builder has a fuller version of 3 and 4 for its own room (actor/
 // humanFeet.ts: heels that rise, feet that follow slopes). This is a small one
 // for flat ground, in the game's own space, that also handles running.
@@ -64,6 +72,14 @@ export const FOOT_GROUND = {
   /** A straight leg is given this much forward, as a share of the thigh, so its knee knows which way to bend. */
   kneeForward: 0.05,
   /**
+   * HER HIPS TURNED (see 7 above): her hip joints swing round and away from over her feet, so she comes down a
+   * little for her legs to still reach them: this far standing, and this much more walking (a leg stepping out in
+   * front has the least to spare), when her hips are turned `twistFull` radians (54 degrees: her head's full 90).
+   */
+  twistDropStanding: 0.015,
+  twistDropWalking: 0.02,
+  twistFull: (54 * Math.PI) / 180,
+  /**
    * A STEP ON THE SPOT. Standing, a foot held more than `stepOffset` from where her pose stands it is picked up
    * `stepHeight` and set down where it belongs over `stepSeconds`, one foot at a time. Once she has been still for
    * `stepSettle`, a foot left more than `settleOffset` out is tidied the same way, so she ends standing square.
@@ -78,6 +94,18 @@ export const FOOT_GROUND = {
 /** One leg's bones: the hip joint (it turns her thigh), the knee (it turns her shin) and the ankle (her foot). */
 export interface LegBones { readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
 
+/**
+ * How her hips and legs are turned this frame, each measured from the way her root faces (radians about the upright
+ * axis; Joshua's bands: her belly and hips, her upper legs, her lower legs and feet).
+ */
+export interface LegTwist {
+  /** The bone that is turned for her hips: it carries her legs and her spine. */
+  readonly hipsBone: THREE.Bone;
+  hips: number;
+  upperLegs: number;
+  feet: number;
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 /** 0 below `from`, 1 above `to`, an S-shaped ease between. */
 const ease = (from: number, to: number, v: number) => { const t = clamp((v - from) / (to - from), 0, 1); return t * t * (3 - 2 * t); };
@@ -87,6 +115,7 @@ const fract = (v: number) => v - Math.floor(v);
 const hipAt = new THREE.Vector3(), kneeAt = new THREE.Vector3(), ankleAt = new THREE.Vector3(), goal = new THREE.Vector3();
 const line = new THREE.Vector3(), bend = new THREE.Vector3(), ahead = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3();
 const parentQ = new THREE.Quaternion(), turn = new THREE.Quaternion(), footQ = new THREE.Quaternion();
+const UPRIGHT = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3();
 
 /**
  * Turn a bone by a rotation given in WORLD space, then bring the world matrices of the bone and everything hanging
@@ -109,6 +138,13 @@ interface Foot {
   /** How far its ankle is moved from where her pose has it, over the ground (world x and z). */
   offX: number;
   offZ: number;
+  /** This frame, as her pose has the leg before her hips are turned: where its ankle is, which way its knee is off
+   * the line from hip to ankle, and how its foot lies. */
+  readonly ankle: THREE.Vector3;
+  readonly knee: THREE.Vector3;
+  readonly lie: THREE.Quaternion;
+  /** This frame: how far its ankle is to be raised, and whether its leg is to be reached at all. */
+  raise: number;
 }
 
 export class FootGround {
@@ -128,8 +164,8 @@ export class FootGround {
 
   private readonly legs: readonly [LegBones, LegBones];
   private readonly feet: readonly [Foot, Foot] = [
-    { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0 },
-    { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0 },
+    { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0, ankle: new THREE.Vector3(), knee: new THREE.Vector3(), lie: new THREE.Quaternion(), raise: 0 },
+    { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0, ankle: new THREE.Vector3(), knee: new THREE.Vector3(), lie: new THREE.Quaternion(), raise: 0 },
   ];
   /** Where her fit sits when she stands, and how high each ankle is over the floor then (in her root's frame). */
   private readonly fitFloorY: number;
@@ -166,8 +202,9 @@ export class FootGround {
    * @param motion    her pose's state this frame: where she is in her stride, how much she walks or runs, her sway
    * @param share     how much of her legs' rise and fall shows, 0..1 (her look's Bob, eased off with her speed)
    * @param moving    she moved or turned this frame (a step on the spot waits for her to be still before it tidies her feet)
+   * @param twist     how her hips and legs are turned from the way her root faces (null: not at all)
    */
-  update(dt: number, motion: BodyMotion, share: number, moving: boolean): void {
+  update(dt: number, motion: BodyMotion, share: number, moving: boolean, twist: LegTwist | null = null): void {
     const { root, fit, legs, feet, lift, swing } = this;
     const tuning = FOOT_GROUND, strides = motion.strides, walk = motion.walkBlend, run = motion.runBlend;
     this.stillFor = moving ? 0 : this.stillFor + dt;
@@ -221,6 +258,9 @@ export class FootGround {
       this.planted[0] = this.stepFoot !== 0;
       this.planted[1] = this.stepFoot !== 1;
     }
+    // (her hips turned: her hip joints are no longer over her feet, so she comes down a little for her legs to reach)
+    const turned = twist !== null && Math.abs(twist.hips) > 1e-4;
+    if (turned) drop += (tuning.twistDropStanding + tuning.twistDropWalking * walk) * Math.min(1, Math.abs(twist.hips) / tuning.twistFull);
     this.drop = drop;
 
     // ---- each foot: held to its spot and on the floor if it is planted, clear of the floor if it swings ----
@@ -230,8 +270,16 @@ export class FootGround {
     const fade = Math.exp(-dt / tuning.release);
     for (let side = 0; side < 2; side++) {
       const foot = feet[side], leg = legs[side];
+      // her leg as her pose has it (her hips not yet turned): its ankle, how its foot lies, and which way its knee
+      // stands off the line from hip to ankle
+      foot.ankle.setFromMatrixPosition(leg.ankle.matrixWorld);
+      leg.ankle.getWorldQuaternion(foot.lie);
+      hipAt.setFromMatrixPosition(leg.hip.matrixWorld);
+      line.copy(foot.ankle).sub(hipAt).normalize();
+      foot.knee.setFromMatrixPosition(leg.knee.matrixWorld).sub(hipAt);
+      foot.knee.addScaledVector(line, -foot.knee.dot(line));
       // where her pose (and her sway) puts this ankle over the ground
-      const poseX = leg.ankle.matrixWorld.elements[12] + shiftX, poseZ = leg.ankle.matrixWorld.elements[14] + shiftZ;
+      const poseX = foot.ankle.x + shiftX, poseZ = foot.ankle.z + shiftZ;
       if (this.planted[side]) {
         // PLANTED: held to the spot it was put down on (taken as it lands, from where it is this frame)
         if (!foot.locked) { foot.locked = true; foot.lockX = poseX + foot.offX; foot.lockZ = poseZ + foot.offZ; }
@@ -255,9 +303,30 @@ export class FootGround {
       let want = Math.max(above, 0);                               // (a planted foot above the floor cannot be reached down: a leg cannot grow)
       if (swing[side] >= 0) want = Math.max(want, tuning.clear * walk * ease(0, tuning.clearEase, swing[side]) * ease(0, tuning.clearEase, 1 - swing[side]));
       if (this.stepFoot === side) want = Math.max(want, tuning.stepHeight * Math.sin(Math.PI * this.stepClock));
-      const raise = want - above;
-      this.raised[side] = raise > tuning.least ? raise : 0;
-      if (raise > tuning.least || this.held[side] > tuning.least) this.reach(leg, foot.offX, Math.max(0, raise), foot.offZ, aheadX, aheadZ);
+      foot.raise = want - above;
+      this.raised[side] = foot.raise > tuning.least ? foot.raise : 0;
+    }
+
+    // ---- her hips turned (her belly's band): her hip joints swing round with them, her spine and all above too ----
+    if (turned) {
+      twist.hipsBone.parent?.getWorldQuaternion(parentQ);
+      turn.setFromAxisAngle(UPRIGHT, twist.hips);
+      twist.hipsBone.quaternion.premultiply(parentQ).premultiply(turn).premultiply(parentQ.invert());
+      twist.hipsBone.updateMatrixWorld(true);
+    }
+
+    // ---- each leg reached from its hip to where its foot is to be ----
+    const thighYaw = yaw + (turned ? twist.upperLegs : 0);
+    for (let side = 0; side < 2; side++) {
+      const foot = feet[side];
+      if (!turned && foot.raise <= tuning.least && this.held[side] <= tuning.least) continue;
+      goal.set(foot.ankle.x + foot.offX, foot.ankle.y + Math.max(0, foot.raise), foot.ankle.z + foot.offZ);
+      if (turned) {
+        // her knee stands off the way her upper legs face; her foot lies as her pose had it, pivoted to its band
+        bend.copy(foot.knee).applyAxisAngle(UPRIGHT, twist.upperLegs);
+        footQ.setFromAxisAngle(UPRIGHT, twist.feet).multiply(foot.lie);
+        this.reach(legs[side], goal, bend, Math.sin(thighYaw), Math.cos(thighYaw), footQ, twist.upperLegs - twist.hips, twist.feet - twist.upperLegs);
+      } else this.reach(legs[side], goal, bend.copy(foot.knee), aheadX, aheadZ, foot.lie, 0, 0);
     }
 
     // ---- and she is set down: lowered, and moved over the foot she stands on ----
@@ -266,45 +335,48 @@ export class FootGround {
   }
 
   /**
-   * Bend one leg so its ankle is moved by (x, y, z) metres from where her pose has it (world axes). The hip stays
-   * where it is; the knee goes forward (a knee bends one way); the foot stays as level as it was. A place her leg is
-   * too short to reach is reached toward, as far as her leg goes.
+   * Reach one leg from its hip, where that is now, to `goal` (where its ankle is to be, world metres). Its knee
+   * stands off the line from hip to ankle toward `knee` (and never backward of `ahead`: a knee bends one way); its
+   * thigh and its shin are each turned about their own length by `thighTurn` and `shinTurn` (radians: how much
+   * further round each faces than the part above it); its foot is laid as `lie` says. A place her leg is too
+   * short to reach is reached toward, as far as her leg goes.
    */
-  private reach(leg: LegBones, x: number, y: number, z: number, aheadX: number, aheadZ: number): void {
+  private reach(leg: LegBones, goal: THREE.Vector3, knee: THREE.Vector3, aheadX: number, aheadZ: number, lie: THREE.Quaternion, thighTurn: number, shinTurn: number): void {
     hipAt.setFromMatrixPosition(leg.hip.matrixWorld);
     kneeAt.setFromMatrixPosition(leg.knee.matrixWorld);
     ankleAt.setFromMatrixPosition(leg.ankle.matrixWorld);
-    leg.ankle.getWorldQuaternion(footQ);
     const thigh = hipAt.distanceTo(kneeAt), shin = kneeAt.distanceTo(ankleAt);
-    goal.set(ankleAt.x + x, ankleAt.y + y, ankleAt.z + z);
     // the line from her hip to where her ankle is to be, and how long it is (never longer than her leg, never folded flat)
     line.copy(goal).sub(hipAt);
     const far = clamp(line.length(), Math.abs(thigh - shin) + 1e-4, (thigh + shin) * 0.9995);
     line.normalize();
-    // Which way her knee goes: where it is now, off that line, with a little of her forward added (so a straight
+    // Which way her knee goes: the way asked, off that line, with a little of her forward added (so a straight
     // leg bends forward) and any backward part taken out first (a knee does not bend backward).
     ahead.set(aheadX, 0, aheadZ).addScaledVector(line, -(aheadX * line.x + aheadZ * line.z));
     if (ahead.lengthSq() < 1e-8) ahead.set(aheadX, 0, aheadZ);
     ahead.normalize();
-    bend.copy(kneeAt).sub(hipAt);
+    if (knee !== bend) bend.copy(knee);
     bend.addScaledVector(line, -bend.dot(line));
     const backward = bend.dot(ahead);
     if (backward < 0) bend.addScaledVector(ahead, -backward);
     bend.addScaledVector(ahead, thigh * FOOT_GROUND.kneeForward).normalize();
     // the triangle hip, knee, ankle with its three sides known: the angle at the hip between the line and the thigh
     const cos = clamp((thigh * thigh + far * far - shin * shin) / (2 * thigh * far), -1, 1), sin = Math.sqrt(1 - cos * cos);
-    // her thigh: from where it points now to where the new knee is
+    // her thigh: from where it points now to where the new knee is...
     from.copy(kneeAt).sub(hipAt).normalize();
     to.copy(line).multiplyScalar(cos).addScaledVector(bend, sin).normalize();
     turnInWorld(leg.hip, turn.setFromUnitVectors(from, to));
-    // her shin: from where the thigh's turn has carried it to pointing at where the ankle is to be
+    // ...and turned about its own length to face the way its band does
+    if (Math.abs(thighTurn) > 1e-5) turnInWorld(leg.hip, turn.setFromAxisAngle(axis.copy(to).negate(), thighTurn));
+    // her shin: from where the thigh has carried it to pointing at where the ankle is to be, then turned likewise
     kneeAt.setFromMatrixPosition(leg.knee.matrixWorld);
     ankleAt.setFromMatrixPosition(leg.ankle.matrixWorld);
     from.copy(ankleAt).sub(kneeAt).normalize();
     to.copy(hipAt).addScaledVector(line, far).sub(kneeAt).normalize();
     turnInWorld(leg.knee, turn.setFromUnitVectors(from, to));
-    // her foot: turned back to how it lay before her leg was bent
+    if (Math.abs(shinTurn) > 1e-5) turnInWorld(leg.knee, turn.setFromAxisAngle(axis.copy(to).negate(), shinTurn));
+    // her foot: laid as asked (as it lay before her leg was bent, pivoted to its band)
     leg.knee.getWorldQuaternion(parentQ);
-    leg.ankle.quaternion.copy(parentQ.invert()).multiply(footQ);
+    leg.ankle.quaternion.copy(parentQ.invert()).multiply(lie);
   }
 }

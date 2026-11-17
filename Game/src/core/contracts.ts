@@ -40,6 +40,22 @@ export interface BodyVitals {
   readonly stomachMl: number;
 }
 
+/**
+ * Which way each part of her faces, in radians about Y like `setYaw` (Joshua's five bands, 2026-11-17: "you can
+ * turn your head +/-90°, the shoulders/arms/hands at 80% of that..., belly/torso..., upper legs..., lower
+ * legs/feet"). Each is a direction in the world, not a turn from the part below it.
+ */
+export interface BodyFacing {
+  readonly head: number;
+  /** Her shoulders, arms and hands (and her guns). */
+  readonly shoulders: number;
+  /** Her belly and torso, her hips with them. */
+  readonly belly: number;
+  readonly upperLegs: number;
+  /** Her lower legs and feet. */
+  readonly feet: number;
+}
+
 export interface HeroineBody {
   /** Add this to the scene. Her feet are at its origin. */
   readonly root: THREE.Object3D;
@@ -49,16 +65,17 @@ export interface HeroineBody {
   readonly ready: boolean;
 
   setPosition(x: number, z: number): void;
-  /** Which way she faces, in radians about Y (0 = +Z). For a body with `setUpperYaw`, this is her hips and legs. */
+  /**
+   * Which way she faces, in radians about Y (0 = +Z). For a body with `setFacing`, this is BODY NORTH: the way she
+   * faces when nothing of her is turned.
+   */
   setYaw(yaw: number): void;
   /**
-   * HER TOP HALF TURNED APART FROM HER LEGS (Joshua, 2026-11-17: "her head and arms rotate up to +/-45° from her
-   * relative body direction to her hips and legs"; the rule itself is src/input/bodyTurn.ts). Which way her head
-   * points and which way her torso (chest, arms, guns) points, in radians about Y like `setYaw`; her hips and
-   * legs keep facing `setYaw`'s way. Optional: a body that cannot turn its top half leaves this out, and the game
-   * faces all of it one way.
+   * EACH PART OF HER TURNED ITS OWN WAY (Joshua's five bands, 2026-11-17; the rule itself is src/input/bodyTurn.ts).
+   * The object is kept and read every frame, so the game hands over one object once and goes on changing it.
+   * Optional: a body that cannot turn its parts apart leaves this out, and the game faces all of it one way.
    */
-  setUpperYaw?(head: number, torso: number): void;
+  setFacing?(facing: BodyFacing | null): void;
   /**
    * Ground speed in m/s (0 = standing). Her legs follow this; the game moves her root. (A body that reads how far
    * it really moved between frames, as the fast heroine does, does not need it.)

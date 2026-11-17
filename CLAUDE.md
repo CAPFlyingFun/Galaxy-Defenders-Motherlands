@@ -28,9 +28,11 @@ use the game's single copy of three.js.
   setting were removed. Buildings are solid and the dome wall stops her.
 - Her feet drive her (Joshua, 2026-11-17): her stride is measured from her foot bones and turned by the distance she
   really covers; a planted foot is held to the spot it landed on (`Game/src/heroine/fast/footGround.ts`).
-- Her top half and bottom half (Joshua, 2026-11-17; `Game/src/input/bodyTurn.ts`): head, arms and torso turn up to 45
-  degrees from her hips and legs; past that her legs are pulled round 45 behind; when the looking stops her legs come
-  round to match in 4 seconds. First person the look is the camera; third person it is her auto-aim target.
+- Which way each part of her faces (Joshua's five bands, 2026-11-17; `Game/src/input/bodyTurn.ts`): from body North
+  her head turns up to 90 degrees, her shoulders/arms/hands 80% of that (72), her belly/torso 60% (54), her upper
+  legs 40% (36), her lower legs and feet 20% (18). Past 90 body North is pulled round; when the looking stops it
+  comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
+  target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first).
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
 - Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces

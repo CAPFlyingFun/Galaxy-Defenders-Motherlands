@@ -24,7 +24,8 @@
 //   * she stands, breathes and walks by the builder's own posing code          (bodyMotion.ts)
 //   * her feet drive her: her stride is measured from her foot bones and
 //     turned by the ground she covers; planted feet are held to their spot     (footGround.ts)
-//   * her head and torso turn apart from her legs, by the game's rule          (`setUpperYaw`; input/bodyTurn.ts)
+//   * each part of her turns its own way, by the game's rule: her head, her
+//     shoulders, her belly and hips, her upper legs, her lower legs and feet   (`setFacing`; input/bodyTurn.ts)
 //
 // She is an ordinary object in the game's scene (no hidden room, no second
 // scene drawn inside the first): `root` holds her skeleton, her skin, her hair
@@ -35,7 +36,7 @@
 // this file's factory (`createFastHeroine`), and in the report that came with it.
 // ============================================================================
 import * as THREE from 'three';
-import type { BodyVitals, FrameInfo, Hand, HeroineBody } from '../../core/contracts';
+import type { BodyFacing, BodyVitals, FrameInfo, Hand, HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
@@ -43,7 +44,7 @@ import { loadBakedLook, type BakedLook } from './bakedLook';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { loadBodyFile } from './bodyFile';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
-import { FootGround } from './footGround';
+import { FootGround, type LegTwist } from './footGround';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -64,14 +65,20 @@ const EYE_FORWARD = 0.10;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
- * HER TOP HALF TURNED FROM HER LEGS (`setUpperYaw`): how the turn is shared out up her back, from her lower spine to
- * her chest (her belly sits low on her spine and should mostly stay with her hips, as a real one does: most of a
- * person's turn is in the ribs), and how her head's own turn is shared between her neck and her skull. GAME TUNING.
+ * EACH PART OF HER TURNED ITS OWN WAY (`setFacing`; Joshua's five bands). Her hips are turned with her belly
+ * (footGround.ts does that, with her legs). Above them, the further turn from her belly to her shoulders is shared
+ * out up her back, from her lower spine to her chest: little of it low down, where her belly is, most of it under
+ * and at her bust, so her bust goes with her shoulders. And the turn from her shoulders to her head is shared
+ * between her neck and her skull. GAME TUNING.
  */
-const TORSO_TURN_SHARES = [0.35, 0.45, 0.2];
+const BACK_TURN_SHARES = [0.1, 0.5, 0.4];
 const HEAD_TURN_SHARES = [0.4, 0.6];
-/** The most her torso is turned from her legs, and her head from her torso (a guard: the game keeps within 45 degrees). */
-const TORSO_TURN_MOST = (55 * Math.PI) / 180, HEAD_TURN_MOST = (50 * Math.PI) / 180;
+/**
+ * Guards (the game's rule keeps well within these): the most her hips, her upper legs and her feet are turned from
+ * the way her root faces, and the most her shoulders are turned from her belly and her head from her shoulders.
+ */
+const DEG = Math.PI / 180;
+const HIPS_TURN_MOST = 60 * DEG, UPPER_LEGS_TURN_MOST = 42 * DEG, FEET_TURN_MOST = 24 * DEG, BACK_TURN_MOST = 30 * DEG, HEAD_TURN_MOST = 30 * DEG;
 /** Her belly is reshaped at most this often (seconds): each change rewrites her points on the CPU. */
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
@@ -407,14 +414,20 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const crown = bone(joints.head);
   const skull = crown.parent && (crown.parent as THREE.Bone).isBone && crown.parent !== bone(joints.neck) ? (crown.parent as THREE.Bone) : crown;
   const skullSize = skull.scale.clone();
-  // HER BACK, for turning her top half from her legs: every bone from her lower spine up to her chest (the bone her
-  // arms and neck hang from), found by walking down from her chest. And her neck up to her skull, for her head.
+  // HER BACK, for turning her shoulders further than her belly: every bone from her lower spine up to her chest (the
+  // bone her arms and neck hang from), found by walking down from her chest. Her neck up to her skull, for her head.
+  // And the bone that is turned for her hips: the one her legs and her spine both hang from, or the bone above it
+  // when there is one (on her skeleton that one stands between her hip joints, so her hips turn about their middle).
   const backBones: THREE.Bone[] = [];
   for (let b: THREE.Object3D | null = bone(joints.chest); b && (b as THREE.Bone).isBone; b = b.parent) {
     backBones.unshift(b as THREE.Bone);
     if (b === bone(joints.spine)) break;
   }
   const neckBones: THREE.Bone[] = skull === bone(joints.neck) ? [skull] : [bone(joints.neck), skull];
+  const pelvisBone = bone(joints.pelvis);
+  const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
+  /** How her hips and legs are turned this frame (one object, rewritten each frame: footGround.ts reads it). */
+  const legTwist: LegTwist = { hipsBone, hips: 0, upperLegs: 0, feet: 0 };
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
   const turnUpright = (b: THREE.Bone, angle: number): void => {
@@ -528,9 +541,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let lastX = 0, lastZ = 0, lastYaw = 0, placed = false;
   /** For the lab only: walk her on the spot at this ground speed, metres a second (0: off). */
   let treadmill = 0;
-  /** Which way her head and her torso face when the game says so (`setUpperYaw`); null: with her legs. */
-  let upperHead: number | null = null, upperTorso: number | null = null;
-  const aimFrom = new THREE.Vector3();
+  /** Which way each part of her faces, when the game says so (`setFacing`: its object, read each frame); null: all one way. */
+  let facing: BodyFacing | null = null;
   let target: THREE.Vector3 | null = null;
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
@@ -548,7 +560,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
-    setUpperYaw(head: number, torso: number): void { upperHead = head; upperTorso = torso; },
+    setFacing(now: BodyFacing | null): void { facing = now; },
     // (her steps follow the distance she really covers, measured each frame in `update`: the game's speed is not needed)
     setWalk(_speed: number): void {},
     treadmill(speed: number): void { treadmill = speed; },
@@ -573,7 +585,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       if (skull.parent) skullPlace.premultiply(skull.parent.matrixWorld);
       out.copy(crown.position).multiplyScalar(EYE_UP).applyMatrix4(skullPlace);
       // ...then forward, the way her head faces
-      const yaw = upperHead ?? root.rotation.y;
+      const yaw = facing?.head ?? root.rotation.y;
       out.x += Math.sin(yaw) * EYE_FORWARD;
       out.z += Math.cos(yaw) * EYE_FORWARD;
       return out;
@@ -641,30 +653,32 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
       // Her feet on the floor (footGround.ts): she is set down on the foot that carries her, each planted foot held
       // to the spot it landed on. How much of her legs' rise and fall shows is her look's Bob, eased off with her speed.
-      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving);
-
-      // HER TOP HALF TURNED FROM HER LEGS (`setUpperYaw`; the rule is the game's, input/bodyTurn.ts): her torso's
-      // turn shared out up her back, then her head's own turn on her neck and skull. Each is a turn about the
-      // upright axis, laid over her pose.
+      // EACH PART OF HER TURNED ITS OWN WAY (`setFacing`; the rule is the game's, input/bodyTurn.ts). Her hips and
+      // legs first: they are turned with her feet kept on their spots, so footGround.ts does it.
       const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
-      const torsoYaw = upperTorso ?? yawNow;
-      const torsoTurn = Math.max(-TORSO_TURN_MOST, Math.min(TORSO_TURN_MOST, wrap(torsoYaw - yawNow)));
-      const headTurn = Math.max(-HEAD_TURN_MOST, Math.min(HEAD_TURN_MOST, wrap((upperHead ?? torsoYaw) - torsoYaw)));
-      if (Math.abs(torsoTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], torsoTurn * (TORSO_TURN_SHARES[i + TORSO_TURN_SHARES.length - backBones.length] ?? 0));
+      const within = (angle: number, most: number): number => Math.max(-most, Math.min(most, angle));
+      if (facing) {
+        legTwist.hips = within(wrap(facing.belly - yawNow), HIPS_TURN_MOST);
+        legTwist.upperLegs = within(wrap(facing.upperLegs - yawNow), UPPER_LEGS_TURN_MOST);
+        legTwist.feet = within(wrap(facing.feet - yawNow), FEET_TURN_MOST);
+      }
+      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing ? legTwist : null);
+
+      // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than
+      // her shoulders (her neck and skull). Each is a turn about the upright axis, laid over her pose.
+      const bellyYaw = facing ? yawNow + legTwist.hips : yawNow;
+      const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) : 0;
+      const headTurn = facing ? within(wrap(facing.head - (bellyYaw + backTurn)), HEAD_TURN_MOST) : 0;
+      if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
+      // (her shoulders face `shouldersYaw`: her arms point from there, as far to each side as arms go)
       aim.advance(frame.dt, target !== null);
       if (aim.weight > 0) {
         root.updateMatrixWorld(true);
-        // Her arms point the way her TORSO faces (it follows her head a moment behind and ends where it ends): the
-        // point she aims at is swung round her by however far her torso has still to turn to it.
-        aim.facing = yawNow + torsoTurn;
-        if (target && upperTorso !== null) {
-          const dx = target.x - root.position.x, dz = target.z - root.position.z;
-          const behind = wrap(yawNow + torsoTurn - Math.atan2(dx, dz)), cos = Math.cos(behind), sin = Math.sin(behind);
-          aim.apply(aimFrom.set(root.position.x + dx * cos + dz * sin, target.y, root.position.z + dz * cos - dx * sin));
-        } else aim.apply(target);
+        aim.facing = bellyYaw + backTurn;
+        aim.apply(target);
       }
 
       // Her detail level: the fixed one asked for, or AUTO's.

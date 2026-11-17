@@ -22,6 +22,7 @@ import { loadHeroineSettings, saveSetting, type HeroineSettings } from './heroin
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
+import { BodyTurn } from './input/bodyTurn';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { createCity } from './world/city';
 import { CityWalls } from './world/collision';
@@ -42,6 +43,9 @@ type GameHeroine = HeroineBody & {
   /** The fast heroine only: the hidden live body (heroine/fast/liveBody.ts), and what it costs. */
   attachLive?: (live: import('./heroine/fast/liveBody').LiveBody | null) => void;
   liveInfo?: () => { stepMs: number; kicks: number } | null;
+  /** The fast heroine only: her stride as measured from her foot bones, and her feet on the floor this frame. */
+  strideInfo?: () => { walk: { stride: number }; run: { stride: number } } | null;
+  feetInfo?: () => { drop: number; held: readonly [number, number]; speed: number };
   /** The week of pregnancy her belly stands for, off her own chart (the fast heroine knows it from her look). */
   weeks?: number;
 };
@@ -231,6 +235,14 @@ async function start(): Promise<void> {
   // and `motion` asks it where each step really ends.
   const walls = new CityWalls(city.footprints);
   const motion = new PlayerMotion(walls);
+  // Which way each part of her faces (src/input/bodyTurn.ts). She starts looking out at the city (+Z). A body that
+  // can turn its parts apart is handed this once and reads it every frame.
+  const turn = new BodyTurn();
+  heroine.setFacing?.(turn);
+  /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
+  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null } = { view: 'third', look: null, move: null };
+  /** The sky target her auto-aim picked this frame (third person). */
+  let aimTarget = 0;
   const rig = new CameraRig();
   const controls = new Controls(renderer.domElement);
 
@@ -325,7 +337,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets, pace, vitals, walls };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls };
   }
 
   // ---- The loop --------------------------------------------------------------------
@@ -367,19 +379,33 @@ async function start(): Promise<void> {
       lastMoveX = x; lastMoveY = y;
     }
     pace.step(dt, push, limits);
-    // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right.
-    //   first person  she faces where she looks;
-    //   third person  she turns to face the way she goes, and the camera keeps the side of her it was dragged to.
-    // (Her facing is decided in one place: PlayerMotion.update, src/input/playerMotion.ts. The walls stop her there too.)
-    if (rig.mode === 'first') motion.update(dt, controls.moveX, controls.moveY, rig.yaw, true, pace.speed);
-    else motion.update(dt, controls.moveX, controls.moveY, rig.viewYaw, false, pace.speed);
+    // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right
+    // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
+    motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
+
+    // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
+    // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
+    // legs and feet 20 %; past 90 body North is pulled round; when the looking stops it comes round to match).
+    //   first person  she looks where the camera looks;
+    //   third person  she looks at the sky target most in front of her shoulders (her auto-aim).
+    turnInput.view = rig.mode;
+    turnInput.move = motion.heading;
+    if (rig.mode === 'first') turnInput.look = rig.yaw;
+    else {
+      aimTarget = targets.pick(motion.x, motion.z, turn.shoulders);
+      const at = targets.position(aimTarget);
+      turnInput.look = Math.atan2(at.x - motion.x, at.z - motion.z);
+    }
+    turn.step(dt, turnInput);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     keyLight.position.set(motion.x - 4, 10, motion.z + 6);
     keyLight.target.position.set(motion.x, 0, motion.z);
     shadowFloor.position.x = motion.x;
     shadowFloor.position.z = motion.z;
     heroine.setPosition(motion.x, motion.z);
-    heroine.setYaw(motion.yaw);
+    // (a body that turns its parts apart was handed `turn` once, where it was made, and reads it each frame; one
+    //  that cannot faces one way, all of it: where she looks, or the way she goes)
+    heroine.setYaw(heroine.setFacing || rig.mode !== 'first' ? turn.base : turn.head);
     heroine.setWalk(motion.speed);
     heroine.update(info);
     // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)
@@ -393,10 +419,14 @@ async function start(): Promise<void> {
     if (rig.mode === 'first') {
       targets.setAimed(-1);
       heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
+    } else if (turn.aimed) {
+      // (the target her top half has turned to, picked above with her turning)
+      targets.setAimed(aimTarget);
+      heroine.aimAt(aim.copy(targets.position(aimTarget)));
     } else {
-      const target = targets.pick(motion.x, motion.z, motion.yaw);
-      targets.setAimed(target);
-      heroine.aimAt(aim.copy(targets.position(target)));
+      // (the nearest target is further round than her top half turns while she runs: not aimed at until she turns)
+      targets.setAimed(-1);
+      heroine.aimAt(null);
     }
 
     // 5. Fire (first person only): hands take turns, and each shot leaves a streak.
@@ -438,7 +468,14 @@ async function start(): Promise<void> {
         // (the hidden live body: what its step costs each frame, and whether her baby is kicking)
         const liveNow = heroine.liveInfo?.();
         const liveLine = liveNow ? `\nlive body: ${liveNow.stepMs.toFixed(1)} ms a frame${liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''}` : liveNote ? `\n${liveNote}` : '';
-        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}${liveLine}`);
+        // (her feet: her measured stride walking and running, how far she is lowered onto them now, how far each
+        //  planted foot is being held from where her pose has it, and which way she faces: body North, head, feet)
+        const strides = heroine.strideInfo?.(), feet = heroine.feetInfo?.();
+        const feetLine = strides && feet
+          ? `\nfeet: stride ${strides.walk.stride.toFixed(2)} / ${strides.run.stride.toFixed(2)} m · down ${(feet.drop * 100).toFixed(1)} cm · held ${(feet.held[0] * 100).toFixed(1)} / ${(feet.held[1] * 100).toFixed(1)} cm · ${feet.speed.toFixed(1)} m/s`
+            + `\nfacing: body north ${Math.round(turn.base * 57.3)}° · head ${Math.round(turn.head * 57.3)}° · feet ${Math.round(turn.feet * 57.3)}°${rig.mode === 'third' ? (turn.aimed ? ' · aimed' : ' · not aimed') : ''}`
+          : '';
+        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}${liveLine}${feetLine}`);
         readoutTimer = 0;
         readoutFrames = 0;
       }

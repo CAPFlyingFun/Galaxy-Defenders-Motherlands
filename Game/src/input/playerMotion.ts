@@ -7,8 +7,10 @@
 // (src/input/pace.ts) says how fast; the city's walls and the dome's glass
 // (src/world/collision.ts) say where she cannot go.
 //
-// This file only works out numbers (x, z, yaw, speed). main.ts hands them to
-// the heroine's body, whichever body that is.
+// This file only works out numbers (x, z, speed, and the way she is going).
+// main.ts hands them to the heroine's body, whichever body that is. WHICH WAY
+// SHE FACES is not decided here: her legs, her head and her torso each have a
+// direction of their own (src/input/bodyTurn.ts), worked out from `heading`.
 // ============================================================================
 import type { GroundPoint } from '../world/collision';
 
@@ -18,8 +20,11 @@ import type { GroundPoint } from '../world/collision';
  */
 const START_X = 0;
 const START_Z = 9;
-/** How quickly she turns to a new heading (bigger = snappier). */
-const TURN_RATE = 10;
+/**
+ * She counts as really going somewhere when she covers at least this share of the step the stick asked for; less
+ * than that (walking into a wall) and `heading` is the way the stick sends her.
+ */
+const GOING_SHARE = 0.2;
 
 /**
  * What stops her. The city's walls (`CityWalls` in src/world/collision.ts) answer to this; so could anything
@@ -30,20 +35,16 @@ export interface Walls {
   move(x: number, z: number, stepX: number, stepZ: number, out: GroundPoint): GroundPoint;
 }
 
-/** Bring an angle into the range -PI..PI. */
-function wrapAngle(angle: number): number {
-  let a = angle % (Math.PI * 2);
-  if (a > Math.PI) a -= Math.PI * 2;
-  if (a < -Math.PI) a += Math.PI * 2;
-  return a;
-}
-
 export class PlayerMotion {
   /** Where she stands. */
   x = START_X;
   z = START_Z;
-  /** Which way she faces (radians, 0 = +Z). */
-  yaw = 0;
+  /**
+   * The way she is moving over the ground this frame (radians, 0 = +Z), or null while she is not moving. It is the
+   * way she REALLY went: sliding along a wall, that is along the wall. Walking straight into a wall she gets
+   * nowhere, and it is the way the stick sends her. Her legs turn to this (src/input/bodyTurn.ts).
+   */
+  heading: number | null = null;
   /**
    * Her REAL ground speed this frame, in metres per second, for her walk animation and her vitals: how far she
    * actually got. Walking straight into a wall it is 0 (she stands against it instead of running on the spot);
@@ -65,15 +66,12 @@ export class PlayerMotion {
    * "away from the camera", stick right is "to the camera's right".
    * The stick gives only the DIRECTION here; `speed` is her ground speed, metres a second (her pace:
    * src/input/pace.ts). When the stick is let go she keeps her last direction while she slows to a stop.
-   *
-   * HER FACING is decided here and nowhere else (`yaw`):
-   *   `faceView` true   she always faces where the camera looks (first person);
-   *   `faceView` false  she turns to face the way the stick sends her (third person).
    */
-  update(dt: number, moveX: number, moveY: number, viewYaw: number, faceView: boolean, speed: number): void {
+  update(dt: number, moveX: number, moveY: number, viewYaw: number, speed: number): void {
     const push = Math.hypot(moveX, moveY);
     if (push > 0.01) { this.headX = moveX / push; this.headY = moveY / push; }
     let travelled = 0;
+    this.heading = null;
     if (speed > 0.01) {
       // "Forward" is the way the camera looks; "right" is to its right.
       const forwardX = Math.sin(viewYaw);
@@ -92,15 +90,11 @@ export class PlayerMotion {
         this.z += stepZ;
       }
       travelled = Math.hypot(this.x - fromX, this.z - fromZ);
-      if (!faceView) this.turnToward(Math.atan2(stepX, stepZ), dt);
+      // the way she is going: the way she really went, if she got anywhere; otherwise the way the stick sends her
+      const asked = Math.hypot(stepX, stepZ);
+      this.heading = travelled > asked * GOING_SHARE ? Math.atan2(this.x - fromX, this.z - fromZ) : Math.atan2(stepX, stepZ);
     }
-    if (faceView) this.yaw = viewYaw;
     // (never more than her pace: being pushed out of a corner is not running faster)
     this.speed = dt > 0 ? Math.min(speed, travelled / dt) : 0;
-  }
-
-  /** Turn smoothly toward a heading, the short way round. */
-  private turnToward(heading: number, dt: number): void {
-    this.yaw = wrapAngle(this.yaw + wrapAngle(heading - this.yaw) * (1 - Math.exp(-TURN_RATE * dt)));
   }
 }

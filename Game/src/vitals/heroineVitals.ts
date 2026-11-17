@@ -59,6 +59,14 @@ export const VITALS_TUNING = {
   sweatMlPerHour: [30, 500] as readonly [rest: number, hardest: number],
   /** She starts a mission having eaten and drunk: this much food and water (mL) is in her at the start. */
   startMeal: [450, 400] as readonly [foodMl: number, waterMl: number],
+  /**
+   * HOW FAST HER STAMINA DRAINS, against the builder's own model (Joshua, 2026-11-17, asked what "double it" meant:
+   * "I meant more how fast her stamina drains which could be an upgrade later by exercising"). 2: it drains twice
+   * as fast as the builder's model has it; 1 would be the builder's own. Only the DRAIN is changed: it fills again
+   * at the builder's own speed. This is the number an exercise upgrade will bring down later (see `staminaDrain`
+   * on the vitals themselves, which starts at this).
+   */
+  staminaDrain: 2,
   /** Her belly grows by this many percent points of the builder's belly slider when her stomach is full (and by none when empty). */
   bellyWhenFull: 4,
   health: {
@@ -137,6 +145,11 @@ export function intensityAtSpeed(speed: number): number {
 export class HeroineVitals {
   /** The builder's own states: her breath and heart, and her gut. */
   private vitals: Vitals = restingVitals();
+  /**
+   * How fast her stamina drains against the builder's model, for THIS heroine (it starts at the game's tuning).
+   * Exercise will lower it later: fitter, she tires more slowly.
+   */
+  staminaDrain: number = VITALS_TUNING.staminaDrain;
   private gut: GutState = restingGut();
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
@@ -160,7 +173,12 @@ export class HeroineVitals {
 
     // 1. Her breath, heart and energy: the builder's model, told how hard she is working.
     const intensity = clamp(intensityAtSpeed(input.speed) + (input.firing ? tuning.firingIntensity : 0), 0, 1);
+    const energyBefore = this.vitals.energy;
     this.now = stepVitals(this.vitals, dt, intensity, this.body);
+    // Her stamina drains faster than the builder's model has it: whatever the model took this frame is taken that
+    // many times over (the builder's code is not ours to change, so the extra is taken here, after its step).
+    const drained = energyBefore - this.vitals.energy;
+    if (drained > 0 && this.staminaDrain !== 1) this.vitals.energy = clamp(this.vitals.energy - drained * (this.staminaDrain - 1), 0, 1);
 
     // 2. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
     const hours = dt * tuning.gutHoursPerSecond;
@@ -200,7 +218,7 @@ export class HeroineVitals {
     const stomachMl = this.gut.stomachFoodMl + this.gut.stomachWaterMl;
     const stomach = clamp((stomachMl - STOMACH.emptyMl) / (STOMACH.fullMl - STOMACH.emptyMl), 0, 1);
     const s = tuning.speed;
-    const tired = clamp((s.tiredFrom - this.now.energy) / s.tiredFrom, 0, 1); // 0 until her energy is under `tiredFrom`
+    const tired = clamp((s.tiredFrom - this.vitals.energy) / s.tiredFrom, 0, 1); // 0 until her energy is under `tiredFrom`
     const speedShare = clamp(1 - tired * s.tiredCost - this.needs.hunger * s.hungerCost - this.needs.thirst * s.thirstCost, s.slowest, 1);
     return {
       heartRate: this.now.beatsPerMinute,
@@ -208,7 +226,7 @@ export class HeroineVitals {
       breathLitres: this.now.tidalL,
       breath: this.now.breath,
       beat: this.now.beat,
-      stamina: this.now.energy,
+      stamina: this.vitals.energy,   // (her own, after the game's extra drain)
       effort: this.now.felt,
       health: this.health,
       food: 1 - this.needs.hunger,

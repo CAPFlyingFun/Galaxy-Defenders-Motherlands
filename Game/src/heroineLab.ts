@@ -17,6 +17,7 @@
 // For scripts (screenshots without waiting on a slow software renderer): `window.heroineLab` has `hold(true)` to
 // stop the page's own frame loop, `advance(frames, dt)` to run frames by hand, and `picture()` to get the canvas.
 // ============================================================================
+import { BLAZE_LOOK } from './heroine/looks/blaze';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FrameInfo, Hand } from './core/contracts';
@@ -74,6 +75,8 @@ async function start(): Promise<void> {
     scene,
     belly: asked.has('belly') ? Number(asked.get('belly')) : undefined,
     outfit: asked.get('outfit') ?? undefined,
+    // ?look=blaze: Joshua's saved Blaze (src/heroine/looks/blaze.ts) in place of the default heroine
+    look: asked.get('look') === 'blaze' ? BLAZE_LOOK : undefined,
     lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
     onProgress: (stage) => { status.textContent = `Loading the heroine: ${stage}…`; },
   });

@@ -34,6 +34,21 @@ use the game's single copy of three.js.
   so no bare skin shows where plates meet. A piece that must match an image exactly can later be a Meshy model.
 - Enemies come from all around the dome sky; rooftop turrets cover sections of it. Cards, waves, tech tree,
   quests, missions and bosses carry over from the HTML version. Economy starts fresh, saved locally.
+- COMMANDER DIRECTION (Joshua, 2026-11-16, after ChatGPT's design review, kept outside the repo): the rooftop
+  turrets are the main guns (about 65% of the work), the heroine commands the dome and fights, repairs and
+  boosts (about 25% + 10%). A mission is 5 waves + a boss (5-10 min), with an untimed calm build phase between
+  waves and a pick-1-of-3 card after each. Duplicate turrets allowed; first four: Flak, Mortar, Laser Lance,
+  Shield Projector. MP is earned and spent inside one mission and resets; Shards are permanent. Blaze first,
+  then Tessa. A breach is a recoverable crisis (enemies fly in and attack the city core until the section is
+  resealed). A HUD minimap opens a full-screen Command Radar (a 2D overlay, never a second 3D scene) and the
+  game pauses while it is open. Sector health colours on the radar are Joshua's 11-stop scale (neon green at
+  100% down through browns, orange, red, magenta at 10%, charcoal at 0), always with the number shown.
+- First step is split: 1a = one playable wave (a couple of enemy types, two turrets, dome damage, Blaze
+  fighting, the minimap ring); 1b = the rest of the five-wave mission. Later: six heroines and abilities;
+  Power/Repair/Radar buildings, a few residents, short story quests; one small rover; then Kawi.
+- Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
+  pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
+  outfits show the bare belly (as his images do).
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

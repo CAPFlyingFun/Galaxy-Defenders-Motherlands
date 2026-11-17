@@ -1,7 +1,7 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `0a8344d`
-(2026-11-16, v0.9.39: "the painted swimsuit and leotard drawn, with the bikini bottom's leg openings").
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `764f7c7`
+(2026-11-16, v0.9.40: "her knees in RECLINE as in SQUAT").
 
 What was copied, unchanged: `src/`, `public/`, `index.html`, `package.json`, `package-lock.json`, `tsconfig.json`,
 `vite.config.ts`, `README.md`, `CLAUDE.md`. Not copied: `assets-archive/` (335 MB of source models the room never

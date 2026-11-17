@@ -1,126 +1,182 @@
 // ============================================================================
-// orientation.ts -- the game is ALWAYS drawn landscape (wide).
+// orientation.ts -- the game is PLAYED IN LANDSCAPE (wide), and this file
+// watches the screen for it.
 //
-// Joshua, 2026-11-16: "draws it landscape view regardless, like a forced
-// orientation system, using the screen's own pixels".
+// HOW IT WAS (2026-11-16): on a phone held upright the game turned ITSELF a
+// quarter turn, so it was still drawn wide ("a forced orientation system").
 //
-// A web page cannot lock an iPhone's screen sideways (Safari does not allow
-// it), so the game turns ITSELF. Everything the game draws lives inside one
-// box, the "stage" (#stage in index.html: the 3D picture and the controls).
+// HOW IT IS NOW (Joshua, 2026-11-17): "Make it like how Beyond Extinction does
+// it which if it starts in portrait or you rotate from landscape to portrait,
+// it will pause ... will say, game is played in landscape, please rotate your
+// device to play". So the game no longer turns itself:
 //
-//   - Screen wider than tall (a computer, a tablet, a phone already turned):
-//     the stage simply fills the screen.
-//   - Touch screen taller than wide (a phone held upright, or with its
-//     rotation lock on): the stage is made as WIDE as the screen is TALL, and
-//     turned a quarter turn clockwise, so holding the phone sideways (top of
-//     the phone to the left) shows the game the right way up.
+//   - A phone held upright is covered by a "rotate your device" message. That
+//     cover is plain CSS in index.html (#rotate-cover): the browser itself
+//     shows and hides it, so no code here can leave it stuck.
+//   - The phone's own rotation lock must be OFF to play: with it on, the phone
+//     never tells the page it was turned and the cover stays up.
+//   - While the phone is upright the game is paused (src/ui/pauseMenu.ts asks
+//     this file to be told, with onUprightChange).
 //
-// Turning the picture is the easy half. Fingers still report where they are
-// on the SCREEN, so a swipe "up the screen" must be read as a swipe "to the
-// right in the game". toGameX / toGameY below do that for every drag, stick
-// and swipe; the controls call them instead of using screen numbers directly.
+// WHAT THIS FILE STILL DOES
+//   1. It RE-FITS the game whenever the screen changes shape. Everything the
+//      game draws lives in one box, the "stage" (#stage in index.html); when
+//      its size changes, everyone who asked with onStageResize() is told (the
+//      3D picture then resizes itself to match).
+//   2. It says whether a touch screen is being held upright: isUpright().
 //
-// A mouse-and-keyboard computer with a tall window is left alone: it has no
-// way to be "held sideways", so the game just uses the window's shape.
+// THE IPHONE'S LATE SIZE (Joshua, 2026-11-17: "When I started in portrait and
+// move to landscape, it didn't resize"). Just after an iPhone is turned it
+// still reports the OLD width and height for a short while, so a game that
+// measures the screen once, the moment it is told "you were turned", fits
+// itself to the old shape and stays that way. The fix is Beyond Extinction's
+// (its src/engine/Game.ts `scheduleResize` and the top of its src/main.ts):
+//   - measure again on every signal the browser gives (resize,
+//     orientationchange, the visual viewport changing);
+//   - and measure AGAIN several times over the next second;
+//   - and, when the phone is turned, write the page's "viewport" setting out
+//     afresh, which makes the iPhone work the page's size out again.
+// On top of that a ResizeObserver watches the stage itself, so whenever the
+// browser really does change its size, however late, the game hears of it.
+//
+// THE OLD NAMES STILL WORK. The controls call isRotated / toGameX / toGameY
+// (written for the turned stage). They are kept so nothing else has to
+// change: the stage is never turned now, so they simply pass screen numbers
+// straight through.
 // ============================================================================
 
-// TURNING THE PHONE WHILE THE GAME IS OPEN (Joshua, 2026-11-17). With the phone's rotation lock OFF, turning the
-// phone makes iOS spin the whole page, and a moment later the game un-turns its own stage to match: for that
-// moment the picture is seen spinning and snapping back, though it ends up looking exactly as it did. So while
-// that happens the game is hidden behind a plain dark COVER: it drops the instant the phone reports it is being
-// turned, stays until the screen has stopped changing for COVER_HOLD_MS, and then fades away. The game the player
-// sees before and after is the same landscape picture; the flip between is never shown.
-const COVER_HOLD_MS = 900; // how long after the LAST change of screen shape the cover stays (iOS's spin takes about half a second)
-const COVER_FADE_MS = 250; // how long the cover takes to fade away
+/** After any sign that the screen changed, the stage is measured again after each of these waits (milliseconds). */
+const MEASURE_AGAIN_MS = [120, 300, 600, 1000];
+/** A touch screen that is taller than it is wide: the same test the cover in index.html uses. Keep the two the same. */
+const UPRIGHT_QUERY = '(orientation: portrait) and (pointer: coarse)';
+/** A stage this short or shorter (pixels) is a phone on its side: styles may pack things tighter (the `is-short` label). */
+const SHORT_STAGE = 500;
 
-/** True while the stage is turned a quarter turn (a touch screen taller than it is wide). */
-let rotated = false;
-const listeners: Array<() => void> = [];
+const resizeListeners: Array<() => void> = [];
+const uprightListeners: Array<(upright: boolean) => void> = [];
 
-/** Is the game currently drawing itself turned a quarter turn? */
+/** The game never draws itself turned any more (the "rotate your device" cover replaced that). Always false. */
 export function isRotated(): boolean {
-  return rotated;
+  return false;
 }
 
 /**
  * A movement measured on the SCREEN (dx to the right, dy downward, in pixels), as the GAME sees it.
- * Turned: the game's "right" runs DOWN the screen, and the game's "down" runs to the screen's LEFT.
+ * The stage is never turned now, so the game's right is the screen's right and its down is the screen's down.
  */
-export function toGameX(dx: number, dy: number): number {
-  return rotated ? dy : dx;
+export function toGameX(dx: number, _dy: number): number {
+  return dx;
 }
-export function toGameY(dx: number, dy: number): number {
-  return rotated ? -dx : dy;
+export function toGameY(_dx: number, dy: number): number {
+  return dy;
 }
 
-/** Call `fn` whenever the stage has been laid out again (the screen was turned or resized). */
+/** Call `fn` whenever the stage has changed size (the screen was turned or resized). */
 export function onStageResize(fn: () => void): void {
-  listeners.push(fn);
+  resizeListeners.push(fn);
+}
+
+/** The browser's own answer to "is this a touch screen held upright?", asked once and then kept up to date by it. */
+let uprightQuery: MediaQueryList | null = null;
+function uprightNow(): boolean {
+  try {
+    uprightQuery ??= typeof matchMedia === 'function' ? matchMedia(UPRIGHT_QUERY) : null;
+    return !!uprightQuery && uprightQuery.matches;
+  } catch {
+    return false; // a browser that cannot be asked: treated as never upright, so the game is never held paused by mistake
+  }
+}
+
+/** Is a touch screen being held upright right now (so the "rotate your device" cover is showing)? */
+export function isUpright(): boolean {
+  return uprightNow();
+}
+
+/** Call `fn` each time the phone is turned upright (true) or back on its side (false). */
+export function onUprightChange(fn: (upright: boolean) => void): void {
+  uprightListeners.push(fn);
 }
 
 /**
- * Start keeping the stage landscape. Call once, before anything measures the stage.
- * `stage` is the box holding the 3D picture and the controls.
+ * Start watching the stage. Call once, before anything measures it.
+ * `stage` is the box holding the 3D picture and the controls (it fills the screen: index.html).
+ *
+ * (The name is from when this turned the stage to keep the game wide. It turns nothing now: the game is kept
+ * landscape by the cover in index.html, and this keeps it FITTED to the screen.)
  */
 export function keepLandscape(stage: HTMLElement): void {
-  // "coarse" = the main way of pointing is a finger. Asked once: it does not change while the game runs.
-  const touchScreen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  // ---- 1. Measuring the stage, and telling whoever asked when it has changed ------------------------------------
+  let lastWidth = -1, lastHeight = -1, lastRatio = -1, lastUpright: boolean | null = null;
+  const measure = (): void => {
+    const width = stage.clientWidth;
+    const height = stage.clientHeight;
+    const ratio = window.devicePixelRatio || 1;
+    // A label the styles may use: is-short = the stage is not tall (a phone on its side).
+    stage.classList.toggle('is-short', Math.min(width, height) <= SHORT_STAGE);
 
-  // The cover: a dark sheet over the whole screen (outside the stage, so it is never turned), normally invisible.
-  const cover = document.createElement('div');
-  cover.style.cssText = `position:fixed;inset:0;z-index:1000;background:#04060d;opacity:0;pointer-events:none;transition:opacity ${COVER_FADE_MS}ms ease`;
-  document.body.appendChild(cover);
-  let coverTimer = 0;
-  /** Drop the cover at once (no fade in), and lift it once the screen has been still for COVER_HOLD_MS. */
-  const coverUp = () => {
-    cover.style.transition = 'none';
-    cover.style.opacity = '1';
-    window.clearTimeout(coverTimer);
-    coverTimer = window.setTimeout(() => {
-      cover.style.transition = `opacity ${COVER_FADE_MS}ms ease`;
-      cover.style.opacity = '0';
-    }, COVER_HOLD_MS);
-  };
-
-  let first = true;
-  let lastWide = window.innerWidth > window.innerHeight;
-  const layout = () => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    // Has the screen gone from tall to wide or back (the phone was turned)? Then hide the flip. Not the first
-    // time (nothing has been shown yet), and not for ordinary resizing that keeps the same shape (a computer's
-    // window being dragged, the phone's address bar sliding away).
-    const wide = width > height;
-    if (!first && touchScreen && wide !== lastWide) coverUp();
-    first = false;
-    lastWide = wide;
-    rotated = touchScreen && height > width;
-
-    if (rotated) {
-      // The stage is `height` wide and `width` tall, turned clockwise about its top-left corner. Turning it
-      // swings it off the left edge of the screen, so it is first slid right by the screen's width.
-      stage.style.width = `${height}px`;
-      stage.style.height = `${width}px`;
-      stage.style.transform = `translateX(${width}px) rotate(90deg)`;
-    } else {
-      stage.style.width = `${width}px`;
-      stage.style.height = `${height}px`;
-      stage.style.transform = '';
+    // Upright or not is checked here too, in case the browser's own "it changed" message (below) never came.
+    const upright = uprightNow();
+    if (upright !== lastUpright) {
+      const first = lastUpright === null;
+      lastUpright = upright;
+      // (not the very first time: nobody has been told anything yet, and whoever cares asks isUpright() when it starts)
+      if (!first) for (const fn of uprightListeners) fn(upright);
     }
-    // Two labels the styles use (src/ui/hud.css):
-    //   is-rotated  the notch and home bar are on different sides of the game than usual
-    //   is-short    the stage is not tall (a phone on its side): controls sit side by side
-    stage.classList.toggle('is-rotated', rotated);
-    stage.classList.toggle('is-short', Math.min(width, height) <= 500);
-    for (const fn of listeners) fn();
+
+    // Only a real change is passed on. Resizing the 3D picture wipes it, so it must not happen for nothing.
+    if (width === lastWidth && height === lastHeight && ratio === lastRatio) return;
+    lastWidth = width;
+    lastHeight = height;
+    lastRatio = ratio;
+    for (const fn of resizeListeners) fn();
   };
 
-  window.addEventListener('resize', layout);
-  // "orientationchange" arrives as the phone starts to turn, before the screen's new size is known: the cover
-  // drops straight away, and the layout follows when the size arrives (the resize above).
+  // ---- 2. Measuring again and again after the screen changes (the iPhone's late size, see the top of this file) --
+  let frameRequest = 0;
+  const timers: number[] = [];
+  const measureSoon = (): void => {
+    // once as the next picture is drawn...
+    cancelAnimationFrame(frameRequest);
+    frameRequest = requestAnimationFrame(measure);
+    // ...and again several times over the next second (earlier waits that have not run yet are replaced)
+    for (const timer of timers.splice(0)) window.clearTimeout(timer);
+    for (const wait of MEASURE_AGAIN_MS) timers.push(window.setTimeout(measure, wait));
+  };
+
+  // ---- 3. The iPhone keeping the page's OLD size after a turn: write the "viewport" setting out afresh ----------
+  // (Beyond Extinction's `kickViewport`.) The setting is made plain for a moment and then put back exactly as
+  // index.html has it, which makes the browser work the page's size out again for the way it is now held.
+  const viewport = document.querySelector('meta[name="viewport"]');
+  const viewportText = viewport?.getAttribute('content') ?? '';
+  const kickViewport = (): void => {
+    if (!viewport || !viewportText) return;
+    viewport.setAttribute('content', 'width=device-width');
+    requestAnimationFrame(() => viewport.setAttribute('content', viewportText));
+  };
+
+  // ---- 4. Every signal a browser gives that the screen changed -------------------------------------------------
+  window.addEventListener('resize', measureSoon);
   window.addEventListener('orientationchange', () => {
-    if (touchScreen) coverUp();
-    layout();
+    kickViewport();
+    window.setTimeout(kickViewport, 350); // once more when the phone's own turning animation is over
+    measureSoon();
   });
-  layout();
+  // (the newer name for the same thing, and the part of the page actually in view: the surest signal on an iPhone)
+  try { screen.orientation?.addEventListener('change', measureSoon); } catch { /* an older browser: the signals above do */ }
+  window.visualViewport?.addEventListener('resize', measureSoon);
+  // (coming back to the game from another app, or from the browser's "back" memory)
+  window.addEventListener('pageshow', measureSoon);
+  // The stage itself: told by the browser whenever its real size changes, whatever the reason and however late.
+  if (typeof ResizeObserver === 'function') new ResizeObserver(measure).observe(stage);
+  // Turned upright or back on its side: the browser says so the moment the cover in index.html appears or goes.
+  // (measured at once, so the game is paused without waiting for a picture to be drawn, and then again as above)
+  const turned = (): void => { measure(); measureSoon(); };
+  uprightNow();
+  const query = uprightQuery as MediaQueryList | null;
+  if (query) {
+    if (typeof query.addEventListener === 'function') query.addEventListener('change', turned);
+    else (query as unknown as { addListener?: (fn: () => void) => void }).addListener?.(turned); // older iPhones
+  }
+
+  measure();
 }

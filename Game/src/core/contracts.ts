@@ -97,6 +97,13 @@ export interface HeroineBody {
   /** Her vitals this frame, for a body that can show them (optional: a body without it breathes at rest). */
   setVitals?(vitals: BodyVitals): void;
 
+  /**
+   * THE GAME WAS PAUSED and is carrying on (src/ui/pauseMenu.ts): the time that went by while it was paused is not a
+   * frame. A body that times its own frames (the fast heroine does, to choose her detail by the frame rate) starts
+   * its clock again here, so a pause is never mistaken for one very slow frame. Optional.
+   */
+  resumed?(): void;
+
   update(frame: FrameInfo): void;
   dispose(): void;
 }

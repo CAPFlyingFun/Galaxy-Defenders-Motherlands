@@ -642,6 +642,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       return { chestMm: m.chest, bellyMm: m.belly, fullMm: breath.fullMillimetres, trunk: [mid.x, mid.y, mid.z, mid.w] };
     },
 
+    /**
+     * The game was paused and is carrying on: her frame clock starts again from now. (Her detail is chosen by the
+     * frame rate, Smart FPS; left alone, a pause would look like one frame that took seconds, and she would be
+     * made lighter for it.)
+     */
+    resumed(): void { lastUpdateAt = performance.now(); },
+
     update(frame: FrameInfo): void {
       if (disposed) return;
       const now = performance.now();

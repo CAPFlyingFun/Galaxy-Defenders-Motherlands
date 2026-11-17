@@ -33,6 +33,13 @@ use the game's single copy of three.js.
   legs 40% (36), her lower legs and feet 20% (18). Past 90 body North is pulled round; when the looking stops it
   comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
   target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first).
+- Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real
+  loading bar, percentage and time left (`Game/index.html`, `Game/src/ui/splash.ts`; the numbers come from
+  `Game/src/core/loadMeter.ts`, which counts real bytes and steps and remembers the device's last load), and the
+  game waits behind it until everything is in, her live body too. Held upright, a "rotate your device" cover shows
+  (plain CSS in `index.html`) and the game pauses; back on its side the pause menu waits with Resume and Settings
+  (`Game/src/ui/pauseMenu.ts`). The stage is never turned by code any more; it is re-fitted after every turn
+  (`Game/src/core/orientation.ts`). While paused no game time passes.
 - Her arms keep clear of her belly and her breasts (Joshua, 2026-11-17; `Game/src/heroine/fast/armClear.ts`): a
   simple collision with about 2 cm of space. Her belly and each breast are measured from her own skin as egg shapes
   (again whenever her shape changes). A hand coming across at belly height stops at her belly; looking up it passes
@@ -78,8 +85,8 @@ use the game's single copy of three.js.
 - Previews: keep one local preview running and reuse the same browser page for all screenshots; screenshot only
   what changed; shut the preview down when done.
 - Ask before changing anything major in a clothing design.
-- Phone first (iPhone 15 Plus, portrait and landscape): at least 30 FPS; nothing outside the camera's view is
-  drawn; the bottom corners stay free for the player's controls.
+- Phone first (iPhone 15 Plus, held on its side: the game is played in landscape only): at least 30 FPS; nothing
+  outside the camera's view is drawn; the bottom corners stay free for the player's controls.
 - The debug readout is only READ (Joshua could not open Settings when it grew over the gear, 2026-11-17): it never
   takes a touch (only its three dome buttons do), it is made first so every control is drawn over it, its lines
   stay short (about 30 letters), and it keeps to the top-left corner beside her vitals card. Check any change to it

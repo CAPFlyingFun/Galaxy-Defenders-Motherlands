@@ -15,6 +15,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, sep } from 'node:path';
 
@@ -224,7 +225,24 @@ self.addEventListener('fetch', (event) => {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// THE VERSION shown in the game's Settings (src/ui/versionTag.ts), so Joshua can tell at a glance whether his phone has
+// the newest build. Three parts, worked out once here as the game is built and written into the code as plain text:
+//   the version number  from package.json ("version"); raised by hand with each update that is pushed
+//   the build's commit  the short name of the exact saved state of the code it was built from
+//   the build's time    when it was built, in US Central time (Joshua's)
+// ---------------------------------------------------------------------------------------------------------------------
+const appVersion = (JSON.parse(readFileSync(here('./package.json'), 'utf8')) as { version: string }).version;
+let appCommit = 'local';
+try { appCommit = execSync('git rev-parse --short HEAD', { cwd: here('.'), stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git checkout: "local" */ }
+const appBuilt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date());
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_COMMIT__: JSON.stringify(appCommit),
+    __APP_BUILT__: JSON.stringify(appBuilt),
+  },
   // Relative paths, so the same build works at capflyingfun.github.io/Galaxy-Defenders-Motherlands/ and locally.
   base: './',
   plugins: [charb(), pwa()],

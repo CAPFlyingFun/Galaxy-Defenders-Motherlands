@@ -59,6 +59,111 @@ function skinningMatrix(mesh: THREE.SkinnedMesh, bones: ArrayLike<number>, weigh
   return out.multiply(mesh.bindMatrix).premultiply(mesh.bindMatrixInverse).premultiply(mesh.matrixWorld);
 }
 
+/** A patch smaller than this share of a sheet's drawn pixels is a stray fleck, not part of the design. */
+const STRAY_SHARE = 0.012;
+/** A colour that covers at least this share of the drawn pixels is one of the sheet's MAIN colours. */
+const MAIN_SHARE = 0.05;
+/** Two main colours closer than this (0-255 a channel, summed over red, green and blue) are taken as one. */
+const SAME_COLOUR = 90;
+
+/**
+ * PAINT OVER STRAY FLECKS in a sheet piece's picture (Joshua, 2026-11-17: "I see a spot on her right chest").
+ *
+ * The builder's cleavage strip ends at the tip of each breast, and at one tip its own paint leaves a fleck of the
+ * EDGING's colour (Blaze's pink) on the black fabric: a few millimetres across, but bright. In the room it is in
+ * shadow and hard to see; baked, it shows. The builder's code is not ours to change (Char_B is a copy), so the
+ * bake tidies the picture instead:
+ *   1. find the sheet's MAIN colours (each covers a good share of it: the fabric, the edging)
+ *   2. give every drawn pixel the main colour it is nearest to, and group neighbours of the same one into PATCHES
+ *      (the soft blended pixels along an edge simply join the side they are nearer to, so edges stay soft)
+ *   3. a patch much smaller than the whole (under `STRAY_SHARE` of the drawn pixels) is a fleck, and is filled
+ *      with the main colour of the big patch it touches most
+ * The edging itself (the long pink binding) is one big patch, so it is never touched.
+ * `pixels` is RGBA, changed in place. Returns how many flecks were painted over.
+ */
+function clearStrayPatches(pixels: Uint8Array, width: number, height: number): number {
+  const total = width * height;
+  const drawn = (p: number) => pixels[p * 4 + 3] > 127;
+
+  // 1. the main colours: count the drawn pixels in coarse colour boxes (16 steps a channel) and keep the full ones
+  const boxes = new Map<number, { count: number; r: number; g: number; b: number }>();
+  let drawnCount = 0;
+  for (let p = 0; p < total; p++) {
+    if (!drawn(p)) continue;
+    drawnCount++;
+    const r = pixels[p * 4], g = pixels[p * 4 + 1], b = pixels[p * 4 + 2];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const box = boxes.get(key);
+    if (box) { box.count++; box.r += r; box.g += g; box.b += b; } else boxes.set(key, { count: 1, r, g, b });
+  }
+  const mains: { r: number; g: number; b: number }[] = [];
+  for (const box of [...boxes.values()].sort((a, b) => b.count - a.count)) {
+    if (box.count < drawnCount * MAIN_SHARE) break;
+    const colour = { r: box.r / box.count, g: box.g / box.count, b: box.b / box.count };
+    // (a box next door to one already kept is the same colour, split by the boxes' edges)
+    if (mains.some((m) => Math.abs(m.r - colour.r) + Math.abs(m.g - colour.g) + Math.abs(m.b - colour.b) < SAME_COLOUR)) continue;
+    mains.push(colour);
+  }
+  if (mains.length < 2) return 0;   // one colour only: there is nothing a fleck could be
+
+  // 2. every drawn pixel's nearest main colour, then patches of neighbours that share one
+  const mainOf = new Int8Array(total).fill(-1);
+  for (let p = 0; p < total; p++) {
+    if (!drawn(p)) continue;
+    let best = 0, bestGap = Infinity;
+    for (let m = 0; m < mains.length; m++) {
+      const gap = Math.abs(pixels[p * 4] - mains[m].r) + Math.abs(pixels[p * 4 + 1] - mains[m].g) + Math.abs(pixels[p * 4 + 2] - mains[m].b);
+      if (gap < bestGap) { bestGap = gap; best = m; }
+    }
+    mainOf[p] = best;
+  }
+  /** The up-to-four neighbours of pixel `p`, handed to `each`. */
+  const neighbours = (p: number, each: (q: number) => void) => {
+    const x = p % width;
+    if (x > 0) each(p - 1);
+    if (x < width - 1) each(p + 1);
+    if (p >= width) each(p - width);
+    if (p < total - width) each(p + width);
+  };
+  const patchOf = new Int32Array(total).fill(-1);
+  const patches: { size: number; main: number; pixels: number[] }[] = [];
+  const queue = new Int32Array(total);
+  for (let start = 0; start < total; start++) {
+    if (mainOf[start] < 0 || patchOf[start] >= 0) continue;
+    const id = patches.length, main = mainOf[start], members: number[] = [];
+    let head = 0, tail = 0;
+    queue[tail++] = start; patchOf[start] = id;
+    while (head < tail) {
+      const p = queue[head++];
+      members.push(p);
+      neighbours(p, (q) => { if (patchOf[q] < 0 && mainOf[q] === main) { patchOf[q] = id; queue[tail++] = q; } });
+    }
+    patches.push({ size: members.length, main, pixels: members });
+  }
+
+  // 3. each small patch is filled with the main colour of the big patch it shares the longest border with
+  const limit = drawnCount * STRAY_SHARE;
+  let cleared = 0;
+  for (const patch of patches) {
+    if (patch.size >= limit) continue;
+    const border = new Map<number, number>();   // a big neighbouring patch's main colour -> pixels of border shared
+    for (const p of patch.pixels) {
+      neighbours(p, (q) => {
+        const other = patchOf[q];
+        if (other < 0 || patches[other] === patch || patches[other].size < limit) return;
+        border.set(patches[other].main, (border.get(patches[other].main) ?? 0) + 1);
+      });
+    }
+    let fill = -1, longest = 0;
+    for (const [main, count] of border) if (count > longest) { longest = count; fill = main; }
+    if (fill < 0) continue;   // (it touches no big patch: a piece on its own, left as it is)
+    const colour = mains[fill];
+    for (const p of patch.pixels) { pixels[p * 4] = Math.round(colour.r); pixels[p * 4 + 1] = Math.round(colour.g); pixels[p * 4 + 2] = Math.round(colour.b); }
+    cleared++;
+  }
+  return cleared;
+}
+
 export interface PieceCapture { readonly pieces: BakedPiece[]; readonly pictures: Record<string, Blob>; readonly notes: string[] }
 
 /**
@@ -158,6 +263,9 @@ export async function capturePieces(
         targetBuffer.dispose(); flatMaterial.dispose();
         flatGeometry.attributes = {}; flatGeometry.index = null; flatGeometry.dispose();
       }
+      // a stray fleck of the edging's colour at a tip of the strip is painted over first (see `clearStrayPatches`)
+      const cleared = clearStrayPatches(raw, SHEET_SIZE, SHEET_SIZE);
+      if (cleared > 0) notes.push(`${mesh.name}: painted over ${cleared} stray patch${cleared === 1 ? '' : 'es'} of colour`);
       // the colour is run out past the cut edge (so the edge is not fringed with black), the cut itself is kept
       const spread = dilate(raw, SHEET_SIZE, SHEET_SIZE, 12);
       for (let i = 3; i < raw.length; i += 4) spread[i] = raw[i];

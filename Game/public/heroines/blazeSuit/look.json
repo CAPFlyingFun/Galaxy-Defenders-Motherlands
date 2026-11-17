@@ -1,7 +1,7 @@
 {
   "version": 1,
   "look": "blazeSuit",
-  "bakedAt": "2026-11-17T08:12:12.760Z",
+  "bakedAt": "2026-11-17T08:36:48.892Z",
   "builderVersion": "0.9.40",
   "belly": 100,
   "vertexCount": 115710,
@@ -35,6 +35,7 @@
       "sarahHair | sarahHair | 28020 triangles | skinned, 17012 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [
+      "cleavageBridge: painted over 1 stray patch of colour",
       "cleavageBridge: 754 points, 1368 triangles, picture cleavageBridge.webp",
       "sneakerL-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
       "sneakerL-plain: 4090 points, 7280 triangles",

@@ -49,9 +49,9 @@ type GameHeroine = HeroineBody & {
  * (src/heroine/heroineSettings.ts):
  *
  *   Performance (the default)  the FAST heroine (src/heroine/fast/): the builder's body file drawn the way Anthill
- *                              Airways' DEV Room draws it: nothing baked, a tee and leggings coloured over her
- *                              skin in the shader (fast/devRoomLook.ts). So for now she is NOT in her suit here.
- *                              ?suit=baked wears a baked copy of the builder's suit instead (belly fixed at 100).
+ *                              Airways' DEV Room draws it (detail levels, lighter triangle lists), wearing her
+ *                              real suit from saved pictures of the builder's paint (fast/bakedLook.ts).
+ *                              ?suit=tee wears the DEV Room's own painted tee and leggings (fast/devRoomLook.ts).
  *   Visual                     the Character Builder's own room, run out of sight (src/heroine/builderHeroine.ts):
  *                              the builder exactly, at several times the cost.
  *
@@ -76,9 +76,11 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
       const { BLAZE_PAINTED } = await import('./heroine/fast/devRoomLook');
       return await createFastHeroine({
         renderer, scene, look,
-        // THE DEV ROOM'S WAY (Joshua, 2026-11-17: "use the same exact settings and approach... from the DEV room"):
-        // nothing baked; a tee and leggings coloured over her skin in the shader. ?suit=baked wears the baked suit.
-        painted: asked.get('suit') === 'baked' ? undefined : BLAZE_PAINTED,
+        // HER OWN SUIT, on the DEV Room's body (Joshua, 2026-11-17: "I didn't ask for a change of outfit, only how it
+        // did the details and cut back the vertices. Place the outfit back like it was but keep the method"): the
+        // body, its detail levels and its lighter triangle lists are the DEV Room's; her outfit is her real suit,
+        // from the saved pictures of the builder's paint. ?suit=tee wears the DEV Room's own painted tee instead.
+        painted: asked.get('suit') === 'tee' ? BLAZE_PAINTED : undefined,
         detail: settings.detail,
         targetFps: settings.targetFps,
         onProgress: (stage) => say(`Loading Blaze: ${stage}…`),

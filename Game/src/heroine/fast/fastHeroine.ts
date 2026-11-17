@@ -306,6 +306,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   layBreath();
   breath.patch(materials.fine);
   breath.patch(materials.plain);
+  // (what she wears over her skin breathes with it: the fabric across her cleavage, or it would sink into her chest)
+  for (const mesh of pieces.meshes) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) breath.patch(material);
   /** Her vitals as the game last gave them; until it does, a quiet breath at rest (14 a minute, half a litre). */
   let vitals: BodyVitals | null = null;
   /** A clock that runs at the speed of her breathing, for her bones' own small breathing move (the builder's stand). */

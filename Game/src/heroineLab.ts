@@ -97,8 +97,8 @@ async function start(): Promise<void> {
       renderer,
       scene,
       look: lookKey(asked.get('look')),
-      // (the DEV Room's way unless ?suit=baked: see fast/devRoomLook.ts)
-      painted: asked.get('suit') === 'baked' ? undefined : BLAZE_PAINTED,
+      // (her real suit; ?suit=tee wears the DEV Room's painted tee instead: see fast/devRoomLook.ts)
+      painted: asked.get('suit') === 'tee' ? BLAZE_PAINTED : undefined,
       detail: detail === 'auto' ? 'auto' : nearestDetail(Number(detail ?? 100) || 100),
       onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
     });

@@ -49,9 +49,20 @@ export interface HeroineBody {
   readonly ready: boolean;
 
   setPosition(x: number, z: number): void;
-  /** Which way she faces, in radians about Y (0 = +Z). */
+  /** Which way she faces, in radians about Y (0 = +Z). For a body with `setUpperYaw`, this is her hips and legs. */
   setYaw(yaw: number): void;
-  /** Ground speed in m/s (0 = standing). Her legs follow this; the game moves her root. */
+  /**
+   * HER TOP HALF TURNED APART FROM HER LEGS (Joshua, 2026-11-17: "her head and arms rotate up to +/-45° from her
+   * relative body direction to her hips and legs"; the rule itself is src/input/bodyTurn.ts). Which way her head
+   * points and which way her torso (chest, arms, guns) points, in radians about Y like `setYaw`; her hips and
+   * legs keep facing `setYaw`'s way. Optional: a body that cannot turn its top half leaves this out, and the game
+   * faces all of it one way.
+   */
+  setUpperYaw?(head: number, torso: number): void;
+  /**
+   * Ground speed in m/s (0 = standing). Her legs follow this; the game moves her root. (A body that reads how far
+   * it really moved between frames, as the fast heroine does, does not need it.)
+   */
   setWalk(speed: number): void;
   /** A world point her guns point at; null lowers them to rest. */
   aimAt(target: THREE.Vector3 | null): void;

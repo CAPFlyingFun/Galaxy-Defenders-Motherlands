@@ -198,8 +198,16 @@ async function start(): Promise<void> {
       heroine.setPosition(Math.sin(state.walkAngle) * WALK_RADIUS - 0, Math.cos(state.walkAngle) * WALK_RADIUS - WALK_RADIUS);
       heroine.setYaw(state.walkAngle + Math.PI / 2);
     }
-    // (?speed= or a test script's `heroineLab.speed` walks her at that ground speed, to see her stride at a jog or a run)
-    heroine.setWalk(testSpeed.value > 0 ? testSpeed.value : state.walk ? WALK_SPEED : 0);
+    // (?speed= or a test script's `heroineLab.speed`: she really moves at that ground speed, straight along the way she
+    //  faces, or backward if it is negative. Her steps follow the ground she covers, so this is how her stride is seen
+    //  at a jog or a run and her feet are checked against the floor. The camera goes with her.)
+    if (testSpeed.value !== 0 && !state.walk) {
+      const yaw = heroine.root.rotation.y, stepX = Math.sin(yaw) * testSpeed.value * dt, stepZ = Math.cos(yaw) * testSpeed.value * dt;
+      heroine.setPosition(heroine.root.position.x + stepX, heroine.root.position.z + stepZ);
+      camera.position.x += stepX; camera.position.z += stepZ;
+      orbit.target.x += stepX; orbit.target.z += stepZ;
+    }
+    heroine.setWalk(testSpeed.value !== 0 ? Math.abs(testSpeed.value) : state.walk ? WALK_SPEED : 0);
 
     // AIM: the ball flies a slow figure round her front, high and low, a few metres out.
     if (state.aim) {
@@ -268,7 +276,7 @@ async function start(): Promise<void> {
     heroine, scene, camera, renderer, orbit, state, THREE,
     hold: (on: boolean) => { held = on; },
     // run `frames` frames; only the last one is drawn (a software renderer takes about a second a picture)
-    /** Walk her at this ground speed, metres a second (0: as the WALK button says). */
+    /** Move her at this ground speed, metres a second, along the way she faces (negative: backing up; 0: as the WALK button says). */
     set speed(value: number) { testSpeed.value = value; },
     advance: (frames: number, dt = 1 / 30) => { for (let k = 0; k < frames; k++) frame(dt, k === frames - 1); showStatus(); return heroine.stats(); },
     // the picture as it is drawn now, as a JPEG data address (drawn and copied in one go)

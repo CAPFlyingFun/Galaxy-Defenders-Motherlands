@@ -35,8 +35,13 @@ import {
   stepBellySpring, stepBreastSpring, walkBounceAccel, walkSwayAccel, type BellySpring,
 } from '@charb/sarahlab/sarahLabTool';
 
-/** Her legs never step slower than this, metres a second (a crawl of a walk would look like wading). */
-const SLOWEST_PACE = 0.7;
+/** Slower than this over the ground, metres a second, she is standing (not walking). */
+const WALK_FROM = 0.05;
+/**
+ * Her ground speed is read from how far she moved each frame, which jitters with the frame's length; it is smoothed
+ * over about this long, seconds, before it decides whether she stands, walks or runs.
+ */
+const SPEED_SMOOTH_SECONDS = 0.08;
 /**
  * Above this ground speed she RUNS (the builder's 'run' stride: both feet off the ground between steps), below it
  * she walks. It sits between a walk (1.1 m/s) and a jog (2.4); `RUN_BACK` is where a run drops back to a walk, a
@@ -57,6 +62,12 @@ export function walkEase(speed: number): number {
 }
 /** How much she moves as she walks, percent of the builder's own tuning (her look's body settings). */
 export interface MotionSettings { readonly walkBob: number; readonly walkSway: number; readonly breastBounce: number }
+/**
+ * A foot counts as PLANTED while its pace back under her is within this share of a planted foot's steady pace (see
+ * `measureStrides`). Not exactly that pace all the way: her hips turn a few degrees with each step, which carries a
+ * planted foot slightly faster in the middle of its step and slower at its ends (about 6 % each way as measured).
+ */
+const PLANTED_BAND = 0.13;
 /** A walk eases into a run (and back) over about this long, seconds. */
 const RUN_BLEND_SECONDS = 0.22;
 /** Standing eases into walking (and back) over about this long, seconds. */
@@ -66,6 +77,53 @@ const WALK_BLEND_SECONDS = 0.16;
  * (`BOUNCE_TILT` in sarahLabTool.ts, which that file keeps to itself): a quarter of 0.1 rad, in tilt-shape weights.
  */
 const BOUNCE_TILT = 0.25 * (0.1 / BELLY_MOTION.tiltRad);
+
+/**
+ * ONE STRIDE AS HER OWN FEET TAKE IT, measured from her foot bones (Joshua, 2026-11-17: "she is skating as her feet
+ * aren't actually driving her along the ground like it should be... Best way for the moment is measure the actual
+ * stride length from foot bone to foot bone, and sync that number with the room's scale").
+ *
+ * She is posed through one whole stride, `STRIDE_SAMPLES` moments of it, and at each her two ankle bones are read in
+ * her own frame (metres, her feet's ground under her, forward along +z). A foot that is PLANTED is carrying her: it
+ * moves back under her at one steady pace, and that pace is the ground going by. So:
+ *   - `stride` is how far the ground goes by in one whole stride (left foot down to left foot down): the planted
+ *     foot's pace, read off her bones. Her stride is turned by the distance she really covers, divided by this, and
+ *     then a planted foot stays where it was put down;
+ *   - `planted` says, for each foot at each moment, whether it is one of those feet;
+ *   - `lift` is how far each ankle is above where it is when she stands (her pose swings her legs from hips that
+ *     never move, so a leg out in front of her has its foot off the floor: she has to come down by that much for
+ *     that foot to stand on the ground).
+ */
+export interface StrideTable {
+  /** How far the ground goes by in one whole stride, metres. */
+  readonly stride: number;
+  /** The share of a stride each foot is planted (about 0.6 walking: both feet down between steps; 0.4 running). */
+  readonly share: number;
+  /** For her left foot [0] and her right [1], at each of the `STRIDE_SAMPLES` moments of a stride: */
+  /** ...its ankle along her forward, metres from under her; */
+  readonly along: readonly [Float32Array, Float32Array];
+  /** ...its ankle's height over where it is when she stands, metres; */
+  readonly lift: readonly [Float32Array, Float32Array];
+  /** ...and 1 while it is planted (carrying her), 0 while it swings. */
+  readonly planted: readonly [Uint8Array, Uint8Array];
+  /** Where in the stride each foot is set down and where it is picked up again (0..1; left, right). */
+  readonly landsAt: readonly [number, number];
+  readonly leavesAt: readonly [number, number];
+  /**
+   * How far she comes down for the foot that carries her to stand on the floor with its leg straight: the lower of
+   * her planted ankles' `lift`, at its most through a stride and at its least, metres. (The difference is her
+   * legs' own rise and fall: what her look's Bob shows a share of.)
+   */
+  readonly needMost: number;
+  readonly needLeast: number;
+  /**
+   * The middle of the moment both feet are off the ground, between her left foot leaving and her right landing
+   * (0..1), when there is such a moment (a run); null when a foot is always down (a walk).
+   */
+  readonly flightAt: number | null;
+}
+/** How many moments of a stride are measured. */
+export const STRIDE_SAMPLES = 240;
 
 /** One finger: its joints from the knuckle out, and the axis it curls about (in the skeleton's bind space). */
 interface Finger { readonly joints: readonly number[]; readonly axis: THREE.Vector3; readonly thumb: boolean }
@@ -130,6 +188,23 @@ export class BodyMotion {
   get walkBob(): number { return this.settings.walkBob; }
   /** 0 standing, 1 walking, in between while she starts or stops. */
   walkBlend = 0;
+  /** 0 walking, 1 running, in between while one eases into the other. */
+  runBlend = 0;
+  /** Where she is in her stride, 0..1 wrapping (the builder's cycle: her left foot lands at 0.25, her right at 0.75). */
+  get phase(): number { return this.stridePhase; }
+  /** Her ground speed along the way her legs face, metres a second, smoothed (never negative: backing up counts the same). */
+  speed = 0;
+  /**
+   * How far her body is over the foot she stands on now, metres toward her left (the builder's WALK Sway). Her legs
+   * are leaned back under her by this much, so whoever places her moves her by it and her feet stay where they were
+   * (footGround.ts does).
+   */
+  sway = 0;
+
+  /** Her stride as her own feet take it, walking and running (measured by `measureStrides`; null until then). */
+  strides: { readonly walk: StrideTable; readonly run: StrideTable } | null = null;
+  /** The belly her strides were measured at (a bigger belly steps shorter: they are measured again when it changes). */
+  private measuredBelly = -1;
 
   private readonly rig: HumanRig;
   private readonly bones: readonly THREE.Bone[];
@@ -137,11 +212,14 @@ export class BodyMotion {
   private readonly unitsPerMetre: number;
   private readonly belly: BellySpring = restingBellySpring();
   private readonly breast: BellySpring = restingBellySpring();
-  /** Where she is in her stride, 0..1 wrapping: it moves on by her real ground speed, so her feet do not slide. */
+  /** Where she is in her stride, 0..1 wrapping: it turns by the distance she really covers, so her feet do not slide. */
   private stridePhase = 0;
-  /** She is running (not walking), and 0 walking .. 1 running while one eases into the other. */
+  /** She is running (not walking). */
   private running = false;
-  private runBlend = 0;
+  /** Her leg's length, hip to ankle, in the game's metres. */
+  readonly legMetres: number;
+  /** The heroine's root her strides were measured in (they are measured again there when her belly changes). */
+  private measuredIn: THREE.Object3D | null = null;
   /** A second pose kept aside, for easing a walk into a run. */
   private readonly keptGait: Float32Array;
   // scratch, made once
@@ -160,7 +238,7 @@ export class BodyMotion {
    * @param skin       her skin: its skeleton's bones are the ones posed
    * @param gripCurl   how far her fingers are closed, percent (the builder's FINGERS slider)
    */
-  constructor(model: THREE.Object3D, skin: THREE.SkinnedMesh, gripCurl: number, private readonly settings: MotionSettings = { walkBob: 100, walkSway: 100, breastBounce: 100 }) {
+  constructor(private readonly model: THREE.Object3D, skin: THREE.SkinnedMesh, gripCurl: number, private readonly settings: MotionSettings = { walkBob: 100, walkSway: 100, breastBounce: 100 }) {
     this.rig = new HumanRig(model);
     this.bones = skin.skeleton.bones;
     this.measure = measureHuman(this.rig.bind);
@@ -174,6 +252,7 @@ export class BodyMotion {
     const inWorld = this.bones[a].getWorldPosition(new THREE.Vector3()).distanceTo(this.bones[b].getWorldPosition(new THREE.Vector3()));
     const inBind = Math.hypot(bind[a].x - bind[b].x, bind[a].y - bind[b].y, bind[a].z - bind[b].z);
     this.unitsPerMetre = inBind / Math.max(1e-6, inWorld);
+    this.legMetres = this.measure.legLength / this.unitsPerMetre;
 
     // Her fingers' curl never changes, so its turns are written once.
     for (const finger of findFingers(this.rig.bind, this.measure)) {
@@ -187,12 +266,20 @@ export class BodyMotion {
    * One frame: pose her bones and work out her motion shapes' weights.
    * @param dt        seconds since the last frame
    * @param seconds   a free-running clock, for her breathing
-   * @param speed     her ground speed, metres a second (0: standing). Her stride keeps pace with it: a walk when
-   *                  slow, the builder's run when fast
+   * @param distance  how far she really moved since the last frame along the way her legs face, metres: forward is
+   *                  positive, backing up negative. HER STRIDE IS TURNED BY THIS and by nothing else, so her feet
+   *                  step as far as she went: not at all against a wall, and backward when she backs up
    * @param belly     her belly, 0-200 % (a big belly walks shorter and wider, and swings more)
    */
-  update(dt: number, seconds: number, speed: number, belly: number): void {
-    const walking = speed > 0.05;
+  update(dt: number, seconds: number, distance: number, belly: number): void {
+    // (her belly changed: her stride is a different length, so it is measured again)
+    if (this.measuredIn && Math.abs(belly - this.measuredBelly) >= 2) this.measureStrides(this.measuredIn, belly);
+
+    // Her ground speed, from the distance she covered: it decides whether she stands, walks or runs.
+    const covered = dt > 0 ? Math.abs(distance) / dt : 0;
+    this.speed += (covered - this.speed) * (dt > 0 ? 1 - Math.exp(-dt / SPEED_SMOOTH_SECONDS) : 1);
+    if (covered === 0 && this.speed < 0.02) this.speed = 0;
+    const speed = this.speed, walking = speed > WALK_FROM;
     const measure = this.measure, bind = this.rig.bind, gait = this.gait;
     const carry = belly / 100;
 
@@ -212,6 +299,7 @@ export class BodyMotion {
     gait.lean = 0;
     gait.carry = carry;
     let phase = 0, strideSeconds = 0;
+    this.sway = 0;
     if (blend < 1) {
       // The builder's own stand: a person standing still, breathing.
       gait.stance = 'stand';
@@ -221,36 +309,47 @@ export class BodyMotion {
     if (blend > 0) {
       if (blend < 1) this.keep();
       // The builder's own walk or run: a step of her stride, with her weight shifting over each foot. One whole
-      // stride's length (in her skeleton's units) is the walk's, the run's, or between them while one eases into
-      // the other; her place in it moves on by how far she really went, so her feet stay where they land.
-      const walkStride = humanStride(measure, 'walk', carry), runStride = humanStride(measure, 'run', carry);
+      // stride's length is the walk's, the run's, or between them while one eases into the other: MEASURED FROM HER
+      // OWN FOOT BONES (`measureStrides`; the builder's own figure only until that has run). Her place in the stride
+      // moves on by how far she really went, so her feet stay where they land; backward when she backs up.
+      const walkStride = this.strides?.walk.stride ?? humanStride(measure, 'walk', carry) / this.unitsPerMetre;
+      const runStride = this.strides?.run.stride ?? humanStride(measure, 'run', carry) / this.unitsPerMetre;
       const stride = walkStride + (runStride - walkStride) * run;
-      const pace = Math.max(SLOWEST_PACE, speed);
-      this.stridePhase = (this.stridePhase + (pace * dt * this.unitsPerMetre) / stride) % 1;
+      const turned = this.stridePhase + distance / stride;
+      this.stridePhase = turned - Math.floor(turned);
       phase = this.stridePhase;
-      strideSeconds = stride / (pace * this.unitsPerMetre);
+      // (how long a stride takes at this speed: what her belly and bust feel the bounce of)
+      strideSeconds = stride / Math.max(0.3, speed);
       gait.phase = phase;
-      /** Pose her in one stance (the builder's `walkWeight` returns a small new object each call: made per frame). */
-      const poseAs = (stance: 'walk' | 'run'): void => {
+      /**
+       * Pose her in one stance, and say how far her body is over her standing foot (a share of her leg, toward her
+       * left). (The builder's `walkWeight` returns a small new object each call: made per frame.)
+       */
+      const poseAs = (stance: 'walk' | 'run'): number => {
         gait.stance = stance;
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
         // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
-        this.rig.apply(weighWalk(measure, steps, walkWeight(phase, stance, (this.settings.walkSway / 100) * walkEase(speed)), this.weighedTurns));
+        const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * walkEase(speed));
+        this.rig.apply(weighWalk(measure, steps, weight, this.weighedTurns));
+        return weight.sway;
       };
-      if (run <= 0) poseAs('walk');
-      else if (run >= 1) poseAs('run');
+      let sway = 0;
+      if (run <= 0) sway = poseAs('walk');
+      else if (run >= 1) sway = poseAs('run');
       else {
         // between the two: the walk's pose kept aside, then the run's mixed over it
-        poseAs('walk');
+        const walkSway = poseAs('walk');
         for (let i = 0; i < this.bones.length; i++) this.bones[i].quaternion.toArray(this.keptGait, i * 4);
-        poseAs('run');
+        const runSway = poseAs('run');
         for (let i = 0; i < this.bones.length; i++) {
           const q = this.bones[i].quaternion;
           this.keptQ.fromArray(this.keptGait, i * 4);
           q.copy(this.keptQ.slerp(q, run));
         }
+        sway = walkSway + (runSway - walkSway) * run;
       }
       if (blend < 1) this.mixWithKept(blend);
+      this.sway = sway * this.legMetres * blend;
     }
     // her fingers round the grips, over whichever pose she is in
     this.rig.set(this.fingerTurns as readonly JointTurn[]);
@@ -269,6 +368,98 @@ export class BodyMotion {
     this.weights[1] = swing * bob;                                       // bellyBob
     this.weights[2] = swing * (this.belly.x / BELLY_MOTION.bobM);        // bellySway
     this.weights[3] = breastBobWeight(belly, this.breast) * (this.settings.breastBounce / 100); // breastBob, by her look's BOUNCE
+  }
+
+  /**
+   * MEASURE HER STRIDE FROM HER FOOT BONES (see StrideTable), walking and running, at this belly.
+   * She is posed through a whole stride of each, exactly as `update` poses her, and her ankles are read in `frame`'s
+   * own space: the heroine's root (metres, the floor at 0, forward along +z). Her bones are left in the last pose
+   * measured, so this is called before a frame's own pose is laid (or while she is being built).
+   */
+  measureStrides(frame: THREE.Object3D, belly: number): void {
+    this.measuredIn = frame;
+    const measure = this.measure, bind = this.rig.bind, gait = this.gait, joints = measure.joints;
+    const ankles = [this.bones[joints.ankleL], this.bones[joints.ankleR]];
+    frame.updateWorldMatrix(true, false);
+    const toFrame = new THREE.Matrix4().copy(frame.matrixWorld).invert(), point = new THREE.Vector3();
+    /** Her ankles as her bones have them now, in the frame: [left along, left height, right along, right height]. */
+    const read = (out: number[]): number[] => {
+      this.model.updateMatrixWorld(true);
+      for (let side = 0; side < 2; side++) {
+        point.setFromMatrixPosition(ankles[side].matrixWorld).applyMatrix4(toFrame);
+        out[side * 2] = point.z;
+        out[side * 2 + 1] = point.y;
+      }
+      return out;
+    };
+    gait.seconds = 0;
+    gait.lean = 0;
+    gait.carry = belly / 100;
+    // as she stands: where each ankle is when its foot is flat on the floor under her
+    gait.stance = 'stand';
+    gait.phase = 0;
+    this.rig.apply(poseHuman(measure, bind, gait, this.standTurns));
+    const stand = read([0, 0, 0, 0]), now = [0, 0, 0, 0];
+
+    const table = (stance: 'walk' | 'run', speed: number): StrideTable => {
+      const N = STRIDE_SAMPLES;
+      const along: [Float32Array, Float32Array] = [new Float32Array(N), new Float32Array(N)];
+      const lift: [Float32Array, Float32Array] = [new Float32Array(N), new Float32Array(N)];
+      const planted: [Uint8Array, Uint8Array] = [new Uint8Array(N), new Uint8Array(N)];
+      gait.stance = stance;
+      for (let k = 0; k < N; k++) {
+        gait.phase = k / N;
+        const steps = poseHuman(measure, bind, gait, this.walkTurns);
+        this.rig.apply(weighWalk(measure, steps, walkWeight(gait.phase, stance, (this.settings.walkSway / 100) * walkEase(speed)), this.weighedTurns));
+        read(now);
+        for (let side = 0; side < 2; side++) { along[side][k] = now[side * 2]; lift[side][k] = now[side * 2 + 1] - stand[side * 2 + 1]; }
+      }
+      // Each foot's pace along her forward, metres a stride (going back under her is negative). A PLANTED foot goes
+      // back at one steady pace (the ground going by); a swinging foot is going forward, or back at some other pace.
+      // So: the middle value of all the backward paces is a planted foot's (a foot is planted for more of a stride
+      // than it swings backward), and each foot is planted through its longest unbroken stretch within a little of
+      // that pace.
+      const pace = (side: number, k: number): number => (along[side][(k + 1) % N] - along[side][(k + N - 1) % N]) * (N / 2);
+      const backward: number[] = [];
+      for (let side = 0; side < 2; side++) for (let k = 0; k < N; k++) { const v = pace(side, k); if (v < 0) backward.push(v); }
+      backward.sort((a, b) => a - b);
+      const steady = backward.length > 0 ? backward[backward.length >> 1] : 0;
+      const landsAt: [number, number] = [0, 0], leavesAt: [number, number] = [0, 0];
+      let sum = 0, count = 0;
+      for (let side = 0; side < 2; side++) {
+        const near = (k: number): boolean => { const v = pace(side, k % N); return v < 0 && Math.abs(v - steady) <= -steady * PLANTED_BAND; };
+        // the longest unbroken stretch (it may run across the end of the table and on from its start)
+        let bestStart = 0, bestLength = 0;
+        for (let start = 0; start < N; start++) {
+          if (!near(start) || near(start + N - 1)) continue;        // (a stretch starts where the sample before is not in it)
+          let length = 0;
+          while (length < N && near(start + length)) length++;
+          if (length > bestLength) { bestLength = length; bestStart = start; }
+        }
+        for (let i = 0; i < bestLength; i++) { const k = (bestStart + i) % N; planted[side][k] = 1; sum -= pace(side, k); count++; }
+        landsAt[side] = bestStart / N;
+        leavesAt[side] = ((bestStart + bestLength) % N) / N;
+      }
+      // how far she must come down for her carrying foot to be on the floor: the lower planted ankle, through a stride
+      let needMost = 0, needLeast = Infinity, flight = 0;
+      for (let k = 0; k < N; k++) {
+        const left = planted[0][k] === 1, right = planted[1][k] === 1;
+        if (!left && !right) { flight++; continue; }
+        const need = Math.min(left ? lift[0][k] : Infinity, right ? lift[1][k] : Infinity);
+        needMost = Math.max(needMost, need);
+        needLeast = Math.min(needLeast, need);
+      }
+      // (both feet off the ground: from her left foot leaving to her right foot landing, if that is a gap at all)
+      const gap = (landsAt[1] - leavesAt[0] + 1) % 1;
+      const flightAt = flight > 0 && gap < 0.5 ? (leavesAt[0] + gap / 2) % 1 : null;
+      return {
+        stride: count > 0 ? sum / count : 0, share: count / (2 * N), along, lift, planted, landsAt, leavesAt,
+        needMost, needLeast: Number.isFinite(needLeast) ? needLeast : 0, flightAt,
+      };
+    };
+    // (her sway eases off with her speed, so each is measured at a speed of its own: a walk, a run)
+    this.strides = { walk: table('walk', WALK_EASE.fullAt), run: table('run', 3.8) };
+    this.measuredBelly = belly;
   }
 
   /** Put every bone back as the file has it (for when she is taken apart). */

@@ -39,7 +39,8 @@ import { AutoDetail, type TargetFps } from './autoDetail';
 import { loadBakedLook, type BakedLook } from './bakedLook';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { loadBodyFile } from './bodyFile';
-import { BodyMotion, walkEase } from './bodyMotion';
+import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
+import { FootGround } from './footGround';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -57,8 +58,17 @@ import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 const EYE_UP = 0.42;
 /** ...and this far in front of it (metres): clear of her face, so looking down shows her bust and belly. */
 const EYE_FORWARD = 0.10;
-/** Ground speed above which she walks instead of standing (metres a second). */
-const WALK_FROM = 0.05;
+/** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
+const JUMP_METRES = 1.5;
+/**
+ * HER TOP HALF TURNED FROM HER LEGS (`setUpperYaw`): how the turn is shared out up her back, from her lower spine to
+ * her chest (her belly sits low on her spine and should mostly stay with her hips, as a real one does: most of a
+ * person's turn is in the ribs), and how her head's own turn is shared between her neck and her skull. GAME TUNING.
+ */
+const TORSO_TURN_SHARES = [0.2, 0.4, 0.4];
+const HEAD_TURN_SHARES = [0.4, 0.6];
+/** The most her torso is turned from her legs, and her head from her torso (a guard: the game keeps within 45 degrees). */
+const TORSO_TURN_MOST = (55 * Math.PI) / 180, HEAD_TURN_MOST = (50 * Math.PI) / 180;
 /** Her belly is reshaped at most this often (seconds): each change rewrites her points on the CPU. */
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
@@ -134,6 +144,15 @@ export interface FastHeroine extends HeroineBody {
   liveInfo(): { stepMs: number; kicks: number } | null;
   /** Change the frame rate AUTO detail holds. */
   setTargetFps(target: TargetFps): void;
+  /**
+   * FOR THE LAB: walk her on the spot at this ground speed, metres a second (negative: backing up; 0: off, her steps
+   * follow the ground she really covers, as in the game).
+   */
+  treadmill(speed: number): void;
+  /** Her feet on the floor this frame, for a readout and the tests: how far she is lowered, which feet are planted, how far each was raised by bending its knee (metres). */
+  feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number };
+  /** Her stride as measured from her own foot bones, walking and running (bodyMotion.ts), for a readout and the tests. */
+  strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null;
   /**
    * Her breathing now, for a readout: how far her chest and her belly are moved out where each moves most, and how far
    * her belly stands out for her stomach (millimetres); and her trunk as measured at about navel height (its half
@@ -323,6 +342,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     // (her stride is measured in her skeleton's own units against the world, so it is measured again at her real size)
     motion.dispose();
     motion = new BodyMotion(file.scene, skin, GRIP_CURL, look.manifest.motion);
+    // HER STRIDE, MEASURED FROM HER FOOT BONES as she stands here at her real size (bodyMotion.ts `measureStrides`)
+    motion.measureStrides(root, body.belly);
     motion.update(0, 0, 0, body.belly);
     root.updateMatrixWorld(true);
   }
@@ -341,8 +362,20 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   layBreath();
   breath.patch(materials.fine);
   breath.patch(materials.plain);
-  // (what she wears over her skin breathes with it: the fabric across her cleavage, or it would sink into her chest)
-  for (const mesh of pieces.meshes) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) breath.patch(material);
+  // (what she wears over her TRUNK breathes with it: the fabric across her cleavage, or it would sink into her chest.
+  //  Her sneakers do not: they are nowhere near her breathing, and their points are stored in a space of their own,
+  //  which the breathing read as part of her trunk: it pulled a long white spike out of each toe.)
+  {
+    const point = new THREE.Vector3();
+    root.updateMatrixWorld(true);
+    for (const mesh of pieces.meshes) {
+      const count = mesh.geometry.getAttribute('position').count;
+      let top = -Infinity;
+      for (let i = 0; i < count; i += 3) top = Math.max(top, mesh.getVertexPosition(i, point).applyMatrix4(mesh.matrixWorld).y);
+      if (top - root.position.y < look.manifest.barefootHeightMetres * 0.45) continue;   // (it is all below her hips)
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) breath.patch(material);
+    }
+  }
   /** Her vitals as the game last gave them; until it does, a quiet breath at rest (14 a minute, half a litre). */
   let vitals: BodyVitals | null = null;
   /** The hidden live body, once it has been opened and attached; and how long its steps take, milliseconds, smoothed. */
@@ -351,17 +384,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let breathClock = 0;
 
   const bones = skin.skeleton.bones, joints = motion.measure.joints;
-  // HER WALK'S BOB (the builder's WALK Bob: actor/walkWeight.ts `bobDrop`). Her pose alone leaves her feet a little
-  // off the floor through each step, because her root does not move. So each frame her lower ankle is measured
-  // against where it is when she stands: that is how far she must come down for the foot to be on the ground.
-  // With no bob she stays at the lowest of those all the way through her stride (hips level); her look's Bob brings
-  // her that share of the way back up at each moment, which is her hips rising and falling with each step.
-  const ankleL = bones[joints.ankleL], ankleR = bones[joints.ankleR];
-  const fitFloorY = fit.position.y;
+  // HER FEET ON THE FLOOR (footGround.ts): she is lowered onto the foot that carries her and moved over it, a knee
+  // bends rather than a foot going through the floor, and she steps round when her legs turn on the spot. Made now,
+  // while she stands, because it measures where her ankles are when her feet are flat on the floor.
   root.updateMatrixWorld(true);
-  const ankleStandY = Math.min(ankleL.matrixWorld.elements[13], ankleR.matrixWorld.elements[13]) - root.position.y;
-  /** The most her lower foot has been off the floor lately (it forgets slowly), and her bob's offset now, metres. */
-  let liftMost = 0, bobNow = 0;
+  const ground = new FootGround(root, fit,
+    { hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
+    { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] }, motion.legMetres);
   const bone = (index: number): THREE.Bone => bones[index];
   const arm = (side: number, shoulder: number, elbow: number, wrist: number): ArmBones => ({
     side, upper: bone(shoulder), fore: bone(elbow), hand: bone(wrist), knuckles: findKnuckles(bone(wrist)),
@@ -375,6 +404,23 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const crown = bone(joints.head);
   const skull = crown.parent && (crown.parent as THREE.Bone).isBone && crown.parent !== bone(joints.neck) ? (crown.parent as THREE.Bone) : crown;
   const skullSize = skull.scale.clone();
+  // HER BACK, for turning her top half from her legs: every bone from her lower spine up to her chest (the bone her
+  // arms and neck hang from), found by walking down from her chest. And her neck up to her skull, for her head.
+  const backBones: THREE.Bone[] = [];
+  for (let b: THREE.Object3D | null = bone(joints.chest); b && (b as THREE.Bone).isBone; b = b.parent) {
+    backBones.unshift(b as THREE.Bone);
+    if (b === bone(joints.spine)) break;
+  }
+  const neckBones: THREE.Bone[] = skull === bone(joints.neck) ? [skull] : [bone(joints.neck), skull];
+  const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
+  /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
+  const turnUpright = (b: THREE.Bone, angle: number): void => {
+    if (!b.parent || Math.abs(angle) < 1e-5) return;
+    b.parent.getWorldQuaternion(heldQuaternion);
+    upQuaternion.setFromAxisAngle(UP_AXIS, angle);
+    // local' = parent⁻¹ · turn · parent · local
+    b.quaternion.premultiply(heldQuaternion).premultiply(upQuaternion).premultiply(heldQuaternion.invert());
+  };
 
   // Her height with her hair, as she stands (a sample of her hair's points over the top of her skin).
   let height = crownOverFloor;
@@ -470,9 +516,18 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   hair?.show(drawnDetail, true);
 
   // ---- 12. the heroine the game talks to -----------------------------------------------------------------------------
-  let walking = false;
-  /** Her ground speed as the game last gave it, metres a second: her stride keeps pace with it. */
-  let speedNow = 0;
+  /**
+   * HER STEPS FOLLOW THE GROUND SHE REALLY COVERS (Joshua, 2026-11-17: "her feet aren't actually driving her along
+   * the ground like it should be"): where her root was last frame and which way it faced. The distance between
+   * frames, along the way her legs face, is what turns her stride (bodyMotion.ts); the speed the game says she
+   * walks at (`setWalk`) is not used.
+   */
+  let lastX = 0, lastZ = 0, lastYaw = 0, placed = false;
+  /** For the lab only: walk her on the spot at this ground speed, metres a second (0: off). */
+  let treadmill = 0;
+  /** Which way her head and her torso face when the game says so (`setUpperYaw`); null: with her legs. */
+  let upperHead: number | null = null, upperTorso: number | null = null;
+  const aimFrom = new THREE.Vector3();
   let target: THREE.Vector3 | null = null;
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
@@ -490,7 +545,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
-    setWalk(speed: number): void { walking = speed > WALK_FROM; speedNow = speed; },
+    setUpperYaw(head: number, torso: number): void { upperHead = head; upperTorso = torso; },
+    // (her steps follow the distance she really covers, measured each frame in `update`: the game's speed is not needed)
+    setWalk(_speed: number): void {},
+    treadmill(speed: number): void { treadmill = speed; },
 
     aimAt(point: THREE.Vector3 | null): void {
       if (!point) { target = null; return; }
@@ -511,8 +569,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       skullPlace.compose(skull.position, skull.quaternion, one);
       if (skull.parent) skullPlace.premultiply(skull.parent.matrixWorld);
       out.copy(crown.position).multiplyScalar(EYE_UP).applyMatrix4(skullPlace);
-      // ...then forward, the way she faces
-      const yaw = root.rotation.y;
+      // ...then forward, the way her head faces
+      const yaw = upperHead ?? root.rotation.y;
       out.x += Math.sin(yaw) * EYE_FORWARD;
       out.z += Math.cos(yaw) * EYE_FORWARD;
       return out;
@@ -530,6 +588,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
+    /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
+    strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
+    feetInfo() { return { drop: ground.drop, planted: ground.planted, raised: ground.raised, held: ground.held, stepFoot: ground.stepFoot, phase: motion.phase, walk: motion.walkBlend, run: motion.runBlend, speed: motion.speed, sway: motion.sway }; },
     breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
       const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
       return { chestMm: m.chest, bellyMm: m.belly, fullMm: breath.fullMillimetres, trunk: [mid.x, mid.y, mid.z, mid.w] };
@@ -555,29 +616,52 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       if (vitals) breath.set(vitals);
       else { REST_BREATH.breath = 0.5 - 0.5 * Math.cos(breathClock * Math.PI * 2 * 0.25); breath.set(REST_BREATH); }
 
-      // Her pose (the builder's stand or walk, her fingers) and the weight of her belly and bust.
-      motion.update(frame.dt, breathClock, walking ? speedNow : 0, body.belly);
+      // HOW FAR SHE REALLY MOVED since the last frame, along the way her legs face (backward is negative), and how
+      // far her legs turned. (The first frame, and a move too far to be a step, count as being put there: no step.)
+      const yawNow = root.rotation.y;
+      let along = 0, moving = false;
+      {
+        const movedX = root.position.x - lastX, movedZ = root.position.z - lastZ;
+        if (placed && movedX * movedX + movedZ * movedZ < JUMP_METRES * JUMP_METRES) {
+          along = movedX * Math.sin(yawNow) + movedZ * Math.cos(yawNow);
+          moving = movedX * movedX + movedZ * movedZ > 1e-10 || Math.abs(Math.sin(yawNow - lastYaw)) > 1e-5;
+        } else ground.letGo();                                     // (put somewhere else: the spots her feet stood on are not here)
+      }
+      lastX = root.position.x; lastZ = root.position.z; lastYaw = yawNow; placed = true;
+      if (treadmill !== 0) along = treadmill * frame.dt;
+
+      // Her pose (the builder's stand, walk or run, her fingers) and the weight of her belly and bust.
+      motion.update(frame.dt, breathClock, along, body.belly);
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
       // (the same four on a live level, where they sit among all her other shapes)
       for (let i = 0; i < 4; i++) if (liveMotionAt[i] >= 0) liveInfluences[liveMotionAt[i]] = motion.weights[i];
 
-      // Her walk's bob: her lower foot's height against standing, and her look's share of the way up from her lowest.
-      fit.position.y = fitFloorY;
-      if (motion.walkBlend > 0) {
-        root.updateMatrixWorld(true);
-        const lift = Math.min(ankleL.matrixWorld.elements[13], ankleR.matrixWorld.elements[13]) - root.position.y - ankleStandY;
-        liftMost = Math.max(lift, liftMost - 0.02 * frame.dt);
-        const share = Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(speedNow));
-        bobNow = (-liftMost + share * (liftMost - lift)) * motion.walkBlend;
-        fit.position.y = fitFloorY + bobNow;
-      } else { liftMost = 0; bobNow = 0; }
+      // Her feet on the floor (footGround.ts): she is set down on the foot that carries her, each planted foot held
+      // to the spot it landed on. How much of her legs' rise and fall shows is her look's Bob, eased off with her speed.
+      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving);
+
+      // HER TOP HALF TURNED FROM HER LEGS (`setUpperYaw`; the rule is the game's, input/bodyTurn.ts): her torso's
+      // turn shared out up her back, then her head's own turn on her neck and skull. Each is a turn about the
+      // upright axis, laid over her pose.
+      const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+      const torsoYaw = upperTorso ?? yawNow;
+      const torsoTurn = Math.max(-TORSO_TURN_MOST, Math.min(TORSO_TURN_MOST, wrap(torsoYaw - yawNow)));
+      const headTurn = Math.max(-HEAD_TURN_MOST, Math.min(HEAD_TURN_MOST, wrap((upperHead ?? torsoYaw) - torsoYaw)));
+      if (Math.abs(torsoTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], torsoTurn * (TORSO_TURN_SHARES[i + TORSO_TURN_SHARES.length - backBones.length] ?? 0));
+      if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       aim.advance(frame.dt, target !== null);
       if (aim.weight > 0) {
         root.updateMatrixWorld(true);
-        aim.facing = root.rotation.y;
-        aim.apply(target);
+        // Her arms point the way her TORSO faces (it follows her head a moment behind and ends where it ends): the
+        // point she aims at is swung round her by however far her torso has still to turn to it.
+        aim.facing = yawNow + torsoTurn;
+        if (target && upperTorso !== null) {
+          const dx = target.x - root.position.x, dz = target.z - root.position.z;
+          const behind = wrap(yawNow + torsoTurn - Math.atan2(dx, dz)), cos = Math.cos(behind), sin = Math.sin(behind);
+          aim.apply(aimFrom.set(root.position.x + dx * cos + dz * sin, target.y, root.position.z + dz * cos - dx * sin));
+        } else aim.apply(target);
       }
 
       // Her detail level: the fixed one asked for, or AUTO's.

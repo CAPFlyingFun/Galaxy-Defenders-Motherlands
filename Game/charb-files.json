@@ -13,6 +13,8 @@
     "models/sarah-v2-spandex-lite.glb",
     "fabrics/athletic-plain.jpg",
     "fabrics/jersey-plain.jpg",
-    "fabrics/jersey-trim.jpg"
+    "fabrics/jersey-trim.jpg",
+    "fabrics/flat-plain.png",
+    "fabrics/flat-trim.png"
   ]
 }

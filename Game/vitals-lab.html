@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Vitals Lab · Galaxy Defenders: Motherlands</title>
+<style>
+  /* A plain test page for the heroine's vitals: no 3D, just the numbers, so they can be tried on a phone. */
+  html, body { margin: 0; min-height: 100%; background: #10141c; color: #eaf2ff;
+    font-family: -apple-system, 'Segoe UI', Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  body { padding: calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 16px calc(12px + env(safe-area-inset-left)); box-sizing: border-box; }
+  h1 { font: 800 15px system-ui, sans-serif; letter-spacing: .06em; margin: 0 0 8px; }
+  #card { margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
+  .row > span { font: 700 10px system-ui, sans-serif; letter-spacing: .08em; opacity: .7; width: 100%; }
+  button { min-height: 40px; padding: 6px 12px; border-radius: 9px; border: 1px solid #ffffff40; background: #1a2230;
+    color: #eaf2ff; font: 700 12px system-ui, sans-serif; letter-spacing: .04em; }
+  button.on { background: #b3187a; border-color: #ff5cc8; }
+  #numbers { font: 600 12px ui-monospace, monospace; white-space: pre; line-height: 1.5; margin-top: 8px; opacity: .9; }
+</style>
+</head>
+<body>
+<h1>VITALS LAB</h1>
+<div id="card"></div>
+<div class="row" id="pace"><span>WHAT SHE IS DOING</span></div>
+<div class="row" id="acts"><span>ACTIONS</span></div>
+<div class="row" id="clock"><span>CLOCK</span></div>
+<div id="numbers"></div>
+<script type="module" src="/src/vitalsLab.ts"></script>
+</body>
+</html>

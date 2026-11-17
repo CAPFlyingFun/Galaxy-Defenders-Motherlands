@@ -27,7 +27,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { ACTIVITY, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { ACTIVITY, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { STOMACH } from '@charb/actor/abdominalOrgans';
 import { eat as gutEat, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
 
@@ -60,13 +60,30 @@ export const VITALS_TUNING = {
   /** She starts a mission having eaten and drunk: this much food and water (mL) is in her at the start. */
   startMeal: [450, 400] as readonly [foodMl: number, waterMl: number],
   /**
-   * HOW FAST HER STAMINA DRAINS, against the builder's own model (Joshua, 2026-11-17, asked what "double it" meant:
-   * "I meant more how fast her stamina drains which could be an upgrade later by exercising"). 2: it drains twice
-   * as fast as the builder's model has it; 1 would be the builder's own. Only the DRAIN is changed: it fills again
-   * at the builder's own speed. This is the number an exercise upgrade will bring down later (see `staminaDrain`
-   * on the vitals themselves, which starts at this).
+   * HER STAMINA, BY PACE (Joshua, 2026-11-17: "anything but walking drains stamina at a specific rate... walking
+   * actually gains stamina back but slowly, and faster if not moving"). A fixed rate for each pace, from the moment
+   * she is at it: seconds from full to empty (a pace that drains) or from empty to full (one that refills). Between
+   * two paces the rate is in between. These are for a heroine who is NOT pregnant; see `pregnant` just below.
+   * (The builder's model, used before, built up over half a minute and barely drained below a hard run: too slow.)
+   * Her breath and heart still come from the builder's model, which reads this stamina, so she is winded as it runs low.
    */
-  staminaDrain: 2,
+  stamina: {
+    /** [speed m/s (the paces in input/pace.ts), seconds, +1 refills / -1 drains] */
+    byPace: [[0, 30, +1], [1.1, 60, +1], [2.4, 120, -1], [3.8, 75, -1], [5.5, 35, -1]] as ReadonlyArray<readonly [number, number, number]>,
+    /** Firing drains a little too: this many seconds of firing alone would empty her. */
+    firingSeconds: 240,
+  },
+  /**
+   * PREGNANT, SHE TIRES SOONER (real numbers: oxygen use rises 20 to 33% by term, a weight-bearing effort costs more,
+   * and her oxygen reserve is smaller in the third trimester). At full effect (from week 36; growing from week 8, the
+   * builder's own pregnancy curve) her stamina drains this much faster and refills this much slower.
+   */
+  pregnant: { drainFaster: 0.3, refillSlower: 0.2 },
+  /**
+   * THE EXERCISE UPGRADE, later (Joshua: "how fast her stamina drains, which could be an upgrade later by exercising"):
+   * every drain is multiplied by this. 1 is the table above; fitter, it comes down.
+   */
+  staminaDrain: 1,
   /** Her belly grows by this many percent points of the builder's belly slider when her stomach is full (and by none when empty). */
   bellyWhenFull: 4,
   health: {
@@ -141,6 +158,24 @@ export function intensityAtSpeed(speed: number): number {
   return table[table.length - 1][1];
 }
 
+/**
+ * How fast her stamina changes at a ground speed, a share of a full bar each second (+ refilling, - draining).
+ * @param pregnancy  0 not pregnant .. 1 late pregnancy (VITALS_TUNING.pregnant)
+ * @param drain      the exercise upgrade's multiplier on every drain (1 = as tuned)
+ */
+export function staminaRate(speed: number, firing: boolean, pregnancy: number, drain = 1): number {
+  const T = VITALS_TUNING, table = T.stamina.byPace;
+  const rateOf = (row: readonly [number, number, number]): number => row[2] / row[1];
+  // (the rate at this speed: between the two paces it lies between, or the last one past a sprint)
+  let rate = rateOf(table[table.length - 1]);
+  if (speed <= table[0][0]) rate = rateOf(table[0]);
+  else for (let i = 1; i < table.length; i++) {
+    if (speed <= table[i][0]) { const t = (speed - table[i - 1][0]) / (table[i][0] - table[i - 1][0]); rate = rateOf(table[i - 1]) + t * (rateOf(table[i]) - rateOf(table[i - 1])); break; }
+  }
+  if (firing) rate -= 1 / T.stamina.firingSeconds;
+  return rate < 0 ? rate * drain * (1 + T.pregnant.drainFaster * pregnancy) : rate / (1 + T.pregnant.refillSlower * pregnancy);
+}
+
 /** The heroine's vitals. Make one per heroine, `step` it every frame, and read `reading`. */
 export class HeroineVitals {
   /** The builder's own states: her breath and heart, and her gut. */
@@ -150,6 +185,8 @@ export class HeroineVitals {
    * Exercise will lower it later: fitter, she tires more slowly.
    */
   staminaDrain: number = VITALS_TUNING.staminaDrain;
+  /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): it makes her tire sooner. */
+  private readonly pregnancy: number;
   private gut: GutState = restingGut();
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
@@ -160,6 +197,7 @@ export class HeroineVitals {
    * heart, deeper breaths and lower staying power from these). Left out, the builder's own defaults are used.
    */
   constructor(private readonly body: VitalsBody = {}) {
+    this.pregnancy = pregnancyShare(body.weeks);
     this.now = stepVitals(this.vitals, 0, 0, this.body);
     const [foodMl, waterMl] = VITALS_TUNING.startMeal;
     this.gut = gutEat(this.gut, foodMl, waterMl);
@@ -171,14 +209,13 @@ export class HeroineVitals {
     if (dt <= 0) return;
     const tuning = VITALS_TUNING;
 
-    // 1. Her breath, heart and energy: the builder's model, told how hard she is working.
+    // 1. Her breath and heart: the builder's model, told how hard she is working.
     const intensity = clamp(intensityAtSpeed(input.speed) + (input.firing ? tuning.firingIntensity : 0), 0, 1);
-    const energyBefore = this.vitals.energy;
+    const stamina = this.vitals.energy;
     this.now = stepVitals(this.vitals, dt, intensity, this.body);
-    // Her stamina drains faster than the builder's model has it: whatever the model took this frame is taken that
-    // many times over (the builder's code is not ours to change, so the extra is taken here, after its step).
-    const drained = energyBefore - this.vitals.energy;
-    if (drained > 0 && this.staminaDrain !== 1) this.vitals.energy = clamp(this.vitals.energy - drained * (this.staminaDrain - 1), 0, 1);
+    // Her stamina: the game's own rate for her pace (VITALS_TUNING.stamina), not the builder's. What the builder's
+    // step did to it is put back, and the game's change is made instead. (Her breath reads it the next frame.)
+    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain) * dt, 0, 1);
 
     // 2. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
     const hours = dt * tuning.gutHoursPerSecond;

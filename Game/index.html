@@ -97,6 +97,17 @@
                calc(env(safe-area-inset-bottom, 0px) + 24px) calc(env(safe-area-inset-left, 0px) + 28px);
       background: radial-gradient(95% 60% at 50% 46%, #101a2e 0%, #04060d 72%); color: #eaf2ff; pointer-events: auto; }
   html.gd-fit.gd-upright #rotate-cover { display: flex; }
+
+  /* UPRIGHT WHILE PLAYING (Joshua, 2026-11-17): "a hybrid of the pause menu and message on the top, and the last part
+     the game", with a yellow double pause sign over the game, half blacked out. The game's box keeps its landscape
+     size and is only SHRUNK (a transform: nothing is resized or rebuilt) to the phone's width, along the bottom.
+     The cover stops above it and carries the pause menu. (While still loading, the cover fills the screen.) */
+  html.gd-playing.gd-upright #stage { transform-origin: 0 0; transform: translate(0, var(--gd-strip-top)) scale(var(--gd-scale)); }
+  html.gd-playing.gd-upright #rotate-cover { height: var(--gd-strip-top); border-bottom: 1px solid rgba(94, 232, 200, .35);
+    overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; align-items: safe center; }
+  /* the controls are hidden in the strip (it is a picture of the game, not something to play) */
+  html.gd-upright .gd-hud { visibility: hidden; }
+  /* the pause menu's own card is not shown in the strip: the yellow pause sign is (src/ui/pauseMenu.css) */
   @media (orientation: portrait) and (pointer: coarse) { html:not(.gd-fit) #rotate-cover { display: flex; width: 100%; height: 100%; } }
   /* Upright, the splash is hidden behind the cover (it keeps loading). */
   html.gd-upright #splash { visibility: hidden; }
@@ -108,6 +119,21 @@
   .rotate-title { margin-bottom: 10px; font-size: 21px; font-weight: 800; letter-spacing: .14em; color: #ffd56b; }
   .rotate-hint { margin: 0; font-size: 15px; line-height: 1.5; }
   .rotate-note { margin: 18px 0 0; font-size: 12px; line-height: 1.5; color: #8fa3c8; }
+  /* Two sets of words: while loading ("rotate your device") and while playing ("paused"). */
+  .rotate-play, .rotate-pause { display: none; }
+  html.gd-playing .rotate-play { display: block; }
+  html.gd-playing .rotate-pause { display: block; }
+  html.gd-playing .rotate-load { display: none; }
+  html.gd-playing .rotate-phone { margin-bottom: 20px; }
+  /* The pause buttons, as in the pause menu (src/ui/pauseMenu.css); and the game's Settings panel when it is moved
+     in here (it uses the controls' colours, so they are given here too). */
+  .rotate-pause { margin-top: 18px; --line: rgba(94, 232, 200, 0.55); --navy: rgba(16, 26, 46, 0.72); --teal: #5ee8c8; --gold: #ffd56b; --text: #eaf2ff; }
+  .rotate-pause button { display: block; width: 100%; min-height: 46px; margin-top: 10px; border-radius: 10px; color: #eaf2ff;
+    font: inherit; font-size: 15px; font-weight: 700; letter-spacing: .06em; touch-action: manipulation; }
+  .rotate-resume { border: 1px solid rgba(94, 232, 200, .35); background: transparent; color: #8fa3c8 !important; }
+  .rotate-resume small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+  .rotate-settings { border: 1px solid rgba(94, 232, 200, .55); background: #101a2e; }
+  .rotate-settings-slot .gd-settings { position: static; max-height: none; min-width: 0; margin-top: 12px; text-align: left; font-size: 14px; }
 
   /* Someone who has asked their device for less movement gets a still bar and a still phone. */
   @media (prefers-reduced-motion: reduce) {
@@ -143,9 +169,17 @@
 <div id="rotate-cover" role="alert">
   <div class="rotate-box">
     <div class="rotate-phone"></div>
-    <div class="rotate-title">ROTATE YOUR DEVICE</div>
-    <p class="rotate-hint">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
+    <div class="rotate-title rotate-load">ROTATE YOUR DEVICE</div>
+    <p class="rotate-hint rotate-load">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
+    <div class="rotate-title rotate-play">PAUSED</div>
+    <p class="rotate-hint rotate-play">Turn your phone on its side to keep playing.</p>
     <p class="rotate-note">Nothing happening? Switch off rotation lock.</p>
+    <!-- the pause menu's buttons for an upright phone (wired up by src/ui/pauseMenu.ts once the game has started) -->
+    <div class="rotate-pause">
+      <button class="rotate-resume" type="button">Resume<small>turn your phone on its side</small></button>
+      <button class="rotate-settings" type="button">Settings</button>
+      <div class="rotate-settings-slot"></div>
+    </div>
   </div>
 </div>
 

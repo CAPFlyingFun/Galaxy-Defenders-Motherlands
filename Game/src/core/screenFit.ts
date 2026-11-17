@@ -102,6 +102,13 @@ function apply(): void {
   // the cover is shown upright: the pair flipped
   root.setProperty('--gd-cw', `${landscape.height}px`);
   root.setProperty('--gd-ch', `${landscape.width}px`);
+  // THE STRIP (Joshua, 2026-11-17: the pause menu on the top part of an upright phone, the game below it). Upright,
+  // the game's landscape box is shrunk to the phone's width and sits along the bottom; the cover takes the rest.
+  // On his phone: 430 / 932 = 0.46, so the strip is about 200 pixels tall, a fifth of the screen.
+  const scale = landscape.height / landscape.width, strip = landscape.height * scale;
+  root.setProperty('--gd-scale', String(scale));
+  root.setProperty('--gd-strip-h', `${strip}px`);
+  root.setProperty('--gd-strip-top', `${landscape.width - strip}px`);
   document.documentElement.classList.add('gd-fit');
   document.documentElement.classList.toggle('gd-upright', upright);
 }

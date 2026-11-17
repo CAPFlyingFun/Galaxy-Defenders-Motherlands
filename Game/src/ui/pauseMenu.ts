@@ -44,7 +44,7 @@ export interface Pause {
   /**
    * While paused: should the still picture be drawn again now? `now` is the frame's time, milliseconds.
    * The picture has to be drawn again after the screen changes size (resizing wipes it), and it is refreshed a few
-   * times a second besides, so a change made in Settings shows. Never while the phone is upright: nobody can see it.
+   * times a second besides, so a change made in Settings shows. Upright too: the game is the strip under the menu.
    */
   wantsPicture(now: number): boolean;
 }
@@ -200,8 +200,44 @@ export function createPause(options: PauseOptions): Pause {
     return true;
   };
 
-  // Turned upright: pause. Turned back: nothing here, the menu is already open and waits for Resume.
-  onUprightChange((upright) => { if (upright) pause(); });
+  // ---- UPRIGHT: the pause menu on the cover, the game in a strip below it (Joshua, 2026-11-17) -------------------------
+  // index.html holds the buttons; they are wired here. The game has started: the page is labelled for it, and the
+  // cover shows "PAUSED" with Resume and Settings in place of "rotate your device".
+  document.documentElement.classList.add('gd-playing');
+  const coverSettings = document.querySelector<HTMLElement>('.rotate-settings');
+  const coverSlot = document.querySelector<HTMLElement>('.rotate-settings-slot');
+  /** Where the Settings panel lives normally (in the controls), so it can be put back after its visit to the cover. */
+  let panelHome: { parent: Node; before: Node | null } | null = null;
+  const settingsHome = (): void => {
+    const panel = settingsPanel();
+    if (!panel || !panelHome) return;
+    panel.hidden = true;
+    panelHome.parent.insertBefore(panel, panelHome.before);
+    panelHome = null;
+    if (coverSettings) coverSettings.textContent = 'Settings';
+    showSettingsState();
+  };
+  const resumeButton = document.querySelector<HTMLElement>('.rotate-resume');
+  if (resumeButton) {
+    // (it cannot play upright: Resume says so, gently, and does nothing else)
+    resumeButton.addEventListener('click', () => { resumeButton.animate?.([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], 220); });
+  }
+  if (coverSettings && coverSlot) {
+    coverSettings.addEventListener('click', () => {
+      const panel = settingsPanel();
+      if (!panel) return;
+      if (panelHome) { settingsHome(); return; }
+      // The game's own Settings panel is moved into the cover while it is open there (the game in the strip is far
+      // too small to use it). Moving it keeps everything it does; it goes home when closed or when the phone turns.
+      panelHome = { parent: panel.parentNode as Node, before: panel.nextSibling };
+      coverSlot.appendChild(panel);
+      panel.hidden = false;
+      coverSettings.textContent = 'Close settings';
+    });
+  }
+
+  // Turned upright: pause. Turned back: the menu is already open and waits for Resume (Settings goes home first).
+  onUprightChange((upright) => { if (upright) pause(); else settingsHome(); });
   if (isUpright()) pause();
 
   return {
@@ -209,7 +245,7 @@ export function createPause(options: PauseOptions): Pause {
     pause,
     resume,
     wantsPicture(now: number): boolean {
-      if (isUpright()) return false;
+      // (upright too: the game is shown in the strip under the pause menu)
       if (!pictureWanted && now - pictureAt < STILL_PICTURE_MS) return false;
       pictureWanted = false;
       pictureAt = now;

@@ -114,9 +114,12 @@ export function connectSplash(meter: LoadMeter): Splash {
 
 /**
  * Loading failed and the game cannot start: say so on the splash, in place of what was loading, in `colour`.
- * (If the page has no splash, the words are put in the middle of the page.)
+ * A tap anywhere then loads the page again. (The game installed on a phone's home screen has no reload button, so
+ * "please reload the page" would be advice nobody could follow.)
+ * If the page has no splash, the words are put in the middle of the page.
  */
 export function showSplashError(text: string, colour: string): void {
+  const again = (): void => location.reload();
   const splash = document.getElementById('splash');
   const step = document.getElementById('splash-step');
   if (splash && step) {
@@ -128,10 +131,12 @@ export function showSplashError(text: string, colour: string): void {
     step.style.color = colour;
     const time = document.getElementById('splash-time');
     if (time) time.textContent = '';
+    splash.addEventListener('click', again);
     return;
   }
   const message = document.createElement('p');
   message.style.cssText = `position:fixed;inset:0;margin:auto;height:3em;text-align:center;color:${colour}`;
   message.textContent = text;
+  message.addEventListener('click', again);
   document.body.appendChild(message);
 }

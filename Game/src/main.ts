@@ -556,5 +556,5 @@ start().catch((error: unknown) => {
   // If something fails while starting (for example the dome model does not load), say so on the page.
   // (on the splash, which is still up: it covers the page, so a message under it would never be seen)
   console.error(error);
-  showSplashError('Galaxy Defenders could not start. Please reload the page.', PALETTE.gold);
+  showSplashError('Galaxy Defenders could not start. Tap here to try again.', PALETTE.gold);
 });

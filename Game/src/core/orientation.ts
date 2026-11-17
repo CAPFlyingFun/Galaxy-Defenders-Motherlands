@@ -24,6 +24,12 @@
 //      its size changes, everyone who asked with onStageResize() is told (the
 //      3D picture then resizes itself to match).
 //   2. It says whether a touch screen is being held upright: isUpright().
+//      That answer, and the game box's size, come from screenFit.ts (Joshua,
+//      2026-11-17): the screen is measured ONCE, kept as a landscape pair, and
+//      flipped on a turn; the phone's own angle says which way it is held. The
+//      page's own size is no longer trusted for either (the iPhone could leave
+//      it stuck at the old shape after a turn). The game box stays landscape
+//      behind the cover, so turning the phone never resizes the 3D picture.
 //
 // THE IPHONE'S LATE SIZE (Joshua, 2026-11-17: "When I started in portrait and
 // move to landscape, it didn't resize"). Just after an iPhone is turned it
@@ -45,10 +51,11 @@
 // straight through.
 // ============================================================================
 
+import { checkScreen, isUprightNow, onTurn } from './screenFit';
+
 /** After any sign that the screen changed, the stage is measured again after each of these waits (milliseconds). */
 const MEASURE_AGAIN_MS = [120, 300, 600, 1000];
 /** A touch screen that is taller than it is wide: the same test the cover in index.html uses. Keep the two the same. */
-const UPRIGHT_QUERY = '(orientation: portrait) and (pointer: coarse)';
 /** A stage this short or shorter (pixels) is a phone on its side: styles may pack things tighter (the `is-short` label). */
 const SHORT_STAGE = 500;
 
@@ -76,15 +83,9 @@ export function onStageResize(fn: () => void): void {
   resizeListeners.push(fn);
 }
 
-/** The browser's own answer to "is this a touch screen held upright?", asked once and then kept up to date by it. */
-let uprightQuery: MediaQueryList | null = null;
+/** Upright or not, from screenFit.ts (the phone's own angle). */
 function uprightNow(): boolean {
-  try {
-    uprightQuery ??= typeof matchMedia === 'function' ? matchMedia(UPRIGHT_QUERY) : null;
-    return !!uprightQuery && uprightQuery.matches;
-  } catch {
-    return false; // a browser that cannot be asked: treated as never upright, so the game is never held paused by mistake
-  }
+  return isUprightNow();
 }
 
 /** Is a touch screen being held upright right now (so the "rotate your device" cover is showing)? */
@@ -168,15 +169,9 @@ export function keepLandscape(stage: HTMLElement): void {
   window.addEventListener('pageshow', measureSoon);
   // The stage itself: told by the browser whenever its real size changes, whatever the reason and however late.
   if (typeof ResizeObserver === 'function') new ResizeObserver(measure).observe(stage);
-  // Turned upright or back on its side: the browser says so the moment the cover in index.html appears or goes.
-  // (measured at once, so the game is paused without waiting for a picture to be drawn, and then again as above)
-  const turned = (): void => { measure(); measureSoon(); };
-  uprightNow();
-  const query = uprightQuery as MediaQueryList | null;
-  if (query) {
-    if (typeof query.addEventListener === 'function') query.addEventListener('change', turned);
-    else (query as unknown as { addListener?: (fn: () => void) => void }).addListener?.(turned); // older iPhones
-  }
+  // Turned upright or back on its side (screenFit.ts, from the phone's angle): measured at once, and again as above.
+  onTurn(() => { measure(); measureSoon(); });
+  window.addEventListener('orientationchange', checkScreen);
 
   measure();
 }

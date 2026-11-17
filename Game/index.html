@@ -19,7 +19,10 @@
   /* THE STAGE: everything the game draws (the 3D picture and the controls). It simply fills the screen; the game is
      played in landscape, and src/core/orientation.ts tells the game whenever the stage changes size. The four
      --safe-* numbers are the space the phone keeps for its notch, rounded corners and home bar. */
-  #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden;
+  /* (Its size comes from src/core/screenFit.ts: the screen measured once as a landscape pair, --gd-w x --gd-h, so it
+     stays landscape even while the phone is upright behind the cover, and a turn never resizes the 3D picture.
+     Until that code has run, it simply fills the screen.) */
+  #stage { position: fixed; left: 0; top: 0; width: var(--gd-w, 100%); height: var(--gd-h, 100%); overflow: hidden;
     --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);
     --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
   #app { position: absolute; inset: 0; }
@@ -36,7 +39,7 @@
      (src/ui/splash.ts) from an honest measure of the loading (src/core/loadMeter.ts) and takes it away when the game
      is ready. The colours are the controls' own (src/ui/hud.css).
      ================================================================================================================== */
-  #splash { position: fixed; inset: 0; z-index: 900; box-sizing: border-box; overflow: hidden;
+  #splash { position: fixed; left: 0; top: 0; width: var(--gd-w, 100%); height: var(--gd-h, 100%); z-index: 900; box-sizing: border-box; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     /* (kept clear of the phone's notch, rounded corners and home bar) */
     padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 28px)
@@ -85,14 +88,18 @@
      A computer with a mouse is never covered, however narrow its window: it cannot be turned on its side.
      (src/core/orientation.ts asks the browser the very same question to know when to pause. Keep the two the same.)
      ================================================================================================================== */
-  #rotate-cover { display: none; }
-  @media (orientation: portrait) and (pointer: coarse) {
-    #rotate-cover { display: flex; position: fixed; inset: 0; z-index: 1000; box-sizing: border-box;
+  /* WHEN IT SHOWS: src/core/screenFit.ts reads the phone's own ANGLE (never stuck, unlike the page's size after a
+     turn) and labels the page "gd-upright". Before that code has run, the browser's own portrait test stands in. */
+  #rotate-cover { display: none; position: fixed; left: 0; top: 0; z-index: 1000; box-sizing: border-box;
+      width: var(--gd-cw, 100%); height: var(--gd-ch, 100%);
       align-items: center; justify-content: center; text-align: center;
       padding: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-right, 0px) + 28px)
                calc(env(safe-area-inset-bottom, 0px) + 24px) calc(env(safe-area-inset-left, 0px) + 28px);
       background: radial-gradient(95% 60% at 50% 46%, #101a2e 0%, #04060d 72%); color: #eaf2ff; pointer-events: auto; }
-  }
+  html.gd-fit.gd-upright #rotate-cover { display: flex; }
+  @media (orientation: portrait) and (pointer: coarse) { html:not(.gd-fit) #rotate-cover { display: flex; width: 100%; height: 100%; } }
+  /* Upright, the splash is hidden behind the cover (it keeps loading). */
+  html.gd-upright #splash { visibility: hidden; }
   .rotate-box { max-width: 300px; }
   /* A little phone that turns onto its side, over and over. */
   .rotate-phone { width: 46px; height: 82px; margin: 0 auto 30px; border: 3px solid #5ee8c8; border-radius: 11px;
@@ -142,6 +149,7 @@
   </div>
 </div>
 
+<script type="module" src="/src/core/screenFit.ts"></script>
 <script type="module" src="/src/main.ts"></script>
 <script type="module" src="/src/ui/versionTag.ts"></script>
 <script type="module" src="/src/ui/layoutEditor.ts"></script>

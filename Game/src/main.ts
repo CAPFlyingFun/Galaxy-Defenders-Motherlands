@@ -12,6 +12,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { Hand, HeroineBody } from './core/contracts';
+import './core/screenFit'; // first: the screen measured once, the game box sized from it (Joshua, 2026-11-17)
 import { keepLandscape, onStageResize } from './core/orientation';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';

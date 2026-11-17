@@ -27,7 +27,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { ACTIVITY, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { ACTIVITY, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { STOMACH } from '@charb/actor/abdominalOrgans';
 import { eat as gutEat, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
 
@@ -80,6 +80,28 @@ export const VITALS_TUNING = {
    */
   pregnant: { drainFaster: 0.3, refillSlower: 0.2 },
   /**
+   * WHAT ELSE RAISES HER HEART AND BREATHING (Joshua, 2026-11-17: "what other real life stuff affects the heart rate and
+   * breathing?"). Three, each 0..1, each adding to her heart rate (beats a minute) and her breathing (breaths a minute)
+   * at full strength, and making her stamina drain faster (a share more) at full strength:
+   *   THIRST   her water bar running low. Real: heart rate up 3 to 5 beats a minute for every 1% of body weight lost
+   *            as water; a badly dehydrated 4% is about +18, and the same work feels harder.
+   *   PAIN     her health below `painFrom` (an injury): real pain makes breathing faster and SHALLOWER, and lifts the heart.
+   *   FEAR     danger (a dome section hurt or breached; a hit on her; later, enemies close): adrenaline. It rises within
+   *            a couple of seconds and fades over `fearFallSeconds` once the danger passes (real: fast breathing from
+   *            fear passes once the fear is gone).
+   * GAME TUNING (the sizes for pain and fear are the game's choice: real ones vary a great deal from person to person).
+   */
+  stress: {
+    thirst: { heart: 18, breaths: 3, drain: 0.25 },
+    pain: { heart: 15, breaths: 6, drain: 0.1, shallower: 0.25 },
+    fear: { heart: 30, breaths: 8, drain: 0.2 },
+    painFrom: 90,
+    fearRiseSeconds: 1.5,
+    fearFallSeconds: 20,
+    /** A hit on her frightens her this much at once (a share of full fear for each point of health lost, at most 1). */
+    fearPerHealthLost: 0.04,
+  },
+  /**
    * THE EXERCISE UPGRADE, later (Joshua: "how fast her stamina drains, which could be an upgrade later by exercising"):
    * every drain is multiplied by this. 1 is the table above; fitter, it comes down.
    */
@@ -110,6 +132,8 @@ export interface VitalsInput {
   readonly speed: number;
   /** is she shooting this frame? */
   readonly firing: boolean;
+  /** how much danger she is in, 0 calm .. 1 terrifying (a breach, enemies close): it frightens her. Left out: none. */
+  readonly threat?: number;
 }
 
 /** One reading of her vitals, for the display and for her body. */
@@ -185,6 +209,8 @@ export class HeroineVitals {
    * Exercise will lower it later: fitter, she tires more slowly.
    */
   staminaDrain: number = VITALS_TUNING.staminaDrain;
+  /** Her fear now, 0..1 (VITALS_TUNING.stress): rises toward the danger she is in, fades after it. */
+  private fear = 0;
   /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): it makes her tire sooner. */
   private readonly pregnancy: number;
   private gut: GutState = restingGut();
@@ -215,7 +241,33 @@ export class HeroineVitals {
     this.now = stepVitals(this.vitals, dt, intensity, this.body);
     // Her stamina: the game's own rate for her pace (VITALS_TUNING.stamina), not the builder's. What the builder's
     // step did to it is put back, and the game's change is made instead. (Her breath reads it the next frame.)
-    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain) * dt, 0, 1);
+    // Thirst, pain and fear (VITALS_TUNING.stress): how strong each is now.
+    const st = tuning.stress;
+    const threat = clamp(input.threat ?? 0, 0, 1);
+    this.fear += (threat - this.fear) * (1 - Math.exp(-dt / (threat > this.fear ? st.fearRiseSeconds : st.fearFallSeconds)));
+    const thirst = this.needs.thirst, pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1), fear = this.fear;
+    // ...they make her stamina drain faster
+    const drainMore = 1 + st.thirst.drain * thirst + st.pain.drain * pain + st.fear.drain * fear;
+    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore) * dt, 0, 1);
+    // ...and lift her heart and her breathing on top of what the work does. Her breath and her heartbeat are moved on
+    // by the extra too, so what she shows (the heart on her card, her chest rising) goes at the rate the card says.
+    const moreBeats = st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear;
+    const moreBreaths = st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear;
+    if (moreBeats > 0 || moreBreaths > 0) {
+      const h = clamp(dt, 0, 0.5);
+      this.vitals.pulse = (this.vitals.pulse + (h * moreBeats) / 60) % 1;
+      this.vitals.cycle = (this.vitals.cycle + (h * moreBreaths) / 60) % 1;
+      const shallow = 1 - st.pain.shallower * pain;
+      this.now = {
+        ...this.now,
+        beatsPerMinute: this.now.beatsPerMinute + moreBeats,
+        breathsPerMinute: this.now.breathsPerMinute + moreBreaths,
+        tidalL: this.now.tidalL * shallow,
+        breathL: this.now.breathL * shallow,
+        beat: beatOf(this.vitals.pulse),
+        breath: breathOf(this.vitals.cycle, this.now.inShare),
+      };
+    }
 
     // 2. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
     const hours = dt * tuning.gutHoursPerSecond;
@@ -243,6 +295,8 @@ export class HeroineVitals {
   /** She is hurt (an enemy's hit) or mended (a med kit): health down or up by `amount`. */
   changeHealth(amount: number): void {
     this.health = clamp(this.health + amount, 0, VITALS_TUNING.health.most);
+    // (a hit frightens her at once)
+    if (amount < 0) this.fear = Math.min(1, this.fear - amount * VITALS_TUNING.stress.fearPerHealthLost);
   }
 
   get alive(): boolean {

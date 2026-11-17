@@ -522,7 +522,11 @@ async function start(): Promise<void> {
     // 5b. Her vitals: what she just did (how fast she moved, whether she is shooting) moves her heart, her breath,
     // her stamina, her food and her water on; her body and the card along the top show them.
     const shooting = rig.mode === 'first' && (controls.fireHeld || clicks > 0);
-    vitals.step(dt, { speed: motion.speed, firing: shooting });
+    // (danger frightens her: for now the dome's state, the worst section: hurt up to 0.6, broken through 1. Step 1a's
+    //  enemies coming close will add to it.)
+    let threat = 0;
+    for (const section of dome.sections) threat = Math.max(threat, section.shattered ? 1 : 0.6 * (1 - section.hp / SECTION_MAX_HP));
+    vitals.step(dt, { speed: motion.speed, firing: shooting, threat });
     const reading = vitals.reading;
     limits = reading;
     heroine.setVitals?.(reading);

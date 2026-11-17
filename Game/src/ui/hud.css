@@ -99,8 +99,8 @@
 }
 .gd-fire.is-down { background: rgba(255, 95, 162, 0.45); border-color: var(--pink); }
 
-/* On a phone the stage is short (src/core/orientation.ts marks it is-short): put the two right-hand buttons side by side. */
-#stage.is-short .gd-actions { flex-direction: row; align-items: flex-end; }
+/* The view switch always sits ABOVE the fire button (Joshua, 2026-11-16), never beside it: the space left of FIRE
+   is where the right thumb drags to pan the camera. */
 
 /* ---- Centre: the first-person crosshair ----------------------------------- */
 .gd-crosshair {

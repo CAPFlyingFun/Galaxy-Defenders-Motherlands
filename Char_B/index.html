@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-any-orientation>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Characters" />
+    <meta name="theme-color" content="#16201d" />
+    <!-- Saved to a Home Screen, the room is an app: its name and icon (manifest.webmanifest), and its files kept on the
+         device by the service worker (src/pwa). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Custom Character Builder</title>
+    <style>
+      html, body {
+        margin: 0; height: 100%; background: #16201d; overflow: hidden; font-family: system-ui, sans-serif;
+        touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-user-select: none;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+      }
+      /* (height follows the dynamic viewport: a phone's toolbar can lie over the layout box rather than shrink it) */
+      #app, #ui { position: fixed; top: 0; left: 0; right: 0; height: 100dvh; }
+      #app canvas { display: block; width: 100%; height: 100%; }
+      #ui { z-index: 10; pointer-events: none; }
+      #ui > * { pointer-events: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

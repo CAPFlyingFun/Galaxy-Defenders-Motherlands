@@ -1,0 +1,825 @@
+/**
+ * HER PELVIC ORGANS IN THE ROOM (the skeleton-outward plan, Phase 1; v3, on her skeleton). The womb with its cervix, the
+ * birth canal and the bladder, laid out against her measured pelvis (actor/pelvicOrgans.ts, src/data/pelvis/), each a
+ * simple soft body (actor/organCage.ts) hung from her pelvis bone: tied by its ligaments where anatomy ties it -- the
+ * cervix and the canal hard, the womb's body and the bladder's dome loosely -- so they sway, lag and settle as she moves
+ * and come back to rest when she stops. Standing still they are exactly where they were laid: what they feel of gravity
+ * is only its change as she leans away from upright (at rest her tissue already carries her organs' weight).
+ *
+ * PREGNANT, her womb is grown for HER WEEKS from what it holds (actor/pregnantWomb.ts) and seen through; her bladder is
+ * pressed by it; its sac is where the room's baby code packs her babies (`sac`), and where they need more room than it
+ * grew its wall gives it (`fitSac`); what its soft body does carries them (`wombMove`).
+ */
+import * as THREE from 'three';
+import { BLADDER, layOrgans, narrowAt, organMeshes, subNarrow, subPath, wombAxis, wombHalf, along, lengthOf, type OrganLayout, type OrganMesh, type PelvisLandmarks } from '../actor/pelvicOrgans';
+import { WOMB_SHAPE, growWomb, pregnantLayout, wombSac, type PregnantWomb, type TorsoLandmarks, type WombRoom } from '../actor/pregnantWomb';
+import { CANAL_OPENING, openCanal, type CanalBones } from '../actor/birthCanal';
+import { DOORS, ENDS_SHUT, SKIN_RING_ROWS, birthAngles, doorFrame, doorMeshes, followDoor, followEnds, followLips, outerSkin, passingLips, sliderLips, passingOutlines, pressDoorLine, rimOf, fittedDoors, sharedDoors, sliderDoors, swingDoors, type Angles, type PassingOutlines, type DoorFrame, type Ends } from '../actor/birthDoors';
+import { DoorCloth } from '../actor/doorCloth';
+import { clothCompliance, clothDamping, clothFriction, clothGravityScale, clothMaxStretch, clothRestScale, clothStandOffMm, clothSubsteps } from './sarahLabTool';
+import { NP, NT, sacRadius, type WombShape } from './baby';
+import { followCage, makeCage, placeCage, restGaps, separate, skinToCage, stepCage, type Cage, type CageSkin, type CageTune } from '../actor/organCage';
+import type { P3 } from '../actor/pelvisMeasure';
+import { layAdnexa } from '../actor/adnexa';
+
+/** How each organ's soft body is tuned. GAME TUNING: firm enough to keep its shape, damped so a sway settles in about a
+ * second ("not like jelly"), its ties looser where anatomy leaves it free. */
+export const ORGAN_TUNE = Object.freeze({
+  uterus: { shape: 0.35, keep: 0.08, tieFrom: 0.06, tieTo: 0.012 },
+  vagina: { shape: 0.4, keep: 0.05, tieFrom: 0.09, tieTo: 0.05 },
+  bladder: { shape: 0.25, keep: 0.1, tieFrom: 0.06, tieTo: 0.01 },
+});
+/** v2: her skin carried down to her doors (`skinSleeve`): how far up her canal past her doors' hinges the sleeve round it
+ * runs (metres: round the turn under her pubic bone and into her), and how much wider than her doors' feet it is by its
+ * end. GAME TUNING. */
+const SLEEVE = Object.freeze({ along: 0.15, wider: 0.12 });
+/** How firmly her canal is tied to where her bones hold it when it is fully open (ORGAN_TUNE.vagina's ties, closed, are
+ * loose: it sways). GAME TUNING. */
+const CANAL_HELD = 0.6;
+/** How much of her pregnant womb's wall is drawn (the rest seen through, to what it holds). GAME TUNING. */
+const WOMB_SEEN = 0.45;
+/** Their colours: muscle for the womb, mucosa for the canal, a bladder's wall over what it holds. */
+const COLOURS = Object.freeze({ uterus: 0xb04a52, vagina: 0xd88895, bladder: 0xd8c25a });
+/** Her opening's doors: the canal's lining inside, her outer skin outside (the test piece). */
+const DOOR_COLOURS = Object.freeze({ lining: 0xd88895, skin: 0xe9c3aa });
+/** How near her opening her baby gives as it crosses it (babySqueeze.ts), metres either side of a plane `SQUEEZE_OUT`
+ * outside her opening: through the whole of her doors, from their hinges inside her to their lips pushed open outside
+ * round its head (Joshua, 2026-11-08, choosing it: head and shoulders "squeeze up to 22% while inside the doors (like
+ * moulding)"). GAME TUNING. */
+const SQUEEZE_SLAB = 0.1;
+/** Each station's lip, how far across from her middle (metres): the right's and the left's. */
+type Lips = { right: number[]; left: number[] };
+/** GAME TUNING: how far her doors' feet are raised into her at most (metres), over how many passes round her they are
+ * evened, and what share of the way to where they are going they follow each frame (`setFootRise`). */
+/** GAME TUNING: her skin stops this far in under her doors' feet (metres), and the cut reaches from this far out of her
+ * past her canal's mouth to this far up it (`ringCut`). */
+const RING_CUT = Object.freeze({ under: 0.005, from: -0.04, to: 0.03 });
+const FOOT_RISE = Object.freeze({ most: 0.05, out: 0.02, even: 3, follow: 0.25 });
+const SQUEEZE_OUT = 0.02;
+/** Her doors as cloth (`pressMode` 'cloth'): the tee's dials as Joshua set his Sarah's (2026-11-08, her saved
+ * character: WEIGHT 25, CALM 100, FIT 100, CLOSE 100, STRETCH 50, GRIP 100, STEPS 43). GAME TUNING. */
+const DOOR_CLOTH_DIALS = Object.freeze({ weight: 25, calm: 100, fit: 100, close: 100, stretch: 50, grip: 100, steps: 43 });
+const G = 9.81;
+/** Faster than her body changes its motion, m/s²: a pose put on in one frame, not a movement. GAME TUNING (about 5 g;
+ * walking's hardest heel strike shakes her pelvis by 1-2 g). */
+export const JUMP_ACCEL = 50;
+
+type Name = 'uterus' | 'vagina' | 'bladder';
+interface Organ { readonly name: Name; readonly cage: Cage; readonly skin: CageSkin; readonly mesh: THREE.Mesh; readonly tune: CageTune; readonly out: Float32Array }
+
+/** Cage points for one organ: along a centre line, each station its middle and points round it; tied from `tieFrom` at
+ * its start to `tieTo` at its end. */
+function lineCage(path: readonly P3[], half: (t: number) => readonly [number, number], every: number, tieFrom: number, tieTo: number, grams: number, axis?: (t: number) => P3) {
+  const total = lengthOf(path), stations = Math.max(3, Math.round(total / every) + 1);
+  const rest: number[] = [], mass: number[] = [], tie: number[] = [], radius: number[] = [];
+  for (let s = 0; s < stations; s++) {
+    const t = s / (stations - 1), at = along(path, t * total), next = along(path, Math.min(total, t * total + 0.002)), prev = along(path, Math.max(0, t * total - 0.002));
+    const own = axis?.(t), tx = own ? own[0] : next[0] - prev[0], ty = own ? own[1] : next[1] - prev[1], tz = own ? own[2] : next[2] - prev[2], tl = Math.hypot(tx, ty, tz) || 1;
+    // across her (+x), and the other way round the line in her midline's plane
+    const ny = -tz / tl, nz = ty / tl, [a, b] = half(t), w = a * b, tieAt = tieFrom + (tieTo - tieFrom) * t;
+    const put = (x: number, y: number, z: number, r: number, m: number) => { rest.push(x, y, z); mass.push(m); tie.push(tieAt); radius.push(r); };
+    put(at[0], at[1], at[2], 0.6 * Math.min(a, b), w);
+    for (const [ca, cb] of [[0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]] as const) put(at[0] + a * ca, at[1] + ny * b * cb, at[2] + nz * b * cb, 0.35 * Math.min(a, b), w * 0.5);
+  }
+  const sum = mass.reduce((x, y) => x + y, 0);
+  return { rest, mass: mass.map((m) => (m / sum) * grams), tie, radius };
+}
+
+/** Cage points for the bladder: its middle and points over it, its base tied hard and its dome loosely. */
+function bladderCage(l: OrganLayout['bladder'], tieFrom: number, tieTo: number) {
+  const [cx, cy, cz] = l.centre, [rx, ry, rz] = l.radii, rest: number[] = [], mass: number[] = [], tie: number[] = [], radius: number[] = [];
+  const grams = l.ml + 40;
+  const put = (ux: number, uy: number, uz: number, m: number) => {
+    rest.push(cx + rx * ux, cy + ry * uy, cz + rz * uz); mass.push(m);
+    tie.push(tieFrom + (tieTo - tieFrom) * ((uy + 1) / 2)); radius.push(0.55 * Math.min(rx, ry, rz));
+  };
+  put(0, 0, 0, 3);
+  for (const [ux, uy, uz] of [[0.7, 0, 0], [-0.7, 0, 0], [0, 0.7, 0], [0, -0.7, 0], [0, 0, 0.7], [0, 0, -0.7]]) put(ux, uy, uz, 1);
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) put(0.45 * sx, 0.45 * sy, 0.45 * sz, 0.7);
+  const sum = mass.reduce((x, y) => x + y, 0);
+  return { rest, mass: mass.map((m) => (m / sum) * grams), tie, radius };
+}
+
+/** Her womb's drawn points (rest metres) pushed out, above its cervix, to stand at least its wall's thickness outside `room`. */
+function makeRoom(points: Float32Array, womb: PregnantWomb, room: WombShape): void {
+  const foot = womb.path[womb.path.length - WOMB_SHAPE.stations - 1], lean = (womb.leanDeg * Math.PI) / 180, ay = Math.cos(lean), az = Math.sin(lean);
+  const c = room.centre;
+  for (let i = 0; i < points.length; i += 3) {
+    if ((points[i + 1] - foot[1]) * ay + (points[i + 2] - foot[2]) * az <= 0) continue;
+    const dx = points[i] - c.x, dy = points[i + 1] - c.y, dz = points[i + 2] - c.z, r = Math.hypot(dx, dy, dz);
+    if (r < 1e-6) continue;
+    const need = sacRadius(room, dx / r, dy / r, dz / r) + womb.wallM;
+    if (need > r) { const k = need / r; points[i] = c.x + dx * k; points[i + 1] = c.y + dy * k; points[i + 2] = c.z + dz * k; }
+  }
+}
+
+export class PelvicOrgansView {
+  /** Her organs as drawn (world units, at the scene's root: their points are where their soft bodies have them). */
+  readonly group = new THREE.Group();
+  private readonly holder = new THREE.Object3D();
+  private organs: Organ[] = [];
+  /** HER OVARIES AND TUBES (actor/adnexa.ts), beside whichever womb she has: carried by her small womb's soft body when it
+   * is drawn (`skin`), else laid where v2's womb stands (`rest`, her rest frame, metres). */
+  private adnexa: { mesh: THREE.Mesh; rest: Float32Array; skin: CageSkin | null; out: Float32Array }[] = [];
+  private readonly adnexaMaterials = { ovaries: new THREE.MeshStandardMaterial({ color: 0xe6cdb2, roughness: 0.6, metalness: 0 }), tubes: new THREE.MeshStandardMaterial({ color: 0xd88f98, roughness: 0.55, metalness: 0 }) };
+  /** Where three of their rest places were last step, and how fast they were going (world metres, m/s). */
+  private last: number[] | null = null;
+  private speed: number[] | null = null;
+  /** The pairs that push on each other, and how close each pair's points may come. */
+  private touching: { a: Cage; b: Cage; gaps: Float32Array }[] = [];
+  private layout: OrganLayout | null = null;
+  private bladderMl: number = BLADDER.defaultMl;
+  private open = 0;
+  /** how far BIRTH OPENING pushes her doors open (Joshua's 10 cm circle: actor/birthDoors.ts BIRTH_HEAD) */
+  private doorPush = 0;
+  /** Her opening's doors (actor/birthDoors.ts): hung in her rest frame from her pelvis, how far they stand open now (0..1). */
+  private readonly bones: PelvisLandmarks & CanalBones;
+  private readonly doors: { frame: DoorFrame; mesh: THREE.Mesh; skin: THREE.Mesh; material: THREE.MeshStandardMaterial; skinMaterial: THREE.MeshStandardMaterial; outerMaterial: THREE.MeshStandardMaterial };
+  /** v2: the skin round her doors drawn as a sleeve round her canal, up into her (`skinSleeve`) */
+  private sleeveOn = false;
+  private underSkin = false;
+  /** the sleeve as last drawn: its points (her rest frame, metres), how many round each of its rows (SKIN_RING_ROWS), and a count that
+   * goes up each time it is drawn again -- for her own skin to be stretched over (vulvaMesh.ts `setSeat`) */
+  private sleeveLaid: { points: Float32Array; columns: number; version: number; doors: Float32Array } | null = null;
+  private sleeveVersion = 0;
+  /** her canal's whole length when it is fully open (metres): what a birth measures its way down by */
+  private openLength = 0;
+  private swing = 0;
+  private drawnSwing = -1;
+  /** FOLD BACK (by hand, actor/birthDoors.ts): where it is held (0..1), how far the doors are folded now, and the angles laid */
+  private foldWant = 0;
+  private fold = 0;
+  private drawnFold = -1;
+  private laidAngles = { outer: 0, mid: 0, inner: 0, hinge: 0 };
+  /** WHAT PASSES THROUGH HER (a birth: her baby, all of it), in her rest frame (metres), and each of the doors' sections
+   * as it pushes them, front to back: where it holds each (`want`) and where each stands now (`now`) -- null once they
+   * are all back where BIRTH OPENING has them (actor/birthDoors.ts `pressDoor`). */
+  private passing: Float32Array | null = null;
+  private pressed: { want: { right: Angles[]; left: Angles[]; ends: Ends; lips?: Lips }; now: { right: Angles[]; left: Angles[]; ends: Ends; lips?: Lips } } | null = null;
+  /** HER OPENING AS LIPS (Joshua, 2026-11-11: "basically like two lips that touch… flush with the skin"; actor/birthDoors.ts
+   * `lipCorners`): her doors drawn as two lips at her skin that part into an oval, a low dome as they are pushed --
+   * rather than two long flaps swung out of her. GAME TUNING; probes may turn it off to compare. */
+  lips = true;
+  private pressTick = 0;
+  private openNow = 0;
+  /** Her week (null: not pregnant) and each baby's weight, g; and her womb grown for them. */
+  private week: number | null = null;
+  private babyGrams: readonly number[] = [];
+  private grown: PregnantWomb | null = null;
+  private outer: WombRoom | null = null;
+  /** v2: her opening opens by BIRTH OPENING whether or not a womb is grown here (her womb is her body's own) */
+  opensFreely = false;
+  /**
+   * v2: HER DOORS AT HER OWN SIZE (the new direction's step 3). The doors are laid for a 10 cm head -- their hinges 11 cm
+   * apart, 10 cm front to back -- and on her skeleton there was no flesh for that to lie in; between v2's thighs there is
+   * not that much room. So shut they are drawn `restScale` of their size about her opening (her flesh at rest), growing to
+   * their full size as they are pushed open (it stretches): 1 is as they were. GAME TUNING.
+   */
+  restScale = 1;
+  private doorsOn = true;
+  private innerOn = true;
+  private outerOn = true;
+  private scaledTo = 1;
+  private readonly doorSkin = new THREE.Color(DOOR_COLOURS.skin);
+  private readonly doorLining = new THREE.Color(DOOR_COLOURS.lining);
+  private sacOf: { womb: PregnantWomb; shape: WombShape } | null = null;
+  /** The sac as her babies need it (grown round them where they stand past it), which her womb's wall makes room for. */
+  private room: WombShape | null = null;
+  private readonly toRest = new THREE.Matrix4();
+  private readonly restAt = new THREE.Vector3();
+  private readonly restQuat = new THREE.Quaternion();
+  private readonly toWorld = new THREE.Matrix4();
+  private readonly materials = new Map<Name, THREE.MeshStandardMaterial>();
+
+  /**
+   * @param pelvis her measured pelvis (rest metres)
+   * @param bone her pelvis bone, and `holderMatrix` her rest frame (metres) as that bone carries it, read at her bind
+   * @param units world units per metre
+   */
+  constructor(pelvis: PelvisLandmarks & CanalBones, private readonly torso: TorsoLandmarks, bone: THREE.Bone, holderMatrix: THREE.Matrix4, private readonly units: number) {
+    this.holder.matrixAutoUpdate = false; this.holder.matrix.copy(holderMatrix); this.holder.name = 'pelvicOrgans';
+    bone.add(this.holder);
+    this.holder.updateMatrixWorld(true);
+    this.holder.getWorldQuaternion(this.restQuat);
+    // her opening's doors and the outer skin round them: rigid, carried by her pelvis bone in her rest frame (metres)
+    // (her pelvis with her tailbone's tip, which her torso's measurements have: her canal's wall keeps off it)
+    { const tail = (torso.landmarks as { coccyx?: readonly number[] }).coccyx; this.bones = tail ? { ...pelvis, tail } : pelvis; }
+    { const frame = doorFrame(layOrgans(this.bones).vagina.path);
+      const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
+      const skinMaterial = new THREE.MeshStandardMaterial({ color: DOOR_COLOURS.skin, roughness: 0.65, metalness: 0, side: THREE.DoubleSide });
+      // (the sleeve's OUTSIDE under her own skin, `sleeveUnderSkin`: her skin's tone, and set back in depth so that her own
+      // skin, which lies a millimetre and a half off it, is what is seen wherever the two are together)
+      const outerMaterial = new THREE.MeshStandardMaterial({ color: DOOR_COLOURS.skin, roughness: 0.65, metalness: 0, side: THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 64 });
+      const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material), s = outerSkin(frame), sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.BufferAttribute(s.points, 3)); sg.setIndex(new THREE.BufferAttribute(s.triangles, 1)); sg.computeVertexNormals();
+      const skin = new THREE.Mesh(sg, skinMaterial);
+      mesh.name = 'organ:doors'; skin.name = 'organ:outerSkin'; mesh.frustumCulled = false; skin.frustumCulled = false;
+      this.holder.add(mesh, skin);
+      this.doors = { frame, mesh, skin, material, skinMaterial, outerMaterial }; }
+    this.drawDoors();
+    this.group.name = 'pelvicOrgans';
+    for (const name of ['uterus', 'vagina', 'bladder'] as const) this.materials.set(name, new THREE.MeshStandardMaterial({ color: COLOURS[name], roughness: 0.55, metalness: 0, transparent: name === 'bladder', opacity: name === 'bladder' ? 0.85 : 1 }));
+    this.build();
+  }
+
+  /** How much her bladder holds, mL (it rises as it fills); rebuilds the bladder's soft body. */
+  setBladder(ml: number): void {
+    const v = Math.max(5, Math.min(BLADDER.mostMl, Math.round(ml)));
+    if (v === this.bladderMl) return;
+    this.bladderMl = v; this.build();
+  }
+  get bladder(): number { return this.bladderMl; }
+  /**
+   * HER WEEKS (the room's pregnancy, actor/pregnantWomb.ts): her womb grown for `week` (null: not pregnant), each baby
+   * weighing what `babyGrams` says. Laid again only when it changes enough to see (a fiftieth of a week, a gram in a
+   * hundred).
+   */
+  setPregnancy(week: number | null, babyGrams: readonly number[]): void {
+    const same = week === null ? this.week === null
+      : this.week !== null && Math.abs(week - this.week) < 0.02 && babyGrams.length === this.babyGrams.length && babyGrams.every((g, i) => Math.abs(g - this.babyGrams[i]) <= 0.01 * Math.max(1, g));
+    if (same) return;
+    this.week = week === null ? null : Math.max(0, week); this.babyGrams = [...babyGrams];
+    // (the room her babies needed was for the womb she had: they are packed again into this one)
+    this.room = null; this.build();
+  }
+  /**
+   * THE WOMB FORMS TO THE SAC (Joshua, 2026-10-29: "Sac forms to baby > womb forms to sac > belly skin forms to womb"):
+   * where her babies, packed at the chart's size, need the sac to stand further out than her womb grew, its wall gives
+   * them that room. `room` is that sac (rest metres), as the room's baby code grows it; null gives the room back.
+   */
+  fitSac(room: WombShape | null): void {
+    if (room === this.room || !this.grown) return;
+    this.room = room; this.build();
+  }
+  /** Her womb as grown for her week (null: not pregnant). */
+  get womb(): PregnantWomb | null { return this.grown; }
+  /**
+   * v2: HER WOMB IS HER BODY'S OWN (the new direction, Joshua 2026-11-09: "we are going to use the existing womb and
+   * design we have in v2, but lock it to the real bone"). Given the room it takes (sarahlab/wombRoom.ts; null: she is not
+   * pregnant), no womb is grown here: the small womb of these organs is not drawn while v2's stands in its place, and
+   * her belly's organs make room for v2's (`wombRoom`).
+   */
+  setOuterWomb(room: WombRoom | null): void {
+    if (room === this.outer) return;
+    this.outer = room;
+    const u = this.organs.find((o) => o.name === 'uterus'); if (u) u.mesh.visible = !room && this.innerOn;
+    this.layAdnexa(); this.draw();
+  }
+  /** Her ovaries and tubes laid again beside her womb as it is now: v2's own, or her small womb (carried by its soft body). */
+  private layAdnexa(): void {
+    for (const a of this.adnexa) { a.mesh.removeFromParent(); a.mesh.geometry.dispose(); }
+    this.adnexa = [];
+    // (v2's own womb only once it has grown past her small one -- before that its sac is small and low in front, and her
+    // ovaries and tubes are where they are without a pregnancy: beside her small womb, which is laid even when not drawn)
+    const uterus = this.organs.find((o) => o.name === 'uterus'), small = this.layout?.uterus;
+    const fundus = small ? Math.max(...small.path.map((p) => p[1])) : -Infinity, outer = this.outer && this.outer.top > fundus + 0.02 ? this.outer : null;
+    const womb = outer ?? small;
+    if (!womb) return;
+    let laid: ReturnType<typeof layAdnexa>;
+    try { laid = layAdnexa(womb); } catch { return; }
+    for (const [name, m] of [['ovaries', laid.ovaries], ['tubes', laid.tubes]] as const) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(m.points.length), 3)); g.setIndex(new THREE.BufferAttribute(m.triangles, 1));
+      const mesh = new THREE.Mesh(g, this.adnexaMaterials[name]);
+      mesh.name = `organ:${name}`; mesh.frustumCulled = false; mesh.visible = this.innerOn;
+      this.group.add(mesh);
+      this.adnexa.push({ mesh, rest: m.points, skin: !outer && uterus ? skinToCage(uterus.cage, m.points, 4) : null, out: new Float32Array(m.points.length) });
+    }
+  }
+  /** The room her womb takes, whichever womb she has: v2's own, or the one grown here (null: not pregnant). */
+  get wombRoom(): WombRoom | null { return this.outer ?? this.grown; }
+  /** HER OPENING'S DOORS DRAWN OR NOT (v2 keeps its own opening until the skeleton's replaces it; they still follow). */
+  set doorsShown(on: boolean) { this.doorsOn = on; this.doors.mesh.visible = on && this.group.visible; this.doors.skin.visible = on && this.outerOn && this.group.visible; }
+  /** Her womb and her bladder drawn or not (v2: only while she is seen through -- behind her open doors only her canal
+   * is to be seen); her canal is always drawn with the rest. */
+  set innerShown(on: boolean) { this.innerOn = on; for (const o of this.organs) if (o.name !== 'vagina') o.mesh.visible = on && !(o.name === 'uterus' && !!this.outer); for (const a of this.adnexa) a.mesh.visible = on; }
+  /** The test piece of outer skin round her doors drawn or not: in v2 her own skin is there. */
+  set outerSkinShown(on: boolean) { this.outerOn = on; this.doors.skin.visible = on && this.doorsOn && this.group.visible; }
+  /** Her doors' outer faces in this colour (v2: her own skin's tone round her opening); their lining stays its own. */
+  setDoorSkin(colour: THREE.ColorRepresentation, lining?: THREE.ColorRepresentation): void { this.doorSkin.set(colour); this.doors.skinMaterial.color.copy(this.doorSkin); if (lining !== undefined) this.doorLining.set(lining); this.drawnSwing = -1; this.drawDoors(); }
+  get doorsShown(): boolean { return this.doorsOn; }
+  /**
+   * BIRTH OPENING (0 closed .. 1 full, actor/birthCanal.ts): her cervix thinned and opened to 10 cm and her canal opened
+   * round to a head's width. Only while she is pregnant; laid again only when it moves a hundredth.
+   */
+  setOpening(open: number): void {
+    this.doorPush = Math.min(1, Math.max(0, Number.isFinite(open) ? open : 0));
+    this.setCervix(open);
+  }
+  /** Her cervix and canal opened `open` (0..1) by her labour, her doors left to what passes through them (a birth). */
+  setCervix(open: number): void {
+    const o = Math.min(1, Math.max(0, Number.isFinite(open) ? open : 0));
+    if (Math.abs(o - this.open) < 0.01 && !(o === 0 && this.open !== 0)) return;
+    this.open = o; this.room = null;
+    if (this.grown || this.opensFreely) this.build();
+  }
+  get opening(): number { return this.open; }
+  /**
+   * The sac inside her grown womb, in her rest frame (metres), as the room's baby code holds one (baby.ts WombShape):
+   * where her babies are packed, float and kick. Null when she is not pregnant. Worked out once a womb.
+   */
+  sac(): WombShape | null {
+    if (!this.grown) return null;
+    if (!this.sacOf || this.sacOf.womb !== this.grown) {
+      const s = wombSac(this.grown, NT, NP);
+      this.sacOf = { womb: this.grown, shape: { centre: new THREE.Vector3(...s.centre), r: s.r, axis: new THREE.Vector3(...s.axis), skin: new Float32Array(NT * NP).fill(Infinity), give: new Float32Array(NT * NP) } };
+    }
+    return this.sacOf.shape;
+  }
+  /** How far her womb's soft body has carried what is in it from where it was laid, in her rest frame (metres), into `out`. */
+  wombMove(out: THREE.Vector3): THREE.Vector3 {
+    const o = this.organs.find((g) => g.name === 'uterus');
+    if (!o || !o.cage.primed) return out.set(0, 0, 0);
+    this.toRest.copy(this.boneToWorld()).invert();
+    return out.set(o.cage.centre[0], o.cage.centre[1], o.cage.centre[2]).applyMatrix4(this.toRest).sub(this.restAt.set(...o.cage.restCentre));
+  }
+  /** The layout as laid (rest metres): for probes and the readout. */
+  get laid(): OrganLayout | null { return this.layout; }
+  /** One organ's soft body (world metres), for the organs that lie against it (sarahlab/abdomenView.ts); a new one each
+   * time her organs are laid again. */
+  cage(name: Name): Cage | null { return name === 'uterus' && this.outer ? null : this.organs.find((o) => o.name === name)?.cage ?? null; }
+
+  private build(): void {
+    for (const o of this.organs) { o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
+    this.organs = [];
+    const laid = layOrgans(this.bones, this.bladderMl);
+    this.grown = this.week === null ? null : growWomb(laid, this.torso, this.week, this.babyGrams, this.open);
+    const canalNow = this.open > 0 && (this.grown || this.opensFreely) ? openCanal(laid.vagina, this.bones, this.open, DOORS.hingeUp) : laid.vagina;
+    const layout = this.grown ? pregnantLayout(laid, this.grown, canalNow) : this.opensFreely ? { ...laid, vagina: canalNow } : laid;
+    // (the canal drawn from where its doors hang up: below them the doors are its opening)
+    // (her doors hang from her canal's opening as it stands now: in v2 it comes down from her skin to its seat as it opens)
+    { const f = doorFrame(layout.vagina.path), g = this.doors.frame;
+      if (Math.hypot(f.mouth[1] - g.mouth[1], f.mouth[2] - g.mouth[2]) > 1e-6 || Math.hypot(f.t[1] - g.t[1], f.t[2] - g.t[2]) > 1e-6) { this.doors.frame = f; this.drawnSwing = -1; this.scaledTo = -1; this.pressed = null; } }
+    if (!this.openLength) this.openLength = lengthOf(openCanal(laid.vagina, this.bones, 1, DOORS.hingeUp).path);
+    const canal = layout.vagina, canalLong = lengthOf(canal.path), drawn: OrganLayout = { ...layout, vagina: { ...canal, path: subPath(canal.path, DOORS.hingeUp, canalLong), narrow: subNarrow(canal.narrow, DOORS.hingeUp, canalLong, canalLong), narrowAcross: subNarrow(canal.narrowAcross, DOORS.hingeUp, canalLong, canalLong), back: subNarrow(canal.back, DOORS.hingeUp, canalLong, canalLong) } }, meshes = organMeshes(drawn);
+    if (this.grown && this.room) makeRoom(meshes.uterus.points, this.grown, this.room);
+    this.layout = layout; this.last = null;
+    // (pregnant, her womb is seen through: what it holds is inside)
+    const wm = this.materials.get('uterus')!;
+    wm.transparent = !!this.grown; wm.opacity = this.grown ? WOMB_SEEN : 1; wm.depthWrite = !this.grown; wm.needsUpdate = true;
+    const U = ORGAN_TUNE, u = layout.uterus, held = this.grown || this.opensFreely ? this.open * this.open * (3 - 2 * this.open) : 0;
+    const cages: Record<Name, ReturnType<typeof lineCage>> = {
+      uterus: lineCage(u.path, wombHalf(u), Math.max(0.011, u.length / 30), U.uterus.tieFrom, U.uterus.tieTo, this.grown ? this.grown.contents.totalG : 60, u.axes ? wombAxis(u) : undefined),
+      // (open, it is stretched round what passes and held by the bones it passes between: firmer the wider it is, so it
+      // does not sag onto them as she lies back -- her tailbone's tip stood through its back wall in RECLINE)
+      vagina: lineCage(drawn.vagina.path, (t) => [(drawn.vagina.width / 2) * narrowAt(drawn.vagina.narrowAcross, t), (drawn.vagina.depth / 2) * narrowAt(drawn.vagina.narrow, t)], 0.012, U.vagina.tieFrom + (CANAL_HELD - U.vagina.tieFrom) * held, U.vagina.tieTo + (CANAL_HELD - U.vagina.tieTo) * held, 40),
+      bladder: bladderCage(layout.bladder, U.bladder.tieFrom, U.bladder.tieTo),
+    };
+    for (const name of ['uterus', 'vagina', 'bladder'] as const) {
+      const m: OrganMesh = meshes[name], c = cages[name];
+      const cage = makeCage(c.rest, c.mass, c.tie, c.radius), skin = skinToCage(cage, m.points, 4);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(m.points.length), 3));
+      geometry.setIndex(new THREE.BufferAttribute(m.triangles, 1));
+      const mesh = new THREE.Mesh(geometry, this.materials.get(name)!);
+      mesh.name = `organ:${name}`; mesh.frustumCulled = false;
+      if ((name === 'uterus' && this.outer) || (name !== 'vagina' && !this.innerOn)) mesh.visible = false;
+      this.group.add(mesh);
+      this.organs.push({ name, cage, skin, mesh, tune: { shape: U[name].shape, keep: U[name].keep }, out: new Float32Array(m.points.length) });
+    }
+    const by = (n: Name) => this.organs.find((o) => o.name === n)!.cage;
+    this.touching = (['uterus', 'vagina'] as const).map((n) => ({ a: by('bladder'), b: by(n), gaps: restGaps(by('bladder'), by(n)) }));
+    this.layAdnexa();
+    this.draw();
+  }
+
+  /** Where her rest frame is now, in world metres. */
+  private boneToWorld(): THREE.Matrix4 {
+    this.holder.updateMatrixWorld(true);
+    return this.toWorld.makeScale(1 / this.units, 1 / this.units, 1 / this.units).multiply(this.holder.matrixWorld);
+  }
+
+  /** Where three of their rest places (the os, the fundus, the bladder's middle) are now, world metres. */
+  private marks(toWorld: ArrayLike<number>): number[] {
+    const l = this.layout, out: number[] = [];
+    if (!l) return out;
+    for (const p of [l.uterus.path[0], l.uterus.path[l.uterus.path.length - 1], l.bladder.centre]) {
+      out.push(toWorld[0] * p[0] + toWorld[4] * p[1] + toWorld[8] * p[2] + toWorld[12], toWorld[1] * p[0] + toWorld[5] * p[1] + toWorld[9] * p[2] + toWorld[13], toWorld[2] * p[0] + toWorld[6] * p[1] + toWorld[10] * p[2] + toWorld[14]);
+    }
+    return out;
+  }
+
+  /** Carried to where her pelvis holds them now, at once and at rest: after a time they were not stepped (hidden, with
+   * X-RAY at nothing) they are not left to swing in from where she stood then. */
+  carry(): void {
+    const toWorld = this.boneToWorld().elements;
+    for (const o of this.organs) placeCage(o.cage, toWorld);
+    this.last = this.marks(toWorld); this.speed = null;
+    this.draw();
+  }
+  /** One step of `dt` seconds: their soft bodies follow her pelvis, feeling only gravity's change as she leans. A pose put
+   * on in one frame (her pelvis's motion changing faster than JUMP_ACCEL allows) is not a movement: they are simply
+   * carried to where it holds them. */
+  update(dt: number): void {
+    const toWorld = this.boneToWorld().elements;
+    const now = this.marks(toWorld);
+    if (this.last && this.speed && now.length === this.last.length && dt > 0) {
+      let off = 0;
+      for (let i = 0; i < now.length; i++) off = Math.max(off, Math.abs(now[i] - (this.last[i] + this.speed[i] * dt)));
+      if (off > JUMP_ACCEL * dt * dt) {
+        for (const o of this.organs) placeCage(o.cage, toWorld);
+        this.last = now; // (and its speed is what it was: a pose put on mid-walk keeps her walking)
+        this.draw();
+        return;
+      }
+    }
+    if (this.last && now.length === this.last.length && dt > 0) this.speed = now.map((v, i) => (v - this.last![i]) / dt);
+    this.last = now;
+    const q = this.holder.getWorldQuaternion(new THREE.Quaternion());
+    const held = new THREE.Vector3(0, -G, 0).applyQuaternion(this.restQuat.clone().invert()).applyQuaternion(q);
+    const felt: [number, number, number] = [0 - held.x, -G - held.y, 0 - held.z];
+    for (const o of this.organs) stepCage(o.cage, dt, toWorld, felt, o.tune);
+    // (the bladder pushes on the womb and the canal; the womb's cervix sits in the canal, so those two do not push)
+    for (const t of this.touching) separate(t.a, t.b, t.gaps);
+    this.draw();
+    // her opening's doors: toward where BIRTH OPENING holds them, closing as a pneumatic door does
+    // (BIRTH OPENING lays them round Joshua's 10 cm circle coming down, closed to its widest: actor/birthDoors.ts BIRTH_HEAD)
+    this.swing = swingDoors(this.swing, this.grown || this.opensFreely ? this.doorPush : 0, dt);
+    this.fold = swingDoors(this.fold, this.foldWant, dt);
+    this.pressDoors(dt);
+    this.drawDoors();
+    // (v2: at her own size shut, their full size open -- about her opening, in her rest frame)
+    if (this.restScale !== 1 || this.scaledTo !== 1) {
+      const t = Math.min(1, Math.max(0, this.swing)), s = this.restScale + (1 - this.restScale) * t * t * (3 - 2 * t);
+      if (Math.abs(s - this.scaledTo) > 1e-4) {
+        this.scaledTo = s;
+        const m = this.doors.frame.mouth, k = 1 - s;
+        for (const o of [this.doors.mesh, this.doors.skin]) { o.matrixAutoUpdate = false; o.matrix.set(s, 0, 0, m[0] * k, 0, s, 0, m[1] * k, 0, 0, s, m[2] * k, 0, 0, 0, 1); o.matrixWorldNeedsUpdate = true; }
+      }
+    }
+  }
+
+  /** How far a birth has pushed her opening's doors now (0 closed .. 1 open round the 10 cm circle's widest:
+   * actor/birthDoors.ts BIRTH_HEAD). */
+  get doorSwing(): number { return this.swing; }
+  /** FOLD BACK (0..1): her opening's doors folded back by hand -- their three pieces in turn, the lip's end first, then
+   * their main hinges (actor/birthDoors.ts) -- going back as a pneumatic door does when let go. */
+  setFold(fold: number): void { this.foldWant = Math.min(1, Math.max(0, Number.isFinite(fold) ? fold : 0)); }
+  /** How far they are folded now (0..1) and the angles laid on them (degrees). */
+  get doorFold(): number { return this.fold; }
+  get doorAngles(): { outer: number; mid: number; inner: number; hinge: number } { return { ...this.laidAngles }; }
+  /** For a probe: what passes through her now and her doors as drawn, in her rest frame (metres). */
+  doorsSeen(): { passing: number[]; doors: { p: number[]; t: number[]; l: number[] }; skin: { p: number[]; t: number[] } } {
+    const g = this.doors.mesh.geometry, sg = this.doors.skin.geometry, arr = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined) => (a ? Array.from(a.array as ArrayLike<number>) : []);
+    return { passing: this.passing ? Array.from(this.passing) : [], doors: { p: arr(g.getAttribute('position')), t: arr(g.getIndex() ?? undefined), l: [] }, skin: { p: arr(sg.getAttribute('position')), t: arr(sg.getIndex() ?? undefined) } };
+  }
+  /** How far her opening's ends stand from its middle now (metres: front, back). */
+  get doorEnds(): { front: number; back: number } { return { ...(this.pressed?.now.ends ?? ENDS_SHUT) }; }
+  /** How wide her opening stands now between its doors' lips, at its middle (metres). */
+  get doorOpenM(): number { return this.openNow; }
+  /** Her canal's whole length fully open, metres (0 until her organs are laid). */
+  get canalOpenLength(): number { return this.openLength; }
+  /**
+   * v2: HER OWN SKIN CARRIED DOWN TO HER DOORS (Joshua, 2026-11-10: "stretch her own skin down to the base of the doors as
+   * she opens"). The skin round her doors -- on her skeleton a flat test piece -- is drawn as a sleeve round her canal:
+   * from her doors' feet back along it, round the turn under her pubic bone and on up into her, where her own skin
+   * closes over it. As her opening comes down from her skin to its seat, that is her skin pushed out before it.
+   */
+  set skinSleeve(on: boolean) { if (on !== this.sleeveOn) { this.sleeveOn = on; this.drawnSwing = -1; } }
+  get skinSleeve(): boolean { return this.sleeveOn; }
+  /**
+   * v2, her own skin laid over the sleeve (vulvaMesh.ts `setSeat`): the sleeve is then what shows of her INSIDE where
+   * her doors' ends part -- between her canal's end and her skin's rim -- so its inside is drawn in her canal's lining's
+   * colour. (Drawn both ways in her skin's tone it stood through her own skin wherever her skin's facets cut its curve,
+   * and showed skin-coloured between her doors, 2026-11-10.) Its OUTSIDE is drawn in her skin's tone, set back in depth
+   * behind her own skin: drawn from its inside alone, the room her skin keeps off her half-open doors showed straight
+   * through her -- a glassy band round her doors at 60% -- where now it shows skin.
+   */
+  set sleeveUnderSkin(on: boolean) { if (on !== this.underSkin) { this.underSkin = on; this.drawnSwing = -1; } }
+  /** v2: the sleeve round her canal as it stands (null while it is not drawn as one, or her doors are not shown). */
+  get sleeve(): { points: Float32Array; columns: number; version: number; doors: Float32Array } | null { return this.sleeveOn && this.doors.mesh.visible ? this.sleeveLaid : null; }
+  /** Her opening's mouth and the way out of her along her canal as they stand now (world units) -- a probe's view of it,
+   * the same on her skeleton and in v2. */
+  mouthNow(): { at: THREE.Vector3; out: THREE.Vector3 } {
+    this.holder.updateMatrixWorld(true);
+    const f = this.doors.frame;
+    return { at: this.holder.localToWorld(new THREE.Vector3(f.mouth[0], f.mouth[1], f.mouth[2])), out: new THREE.Vector3(-f.t[0], -f.t[1], -f.t[2]).transformDirection(this.holder.matrixWorld) };
+  }
+
+  /**
+   * WHAT PASSES THROUGH HER OPENING NOW (a birth, Joshua 2026-11-08: "based on the whole baby's model, not just the head
+   * so it doesn't close up while the baby is still halfway out"): `world` its points (x, y, z after one another, world
+   * units), or null when nothing is passing. Each of her doors' sections is pushed by its own slice of it.
+   */
+  setPassing(world: ArrayLike<number> | null): void {
+    if (!world || world.length < 9) { this.passing = null; return; }
+    this.holder.updateMatrixWorld(true);
+    const e = this.toRest.copy(this.holder.matrixWorld).invert().elements, out = this.passing && this.passing.length === world.length ? this.passing : new Float32Array(world.length);
+    for (let i = 0; i + 2 < world.length; i += 3) {
+      const x = world[i], y = world[i + 1], z = world[i + 2];
+      out[i] = e[0] * x + e[4] * y + e[8] * z + e[12]; out[i + 1] = e[1] * x + e[5] * y + e[9] * z + e[13]; out[i + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+    }
+    this.passing = out;
+  }
+  /**
+   * HER BABY'S WAY DOWN (a birth on her skeleton): her canal as it is laid now, from its top (the top of her cervix) down
+   * to her opening, in the world (the birth places her baby along it as it places one down the canal of her skin: points,
+   * how far down each is, its length; metres down, world points). Null when she is not pregnant.
+   */
+  canalPath(): { points: THREE.Vector3[]; down: number[]; length: number } | null {
+    const l = this.layout;
+    if (!l || !(this.grown || this.opensFreely)) return null;
+    this.holder.updateMatrixWorld(true);
+    const rest = [...l.vagina.path].reverse(), down = [0];
+    for (let k = 1; k < rest.length; k++) down.push(down[k - 1] + Math.hypot(rest[k][0] - rest[k - 1][0], rest[k][1] - rest[k - 1][1], rest[k][2] - rest[k - 1][2]));
+    return { points: rest.map((p) => this.holder.localToWorld(new THREE.Vector3(p[0], p[1], p[2]))), down, length: down[down.length - 1] };
+  }
+
+  /**
+   * Where her baby may give a little as it crosses her opening (babySqueeze.ts, as v2's opening hands it over): her
+   * opening's middle, the way through it, along it and across it, and the most it stretches (Joshua's 12.5 by 10 cm) --
+   * what is wider than that is drawn in, never its head (`head`, `headR`: its middle and radius, world). World units.
+   */
+  passFrame(head: THREE.Vector3 | null, headR: number): { centre: THREE.Vector3; axis: THREE.Vector3; up: THREE.Vector3; across: THREE.Vector3; ra: number; rb: number; head: THREE.Vector3 | null; headR: number; slab: number; out: number } {
+    this.holder.updateMatrixWorld(true);
+    const f = this.doors.frame, m = this.holder.matrixWorld, dir = (v: readonly number[]) => new THREE.Vector3(v[0], v[1], v[2]).transformDirection(m);
+    return {
+      centre: this.holder.localToWorld(new THREE.Vector3(f.mouth[0], f.mouth[1], f.mouth[2])), axis: dir(f.t).negate(), up: dir(f.n), across: dir(f.x), out: SQUEEZE_OUT * this.units,
+      ra: (DOORS.lengthMost / 2) * this.units, rb: (DOORS.acrossMost / 2) * this.units, head, headR,
+      // (from inside her by her doors' hinges to past their lips open: what crosses them gives)
+      slab: SQUEEZE_SLAB,
+    };
+  }
+
+  /** Her doors' sections pushed by what passes (each solved every other frame, the two halves in turn: a frame's time),
+   * each following where it is held -- as fast as it is pushed, as the closer brings it back once let go -- and handed
+   * back to BIRTH OPENING once nothing holds them. */
+  /** How what passes moves her doors (Joshua, 2026-11-08): as the BIRTH OPENING slider has them, set by it (`slider`);
+   * that with each section's lip pushed by its own slice (`soft`, the hybrid); or every section pushed on its own
+   * (`sections`). GAME TUNING; probes switch it. */
+  pressMode: 'slider' | 'soft' | 'sections' | 'cloth' | 'shared' | 'fitted' = 'shared';
+  /** The full sim's own sections under `fitted`'s curves, kept frame to frame. */
+  private rawPress: { right: Angles[]; left: Angles[] } | null = null;
+  /** The tee's dials her doors' cloth runs on (DOOR_CLOTH_DIALS; probes try others). */
+  clothDials: { weight: number; calm: number; fit: number; close: number; stretch: number; grip: number; steps: number } = { ...DOOR_CLOTH_DIALS };
+  private cloth: DoorCloth | null = null;
+  private clothPoints: Float32Array | null = null;
+  private clothOutlines: PassingOutlines | null = null;
+
+  /**
+   * WHERE HER DOORS' FEET STAND, FROM AN EYE (vulvaMesh.ts `setRingCut`: her skin stops under her lips): `m` from the eye's
+   * own frame to her opening's (x across, t up her canal, n along it; metres); `shape` their outline -- across at its
+   * middle (her canal's mouth, as her hinges are), how far past that her feet stand less `RING_CUT.under` (her skin goes
+   * on that far under them), half its length, the least share of across at its ends -- and `t` how far down and up her
+   * canal the cut reaches. False while her doors are not shown or not drawn as lips.
+   */
+  ringCut(camera: THREE.Camera, m: THREE.Matrix4, shape: THREE.Vector4, t: THREE.Vector2): boolean {
+    if (!this.lips || !this.doors.mesh.visible) return false;
+    this.holder.updateMatrixWorld(true);
+    const f = this.doors.frame, B = new THREE.Matrix4().set(
+      f.x[0], f.x[1], f.x[2], -(f.x[0] * f.mouth[0] + f.x[1] * f.mouth[1] + f.x[2] * f.mouth[2]),
+      f.t[0], f.t[1], f.t[2], -(f.t[0] * f.mouth[0] + f.t[1] * f.mouth[1] + f.t[2] * f.mouth[2]),
+      f.n[0], f.n[1], f.n[2], -(f.n[0] * f.mouth[0] + f.n[1] * f.mouth[1] + f.n[2] * f.mouth[2]),
+      0, 0, 0, 1);
+    // (as her doors are drawn: `scaledTo` of their size about her opening's mouth -- her own size shut, `restScale`)
+    const k = 1 / (this.scaledTo > 0 ? this.scaledTo : 1);
+    m.makeScale(k, k, k).multiply(B).multiply(this.ringInv.copy(this.holder.matrixWorld).invert()).multiply(camera.matrixWorld);
+    const ends = this.pressed?.now.ends ?? ENDS_SHUT;
+    shape.set(CANAL_OPENING.diameterM / 2, DOORS.hingeOut - RING_CUT.under, Math.max(ends.front, ends.back), DOORS.endWidth);
+    t.set(RING_CUT.from, RING_CUT.to);
+    return true;
+  }
+  private readonly ringInv = new THREE.Matrix4();
+
+  /** Her doors' feet raised into her, each section's (metres along her canal), as they are drawn now and where they go. */
+  private footNow: Float32Array | null = null;
+  private footWant: Float32Array | null = null;
+  /** Each section's foot as it stands unraised, in her opening's frame (x, t, along): read when her doors are drawn. */
+  private feet: Float32Array | null = null;
+  /**
+   * HER DOORS' FEET AT HER SKIN (Joshua, 2026-11-11: "Better… keep working", of her opening as lips with her own skin
+   * still standing round them as a tube). Wide open in RECLINE her own skin, laid down the sleeve to her doors' feet,
+   * left it 3 to 4 cm up round her back half (MEASURED): her opening sat that far out of her there, the rest a wall of her
+   * own skin. So each section's foot is raised into her to where her skin leaves the sleeve at its place round it
+   * (`ring`: vulvaMesh.ts `seatRise`, all round, as last laid) -- as far as her skin is laid down to them (`share`) --
+   * and its section with it: her lips, their dome on them, stand where her skin is. Followed a little each frame: what her
+   * skin is laid to next follows from where her feet now are. Drawn as lips only.
+   */
+  setFootRise(ring: Float32Array | null, share: number): void {
+    const feet = this.feet, C = feet ? feet.length / 3 : 0;
+    if (!this.lips || !feet || !C) { if (this.footNow) { this.footNow = null; this.drawnSwing = -1; } return; }
+    const want = (this.footWant = this.footWant?.length === C ? this.footWant : new Float32Array(C));
+    want.fill(0);
+    if (ring && ring.length >= 9 && share > 0) {
+      const f = this.doors.frame, N = ring.length / 3, place = new Float32Array(N * 2);
+      let ix = 0, ia = 0;
+      for (let c = 0; c < C; c++) { ix += feet[c * 3] / C; ia += feet[c * 3 + 2] / C; }
+      // (each place round her: its angle about her doors' middle, and how far up her canal it is)
+      for (let b = 0; b < N; b++) {
+        const dx = ring[b * 3] - f.mouth[0], dy = ring[b * 3 + 1] - f.mouth[1], dz = ring[b * 3 + 2] - f.mouth[2];
+        const x = dx * f.x[0] + dy * f.x[1] + dz * f.x[2], t = dx * f.t[0] + dy * f.t[1] + dz * f.t[2], a = dx * f.n[0] + dy * f.n[1] + dz * f.n[2];
+        place[b * 2] = Math.atan2(a - ia, x - ix); place[b * 2 + 1] = t;
+      }
+      for (let c = 0; c < C; c++) {
+        const g = Math.atan2(feet[c * 3 + 2] - ia, feet[c * 3] - ix);
+        // (the two places either side of it round her)
+        let best = -1, bd = Infinity, sec = -1, sd = Infinity;
+        for (let b = 0; b < N; b++) { let d = Math.abs(place[b * 2] - g); if (d > Math.PI) d = 2 * Math.PI - d; if (d < bd) { sec = best; sd = bd; best = b; bd = d; } else if (d < sd) { sec = b; sd = d; } }
+        const w = sd + bd > 1e-9 ? sd / (sd + bd) : 1, t = sec >= 0 ? place[best * 2 + 1] * w + place[sec * 2 + 1] * (1 - w) : place[best * 2 + 1];
+        want[c] = Math.min(FOOT_RISE.most, Math.max(-FOOT_RISE.out, t - feet[c * 3 + 1])) * share;
+      }
+      // (evened round her: her feet one smooth line)
+      for (let pass = 0; pass < FOOT_RISE.even; pass++) { const w = want.slice(); for (let c = 0; c < C; c++) want[c] = (w[(c + C - 1) % C] + 2 * w[c] + w[(c + 1) % C]) / 4; }
+    }
+    const now = (this.footNow = this.footNow?.length === C ? this.footNow : new Float32Array(C));
+    let moved = false;
+    for (let c = 0; c < C; c++) { const v = now[c] + (want[c] - now[c]) * FOOT_RISE.follow; if (Math.abs(v - now[c]) > 1e-5) { now[c] = v; moved = true; } }
+    if (moved) this.drawnSwing = -1;
+  }
+
+  private pressDoors(dt: number): void {
+    if (!this.passing && !this.pressed) return;
+    const J = DOORS.stations, uniform = birthAngles(this.grown || this.opensFreely ? this.swing : 0), row = (): Angles[] => Array.from({ length: J }, () => uniform);
+    this.pressed ??= { want: { right: row(), left: row(), ends: ENDS_SHUT }, now: { right: row(), left: row(), ends: ENDS_SHUT } };
+    const P = this.pressed, tick = this.pressTick++;
+    if (this.passing) {
+      // (sliced where her opening's ends stand now; its ends pushed apart as far as what crosses it reaches, to 12.5 cm)
+      const rim = Math.min(rimOf(P.now.right).t, rimOf(P.now.left).t);
+      if (this.pressMode === 'sections') {
+        const o = passingOutlines(this.doors.frame, this.passing, P.now.ends, rim);
+        P.want.ends = o.ends;
+        // (each door as one piece front to back: half its sections worked out a frame, in turn, each drawn toward the ones
+        // beside it, then smoothed -- actor/birthDoors.ts `pressDoorLine`)
+        for (const side of ['right', 'left'] as const) P.want[side] = pressDoorLine(o[side], P.want[side], uniform, (tick % 2) as 0 | 1);
+      } else if (this.pressMode === 'fitted') {
+        // (plan B, closer round it: the full sim's sections laid on one smooth curve a door -- `fittedDoors`)
+        const d = fittedDoors(this.doors.frame, this.passing, P.now.ends, rim, this.rawPress ?? P.want, (tick % 2) as 0 | 1);
+        this.rawPress = d.raw;
+        P.want = { right: d.right, left: d.left, ends: d.ends };
+      } else if (this.pressMode === 'shared') {
+        // (plan B: one pose a door, solved against the baby as the circle was -- `sharedDoors`)
+        P.want = sharedDoors(this.doors.frame, this.passing, P.now.ends, rim, P.want);
+      } else if (this.pressMode === 'cloth') {
+        // (the full sim, and over it her doors as cloth on the tee's settings: actor/doorCloth.ts)
+        const o = passingOutlines(this.doors.frame, this.passing, P.now.ends, rim);
+        P.want.ends = o.ends;
+        for (const side of ['right', 'left'] as const) P.want[side] = pressDoorLine(o[side], P.want[side], uniform, (tick % 2) as 0 | 1);
+        this.clothOutlines = o;
+      } else {
+        // (as the BIRTH OPENING slider has them, set by what passes; the hybrid's lips its own -- `sliderDoors`)
+        const d = sliderDoors(this.doors.frame, this.passing, P.now.ends, rim, this.pressMode === 'soft', P.want);
+        P.want = { right: d.right, left: d.left, ends: d.ends };
+      }
+    } else { for (const side of ['right', 'left'] as const) for (let j = 0; j < J; j++) P.want[side][j] = uniform; P.want.ends = ENDS_SHUT; }
+    P.now.ends = followEnds(P.now.ends, P.want.ends, dt);
+    let settled = !this.passing && P.now.ends.front === ENDS_SHUT.front && P.now.ends.back === ENDS_SHUT.back;
+    // (drawn as lips: each station's lips as far apart as what passes is wide at her skin -- or, with nothing passing,
+    // where BIRTH OPENING parts them -- following as her doors do)
+    if (this.lips) {
+      const slider = sliderLips(this.grown || this.opensFreely ? this.swing : 0);
+      P.want.lips = this.passing ? passingLips(this.doors.frame, this.passing, P.now.ends) : { right: slider, left: slider };
+      const was = P.now.lips ?? { right: slider, left: slider };
+      P.now.lips = { right: followLips(was.right, P.want.lips.right, dt), left: followLips(was.left, P.want.lips.left, dt) };
+      if (P.now.lips.right.some((x, j) => x !== P.want.lips!.right[j]) || P.now.lips.left.some((x, j) => x !== P.want.lips!.left[j])) settled = false;
+    }
+    for (const side of ['right', 'left'] as const) for (let j = 0; j < J; j++) {
+      const a = (P.now[side][j] = followDoor(P.now[side][j], P.want[side][j], dt)), w = P.want[side][j];
+      if (a.hinge !== w.hinge || a.inner !== w.inner || a.mid !== w.mid || a.outer !== w.outer) settled = false;
+    }
+    this.drawnSwing = -1;
+    if (this.pressMode === 'cloth' && this.passing) this.stepCloth(dt, rimOf(P.now.right).t);
+    else { this.cloth = null; this.clothPoints = null; }
+    if (settled) { this.pressed = null; this.cloth = null; this.clothPoints = null; this.rawPress = null; }
+  }
+
+  /** Her doors as cloth this frame (`pressMode` 'cloth'): drawn toward the full sim's, holding to the slider's lengths. */
+  private stepCloth(dt: number, rim: number): void {
+    const P = this.pressed, o = this.clothOutlines;
+    if (!P || !this.passing) return;
+    const f = this.doors.frame, pushed = doorMeshes(f, 0, this.fold, P.now);
+    const s = sliderDoors(f, this.passing, P.now.ends, rim, false), laid = doorMeshes(f, 0, this.fold, { right: s.right, left: s.left, ends: P.now.ends });
+    this.cloth ??= new DoorCloth(pushed.points.length / 3, pushed.triangles, pushed.points.length / 3 / (2 * DOORS.stations + 2 * (DOORS.bandSteps - 1)));
+    // (down, in her opening's frame, as heavy as WEIGHT makes it)
+    this.holder.updateMatrixWorld(true);
+    const down = new THREE.Vector3(0, -1, 0).transformDirection(this.holder.matrixWorld.clone().invert()), g = 981 * clothGravityScale(this.clothDials.weight);
+    const gravity = [f.x, f.t, f.n].map((a) => g * (down.x * a[0] + down.y * a[1] + down.z * a[2]));
+    const D = this.clothDials;
+    this.clothPoints = this.cloth.step(dt, f, laid.points, pushed.points, o, P.now.ends, gravity, {
+      substeps: clothSubsteps(D.steps), stretchCompliance: clothCompliance(D.stretch), bendCompliance: 1e-4, restScale: clothRestScale(D.fit),
+      maxStretch: clothMaxStretch(D.stretch), damping: clothDamping(D.calm), friction: clothFriction(D.grip), standOff: clothStandOffMm(D.close) / 10,
+    });
+  }
+
+  private drawDoors(): void {
+    if (Math.abs(this.swing - this.drawnSwing) < 1e-4 && Math.abs(this.fold - this.drawnFold) < 1e-4) return;
+    this.drawnSwing = this.swing; this.drawnFold = this.fold;
+    const d = doorMeshes(this.doors.frame, this.swing, this.fold, this.pressed?.now, this.lips, this.lips ? this.footNow ?? undefined : undefined), g = this.doors.mesh.geometry;
+    this.feet = d.feet ?? null;
+    if (this.clothPoints && this.clothPoints.length === d.points.length) d.points.set(this.clothPoints);
+    this.laidAngles = d.angles; this.openNow = d.openM;
+    const colour = new Float32Array(d.lining.length * 3), lining = this.doorLining, skin = this.doorSkin;
+    d.lining.forEach((l, i) => (l ? lining : skin).toArray(colour, i * 3));
+    g.setAttribute('position', new THREE.BufferAttribute(d.points, 3)); g.setAttribute('color', new THREE.BufferAttribute(colour, 3));
+    g.setIndex(new THREE.BufferAttribute(d.triangles, 1)); g.computeVertexNormals();
+    // (her skin round it, its ends going with her opening's)
+    const sg = this.doors.skin.geometry;
+    if (this.sleeveOn) this.toSleeve(d.skin.points);
+    this.sleeveLaid = this.sleeveOn ? { points: d.skin.points, columns: d.skin.points.length / 3 / SKIN_RING_ROWS, version: ++this.sleeveVersion, doors: d.points } : null;
+    sg.setAttribute('position', new THREE.BufferAttribute(d.skin.points, 3)); sg.setIndex(new THREE.BufferAttribute(d.skin.triangles, 1)); sg.computeVertexNormals();
+    // (under her own skin: from its inside only, as her lining -- which of its faces is its inside told from its first
+    // triangle up its wall: the one that looks at her canal's line)
+    { const sm = this.doors.skinMaterial, under = this.sleeveOn && this.underSkin, T = d.skin.triangles, Q = d.skin.points;
+      let side: THREE.Side = THREE.DoubleSide;
+      if (under && T.length >= 3) {
+        const C = Q.length / 3 / SKIN_RING_ROWS, mid = [0, 0, 0];
+        // (a triangle from the sleeve's upper rows, and the middle of the row it is in)
+        let t0 = 0; for (let t = 0; t + 2 < T.length; t += 3) if (Math.min(T[t], T[t + 1], T[t + 2]) >= 4 * C) { t0 = t; break; }
+        const row = Math.floor(T[t0] / C); for (let c = 0; c < C; c++) for (let e = 0; e < 3; e++) mid[e] += Q[(row * C + c) * 3 + e] / C;
+        const a = T[t0] * 3, b = T[t0 + 1] * 3, c2 = T[t0 + 2] * 3, ux = Q[b] - Q[a], uy = Q[b + 1] - Q[a + 1], uz = Q[b + 2] - Q[a + 2], vx = Q[c2] - Q[a], vy = Q[c2 + 1] - Q[a + 1], vz = Q[c2 + 2] - Q[a + 2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, out = nx * (Q[a] - mid[0]) + ny * (Q[a + 1] - mid[1]) + nz * (Q[a + 2] - mid[2]);
+        side = out > 0 ? THREE.BackSide : THREE.FrontSide;
+      }
+      if (sm.side !== side) { sm.side = side; sm.needsUpdate = true; }
+      sm.color.copy(under ? this.doorLining : this.doorSkin);
+      // (and its outside, under her own skin: the same triangles drawn a second time, the other way round)
+      const om = this.doors.outerMaterial, out: THREE.Side = side === THREE.BackSide ? THREE.FrontSide : THREE.BackSide;
+      sg.clearGroups();
+      if (under && side !== THREE.DoubleSide) {
+        sg.addGroup(0, T.length, 0); sg.addGroup(0, T.length, 1);
+        if (om.side !== out) { om.side = out; om.needsUpdate = true; }
+        om.color.copy(this.doorSkin);
+        this.doors.skin.material = [sm, om];
+      } else this.doors.skin.material = sm; }
+  }
+
+  /** The skin round her doors (`skinRing`'s rows: its first her doors' feet, round her opening) drawn as a sleeve round her
+   * canal (`skinSleeve`): each row further up her canal's line, as far as `SLEEVE.along` past her doors' hinges, each
+   * point the same way round it as its foot and a little further out (`SLEEVE.wider` by its end). */
+  private toSleeve(ring: Float32Array): void {
+    const f = this.doors.frame, K = 8, C = ring.length / 3 / (K + 1);
+    // (the middle of her doors' feet, for each column's own place round it)
+    let ix = 0, ia = 0;
+    const foot = (c: number) => { const dx = ring[c * 3] - f.mouth[0], dy = ring[c * 3 + 1] - f.mouth[1], dz = ring[c * 3 + 2] - f.mouth[2]; return [dx * f.x[0] + dy * f.x[1] + dz * f.x[2], dx * f.n[0] + dy * f.n[1] + dz * f.n[2]]; };
+    for (let c = 0; c < C; c++) { const q = foot(c); ix += q[0] / C; ia += q[1] / C; }
+    const path = this.layout?.vagina.path ?? null, long = path ? lengthOf(path) : 0, end = Math.min(long * 0.85, DOORS.hingeUp + SLEEVE.along);
+    // (each column's rows begin as far up her canal as its foot is raised: `setFootRise`)
+    const raised = this.lips && this.footNow?.length === C ? this.footNow : null;
+    if (!path || end <= DOORS.hingeUp) return;
+    for (let k = 1; k <= K; k++) {
+      const sK = k / K, l = DOORS.hingeUp + (end - DOORS.hingeUp) * sK, wide = 1 + SLEEVE.wider * sK;
+      const p = along(path, l), q = along(path, Math.min(long, l + 0.004)), b = along(path, Math.max(0, l - 0.004)), ty = q[1] - b[1], tz = q[2] - b[2], tl = Math.hypot(ty, tz) || 1, ny = tz / tl, nz = -ty / tl;
+      for (let c = 0; c < C; c++) {
+        const g = foot(c), i = (k * C + c) * 3, a = ia + (g[1] - ia) * wide;
+        if (raised && raised[c] !== 0) {
+          const from = DOORS.hingeUp + raised[c], lc = from + (end - from) * sK, pc = along(path, Math.min(long, lc)), qc = along(path, Math.min(long, lc + 0.004)), bc = along(path, Math.max(0, lc - 0.004));
+          const ty2 = qc[1] - bc[1], tz2 = qc[2] - bc[2], tl2 = Math.hypot(ty2, tz2) || 1;
+          ring[i] = pc[0] + ix + (g[0] - ix) * wide; ring[i + 1] = pc[1] + (tz2 / tl2) * a; ring[i + 2] = pc[2] + (-ty2 / tl2) * a;
+          continue;
+        }
+        ring[i] = p[0] + ix + (g[0] - ix) * wide; ring[i + 1] = p[1] + ny * a; ring[i + 2] = p[2] + nz * a;
+      }
+    }
+  }
+
+  private draw(): void {
+    if (this.organs.some((o) => !o.cage.primed)) { const toWorld = this.boneToWorld().elements; for (const o of this.organs) stepCage(o.cage, 0, toWorld, [0, 0, 0], o.tune); }
+    for (const o of this.organs) {
+      followCage(o.cage, o.skin, o.out);
+      const pos = o.mesh.geometry.getAttribute('position') as THREE.BufferAttribute, arr = pos.array as Float32Array;
+      for (let i = 0; i < arr.length; i++) arr[i] = o.out[i] * this.units;
+      pos.needsUpdate = true;
+      o.mesh.geometry.computeVertexNormals();
+    }
+    // her ovaries and tubes: with her small womb's soft body, or where v2's womb stands
+    if (this.adnexa.length) {
+      const uterus = this.organs.find((o) => o.name === 'uterus'), e = this.adnexa.some((a) => !a.skin) ? this.boneToWorld().elements : null;
+      for (const a of this.adnexa) {
+        if (a.skin && uterus) followCage(uterus.cage, a.skin, a.out);
+        else if (e) for (let i = 0; i < a.rest.length; i += 3) { const x = a.rest[i], y = a.rest[i + 1], z = a.rest[i + 2]; a.out[i] = e[0] * x + e[4] * y + e[8] * z + e[12]; a.out[i + 1] = e[1] * x + e[5] * y + e[9] * z + e[13]; a.out[i + 2] = e[2] * x + e[6] * y + e[10] * z + e[14]; }
+        const pos = a.mesh.geometry.getAttribute('position') as THREE.BufferAttribute, arr = pos.array as Float32Array;
+        for (let i = 0; i < arr.length; i++) arr[i] = a.out[i] * this.units;
+        pos.needsUpdate = true; a.mesh.geometry.computeVertexNormals();
+      }
+    }
+  }
+
+  /** How far each organ's soft body is from where its bone holds it now, metres (for probes: how much it sways). */
+  sway(): Record<Name, number> {
+    const toWorld = this.boneToWorld().elements, out = {} as Record<Name, number>, want = [0, 0, 0];
+    for (const o of this.organs) {
+      let most = 0;
+      for (let i = 0; i < o.cage.n; i++) {
+        const r = o.cage.rest;
+        want[0] = toWorld[0] * r[3 * i] + toWorld[4] * r[3 * i + 1] + toWorld[8] * r[3 * i + 2] + toWorld[12];
+        want[1] = toWorld[1] * r[3 * i] + toWorld[5] * r[3 * i + 1] + toWorld[9] * r[3 * i + 2] + toWorld[13];
+        want[2] = toWorld[2] * r[3 * i] + toWorld[6] * r[3 * i + 1] + toWorld[10] * r[3 * i + 2] + toWorld[14];
+        most = Math.max(most, Math.hypot(o.cage.x[3 * i] - want[0], o.cage.x[3 * i + 1] - want[1], o.cage.x[3 * i + 2] - want[2]));
+      }
+      out[o.name] = most;
+    }
+    return out;
+  }
+
+  set visible(on: boolean) { this.group.visible = on; this.doors.mesh.visible = on && this.doorsOn; this.doors.skin.visible = on && this.doorsOn && this.outerOn; }
+
+  dispose(): void {
+    for (const o of this.organs) { o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
+    this.organs = []; this.touching = [];
+    for (const a of this.adnexa) { a.mesh.removeFromParent(); a.mesh.geometry.dispose(); }
+    this.adnexa = []; this.adnexaMaterials.ovaries.dispose(); this.adnexaMaterials.tubes.dispose();
+    for (const m of this.materials.values()) m.dispose();
+    for (const m of [this.doors.mesh, this.doors.skin]) { m.removeFromParent(); m.geometry.dispose(); }
+    this.doors.material.dispose(); this.doors.skinMaterial.dispose(); this.doors.outerMaterial.dispose();
+    this.holder.removeFromParent(); this.group.removeFromParent();
+  }
+}

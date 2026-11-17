@@ -14,6 +14,9 @@
 //   ?look=blaze           Joshua's Blaze exactly as he exported her from the Character Room (all pink)
 //   ?look=blazeSuit       Blaze in pink and black: his export with black, edging and painted panels added
 //   ?belly=<0-200>        her belly to start with (the default heroine only: a look brings its own belly)
+//   ?heroine=fast         the FAST heroine (src/heroine/fast/: the game's "Body: Performance") in place of the
+//                         builder's hosted room, wearing a baked look (?look=blazeSuit, the default, or ?look=blaze)
+//   ?detail=auto|100|50|25|10|5|3|2|1   the fast heroine's detail (default 100 here, so pictures are of full detail)
 //   ?hold                 start with the page's own frame loop stopped (for scripts; see below)
 //
 // For scripts (screenshots without waiting on a slow software renderer): `window.heroineLab` has `hold(true)` to
@@ -26,6 +29,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FrameInfo, Hand } from './core/contracts';
 import { createBuilderHeroine, type BuilderHeroine } from './heroine/builderHeroine';
+import { createFastHeroine, type FastHeroine } from './heroine/fast/fastHeroine';
+import { nearestDetail } from './heroine/fast/detailLevels';
+import { lookKey } from './heroine/looks';
 
 const MAX_STEP = 1 / 20;        // a frame never counts for more than this many seconds
 const WALK_SPEED = 1.1;         // metres a second: the builder's own walking pace
@@ -79,18 +85,34 @@ async function start(): Promise<void> {
   const look: HeroineLook | undefined = looks[asked.get('look') ?? ''];
   // The belly she starts with: a look's own (Blaze is 100), else the address's ?belly, else the default heroine's.
   const startBelly = look ? look.body.bump : asked.has('belly') ? Number(asked.get('belly')) : DEFAULT_BELLY;
-  const heroine: BuilderHeroine = await createBuilderHeroine({
-    renderer,
-    scene,
-    belly: asked.has('belly') ? Number(asked.get('belly')) : undefined,
-    outfit: asked.get('outfit') ?? undefined,
-    // ?look=...: one of the saved looks in place of the default heroine
-    look,
-    lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
-    onProgress: (stage) => { status.textContent = `Loading the heroine: ${stage}…`; },
-  });
-  scene.add(heroine.root);
-  await heroine.warmUp(scene, camera);
+  // Which heroine: the fast one (?heroine=fast) or the builder's hosted room.
+  const fast = asked.get('heroine') === 'fast';
+  let heroine: BuilderHeroine | FastHeroine;
+  if (fast) {
+    const detail = asked.get('detail');
+    heroine = await createFastHeroine({
+      renderer,
+      scene,
+      look: lookKey(asked.get('look')),
+      detail: detail === 'auto' ? 'auto' : nearestDetail(Number(detail ?? 100) || 100),
+      onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
+    });
+    scene.add(heroine.root);
+  } else {
+    const room = await createBuilderHeroine({
+      renderer,
+      scene,
+      belly: asked.has('belly') ? Number(asked.get('belly')) : undefined,
+      outfit: asked.get('outfit') ?? undefined,
+      // ?look=...: one of the saved looks in place of the default heroine
+      look,
+      lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
+      onProgress: (stage) => { status.textContent = `Loading the heroine: ${stage}…`; },
+    });
+    scene.add(room.root);
+    await room.warmUp(scene, camera);
+    heroine = room;
+  }
   const loadSeconds = (performance.now() - began) / 1000;
 
   // ---- the aim target: a small magenta ball flying round her ------------------------------------------------------
@@ -216,8 +238,10 @@ async function start(): Promise<void> {
 
   const showStatus = () => {
     const s = heroine.stats(), r = renderer.info.render;
-    status.textContent = `${heroine.height.toFixed(2)} m tall · her: ${s.triangles.toLocaleString()} triangles in ${s.drawCalls} draws · frame: ${r.triangles.toLocaleString()} triangles, ${r.calls} draws\n`
-      + `her update ${s.updateMs.toFixed(1)} ms of CPU a frame${s.clothTee ? ' (cloth tee simulated)' : ''} · ${fps.toFixed(0)} FPS here · loaded in ${loadSeconds.toFixed(1)} s`;
+    // (what is particular to each heroine: the room's cloth tee, the fast body's detail level)
+    const extra = 'clothTee' in s ? (s.clothTee ? ' (cloth tee simulated)' : '') : ` · detail ${s.detail}%${s.auto ? ' (auto)' : ''}`;
+    status.textContent = `${fast ? 'FAST' : 'ROOM'} · ${heroine.height.toFixed(2)} m tall · her: ${s.triangles.toLocaleString()} triangles in ${s.drawCalls} draws · frame: ${r.triangles.toLocaleString()} triangles, ${r.calls} draws\n`
+      + `her update ${s.updateMs.toFixed(2)} ms of CPU a frame${extra} · ${fps.toFixed(0)} FPS here · loaded in ${loadSeconds.toFixed(1)} s`;
   };
 
   // ---- the page's own loop, and the hooks a script can use instead ---------------------------------------------------

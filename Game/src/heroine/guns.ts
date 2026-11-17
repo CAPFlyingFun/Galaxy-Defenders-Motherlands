@@ -10,6 +10,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import type { ArmBones } from './aimArms';
 
 export interface Gun {
   /** The gun. Its matrix is set by hand each frame (`matrixAutoUpdate` is off). */
@@ -57,4 +58,29 @@ export function createGun(): Gun {
       for (const m of materials) m.dispose();
     },
   };
+}
+
+/**
+ * WHERE A GUN SITS IN A HAND: the gun's matrix in the hand bone's own space, worked out once from the hand as it
+ * hangs at her side (she must be standing, facing +Z, her bones' world matrices up to date).
+ *
+ * Both heroines use it. `unitsPerMetre` is how many of the units her bones are measured in make one metre: 100 in
+ * the builder's room (centimetres), 1 for a body that stands in the game's own world.
+ */
+export function seatGunInHand(arm: ArmBones, unitsPerMetre: number, out: THREE.Matrix4): THREE.Matrix4 {
+  const wrist = arm.hand.getWorldPosition(new THREE.Vector3());
+  const knuckles = new THREE.Vector3();
+  for (const k of arm.knuckles) knuckles.add(k.getWorldPosition(new THREE.Vector3()));
+  if (arm.knuckles.length) knuckles.multiplyScalar(1 / arm.knuckles.length); else knuckles.copy(wrist).add(new THREE.Vector3(0, -0.08 * unitsPerMetre, 0));
+  // The barrel points the way her hand does (wrist to knuckles). With her arm hanging, her thumb is to the front:
+  // that is the gun's top, so when the arm swings up level the gun is upright.
+  const forward = knuckles.clone().sub(wrist).normalize();
+  const top = new THREE.Vector3(0, 0, 1).addScaledVector(forward, -forward.z).normalize();
+  const across = new THREE.Vector3().crossVectors(top, forward).normalize();
+  // The grip sits in her palm: most of the way to her knuckles, and 2 cm toward her body (hanging, her palm
+  // faces her thigh, so "toward her body" is toward her middle, x = 0).
+  const inward = new THREE.Vector3(-Math.sign(wrist.x) || 0, 0, 0).addScaledVector(forward, Math.sign(wrist.x) * forward.x).normalize();
+  const grip = wrist.clone().lerp(knuckles, 0.8).addScaledVector(inward, 0.02 * unitsPerMetre);
+  const gunWorld = new THREE.Matrix4().makeBasis(across, top, forward).setPosition(grip).scale(new THREE.Vector3(unitsPerMetre, unitsPerMetre, unitsPerMetre));
+  return out.copy(arm.hand.matrixWorld).invert().multiply(gunWorld);
 }

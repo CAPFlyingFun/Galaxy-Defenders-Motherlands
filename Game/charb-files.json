@@ -1,5 +1,5 @@
 {
-  "about": "The Character Builder files the heroine loads, relative to ../Char_B/public. `npm run build` copies ONLY these into dist/charb/. The dev server warns in its terminal when the builder asks for a file that is not listed here (and /__charb-requested lists everything asked for so far): add the path and build again.",
+  "about": "The Character Builder files the heroine loads, relative to ../Char_B/public. `npm run build` copies ONLY these into dist/charb/. The dev server warns in its terminal when the builder asks for a file that is not listed here (and /__charb-requested lists everything asked for so far): add the path and build again. The FAST heroine (src/heroine/fast/) needs only the body file and her hair's two files (ponytail.glb, ponytail-light.glb); the rest are for the Visual body (the builder's hosted room) and the bake page.",
   "files": [
     "models/sarah-v2-body-slim.glb",
     "models/sarah-v2-body-light.bin",
@@ -9,6 +9,7 @@
     "models/sarah-baby.glb",
     "models/sarah-baby-straight.glb",
     "models/hair/ponytail.glb",
+    "models/hair/ponytail-light.glb",
     "models/skins/sarah-v2-skin-even-2048.webp",
     "models/sarah-v2-spandex-lite.glb",
     "fabrics/athletic-plain.jpg",

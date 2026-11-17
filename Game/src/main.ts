@@ -15,6 +15,7 @@ import type { Hand, HeroineBody } from './core/contracts';
 import { keepLandscape, onStageResize } from './core/orientation';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
+import { loadHeroineSettings, saveSetting, type HeroineSettings } from './heroine/heroineSettings';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
@@ -27,36 +28,63 @@ import { createSky } from './world/sky';
 import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
 
+/** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
+interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
+type GameHeroine = HeroineBody & {
+  stats?: () => HeroineCost;
+  /** The fast heroine only: change her detail and the frame rate Auto holds, while the game runs. */
+  setDetail?: (detail: HeroineSettings['detail']) => void;
+  setTargetFps?: (target: HeroineSettings['targetFps']) => void;
+};
+
 /**
  * THE ONE PLACE THE HEROINE IS MADE.
  * Everything else only knows her as a HeroineBody (core/contracts.ts).
  *
- * By default she is BLAZE: the real Character Builder body in her pink-and-black suit
- * (src/heroine/looks/blazeSuit.ts, built on the look Joshua saved for her in src/heroine/looks/blaze.ts). Her files are large, so the builder's code is fetched only when it is needed
- * (the `import()` below), and a line of text says she is loading.
+ * She is BLAZE in her pink-and-black suit (src/heroine/looks/blazeSuit.ts, built on the look Joshua saved for her in
+ * src/heroine/looks/blaze.ts), drawn one of two ways, chosen in Settings ("Body") and remembered on the device
+ * (src/heroine/heroineSettings.ts):
  *
- *   ?heroine=standin   the simple stand-in figure (loads at once; useful to compare frame rates)
- *   ?look=blaze        Joshua's own export (the all-pink two-piece), in place of the suit
- *   ?body=full|light   the builder's full or light skin (left out, the builder chooses by device)
+ *   Performance (the default)  the FAST heroine (src/heroine/fast/): the builder's body file drawn the way Anthill
+ *                              Airways' DEV Room draws it, wearing a baked copy of the builder's outfit.
+ *   Visual                     the Character Builder's own room, run out of sight (src/heroine/builderHeroine.ts):
+ *                              the builder exactly, at several times the cost.
  *
- * If her files cannot be loaded, the stand-in takes her place, so the game always starts.
+ * Her code is fetched only when it is needed (the `import()`s below), and a line of text says she is loading.
+ *
+ *   ?heroine=fast|room|standin   force one of the two, or the simple stand-in figure (loads at once)
+ *   ?look=blaze                  Joshua's own export (the all-pink two-piece), in place of the suit
+ *   ?detail=, ?fps=, ?sharp=, ?body=light|full   see heroineSettings.ts
+ *
+ * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
+ * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, say: (text: string) => void): Promise<HeroineBody> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin') return createStandInHeroine();
+  const { lookKey, LOOKS } = await import('./heroine/looks');
+  const look = lookKey(asked.get('look'));
+  say('Loading Blaze…');
+  if (settings.body === 'performance') {
+    try {
+      const { createFastHeroine } = await import('./heroine/fast/fastHeroine');
+      return await createFastHeroine({
+        renderer, scene, look,
+        detail: settings.detail,
+        targetFps: settings.targetFps,
+        onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
+      });
+    } catch (error) {
+      console.error('The fast heroine could not be made; trying the Character Builder\'s own room.', error);
+    }
+  }
   try {
-    say('Loading Blaze…');
-    const [{ createBuilderHeroine }, { BLAZE_LOOK }, { BLAZE_SUIT_LOOK }] = await Promise.all([
-      import('./heroine/builderHeroine'),
-      import('./heroine/looks/blaze'),
-      import('./heroine/looks/blazeSuit'),
-    ]);
-    const body = asked.get('body');
+    const { createBuilderHeroine } = await import('./heroine/builderHeroine');
     return await createBuilderHeroine({
       renderer,
       scene,
-      look: asked.get('look') === 'blaze' ? BLAZE_LOOK : BLAZE_SUIT_LOOK,
-      lightSkin: body === 'full' ? false : body === 'light' ? true : 'auto',
+      look: LOOKS[look],
+      lightSkin: settings.skin === 'light',
       groundShadow: false, // the ground paints her shadow itself (src/world/ground.ts)
       onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
     });
@@ -105,8 +133,10 @@ async function start(): Promise<void> {
   // ---- Renderer ---------------------------------------------------------------
   // No shadows (the ground paints her shadow itself) and at most 2 device pixels
   // per CSS pixel: a phone's 3x screen would triple the work for little gain.
+  // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
+  const graphics = loadHeroineSettings();
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, graphics.sharpness));
   host.appendChild(renderer.domElement);
 
   // ---- World --------------------------------------------------------------------
@@ -140,7 +170,7 @@ async function start(): Promise<void> {
   const loading = document.createElement('div');
   loading.style.cssText = 'position:absolute;left:0;right:0;top:45%;text-align:center;font-size:15px;letter-spacing:.08em;color:#5ee8c8;pointer-events:none;text-shadow:0 0 8px #04060d;';
   uiHost.appendChild(loading);
-  const heroine = await createHeroine(renderer, scene, (text) => { loading.textContent = text; });
+  const heroine = await createHeroine(renderer, scene, graphics, (text) => { loading.textContent = text; });
   loading.remove();
   scene.add(heroine.root);
   const motion = new PlayerMotion();
@@ -184,6 +214,17 @@ async function start(): Promise<void> {
       saveFreeWalk(on);
       hud.setView(rig.mode, freeWalk);
     },
+    graphics,
+    onGraphicsChange(key, value) {
+      graphics[key] = value;
+      saveSetting(key, value);
+      // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
+      // heroine, so the game starts again with it.
+      if (key === 'detail') heroine.setDetail?.(graphics.detail);
+      else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
+      else if (key === 'sharpness') fit();
+      else location.reload();
+    },
     onToggleView: toggleView,
     onDomeDebug: domeDebug,
   });
@@ -200,7 +241,7 @@ async function start(): Promise<void> {
   const fit = () => {
     const width = host.clientWidth;
     const height = host.clientHeight;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, graphics.sharpness);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
     sky.setPixelRatio(pixelRatio);
@@ -298,7 +339,12 @@ async function start(): Promise<void> {
       readoutFrames++;
       if (readoutTimer >= 0.5) {
         const fps = Math.round(readoutFrames / readoutTimer);
-        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles} tris`);
+        // the whole frame, then the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
+        const her = heroine.stats?.();
+        const herLine = her
+          ? `\nher: ${her.triangles.toLocaleString()} tris in ${her.drawCalls} draws` + (her.detail !== undefined ? ` · detail ${her.detail}%${her.auto ? ' auto' : ''}` : '') + ` · ${her.updateMs.toFixed(2)} ms CPU`
+          : '';
+        hud.setReadout(`${fps} FPS  ${renderer.info.render.calls} draws  ${renderer.info.render.triangles.toLocaleString()} tris${herLine}`);
         readoutTimer = 0;
         readoutFrames = 0;
       }

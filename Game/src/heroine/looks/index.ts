@@ -1,0 +1,22 @@
+// ============================================================================
+// looks/index.ts -- every saved look the game knows, by the name used in the
+// address (?look=...) and for a baked look's folder (public/heroines/<name>/).
+// ============================================================================
+import type { HeroineLook } from '../heroineLook';
+import { BLAZE_LOOK } from './blaze';
+import { BLAZE_SUIT_LOOK } from './blazeSuit';
+
+export const LOOKS: Readonly<Record<string, HeroineLook>> = {
+  /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
+  blazeSuit: BLAZE_SUIT_LOOK,
+  /** Blaze exactly as Joshua exported her from the Character Room: the all-pink two-piece (blaze.ts). */
+  blaze: BLAZE_LOOK,
+};
+
+/** The look the game's heroine wears when the address does not name one. */
+export const DEFAULT_LOOK = 'blazeSuit';
+
+/** The look's key for what the address asked (`?look=`): a known name, or the default. */
+export function lookKey(asked: string | null): string {
+  return asked && asked in LOOKS ? asked : DEFAULT_LOOK;
+}

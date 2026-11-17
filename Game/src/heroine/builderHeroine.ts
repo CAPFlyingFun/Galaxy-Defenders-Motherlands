@@ -32,7 +32,7 @@ import { wearsLightSkin } from '@charb/sarahlab/skinChoice';
 import type { FrameInfo, Hand, HeroineBody } from '../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from './aimArms';
 import { ROOM_UNITS, SARAH_LAB_ACTION, SARAH_LAB_FIELD, openBuilderRoom, type BuilderRoom } from './builderRoom';
-import { createGun, type Gun } from './guns';
+import { createGun, seatGunInHand, type Gun } from './guns';
 import { RoomDrawer } from './roomDraw';
 import { createGroundShadow } from './groundShadow';
 import { defaultHeroineLook, DEFAULT_BELLY, type HeroineLook } from './heroineLook';
@@ -223,25 +223,8 @@ export async function createBuilderHeroine(options: BuilderHeroineOptions): Prom
     crown.getWorldPosition(crownInRoom);
   };
 
-  /** Work out where a gun sits in a hand, from the hand as it hangs at her side (called once). */
-  const seatGun = (hand: Hand): void => {
-    const a = arms[hand];
-    const wrist = a.hand.getWorldPosition(new THREE.Vector3());
-    const knuckles = new THREE.Vector3();
-    for (const k of a.knuckles) knuckles.add(k.getWorldPosition(new THREE.Vector3()));
-    if (a.knuckles.length) knuckles.multiplyScalar(1 / a.knuckles.length); else knuckles.copy(wrist).add(new THREE.Vector3(0, -8, 0));
-    // The barrel points the way her hand does (wrist to knuckles). With her arm hanging, her thumb is to the front:
-    // that is the gun's top, so when the arm swings up level the gun is upright.
-    const forward = knuckles.clone().sub(wrist).normalize();
-    const top = new THREE.Vector3(0, 0, 1).addScaledVector(forward, -forward.z).normalize();
-    const across = new THREE.Vector3().crossVectors(top, forward).normalize();
-    // The grip sits in her palm: most of the way to her knuckles, and 2 cm toward her body (hanging, her palm
-    // faces her thigh, so "toward her body" is toward her middle, x = 0).
-    const inward = new THREE.Vector3(-Math.sign(wrist.x) || 0, 0, 0).addScaledVector(forward, Math.sign(wrist.x) * forward.x).normalize();
-    const grip = wrist.clone().lerp(knuckles, 0.8).addScaledVector(inward, 0.02 * ROOM_UNITS);
-    const gunWorld = new THREE.Matrix4().makeBasis(across, top, forward).setPosition(grip).scale(new THREE.Vector3(ROOM_UNITS, ROOM_UNITS, ROOM_UNITS));
-    gunInHand[hand].copy(a.hand.matrixWorld).invert().multiply(gunWorld);
-  };
+  /** Work out where a gun sits in a hand, from the hand as it hangs at her side (called once; the maths is in guns.ts). */
+  const seatGun = (hand: Hand): void => { seatGunInHand(arms[hand], ROOM_UNITS, gunInHand[hand]); };
 
   /** Put each gun where its hand is now (in `root`'s space: metres, her feet at the origin). */
   const placeGuns = (): void => {

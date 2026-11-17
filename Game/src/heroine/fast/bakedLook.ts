@@ -1,0 +1,125 @@
+// ============================================================================
+// bakedLook.ts -- a BAKED LOOK: one heroine's outfit and shape, written down
+// ahead of time so the fast heroine does not need the Character Builder's room.
+//
+// A baked look is a small folder under Game/public/heroines/<look>/ :
+//   look.json     this file's `BakedLookManifest`: what was baked, from what, and the names of the files below
+//   albedo.webp   her skin's final COLOUR as the builder draws it (her skin, face, and every painted garment),
+//                 laid out in her own texture layout (the body file's UVs)
+//   normal.webp   her fine surface detail as the builder lights it (pores on bare skin, laid flat under cloth)
+//   surface.webp  how shiny each spot is (green = roughness, blue = metalness: the layout three.js reads)
+//   shape.bin     where each point of her skin is for this look (shapeFile.ts)
+//   pieces.bin    the outfit's few extra pieces that are not skin: the fabric across her cleavage, her sneakers
+//                 (piecesFile.ts), with a small picture for the sneakers (sneaker.webp)
+//
+// They are made by the bake page (Game/bake.html, src/bake/bakeLook.ts), which opens the builder's own room
+// once and reads back what the builder's own shaders worked out. To change a look: change it in the
+// Character Room, paste the export into src/heroine/looks/, and bake again (the steps are in bakeLook.ts).
+//
+// WHAT A BAKE FREEZES. The painted edges are drawn for the belly she was baked at. `setBelly` still reshapes
+// her skin (the builder's own belly shapes), and the picture stretches with it, but an edge the builder would
+// have re-drawn for the new belly (the waistband under her bump) stays where it was baked.
+// ============================================================================
+import * as THREE from 'three';
+import { unpackShape, type BakedShape } from './shapeFile';
+import { unpackPieces, type BakedPiece } from './piecesFile';
+
+export interface BakedLookManifest {
+  readonly version: 1;
+  /** The look's key (its folder name, and its name in `?look=`). */
+  readonly look: string;
+  /** When it was baked, and from which version of the Character Builder. */
+  readonly bakedAt: string;
+  readonly builderVersion: string;
+  /** Her belly when she was baked, 0-200 %. */
+  readonly belly: number;
+  /** How many points her skin has (the body file's: 115,710). */
+  readonly vertexCount: number;
+  /** How tall her bare body stands in the builder's room, the soles of her feet to the top of her head, metres. */
+  readonly barefootHeightMetres: number;
+  /** Her NAVEL control's setting in the builder (-100 deepest innie .. +100 fullest outie): needed when her belly is changed. */
+  readonly navel: number;
+  /** The builder's setting for how strongly her surface-detail picture is read (x, y): the baked picture is read back with it. */
+  readonly normalScale: readonly [number, number];
+  /** Her hair: the builder's style id, its colour ('#rrggbb', or null for the file's own copper) and length (0 shortest - 1). Null: no hair. */
+  readonly hair: { readonly style: string; readonly colour: string | null; readonly length: number } | null;
+  /** File names, beside look.json. */
+  readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null };
+  /** Anything the bake measured that a person may want to read later (never used by the game). */
+  readonly facts?: Readonly<Record<string, unknown>>;
+}
+
+/** A baked look, loaded and ready to put on the fast body. */
+export interface BakedLook {
+  readonly manifest: BakedLookManifest;
+  readonly albedo: THREE.Texture;
+  readonly normal: THREE.Texture;
+  readonly surface: THREE.Texture;
+  readonly shape: BakedShape;
+  /** The outfit's extra pieces (empty when it has none), and their pictures by file name. */
+  readonly pieces: readonly BakedPiece[];
+  readonly piecePictures: ReadonlyMap<string, THREE.Texture>;
+  /** How many megabytes were downloaded for the look. */
+  readonly megabytes: number;
+  dispose(): void;
+}
+
+/** The looks that have a baked folder. `?look=` names one of these; anything else has no fast version yet. */
+export const BAKED_LOOKS: readonly string[] = ['blazeSuit', 'blaze'];
+
+/** The folder a look's baked files are in (beside the game's page). */
+export const bakedLookFolder = (look: string): string => `${import.meta.env.BASE_URL}heroines/${look}/`;
+
+/** Megabytes fetched so far for the look being loaded (added up by `fetchOk`'s callers). */
+let fetchedBytes = 0;
+
+async function fetchOk(url: string): Promise<Response> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} did not load (${response.status})`);
+  return response;
+}
+
+/** Load one picture as a texture, set up the way the body file's own textures are (not flipped, repeating). */
+async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture> {
+  const blob = await (await fetchOk(url)).blob();
+  fetchedBytes += blob.size;
+  // (decoded off the main thread; `none` keeps the picture's rows in the order the bake wrote them)
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  const texture = new THREE.Texture(bitmap);
+  texture.flipY = false;
+  texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Fetch a baked look's files (all at once) and unpack them. */
+export async function loadBakedLook(look: string): Promise<BakedLook> {
+  const folder = bakedLookFolder(look);
+  fetchedBytes = 0;
+  const manifest = (await (await fetchOk(`${folder}look.json`)).json()) as BakedLookManifest;
+  if (manifest.version !== 1) throw new Error(`baked look "${look}" is version ${String(manifest.version)}, which this game does not read`);
+  const bytesOf = (name: string): Promise<ArrayBuffer> => fetchOk(folder + name).then((r) => r.arrayBuffer()).then((b) => { fetchedBytes += b.byteLength; return b; });
+  const [albedo, normal, surface, shapeBytes, pieceBytes] = await Promise.all([
+    loadPicture(folder + manifest.files.albedo, true),
+    loadPicture(folder + manifest.files.normal, false),
+    loadPicture(folder + manifest.files.surface, false),
+    bytesOf(manifest.files.shape),
+    manifest.files.pieces ? bytesOf(manifest.files.pieces) : Promise.resolve(null),
+  ]);
+  const shape = unpackShape(shapeBytes);
+  const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
+  // the pieces' own pictures (her two sneakers share one)
+  const piecePictures = new Map<string, THREE.Texture>();
+  await Promise.all([...new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))].map(async (name) => { piecePictures.set(name, await loadPicture(folder + name, true)); }));
+  return {
+    manifest, albedo, normal, surface, shape, pieces, piecePictures,
+    megabytes: fetchedBytes / 1048576,
+    dispose(): void {
+      for (const t of [albedo, normal, surface, ...piecePictures.values()]) { (t.image as ImageBitmap | undefined)?.close?.(); t.dispose(); }
+    },
+  };
+}

@@ -15,9 +15,15 @@
 // limits (how far a body can turn, how high an arm can point).
 //
 // SPACE. All the maths here is done in the space the bones' world matrices
-// are in: the builder's own room (centimetres, her feet at its origin, facing
-// +Z; see builderRoom.ts). So `target` must be given in that space;
-// builderHeroine.ts converts the game's world point.
+// are in, and `target` must be given in that same space. Two heroines use it:
+//   * the builder-room heroine (builderHeroine.ts): the room's own space
+//     (centimetres, her feet at its origin, always facing +Z), so `facing`
+//     stays 0 and the game's world point is converted first;
+//   * the fast heroine (fast/fastHeroine.ts): her bones are ordinary objects in
+//     the game's scene, so the space is the game's world itself and `facing` is
+//     set each frame to the way she is turned (her root's yaw).
+// No length in here is in any particular unit: everything is angles and
+// directions between her own joints.
 // ============================================================================
 import * as THREE from 'three';
 
@@ -110,6 +116,11 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export class ArmAim {
   /** 0 = arms as the builder poses them, 1 = fully aimed. Eased toward 0 or 1 by `advance`. */
   weight = 0;
+  /**
+   * Which way she faces in the space the bones are in, radians about the upright axis (0 = +Z, as a heroine's yaw).
+   * 0 for the builder's room, where she always faces +Z; her root's yaw for a body that stands in the game's world.
+   */
+  facing = 0;
   private readonly kick = { left: 0, right: 0 };
   private readonly worldTurn = new THREE.Quaternion();
   /** Where she last aimed: kept so the arms come DOWN from where they were, not from nowhere. */
@@ -142,19 +153,21 @@ export class ArmAim {
     const w = this.weight, t = this.lastTarget, { spine, chest } = this.bones;
 
     // ---- 1. her upper body turns a little toward the target (about the upright axis) ----
-    // Her facing is +Z in this space; the bearing is how far round from that the target is, seen from her chest.
+    // The bearing is how far round from her own facing the target is, seen from her chest.
     chest.getWorldPosition(a);
-    const bearing = Math.atan2(t.x - a.x, t.z - a.z);
+    const bearing = wrapAngle(Math.atan2(t.x - a.x, t.z - a.z) - this.facing);
     const torso = clamp(bearing * AIM.torsoTurnShare, -AIM.torsoTurnMost, AIM.torsoTurnMost);
     this.worldTurn.setFromAxisAngle(UP, torso / 2);
     turnInWorld(spine, this.worldTurn, w);
     turnInWorld(chest, this.worldTurn, w);
 
     // ---- 2. each arm ----
-    this.aimArm(this.bones.left, t, torso, this.kick.left, w);
-    this.aimArm(this.bones.right, t, torso, this.kick.right, w);
+    // (`torso` is measured from her own facing; the arms work in the bones' space, so her facing is added back)
+    this.aimArm(this.bones.left, t, this.facing + torso, this.kick.left, w);
+    this.aimArm(this.bones.right, t, this.facing + torso, this.kick.right, w);
   }
 
+  /** `torso`: the way her turned chest faces, radians about the upright axis in the bones' space. */
   private aimArm(arm: ArmBones, target: THREE.Vector3, torso: number, kick: number, w: number): void {
     // The line from her shoulder to the target, held inside what an arm can do: measured as a bearing (round from
     // where her turned chest faces) and a pitch (up from level), each clamped, then made back into a direction.
@@ -166,7 +179,8 @@ export class ArmAim {
     aimLine.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
 
     // Her elbow sits off that line, below it and to the outside: `pole` is that direction, square to the line.
-    pole.set(arm.side * 0.55, -1, 0).addScaledVector(aimLine, -pole.dot(aimLine)).normalize();
+    // ("outside" is along her own left-right axis, which is the X axis turned by her facing)
+    pole.set(arm.side * 0.55 * Math.cos(this.facing), -1, -arm.side * 0.55 * Math.sin(this.facing)).addScaledVector(aimLine, -pole.dot(aimLine)).normalize();
     const bend = (AIM.elbowBend + AIM.recoilBend * kick) / 2;
 
     // Upper arm: from the shoulder, along the line but dipped toward the elbow's side.

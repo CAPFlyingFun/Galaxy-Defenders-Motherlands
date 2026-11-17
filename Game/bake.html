@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>Bake a look · Galaxy Defenders: Motherlands</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: #10141c; color: #eaf2ff; font-family: -apple-system, 'Segoe UI', Arial, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 18px; }
+  h1 { font-size: 18px; letter-spacing: .06em; color: #ffd56b; }
+  #status { font: 600 13px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: #5ee8c8; }
+  #files a { display: inline-block; margin: 6px 8px 0 0; padding: 8px 12px; border-radius: 9px; border: 1px solid #5ee8c880;
+    color: #eaf2ff; text-decoration: none; font: 700 12px system-ui, sans-serif; background: #1a2230; }
+  #pictures img { width: 240px; height: 240px; margin: 10px 8px 0 0; border: 1px solid #ffffff30; image-rendering: auto; }
+  /* The canvas only gives the builder something to compile with: nothing is drawn on it. */
+  #app { position: fixed; left: -4000px; top: 0; width: 16px; height: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>BAKE A LOOK</h1>
+  <p>A dev tool: it opens the Character Builder's room once, dresses the heroine in a look, and writes her outfit and
+     shape down as the small files the fast heroine uses (see <code>src/bake/bakeLook.ts</code>).
+     Add <code>?look=blazeSuit</code> or <code>?look=blaze</code> to the address.</p>
+  <div id="status">Starting…</div>
+  <div id="files"></div>
+  <div id="pictures"></div>
+</main>
+<div id="app"></div>
+<script type="module" src="/src/bake/bakeLook.ts"></script>
+</body>
+</html>

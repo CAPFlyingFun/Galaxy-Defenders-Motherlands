@@ -4,7 +4,7 @@
 //   bottom left    moving: two arrow buttons (ring track) OR a stick (free walk)
 //   bottom right   the view switch (first / third person) and, in first person, FIRE
 //   centre         the first-person crosshair
-//   top right      the settings gear and its panel
+//   top right      the settings gear and its panel (free walk, how the heroine is drawn, the test tools)
 //   top left       with ?debug=1: FPS, draw calls and buttons to hurt the dome
 //
 // The buttons and stick do not move the heroine themselves. They only write
@@ -15,6 +15,9 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
+import type { HeroineSettings } from '../heroine/heroineSettings';
+import { TARGET_FPS } from '../heroine/fast/autoDetail';
+import { DETAILS } from '../heroine/fast/detailLevels';
 
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all';
@@ -27,6 +30,10 @@ export interface HudOptions {
   onFreeWalkChange(on: boolean): void;
   /** The "Show FPS and test tools" tick box in Settings was changed. */
   onDebugChange(on: boolean): void;
+  /** How the heroine is drawn, as the game started with it (src/heroine/heroineSettings.ts). */
+  graphics: HeroineSettings;
+  /** One of those choices was changed in Settings. */
+  onGraphicsChange<K extends keyof HeroineSettings>(key: K, value: HeroineSettings[K]): void;
   onToggleView(): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
@@ -139,6 +146,35 @@ export class Hud {
     element('span', '', debugRow, 'Show FPS and test tools');
     debugBox.addEventListener('change', () => options.onDebugChange(debugBox.checked));
     gear.addEventListener('click', () => (settings.hidden = !settings.hidden));
+
+    // ---- Settings: how the heroine is drawn -----------------------------------
+    // Each row is a label with a drop-down list. `choices` pairs what is shown with what is kept.
+    const choiceRow = <K extends keyof HeroineSettings>(label: string, key: K, choices: readonly (readonly [string, HeroineSettings[K]])[], note = ''): HTMLElement => {
+      const line = element('label', 'gd-choice', settings);
+      element('span', '', line, label);
+      const list = element('select', '', line);
+      choices.forEach(([text, value], i) => {
+        const option = element('option', '', list, text);
+        option.value = String(i);
+        if (value === options.graphics[key]) option.selected = true;
+      });
+      list.addEventListener('change', () => options.onGraphicsChange(key, choices[Number(list.value)][1]));
+      if (note) element('small', 'gd-note', settings, note);
+      return line;
+    };
+    element('h2', 'gd-settings-part', settings, 'HEROINE');
+    choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body. Visual: the Character Builder\'s own. Changing it reloads the game.');
+    const fast = options.graphics.body === 'performance';
+    // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)
+    const detailRow = choiceRow('Detail', 'detail', [['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
+    const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto keeps full detail unless the frame rate falls under the target.');
+    choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
+    const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
+    for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
+      line.classList.toggle('is-off', !on);
+      const list = line.querySelector('select');
+      if (list) list.disabled = !on;
+    }
 
     // ---- Top left: debug -----------------------------------------------------
     if (options.debug) {

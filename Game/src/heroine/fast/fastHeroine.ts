@@ -65,7 +65,7 @@ const JUMP_METRES = 1.5;
  * her chest (her belly sits low on her spine and should mostly stay with her hips, as a real one does: most of a
  * person's turn is in the ribs), and how her head's own turn is shared between her neck and her skull. GAME TUNING.
  */
-const TORSO_TURN_SHARES = [0.2, 0.4, 0.4];
+const TORSO_TURN_SHARES = [0.35, 0.45, 0.2];
 const HEAD_TURN_SHARES = [0.4, 0.6];
 /** The most her torso is turned from her legs, and her head from her torso (a guard: the game keeps within 45 degrees). */
 const TORSO_TURN_MOST = (55 * Math.PI) / 180, HEAD_TURN_MOST = (50 * Math.PI) / 180;

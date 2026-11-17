@@ -279,6 +279,8 @@ async function start(): Promise<void> {
     /** Move her at this ground speed, metres a second, along the way she faces (negative: backing up; 0: as the WALK button says). */
     set speed(value: number) { testSpeed.value = value; },
     advance: (frames: number, dt = 1 / 30) => { for (let k = 0; k < frames; k++) frame(dt, k === frames - 1); showStatus(); return heroine.stats(); },
+    // run `frames` frames and draw none of them (for a script that only measures: far quicker on a software renderer)
+    step: (frames: number, dt = 1 / 30) => { for (let k = 0; k < frames; k++) frame(dt, false); },
     // the picture as it is drawn now, as a JPEG data address (drawn and copied in one go)
     picture: () => { renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.92); },
     holdTarget: (x: number, y: number, z: number) => { heldTarget = new THREE.Vector3(x, y, z); },

@@ -81,14 +81,16 @@ export function connectSplash(meter: LoadMeter): Splash {
   const show = (): void => {
     const fraction = meter.fraction;
     // The bar is as wide as the exact share done; the number beside it is that share in whole percent, rounded DOWN
-    // (so it says 100 only when everything really is in).
+    // (so it says 100 only when everything really is in). The tiny amount added first is for the computer's
+    // arithmetic: 0.57 x 100 comes out as 56.99999999999999, which must still read 57.
     const width = `${(fraction * 100).toFixed(1)}%`;
+    const whole = Math.floor(fraction * 100 + 1e-6);
     if (width !== shownWidth) {
       shownWidth = width;
       fill.style.width = width;
-      bar?.setAttribute('aria-valuenow', String(Math.floor(fraction * 100)));
+      bar?.setAttribute('aria-valuenow', String(whole));
     }
-    writePercent(`${Math.floor(fraction * 100)}%`);
+    writePercent(`${whole}%`);
     if (meter.label) writeStep(meter.label);
     // The time left, when it can be told. If it cannot: on a first load the line says why; otherwise it says nothing.
     const left = meter.secondsLeft();

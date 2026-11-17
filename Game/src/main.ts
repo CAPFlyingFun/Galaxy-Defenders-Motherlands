@@ -11,7 +11,7 @@
 // that damage the dome (keys: K = hit, J = shatter, L = repair all).
 // ============================================================================
 import * as THREE from 'three';
-import type { Hand, HeroineBody } from './core/contracts';
+import { SHADOW_ONLY_LAYER, type Hand, type HeroineBody } from './core/contracts';
 import './core/screenFit'; // first: the screen measured once, the game box sized from it (Joshua, 2026-11-17)
 import { keepLandscape, onStageResize } from './core/orientation';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
@@ -199,6 +199,8 @@ async function start(): Promise<void> {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   keyLight.shadow.mapSize.set(2048, 2048);
   const shadowBox = keyLight.shadow.camera;
+  // (the shadow also sees what only casts a shadow: her hair in first person, see SHADOW_ONLY_LAYER)
+  shadowBox.layers.enable(SHADOW_ONLY_LAYER);
   shadowBox.left = -3; shadowBox.right = 3; shadowBox.top = 3; shadowBox.bottom = -3; shadowBox.near = 1; shadowBox.far = 30;
   shadowBox.updateProjectionMatrix();
   keyLight.shadow.bias = -0.0005;

@@ -12,6 +12,13 @@
 import type * as THREE from 'three';
 
 /** One step of the game loop. */
+/**
+ * THE SHADOW-ONLY LAYER. Something put on this layer (three.js "layers") is not drawn by the game's camera but does
+ * cast its shadow: the key light's shadow camera looks at it too (main.ts). Used for her hair in first person, so
+ * her shadow keeps its head while the camera, inside her head, sees none of it (Joshua, 2026-11-17).
+ */
+export const SHADOW_ONLY_LAYER = 1;
+
 export interface FrameInfo {
   /** Seconds since the last frame, clamped so a hiccup never throws things across the map. */
   readonly dt: number;

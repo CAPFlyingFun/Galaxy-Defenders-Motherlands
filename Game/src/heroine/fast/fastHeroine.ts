@@ -38,7 +38,7 @@
 // this file's factory (`createFastHeroine`), and in the report that came with it.
 // ============================================================================
 import * as THREE from 'three';
-import type { BodyFacing, BodyVitals, FrameInfo, Hand, HeroineBody } from '../../core/contracts';
+import { SHADOW_ONLY_LAYER, type BodyFacing, type BodyVitals, type FrameInfo, type Hand, type HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
@@ -89,8 +89,16 @@ const BELLY_EVERY = 0.1;
 const GRIP_CURL = 55;
 /** A quiet breath at rest, for when the game gives no vitals (its `breath` is rewritten each frame). */
 const REST_BREATH = { breath: 0, breathLitres: 0.5, breathsPerMinute: 14, stomachMl: 0 };
-/** Her head bone's size while it is hidden in first person (not zero: a bone of no size has no inverse). */
-const HIDDEN_HEAD = 0.001;
+/**
+ * HER HEAD IN FIRST PERSON (Joshua, 2026-11-17: "is it possible for the shadow of her to be complete if hiding the
+ * head? It shows she is headless"). It used to be hidden by shrinking her skull BONE, which shrank it for her shadow
+ * too (and her hair with it, as it hangs on that bone). Now her bones are left alone and her head is folded away
+ * only in the picture the camera draws: a few lines added to her skin's shader (`hideHeadPatch` below) pull every
+ * point her skull carries into the base of her skull, as the shrunk bone did. Her shadow is drawn by three.js with a
+ * shader of its own, which these lines are not in, so it keeps her whole head. Her hair is kept too, on the
+ * shadow-only layer (core/contracts.ts SHADOW_ONLY_LAYER): not drawn, but it casts its shadow.
+ */
+const HEAD_GLSL_BONES = 8;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
 const VIEW_BALL_RADIUS = 1.5;
 
@@ -421,7 +429,6 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // carries her skull, face and hair is its parent.
   const crown = bone(joints.head);
   const skull = crown.parent && (crown.parent as THREE.Bone).isBone && crown.parent !== bone(joints.neck) ? (crown.parent as THREE.Bone) : crown;
-  const skullSize = skull.scale.clone();
   // HER BACK, for turning her shoulders further than her belly: every bone from her lower spine up to her chest (the
   // bone her arms and neck hang from), found by walking down from her chest. Her neck up to her skull, for her head.
   // And the bone that is turned for her hips: the one her legs and her spine both hang from, or the bone above it
@@ -432,6 +439,49 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     if (b === bone(joints.spine)) break;
   }
   const neckBones: THREE.Bone[] = skull === bone(joints.neck) ? [skull] : [bone(joints.neck), skull];
+
+  // HER HEAD, FOLDED AWAY IN FIRST PERSON (see the top of this file). The bones that are her head: her skull and
+  // everything hanging from it (the top of her head, her jaw and eyes if she has them), by their numbers in her
+  // skeleton, which is how her skin names them.
+  const headBones: number[] = [];
+  skull.traverse((node) => { const k = skin.skeleton.bones.indexOf(node as THREE.Bone); if (k >= 0 && headBones.length < HEAD_GLSL_BONES) headBones.push(k); });
+  const headUniforms = {
+    uHideHead: { value: 0 },
+    uHeadBones: { value: Array.from({ length: HEAD_GLSL_BONES }, (_, i) => headBones[i] ?? -1) },
+    uSkullAt: { value: new THREE.Vector3() },
+  };
+  /** Add the folding to a material's shader (after anything it already adds). Only the camera's picture uses it. */
+  const hideHeadPatch = (material: THREE.Material): void => {
+    const before = material.onBeforeCompile, key = material.customProgramCacheKey;
+    material.onBeforeCompile = function (shader, renderer) {
+      before.call(this, shader, renderer);
+      Object.assign(shader.uniforms, headUniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\nuniform float uHideHead;\nuniform float uHeadBones[${HEAD_GLSL_BONES}];\nuniform vec3 uSkullAt;`)
+        // (after her bones have posed her: each point is pulled into the base of her skull by the share of it her head carries)
+        .replace('#include <skinning_vertex>', `#include <skinning_vertex>
+if (uHideHead > 0.5) {
+  float headShare = 0.0;
+  for (int b = 0; b < ${HEAD_GLSL_BONES}; b++) {
+    float bone = uHeadBones[b];
+    if (bone < 0.0) continue;
+    headShare += (abs(skinIndex.x - bone) < 0.5 ? skinWeight.x : 0.0) + (abs(skinIndex.y - bone) < 0.5 ? skinWeight.y : 0.0)
+               + (abs(skinIndex.z - bone) < 0.5 ? skinWeight.z : 0.0) + (abs(skinIndex.w - bone) < 0.5 ? skinWeight.w : 0.0);
+  }
+  transformed = mix(transformed, uSkullAt, clamp(headShare, 0.0, 1.0) * 0.999);
+}`);
+    };
+    material.customProgramCacheKey = function () { return `${key.call(this)}|hidehead`; };
+    material.needsUpdate = true;
+  };
+  hideHeadPatch(materials.fine);
+  hideHeadPatch(materials.plain);
+  /** Her hair: drawn in third person; in first person only its shadow (the shadow-only layer). */
+  const showHair = (detail: Detail = drawnDetail): void => {
+    if (!hair) return;
+    hair.show(detail, true);
+    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(firstPerson ? SHADOW_ONLY_LAYER : 0);
+  };
   const pelvisBone = bone(joints.pelvis);
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
   /** How her hips and legs are turned this frame (one object, rewritten each frame: footGround.ts reads it). */
@@ -517,7 +567,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     // (a live level she has left is let go if it is a heavy one: its shapes are tens of megabytes)
     if (before !== detail && body.isLive(before) && before > 5) body.release(before);
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
-    hair?.show(detail, !firstPerson);
+    showHair(detail);
     pieces.setDetail(detail);
   };
   /** Ask for a level: worn at once if it has been made, otherwise made in the background and worn when ready. */
@@ -623,9 +673,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     setFirstPerson(on: boolean): void {
       if (on === firstPerson) return;
       firstPerson = on;
-      // Her head bone made vanishingly small: her face and scalp shrink into the top of her neck; her hair is not drawn.
-      if (on) skull.scale.setScalar(HIDDEN_HEAD); else skull.scale.copy(skullSize);
-      hair?.show(drawnDetail, !on);
+      // Her head folded away in the camera's picture only (her shadow keeps it); her hair moved to the shadow-only layer.
+      headUniforms.uHideHead.value = on ? 1 : 0;
+      showHair();
     },
 
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); },
@@ -723,6 +773,12 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       // corrects all of it.
       armClear.update();
 
+      // First person: where the base of her skull is now, in her skin's own space (her head is folded into it).
+      if (firstPerson) {
+        skull.getWorldPosition(headUniforms.uSkullAt.value);
+        skin.worldToLocal(headUniforms.uSkullAt.value);
+      }
+
       // Her detail level: the fixed one asked for, or AUTO's.
       // AUTO LIVE: Smart FPS turns her detail, from 30 % down to 1 %, by the frame rate alone.
       if (choice === 'autoLive') wanted = auto.updateSmart(frameMs, AUTO_LIVE_TOP);
@@ -754,7 +810,6 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       if (disposed) return;
       disposed = true;
       root.removeFromParent();
-      skull.scale.copy(skullSize);
       for (const hand of ['left', 'right'] as const) { guns[hand].object.removeFromParent(); guns[hand].dispose(); }
       hair?.dispose();
       pieces.dispose();

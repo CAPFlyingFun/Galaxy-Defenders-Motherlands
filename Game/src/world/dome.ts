@@ -16,7 +16,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { FrameInfo } from '../core/contracts';
-import { DOME_RADIUS, DOME_SECTIONS, PALETTE, SECTION_MAX_HP, azimuthOf, sectionIndexAt } from './config';
+import { DOME_OPACITY, DOME_RADIUS, DOME_SECTIONS, PALETTE, SECTION_MAX_HP, azimuthOf, sectionIndexAt } from './config';
 
 /** Seconds the glass takes to break away once a section reaches 0 HP. */
 const SHATTER_SECONDS = 1.1;
@@ -269,6 +269,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     float whole = 1.0 - gone;
     float brokenFrame = step(0.3, hash21(vec2(floor(along * 18.0), vSection)));
     float frameStrength = mix(0.22 * brokenFrame, 1.0, whole);
+    // A healthy section is drawn faintly (DOME_OPACITY) so space shows through; a hurt one brightens to full
+    // strength by the time it has lost half its health, so the player always sees where the dome is in trouble.
+    frameStrength *= mix(${DOME_OPACITY.toFixed(2)}, 1.0, clamp(hurt * 2.0, 0.0, 1.0));
     frameColor = mix(vec3(0.45, 0.16, 0.18), frameColor, whole);
 
     // --- Put it together (colour is already multiplied by alpha) ----------

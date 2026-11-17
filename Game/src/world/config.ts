@@ -15,6 +15,13 @@ export const DOME_SECTIONS = 12;
 /** Full health of one dome section. */
 export const SECTION_MAX_HP = 100;
 
+/**
+ * How strongly a HEALTHY dome section's frame lines and glow are drawn, 0-1 (Joshua, 2026-11-16: "about 20%
+ * opacity to see more from outer space"). The glass itself is already almost clear. A section that is hurt
+ * comes back up to full strength as it loses health, so damage always stands out.
+ */
+export const DOME_OPACITY = 0.2;
+
 /** The round plaza the heroine defends from. */
 export const PLAZA_RADIUS = 14;
 

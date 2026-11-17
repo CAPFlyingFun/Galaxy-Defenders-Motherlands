@@ -70,7 +70,24 @@ const VIEW_BALL_RADIUS = 1.5;
 
 // ------------------------------------------------------------------ options and extras
 
-export type DetailChoice = 'auto' | Detail;
+/**
+ * Her detail: 'autoLive' (the DEV Room's own AUTO LIVE: 3 %, 2 % or 1 % by how far the camera is), 'auto' (ours: as
+ * much as the eye can see at her size on screen, lighter only if the frame rate needs it), or one fixed level.
+ */
+export type DetailChoice = 'autoLive' | 'auto' | Detail;
+/**
+ * THE DEV ROOM'S AUTO LIVE TABLE (Anthill Airways devRoom.ts AUTO_LITE/AUTO_LIVE; Joshua's numbers there, and his
+ * settings picture of 2026-11-17, "use these same settings"): her detail by the camera's distance from her middle,
+ * in metres. Within 3 m: 3 %. Within 5 m: 2 %. Beyond: 1 %. The room's fading of far people is NOT taken ("no
+ * fading since there is only one model and you need to see it").
+ */
+const AUTO_LIVE: readonly { readonly within: number; readonly detail: Detail }[] = [
+  { within: 3, detail: 3 },
+  { within: 5, detail: 2 },
+  { within: Infinity, detail: 1 },
+];
+/** A row of that table is only left once she is this share past its edge (the DEV Room's own 10 %), so she does not flick between two. */
+const AUTO_LIVE_EDGE = 0.1;
 
 export interface FastHeroineOptions {
   /** The game's renderer (her materials are compiled with it before she is shown). */
@@ -365,6 +382,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const waitingFor = new Set<number>();
   /** How tall she was last drawn, in screen pixels: written by the draw itself (below), read by AUTO the next frame. */
   let pixels = 9999;
+  /** How far the camera was from her middle when she was last drawn, metres; and the row of AUTO_LIVE she is in. */
+  let cameraDistance = 0, liveRow = 0;
 
   const wear = (detail: Detail): void => {
     const geometry = body.geometry(detail);
@@ -400,6 +419,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     // how many screen pixels her height covers at that distance, through this camera's lens
     renderer.getDrawingBufferSize(size);
     pixels = (height / distance) * camera.projectionMatrix.elements[5] * 0.5 * size.y;
+    cameraDistance = distance;
   };
 
   // ---- 11. compiled and uploaded before she is shown, so her first frame does not stutter ----------------------------
@@ -508,7 +528,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       }
 
       // Her detail level: the fixed one asked for, or AUTO's.
-      wanted = choice === 'auto' ? auto.update(frameMs, firstPerson ? 9999 : pixels) : choice;
+      if (choice === 'autoLive') {
+        // the DEV Room's table by distance (first person: the camera is at her head, the nearest row)
+        const d = firstPerson ? 0 : cameraDistance;
+        while (liveRow < AUTO_LIVE.length - 1 && d > AUTO_LIVE[liveRow].within * (1 + AUTO_LIVE_EDGE)) liveRow++;
+        while (liveRow > 0 && d < AUTO_LIVE[liveRow - 1].within * (1 - AUTO_LIVE_EDGE)) liveRow--;
+        wanted = AUTO_LIVE[liveRow].detail;
+      } else wanted = choice === 'auto' ? auto.update(frameMs, firstPerson ? 9999 : pixels) : choice;
       want(wanted);
 
       updateMs += (performance.now() - now - updateMs) / 20;
@@ -521,7 +547,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       return {
         triangles: Math.round(skinTriangles + (hair?.triangles() ?? 0) + pieces.triangles() + gunTriangles),
         drawCalls: 1 + hairDrawn + pieces.meshes.length + 4, // her skin, her hair, her outfit's extra pieces, and two guns of two materials each
-        updateMs, detail: drawnDetail, auto: choice === 'auto', pixels: Math.round(pixels), fps: auto.rate, doing: auto.doing,
+        updateMs, detail: drawnDetail, auto: choice === 'auto' || choice === 'autoLive', pixels: Math.round(pixels), fps: auto.rate, doing: auto.doing,
       };
     },
 
@@ -550,7 +576,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     },
   };
   // (start at the level asked for, if it is a fixed one)
-  if (choice !== 'auto') { wanted = choice; want(choice); }
+  if (choice !== 'auto' && choice !== 'autoLive') { wanted = choice; want(choice); }
   return heroine;
 
   // WHAT THE FAST HEROINE DOES NOT HAVE (the "Visual" body does):

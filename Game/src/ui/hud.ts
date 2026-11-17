@@ -186,11 +186,11 @@ export class Hud {
       return line;
     };
     element('h2', 'gd-settings-part', settings, 'HEROINE');
-    choiceRow('Body', 'body', [['Visual', 'visual'], ['Performance', 'performance']], 'Visual: the Character Builder\'s own, her outfit at its best. Performance: the fast body (her outfit is not as good yet). Changing it reloads the game.');
+    choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body, on the DEV Room\'s settings. Visual: the Character Builder\'s own room. Changing it reloads the game.');
     const fast = options.graphics.body === 'performance';
     // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)
-    const detailRow = choiceRow('Detail', 'detail', [['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
-    const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto keeps full detail unless the frame rate falls under the target.');
+    const detailRow = choiceRow('Detail', 'detail', [['Auto live', 'autoLive'], ['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
+    const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: the DEV Room\'s own (3%, 2%, 1% by distance). Auto: full detail unless the frame rate falls under the target.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {

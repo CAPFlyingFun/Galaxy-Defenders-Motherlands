@@ -117,6 +117,12 @@ export function buildExtraPieces(look: BakedLook, skin: THREE.SkinnedMesh, influ
       side: piece.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
       // (a cut-out piece is drawn only where its picture is more than half solid: that is its outline)
       alphaTest: piece.cutOut ? 0.5 : 0,
+      // THE STRIP ACROSS HER CLEAVAGE GIVES WAY TO HER SKIN where the two lie together (Joshua, 2026-11-17: the
+      // outfit "has issues with the look of it"). The strip's job is the gap BETWEEN her breasts; its ends lie on
+      // her bra's cups and band, a hair above her skin. In the builder they sit exactly on it; here they stood a
+      // little proud and showed as two black blocks over the pink band. Pushed back by a small depth offset, her
+      // skin (which is painted with the very same bra there) is what shows wherever the two overlap.
+      polygonOffset: piece.cutOut, polygonOffsetFactor: piece.cutOut ? 8 : 0, polygonOffsetUnits: piece.cutOut ? 600 : 0,
     });
     materials.push(material);
 

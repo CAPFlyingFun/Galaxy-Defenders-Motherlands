@@ -82,7 +82,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
   const body: BodyMode = asked === 'fast' ? 'performance' : asked === 'room' ? 'visual' : read(SETTING_KEYS.body) === 'visual' ? 'visual' : 'performance';
   return {
     body,
-    detail: asDetail(address.get('detail')) ?? asDetail(read(SETTING_KEYS.detail)) ?? 'auto',
+    detail: asDetail(address.get('detail')) ?? asDetail(read(SETTING_KEYS.detail)) ?? 100,   // (100 %: as Joshua ran the DEV Room with one person; Auto is still in Settings)
     targetFps: asFps(address.get('fps')) ?? asFps(read(SETTING_KEYS.targetFps)) ?? 30,
     sharpness: asSharpness(address.get('sharp')) ?? asSharpness(read(SETTING_KEYS.sharpness)) ?? 2,
     skin: asSkin(address.get('body')) ?? asSkin(read(SETTING_KEYS.skin)) ?? deviceSkin(),

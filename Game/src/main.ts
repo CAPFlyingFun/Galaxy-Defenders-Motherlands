@@ -46,7 +46,9 @@ type GameHeroine = HeroineBody & {
  * (src/heroine/heroineSettings.ts):
  *
  *   Performance (the default)  the FAST heroine (src/heroine/fast/): the builder's body file drawn the way Anthill
- *                              Airways' DEV Room draws it, wearing a baked copy of the builder's outfit.
+ *                              Airways' DEV Room draws it: nothing baked, a tee and leggings coloured over her
+ *                              skin in the shader (fast/devRoomLook.ts). So for now she is NOT in her suit here.
+ *                              ?suit=baked wears a baked copy of the builder's suit instead (belly fixed at 100).
  *   Visual                     the Character Builder's own room, run out of sight (src/heroine/builderHeroine.ts):
  *                              the builder exactly, at several times the cost.
  *
@@ -68,8 +70,12 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   if (settings.body === 'performance') {
     try {
       const { createFastHeroine } = await import('./heroine/fast/fastHeroine');
+      const { BLAZE_PAINTED } = await import('./heroine/fast/devRoomLook');
       return await createFastHeroine({
         renderer, scene, look,
+        // THE DEV ROOM'S WAY (Joshua, 2026-11-17: "use the same exact settings and approach... from the DEV room"):
+        // nothing baked; a tee and leggings coloured over her skin in the shader. ?suit=baked wears the baked suit.
+        painted: asked.get('suit') === 'baked' ? undefined : BLAZE_PAINTED,
         detail: settings.detail,
         targetFps: settings.targetFps,
         onProgress: (stage) => say(`Loading Blaze: ${stage}…`),

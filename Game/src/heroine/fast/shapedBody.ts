@@ -68,7 +68,7 @@ interface Level {
 }
 
 /** Every size-dependent shape's weight at a belly size, by name: the builder's own rules. */
-function shapeWeightsAt(belly: number, navel: number): Record<string, number> {
+export function shapeWeightsAt(belly: number, navel: number): Record<string, number> {
   const bust = breastGrowUnits(belly, 0);
   return {
     ...bellyWeights(belly),

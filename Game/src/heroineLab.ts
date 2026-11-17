@@ -32,6 +32,7 @@ import { createBuilderHeroine, type BuilderHeroine } from './heroine/builderHero
 import { createFastHeroine, type FastHeroine } from './heroine/fast/fastHeroine';
 import { nearestDetail } from './heroine/fast/detailLevels';
 import { lookKey } from './heroine/looks';
+import { BLAZE_PAINTED } from './heroine/fast/devRoomLook';
 
 const MAX_STEP = 1 / 20;        // a frame never counts for more than this many seconds
 const WALK_SPEED = 1.1;         // metres a second: the builder's own walking pace
@@ -94,6 +95,8 @@ async function start(): Promise<void> {
       renderer,
       scene,
       look: lookKey(asked.get('look')),
+      // (the DEV Room's way unless ?suit=baked: see fast/devRoomLook.ts)
+      painted: asked.get('suit') === 'baked' ? undefined : BLAZE_PAINTED,
       detail: detail === 'auto' ? 'auto' : nearestDetail(Number(detail ?? 100) || 100),
       onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
     });

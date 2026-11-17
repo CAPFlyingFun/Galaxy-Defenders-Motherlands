@@ -36,13 +36,15 @@ import type { FrameInfo, Hand, HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
-import { loadBakedLook } from './bakedLook';
+import { loadBakedLook, type BakedLook } from './bakedLook';
+import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { loadBodyFile } from './bodyFile';
 import { BodyMotion } from './bodyMotion';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
+import { shapeWeightsAt } from './shapedBody';
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 
 // ------------------------------------------------------------------ tuning (the same numbers as builderHeroine.ts)
@@ -69,8 +71,13 @@ export type DetailChoice = 'auto' | Detail;
 export interface FastHeroineOptions {
   /** The game's renderer (her materials are compiled with it before she is shown). */
   readonly renderer: THREE.WebGLRenderer;
-  /** Which baked look she wears: a folder name under public/heroines/ (bakedLook.ts). */
+  /** Which baked look she wears: a folder name under public/heroines/ (bakedLook.ts). Not read when `painted` is given. */
   readonly look: string;
+  /**
+   * Dress her THE DEV ROOM'S WAY instead (devRoomLook.ts): nothing baked, her shape from the file's own body shapes,
+   * a tee and leggings coloured over her skin in the shader. Her belly can then change size freely.
+   */
+  readonly painted?: PaintedLook;
   /** The game's scene, if it exists already: her materials are compiled for its lights while she loads. */
   readonly scene?: THREE.Scene;
   /** Her detail: 'auto', or one of the fixed levels (percent). Default 'auto'. */
@@ -124,10 +131,33 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const say = (stage: string) => options.onProgress?.(stage);
 
   // ---- 1. everything she is made from, fetched together -----------------------------------------------------------
-  const [file, look] = await Promise.all([loadBodyFile(say), loadBakedLook(options.look)]);
+  const painted = options.painted ?? null;
+  const [file, baked] = await Promise.all([loadBodyFile(say), painted ? Promise.resolve(null) : loadBakedLook(options.look)]);
   const skin = file.skin;
   const fileGeometry = skin.geometry;
   const count = fileGeometry.getAttribute('position').count;
+  // THE DEV ROOM'S WAY: no baked files. Her shape is the file's own points with her body shapes added in at the
+  // weights the builder's rules give for her belly and navel, here and now (devRoomLook.ts).
+  const look: BakedLook = baked ?? (() => {
+    const dictionary0 = skin.morphTargetDictionary ?? {};
+    const moves0 = fileGeometry.morphAttributes.position ?? [], turns0 = fileGeometry.morphAttributes.normal ?? [];
+    const shape = shapeFromFile(
+      fileGeometry, shapeWeightsAt(painted!.bump, painted!.navel),
+      (name) => (dictionary0[name] !== undefined ? moves0[dictionary0[name]] : undefined),
+      (name) => (dictionary0[name] !== undefined ? turns0[dictionary0[name]] : undefined),
+    );
+    // (the same form a baked look has, so everything below reads either; it has no pictures and no extra pieces)
+    const none = new THREE.Texture();
+    return {
+      manifest: {
+        version: 1, look: `painted:${painted!.name}`, bakedAt: '', builderVersion: '', belly: painted!.bump, vertexCount: count,
+        barefootHeightMetres: BAREFOOT_HEIGHT_METRES, navel: painted!.navel, normalScale: [1, 1], hair: painted!.hair,
+        files: { albedo: '', normal: '', surface: '', shape: '', pieces: null },
+      },
+      albedo: none, normal: none, surface: none, shape, pieces: [], piecePictures: new Map(), megabytes: 0,
+      dispose(): void { none.dispose(); },
+    };
+  })();
   if (look.shape.count !== count || look.manifest.vertexCount !== count) {
     look.dispose();
     throw new Error(`[heroine] the baked look "${options.look}" was made for a body of ${look.shape.count} points; the body file has ${count}. Bake the look again (src/bake/bakeLook.ts).`);
@@ -175,7 +205,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   skin.morphTargetInfluences = influences;
 
   // ---- 4. her outfit: the baked pictures on one plain material -----------------------------------------------------
-  const materials = makeSkinMaterials(Array.isArray(skin.material) ? skin.material[0] : skin.material, look, options.renderer);
+  // (or, the DEV Room's way, the file's own skin material with a tee and leggings coloured over it in the shader)
+  const fileMaterial = Array.isArray(skin.material) ? skin.material[0] : skin.material;
+  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer);
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;
@@ -329,7 +361,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
   // ---- 11. compiled and uploaded before she is shown, so her first frame does not stutter ----------------------------
   say('getting her ready to draw');
-  for (const picture of [look.albedo, look.normal, look.surface]) options.renderer.initTexture(picture);
+  if (!painted) for (const picture of [look.albedo, look.normal, look.surface]) options.renderer.initTexture(picture);
   if (options.scene) {
     const camera = new THREE.PerspectiveCamera();
     // (both skin materials, so a change to a light level later compiles nothing)

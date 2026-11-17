@@ -15,8 +15,10 @@
 //   the bar          how far along the loading is
 //   the percentage   the same, as a number (it only ever rises)
 //   the line         what is loading now ("Loading Blaze: unpacking her body…")
-//   the time left    "about 12 seconds left", or nothing at all when there is
-//                    not yet anything honest to say (the first load on a device)
+//   the time left    "about 12 seconds left". Never a made-up number: on the
+//                    first load on a device there is nothing to go by yet, so
+//                    the line says just that (the load is being timed, and
+//                    the next one will show a time)
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
 
@@ -27,6 +29,8 @@ export interface Splash {
 
 /** How long the splash takes to fade (index.html: `#splash { transition: opacity .4s }`), milliseconds. */
 const FADE_MS = 400;
+/** What the time line says on a device's first load, when no time can honestly be given. */
+const FIRST_LOAD_NOTE = 'Timing this first load, so the next one can show the time left';
 
 /**
  * Keep the words in `node` in one piece of text that is REWRITTEN, never replaced. Two other small scripts watch
@@ -86,7 +90,9 @@ export function connectSplash(meter: LoadMeter): Splash {
     }
     writePercent(`${Math.floor(fraction * 100)}%`);
     if (meter.label) writeStep(meter.label);
-    writeTime(timeLeftText(meter.secondsLeft()));
+    // The time left, when it can be told. If it cannot: on a first load the line says why; otherwise it says nothing.
+    const left = meter.secondsLeft();
+    writeTime(left !== null ? timeLeftText(left) : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '');
   };
   const loop = (): void => {
     show();

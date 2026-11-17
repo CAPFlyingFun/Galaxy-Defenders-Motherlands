@@ -75,6 +75,11 @@ export interface LoadMeter {
   readonly label: string;
   /** Seconds left, as nearly as can honestly be told; null when it cannot be told (see the top of this file). */
   secondsLeft(): number | null;
+  /**
+   * True while this is a device's FIRST load of this kind and it is being timed for the next one: no time left can
+   * be told yet, and the splash says so. (False once the game has been in the background: that load is not kept.)
+   */
+  readonly firstLoad: boolean;
   /** True once finish() has been called. */
   readonly finished: boolean;
   /** Everything the meter knows, for the test scripts and the curious (`gdm.meter.report()` with ?debug=1). */
@@ -359,6 +364,7 @@ export function startLoadMeter(kind: string): LoadMeter {
 
     get fraction(): number { return fraction(); },
     get label(): string { return label; },
+    get firstLoad(): boolean { return !remembered && !interrupted; },
     get finished(): boolean { return finished; },
 
     secondsLeft(): number | null {

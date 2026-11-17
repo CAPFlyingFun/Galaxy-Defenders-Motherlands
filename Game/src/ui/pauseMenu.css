@@ -65,3 +65,7 @@
 #stage.is-paused .gd-settings { z-index: 45; }
 .gd-pause.has-settings { justify-content: flex-start; }
 .gd-pause.has-settings .gd-pause-card { margin-left: max(var(--safe-left) + 12px, (100% - 300px) / 2 - 115px); }
+
+/* THE CONTROL EDITOR, OPENED WHILE PAUSED (Settings -> "Edit controls", layoutEditor.ts). It lies over the menu to
+   arrange the controls; the card steps out of its way until "Done". */
+#ui:has(.gd-layout-editor) .gd-pause-card { visibility: hidden; }

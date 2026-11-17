@@ -17,6 +17,7 @@ import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import type { HeroineSettings } from '../heroine/heroineSettings';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
+import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
 
 /** What the dome test buttons can ask for. */
@@ -74,6 +75,11 @@ export class Hud {
   private readonly ringButtons: HTMLElement;
   private readonly stick: HTMLElement;
   private readonly stickKnob: HTMLElement;
+  private readonly stickRings: HTMLElement[];
+  private readonly paceLabel: HTMLElement;
+  /** What the stick last showed, so the page is only touched when it changes. */
+  private shownPace = '';
+  private shownRing = -1;
   private readonly lookStick: HTMLElement;
   private readonly lookStickKnob: HTMLElement;
   private readonly viewButton: HTMLElement;
@@ -98,6 +104,18 @@ export class Hud {
     // The WALK stick (first person, and third person with "free walk" on).
     this.stick = element('div', 'gd-stick gd-walk-stick', move);
     element('span', 'gd-stick-label', this.stick, 'MOVE');
+    // THE FIVE RINGS (src/input/pace.ts): four circles drawn on the stick, one where each ring begins, so the thumb
+    // can see where it is: centre = stop, inner = ease down, middle = hold, outer-middle = build slowly,
+    // outer = build quickly. Each circle is as wide as the knob's middle travels at that ring's push.
+    this.stickRings = PACE_TUNING.ringsFrom.map((from) => {
+      const ring = element('div', 'gd-stick-ring', this.stick);
+      const across = from * STICK_TRAVEL * 2;
+      ring.style.width = ring.style.height = `${across}px`;
+      ring.style.margin = `${-across / 2}px 0 0 ${-across / 2}px`;
+      return ring;
+    });
+    // Her pace in words, over the stick: WALK, JOG, RUN or SPRINT.
+    this.paceLabel = element('span', 'gd-pace', this.stick);
     this.stickKnob = element('div', 'gd-stick-knob', this.stick);
     this.wireStick(this.stick, this.stickKnob, (x, y) => {
       controls.stickX = x;
@@ -195,9 +213,11 @@ export class Hud {
   /** Show the controls that belong to the current view and way of moving. */
   setView(mode: ViewMode, freeWalk: boolean): void {
     const first = mode === 'first';
-    const useStick = first || freeWalk;
-    this.ringButtons.hidden = useStick;
-    this.stick.hidden = !useStick;
+    // The MOVE stick is used in every view now (Joshua, 2026-11-17: the ring stick sets her pace). On the ring
+    // track only its left and right count. The two arrow buttons it replaced stay hidden.
+    void freeWalk;
+    this.ringButtons.hidden = true;
+    this.stick.hidden = false;
     this.lookStick.hidden = !first;
     this.fireButton.hidden = !first;
     this.crosshair.hidden = !first;
@@ -265,6 +285,24 @@ export class Hud {
     stick.addEventListener('pointercancel', release);
     stick.addEventListener('lostpointercapture', release);
   }
+
+  /**
+   * Show her pace on the MOVE stick: its name over the stick, and which ring the thumb is in (the circle that
+   * ring begins at is lit; ring 0, the centre, lights none).
+   */
+  setPace(name: string, ring: number): void {
+    if (name !== this.shownPace) { this.shownPace = name; this.paceLabel.textContent = name; }
+    if (ring !== this.shownRing) {
+      this.shownRing = ring;
+      this.stickRings.forEach((circle, k) => circle.classList.toggle('is-on', k === ring - 1));
+    }
+  }
+
+  /** Where a card (her vitals) can be put: along the top edge, in the middle. */
+  topSlot(): HTMLElement {
+    return (this.slot ??= element('div', 'gd-top-slot', this.root));
+  }
+  private slot: HTMLElement | null = null;
 
   /** Let go of both sticks (used when the view changes and a stick may be hidden under a thumb). */
   private releaseStick(): void {

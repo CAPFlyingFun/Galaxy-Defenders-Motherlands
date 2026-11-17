@@ -32,7 +32,7 @@
 // this file's factory (`createFastHeroine`), and in the report that came with it.
 // ============================================================================
 import * as THREE from 'three';
-import type { FrameInfo, Hand, HeroineBody } from '../../core/contracts';
+import type { BodyVitals, FrameInfo, Hand, HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
@@ -45,6 +45,8 @@ import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
+import { SkinBreath } from './skinBreath';
+import { weekForBump } from '@charb/sarahlab/baby';
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 
 // ------------------------------------------------------------------ tuning (the same numbers as builderHeroine.ts)
@@ -59,6 +61,8 @@ const WALK_FROM = 0.05;
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
 const GRIP_CURL = 55;
+/** A quiet breath at rest, for when the game gives no vitals (its `breath` is rewritten each frame). */
+const REST_BREATH = { breath: 0, breathLitres: 0.5, breathsPerMinute: 14, stomachMl: 0 };
 /** Her head bone's size while it is hidden in first person (not zero: a bone of no size has no inverse). */
 const HIDDEN_HEAD = 0.001;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
@@ -111,6 +115,12 @@ export interface FastHeroine extends HeroineBody {
   setDetail(detail: DetailChoice): void;
   /** Change the frame rate AUTO detail holds. */
   setTargetFps(target: TargetFps): void;
+  /**
+   * Her breathing now, for a readout: how far her chest and her belly are moved out where each moves most, and how far
+   * her belly stands out for her stomach (millimetres); and her trunk as measured at about navel height (its half
+   * width to her left and right, her spine's front and her front, metres in her rest frame).
+   */
+  breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] };
   /** Megabytes downloaded for her, and seconds she took to load. */
   readonly loaded: { readonly megabytes: number; readonly seconds: number };
   /** How long each lighter detail level took to work out, milliseconds (only levels made so far). */
@@ -176,14 +186,16 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
   // her texture layout: the baked pictures' own (the file's islands moved apart), or the file's if the look has none
   const layout = look.shape.uv ?? floats(fileGeometry.getAttribute('uv'), 2);
+  // which bones move each point: the builder's corrected ones from the bake, or the file's own
+  const holdIndex = look.shape.skinIndex ?? Uint16Array.from(floats(fileGeometry.getAttribute('skinIndex'), 4));
+  const holdWeight = look.shape.skinWeight ?? floats(fileGeometry.getAttribute('skinWeight'), 4);
   const body = new ShapedBody({
     count,
     position: look.shape.position,
     normal: look.shape.normal,
     uv: layout,
-    // which bones move each point: the builder's corrected ones from the bake, or the file's own
-    skinIndex: look.shape.skinIndex ?? Uint16Array.from(floats(fileGeometry.getAttribute('skinIndex'), 4)),
-    skinWeight: look.shape.skinWeight ?? floats(fileGeometry.getAttribute('skinWeight'), 4),
+    skinIndex: holdIndex,
+    skinWeight: holdWeight,
     shapeMoves, shapeTurns,
     bakedBelly: look.manifest.belly,
     navel: look.manifest.navel,
@@ -236,7 +248,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   /** The top of her bare head over the floor as she stands (her sneakers' soles under her), metres. */
   let crownOverFloor = look.manifest.barefootHeightMetres;
   // One frame of standing, then she is measured as she stands: how tall, where her soles are, which way she faces.
-  motion.update(0, 0, false, body.belly);
+  motion.update(0, 0, 0, body.belly);
   root.updateMatrixWorld(true);
   {
     const point = new THREE.Vector3();
@@ -276,9 +288,28 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     // (her stride is measured in her skeleton's own units against the world, so it is measured again at her real size)
     motion.dispose();
     motion = new BodyMotion(file.scene, skin, GRIP_CURL);
-    motion.update(0, 0, false, body.belly);
+    motion.update(0, 0, 0, body.belly);
     root.updateMatrixWorld(true);
   }
+
+  // ---- 7b. her skin breathes (skinBreath.ts: the builder's own breathing, fitted to this body) ---------------------
+  // Her skin's own units to her REST FRAME: metres, her soles on the floor, facing +z. That is the heroine's root as
+  // she stands here, so it is "her skin's place in the world, seen from her root". (The builder's `restOfMesh`: her
+  // skin's bind, carried by her first bone, in her mesh's place.)
+  const breath = (() => {
+    const first = skin.skeleton.bones[0];
+    const held = new THREE.Matrix4().copy(skin.bindMatrixInverse).multiply(first.matrixWorld).multiply(skin.skeleton.boneInverses[0]).multiply(skin.bindMatrix);
+    const meshToRest = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(skin.matrixWorld).multiply(held);
+    return new SkinBreath(meshToRest, weekForBump(body.belly));
+  })();
+  const layBreath = (): void => breath.lay(body.points, fullIndex, skin, holdIndex, holdWeight);
+  layBreath();
+  breath.patch(materials.fine);
+  breath.patch(materials.plain);
+  /** Her vitals as the game last gave them; until it does, a quiet breath at rest (14 a minute, half a litre). */
+  let vitals: BodyVitals | null = null;
+  /** A clock that runs at the speed of her breathing, for her bones' own small breathing move (the builder's stand). */
+  let breathClock = 0;
 
   const bones = skin.skeleton.bones, joints = motion.measure.joints;
   const bone = (index: number): THREE.Bone => bones[index];
@@ -384,6 +415,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
   // ---- 12. the heroine the game talks to -----------------------------------------------------------------------------
   let walking = false;
+  /** Her ground speed as the game last gave it, metres a second: her stride keeps pace with it. */
+  let speedNow = 0;
   let target: THREE.Vector3 | null = null;
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
@@ -400,7 +433,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
-    setWalk(speed: number): void { walking = speed > WALK_FROM; },
+    setWalk(speed: number): void { walking = speed > WALK_FROM; speedNow = speed; },
 
     aimAt(point: THREE.Vector3 | null): void {
       if (!point) { target = null; return; }
@@ -437,6 +470,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     },
 
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); },
+    setVitals(now: BodyVitals): void { vitals = now; },
+    breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
+      const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
+      return { chestMm: m.chest, bellyMm: m.belly, fullMm: breath.fullMillimetres, trunk: [mid.x, mid.y, mid.z, mid.w] };
+    },
 
     update(frame: FrameInfo): void {
       if (disposed) return;
@@ -446,10 +484,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); layBreath(); }
+
+      // Her breath: her skin's move from her vitals (or a quiet breath at rest), and her bones' at the same pace.
+      // (the builder's stand breathes fifteen times a minute by its clock: the clock is run faster or slower)
+      const perMinute = vitals?.breathsPerMinute ?? 14;
+      breathClock += frame.dt * (perMinute / 15);
+      if (vitals) breath.set(vitals);
+      else { REST_BREATH.breath = 0.5 - 0.5 * Math.cos(breathClock * Math.PI * 2 * 0.25); breath.set(REST_BREATH); }
 
       // Her pose (the builder's stand or walk, her fingers) and the weight of her belly and bust.
-      motion.update(frame.dt, frame.elapsed, walking, body.belly);
+      motion.update(frame.dt, breathClock, walking ? speedNow : 0, body.belly);
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

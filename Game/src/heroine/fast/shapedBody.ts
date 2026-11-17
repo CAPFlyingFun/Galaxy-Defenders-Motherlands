@@ -101,6 +101,9 @@ export class ShapedBody {
     });
   }
 
+  /** Her points as shaped now (x, y, z each, every point of the full body). Read only: do not write into it. */
+  get points(): Float32Array { return this.position; }
+
   /** Has this level's copy been made? */
   has(detail: number): boolean { return this.levels.has(detail); }
   /** A level's geometry, if it has been made. */

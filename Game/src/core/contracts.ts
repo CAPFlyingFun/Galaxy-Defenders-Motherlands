@@ -25,6 +25,21 @@ export type Hand = 'left' | 'right';
  * A heroine the game can stand in the plaza, walk, aim and shoot with.
  * The stand-in (a simple figure) and the real Character Builder body both answer to this.
  */
+/**
+ * What her body shows of her vitals (src/vitals/heroineVitals.ts): her skin breathes by these, and her belly stands
+ * out a little for a full stomach.
+ */
+export interface BodyVitals {
+  /** her breath this instant: 0 all out .. 1 all in */
+  readonly breath: number;
+  /** how much air a whole breath takes now, litres (deeper when she is working hard) */
+  readonly breathLitres: number;
+  /** breaths a minute */
+  readonly breathsPerMinute: number;
+  /** what is in her stomach, millilitres */
+  readonly stomachMl: number;
+}
+
 export interface HeroineBody {
   /** Add this to the scene. Her feet are at its origin. */
   readonly root: THREE.Object3D;
@@ -50,6 +65,9 @@ export interface HeroineBody {
   setFirstPerson(on: boolean): void;
   /** Belly size, 0-200 (%), as in the Character Builder. */
   setBelly(percent: number): void;
+
+  /** Her vitals this frame, for a body that can show them (optional: a body without it breathes at rest). */
+  setVitals?(vitals: BodyVitals): void;
 
   update(frame: FrameInfo): void;
   dispose(): void;

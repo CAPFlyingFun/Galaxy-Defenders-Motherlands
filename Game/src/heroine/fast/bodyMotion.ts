@@ -35,8 +35,16 @@ import {
   stepBellySpring, stepBreastSpring, walkBounceAccel, walkSwayAccel, type BellySpring,
 } from '@charb/sarahlab/sarahLabTool';
 
-/** The pace of the builder's walk, metres a second: her legs step at this pace however fast the game moves her. */
-const WALK_PACE = 1.1;
+/** Her legs never step slower than this, metres a second (a crawl of a walk would look like wading). */
+const SLOWEST_PACE = 0.7;
+/**
+ * Above this ground speed she RUNS (the builder's 'run' stride: both feet off the ground between steps), below it
+ * she walks. It sits between a walk (1.1 m/s) and a jog (2.4); `RUN_BACK` is where a run drops back to a walk, a
+ * little lower, so a speed hovering at the line does not flick between the two.
+ */
+const RUN_FROM = 1.9, RUN_BACK = 1.6;
+/** A walk eases into a run (and back) over about this long, seconds. */
+const RUN_BLEND_SECONDS = 0.22;
 /** Standing eases into walking (and back) over about this long, seconds. */
 const WALK_BLEND_SECONDS = 0.16;
 /**
@@ -113,8 +121,13 @@ export class BodyMotion {
   private readonly unitsPerMetre: number;
   private readonly belly: BellySpring = restingBellySpring();
   private readonly breast: BellySpring = restingBellySpring();
-  /** How far she has walked at the builder's pace, metres: her place in her stride comes from this. */
-  private walked = 0;
+  /** Where she is in her stride, 0..1 wrapping: it moves on by her real ground speed, so her feet do not slide. */
+  private stridePhase = 0;
+  /** She is running (not walking), and 0 walking .. 1 running while one eases into the other. */
+  private running = false;
+  private runBlend = 0;
+  /** A second pose kept aside, for easing a walk into a run. */
+  private readonly keptGait: Float32Array;
   // scratch, made once
   private readonly standTurns: MutableJointTurn[] = [];
   private readonly walkTurns: MutableJointTurn[] = [];
@@ -136,6 +149,7 @@ export class BodyMotion {
     this.bones = skin.skeleton.bones;
     this.measure = measureHuman(this.rig.bind);
     this.kept = new Float32Array(this.bones.length * 4);
+    this.keptGait = new Float32Array(this.bones.length * 4);
 
     // How big her skeleton's units are in the game's metres: the same two joints measured in the bind pose's own
     // units and in the world (the DEV Room's way, so the stride below is right whatever the file's units are).
@@ -157,10 +171,12 @@ export class BodyMotion {
    * One frame: pose her bones and work out her motion shapes' weights.
    * @param dt        seconds since the last frame
    * @param seconds   a free-running clock, for her breathing
-   * @param walking   whether the game is moving her
+   * @param speed     her ground speed, metres a second (0: standing). Her stride keeps pace with it: a walk when
+   *                  slow, the builder's run when fast
    * @param belly     her belly, 0-200 % (a big belly walks shorter and wider, and swings more)
    */
-  update(dt: number, seconds: number, walking: boolean, belly: number): void {
+  update(dt: number, seconds: number, speed: number, belly: number): void {
+    const walking = speed > 0.05;
     const measure = this.measure, bind = this.rig.bind, gait = this.gait;
     const carry = belly / 100;
 
@@ -168,7 +184,12 @@ export class BodyMotion {
     const ease = 1 - Math.exp(-dt / WALK_BLEND_SECONDS);
     this.walkBlend += ((walking ? 1 : 0) - this.walkBlend) * ease;
     if (walking && this.walkBlend > 0.999) this.walkBlend = 1;
-    if (!walking && this.walkBlend < 0.001) { this.walkBlend = 0; this.walked = 0; }
+    if (!walking && this.walkBlend < 0.001) { this.walkBlend = 0; this.stridePhase = 0; this.running = false; this.runBlend = 0; }
+    // walking or running, eased the same way
+    if (this.running ? speed < RUN_BACK : speed > RUN_FROM) this.running = !this.running;
+    this.runBlend += ((this.running ? 1 : 0) - this.runBlend) * (1 - Math.exp(-dt / RUN_BLEND_SECONDS));
+    if (this.runBlend > 0.999) this.runBlend = 1; else if (this.runBlend < 0.001) this.runBlend = 0;
+    const run = this.runBlend;
     const blend = this.walkBlend;
 
     gait.seconds = seconds;
@@ -183,16 +204,35 @@ export class BodyMotion {
     }
     if (blend > 0) {
       if (blend < 1) this.keep();
-      // The builder's own walk: a step of her stride, with her weight shifting over each foot.
-      const stride = humanStride(measure, 'walk', carry);              // one whole stride, in her skeleton's units
-      this.walked += WALK_PACE * dt;
-      phase = ((this.walked * this.unitsPerMetre) / stride) % 1;
-      strideSeconds = stride / (WALK_PACE * this.unitsPerMetre);
-      gait.stance = 'walk';
+      // The builder's own walk or run: a step of her stride, with her weight shifting over each foot. One whole
+      // stride's length (in her skeleton's units) is the walk's, the run's, or between them while one eases into
+      // the other; her place in it moves on by how far she really went, so her feet stay where they land.
+      const walkStride = humanStride(measure, 'walk', carry), runStride = humanStride(measure, 'run', carry);
+      const stride = walkStride + (runStride - walkStride) * run;
+      const pace = Math.max(SLOWEST_PACE, speed);
+      this.stridePhase = (this.stridePhase + (pace * dt * this.unitsPerMetre) / stride) % 1;
+      phase = this.stridePhase;
+      strideSeconds = stride / (pace * this.unitsPerMetre);
       gait.phase = phase;
-      const steps = poseHuman(measure, bind, gait, this.walkTurns);
-      // (`walkWeight` is the builder's and returns a small new object each call: the one thing made per frame here)
-      this.rig.apply(weighWalk(measure, steps, walkWeight(phase, 'walk'), this.weighedTurns));
+      /** Pose her in one stance (the builder's `walkWeight` returns a small new object each call: made per frame). */
+      const poseAs = (stance: 'walk' | 'run'): void => {
+        gait.stance = stance;
+        const steps = poseHuman(measure, bind, gait, this.walkTurns);
+        this.rig.apply(weighWalk(measure, steps, walkWeight(phase, stance), this.weighedTurns));
+      };
+      if (run <= 0) poseAs('walk');
+      else if (run >= 1) poseAs('run');
+      else {
+        // between the two: the walk's pose kept aside, then the run's mixed over it
+        poseAs('walk');
+        for (let i = 0; i < this.bones.length; i++) this.bones[i].quaternion.toArray(this.keptGait, i * 4);
+        poseAs('run');
+        for (let i = 0; i < this.bones.length; i++) {
+          const q = this.bones[i].quaternion;
+          this.keptQ.fromArray(this.keptGait, i * 4);
+          q.copy(this.keptQ.slerp(q, run));
+        }
+      }
       if (blend < 1) this.mixWithKept(blend);
     }
     // her fingers round the grips, over whichever pose she is in

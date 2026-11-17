@@ -236,3 +236,36 @@
    and sticks themselves take a touch; the empty space round them belongs to the picture. */
 .gd-hud > .gd-move, .gd-hud > .gd-actions { pointer-events: none; }
 .gd-move > *, .gd-actions > * { pointer-events: auto; }
+
+/* ---- THE RING STICK (src/input/pace.ts): four circles on the MOVE stick, one where each ring begins ---------- */
+.gd-stick-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 1px solid rgba(94, 232, 200, 0.28);
+  border-radius: 50%;
+  pointer-events: none;
+}
+/* the circle the thumb's ring begins at is lit */
+.gd-stick-ring.is-on { border: 2px solid var(--gold); }
+/* Her pace in words, just above the stick. */
+.gd-pace {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 4px);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  pointer-events: none;
+}
+/* ---- Her vitals card: along the top edge, in the middle (the bottom corners stay free for the controls) ------ */
+.gd-hud > .gd-top-slot {
+  position: absolute;
+  top: calc(var(--safe-top) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}

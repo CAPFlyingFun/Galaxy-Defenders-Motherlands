@@ -107,6 +107,8 @@ export interface VitalsReading {
   /** food and water as "how full", 1 = fed / watered, 0 = starving / parched (the reverse of hunger and thirst) */
   readonly food: number;
   readonly water: number;
+  /** what is in her stomach, millilitres (food and water together) */
+  readonly stomachMl: number;
   /** how full her stomach is, 0 empty .. 1 full */
   readonly stomach: number;
   /** percent points to ADD to her belly (the builder's 0-200 slider) for what is in her stomach */
@@ -211,6 +213,7 @@ export class HeroineVitals {
       health: this.health,
       food: 1 - this.needs.hunger,
       water: 1 - this.needs.thirst,
+      stomachMl,
       stomach,
       bellyExtra: stomach * tuning.bellyWhenFull,
       speedShare,

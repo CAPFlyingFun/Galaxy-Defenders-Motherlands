@@ -36,6 +36,8 @@ import { BLAZE_PAINTED } from './heroine/fast/devRoomLook';
 
 const MAX_STEP = 1 / 20;        // a frame never counts for more than this many seconds
 const WALK_SPEED = 1.1;         // metres a second: the builder's own walking pace
+/** A ground speed a test asked for (see `speed` on window.heroineLab); 0: none. */
+const testSpeed = { value: Number(new URLSearchParams(location.search).get('speed') ?? 0) || 0 };
 const WALK_RADIUS = 2.2;        // the circle she walks, metres
 
 async function start(): Promise<void> {
@@ -196,7 +198,8 @@ async function start(): Promise<void> {
       heroine.setPosition(Math.sin(state.walkAngle) * WALK_RADIUS - 0, Math.cos(state.walkAngle) * WALK_RADIUS - WALK_RADIUS);
       heroine.setYaw(state.walkAngle + Math.PI / 2);
     }
-    heroine.setWalk(state.walk ? WALK_SPEED : 0);
+    // (?speed= or a test script's `heroineLab.speed` walks her at that ground speed, to see her stride at a jog or a run)
+    heroine.setWalk(testSpeed.value > 0 ? testSpeed.value : state.walk ? WALK_SPEED : 0);
 
     // AIM: the ball flies a slow figure round her front, high and low, a few metres out.
     if (state.aim) {
@@ -265,6 +268,8 @@ async function start(): Promise<void> {
     heroine, scene, camera, renderer, orbit, state, THREE,
     hold: (on: boolean) => { held = on; },
     // run `frames` frames; only the last one is drawn (a software renderer takes about a second a picture)
+    /** Walk her at this ground speed, metres a second (0: as the WALK button says). */
+    set speed(value: number) { testSpeed.value = value; },
     advance: (frames: number, dt = 1 / 30) => { for (let k = 0; k < frames; k++) frame(dt, k === frames - 1); showStatus(); return heroine.stats(); },
     // the picture as it is drawn now, as a JPEG data address (drawn and copied in one go)
     picture: () => { renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.92); },

@@ -15,6 +15,9 @@ import type { Hand, HeroineBody } from './core/contracts';
 import { keepLandscape, onStageResize } from './core/orientation';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
+import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
+import { HeroineVitals } from './vitals/heroineVitals';
+import { VitalsPanel } from './vitals/vitalsPanel';
 import { loadHeroineSettings, saveSetting, type HeroineSettings } from './heroine/heroineSettings';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
@@ -187,6 +190,22 @@ async function start(): Promise<void> {
   /** When a run along the ring starts, this remembers whether left and right must be swapped (see below). */
   let ringFlip = 1;
   let wasRunning = false;
+  /** Which way she last ran on the ring (-1 left, +1 right): kept while she slows to a stop after the stick is let go. */
+  let ringHeading = 0;
+  /** The stick's direction last frame (free walk), to notice her turning right round. */
+  let lastMoveX = 0, lastMoveY = 0;
+
+  // HER PACE AND HER VITALS.
+  // Her pace (walk, jog, run, sprint) comes from how far the MOVE stick is pushed (src/input/pace.ts).
+  // Her vitals (heart, breath, stamina, health, food, water) follow what she does (src/vitals/heroineVitals.ts):
+  // Blaze is 28, and her belly (100 %) is week 40 by the Character Builder's chart, which its model of her breath
+  // and heart takes into account. Her body shows them (she breathes faster and deeper after a run), and so does
+  // the card along the top of the screen.
+  const pace = new Pace();
+  const vitals = new HeroineVitals({ age: 28, weeks: 40 });
+  const vitalsPanel = new VitalsPanel();
+  /** What her body allows this frame (her stamina, her share of full speed), from last frame's vitals. */
+  let limits: PaceLimits = NO_LIMITS;
   let nextHand: Hand = 'right';
   let fireCooldown = 0;
 
@@ -235,6 +254,8 @@ async function start(): Promise<void> {
     onDomeDebug: domeDebug,
   });
 
+  hud.topSlot().appendChild(vitalsPanel.element);
+
   controls.onKey = (key) => {
     if (key === 'v') toggleView();
     if (!debug) return;
@@ -258,7 +279,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets, pace, vitals };
   }
 
   // ---- The loop --------------------------------------------------------------------
@@ -290,19 +311,35 @@ async function start(): Promise<void> {
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
     // 2. Move the heroine.
-    if (rig.mode === 'first') {
-      motion.updateFree(dt, controls.moveX, controls.moveY, rig.yaw, true);
-    } else if (freeWalk) {
-      motion.updateFree(dt, controls.moveX, controls.moveY, rig.viewYaw, false);
+    // How far the stick is pushed sets her pace; where it points steers her.
+    const push = Math.min(1, Math.hypot(controls.moveX, controls.moveY));
+    if (rig.mode === 'first' || freeWalk) {
+      // (turning right round, the stick pointing more than about 120 degrees from where it pointed: she loses a pace)
+      if (push > PACE_TUNING.ringsFrom[0]) {
+        const x = controls.moveX / push, y = controls.moveY / push;
+        if (x * lastMoveX + y * lastMoveY < -0.5) pace.turnedBack();
+        lastMoveX = x; lastMoveY = y;
+      }
+      pace.step(dt, push, limits);
+      if (rig.mode === 'first') motion.updateFree(dt, controls.moveX, controls.moveY, rig.yaw, true, pace.speed);
+      else motion.updateFree(dt, controls.moveX, controls.moveY, rig.viewYaw, false, pace.speed);
     } else {
       // "Left" must mean left ON SCREEN. If the player has dragged the view round to
       // look back at her, screen-left is the other way along the ring, so swap. The
       // choice is made once, when a run starts, so it never flips mid-run.
-      const running = controls.ringDir !== 0;
-      if (running && !wasRunning) ringFlip = Math.cos(rig.yaw - motion.ringAngle) >= 0 ? 1 : -1;
+      // On the ring only the stick's left and right count: which side it is on is her direction, how far it is
+      // pushed is her pace, as everywhere else.
+      const direction = Math.abs(controls.moveX) >= PACE_TUNING.ringsFrom[0] ? Math.sign(controls.moveX) : 0;
+      const running = direction !== 0;
+      if (running && !wasRunning && pace.speed < 0.05) ringFlip = Math.cos(rig.yaw - motion.ringAngle) >= 0 ? 1 : -1;
       wasRunning = running;
-      // The camera swings round the plaza by the same angle she ran.
-      rig.swing(motion.updateRing(dt, controls.ringDir * ringFlip));
+      if (running) {
+        if (ringHeading !== 0 && direction !== ringHeading) pace.turnedBack(); // she turned right round
+        ringHeading = direction;
+      }
+      pace.step(dt, running ? push : 0, limits);
+      // The camera swings round the plaza by the same angle she ran. (Let go, she slows to a stop the way she was going.)
+      rig.swing(motion.updateRing(dt, ringHeading * ringFlip, pace.speed));
     }
     heroine.setPosition(motion.x, motion.z);
     heroine.setYaw(motion.yaw);
@@ -334,6 +371,16 @@ async function start(): Promise<void> {
       nextHand = nextHand === 'right' ? 'left' : 'right';
     }
     tracers.update(info);
+
+    // 5b. Her vitals: what she just did (how fast she moved, whether she is shooting) moves her heart, her breath,
+    // her stamina, her food and her water on; her body and the card along the top show them.
+    const shooting = rig.mode === 'first' && (controls.fireHeld || clicks > 0);
+    vitals.step(dt, { speed: motion.speed, firing: shooting });
+    const reading = vitals.reading;
+    limits = reading;
+    heroine.setVitals?.(reading);
+    vitalsPanel.show(reading);
+    hud.setPace(pace.name, pace.ring);
 
     // 6. Draw.
     dome.update(info);

@@ -1,0 +1,135 @@
+// ============================================================================
+// pace.ts -- how fast she goes: WALK, JOG, RUN or SPRINT, worked out from how
+// far the MOVE stick is pushed. Pure numbers: no page, no 3D.
+//
+// Joshua, 2026-11-17: "split the movement joystick up in parts or make it
+// gradual so full deflection from standing would start walking... if you keep
+// holding it forward after maybe 5s you will move into a light jog... then
+// running... then sprinting, but also using a lot of energy/stamina... if you
+// hold the joystick in the middle it will hold your speed, slightly forward or
+// back will change the speed. Maybe split the joystick in like 5 rings."
+//
+// THE FIVE RINGS, by how far the stick is pushed from its middle (in ANY
+// direction: the direction steers her, the distance sets her pace):
+//
+//   ring 0  the centre        she slows to a stop (also when the stick is let go)
+//   ring 1  the inner ring    she eases DOWN a pace, never below a walk
+//   ring 2  the middle ring   she HOLDS the pace she has
+//   ring 3  the outer-middle  she builds UP slowly  (a pace every 5 seconds)
+//   ring 4  the outer ring    she builds UP quickly (a pace every 2 seconds)
+//
+// So a full push from standing walks at once, then jogs, runs and sprints;
+// easing the stick back to the middle ring keeps whatever pace she reached.
+//
+// HER BODY HAS A SAY (src/vitals/heroineVitals.ts): with little stamina left
+// she cannot hold a sprint, then cannot hold a run; and tiredness, hunger and
+// thirst take a share off her speed at every pace.
+// ============================================================================
+
+/** The four paces and their ground speeds, metres a second (the same speeds her vitals call a walk, jog, run, sprint). */
+export const PACES = [
+  { name: 'WALK', speed: 1.1 },
+  { name: 'JOG', speed: 2.4 },
+  { name: 'RUN', speed: 3.8 },
+  { name: 'SPRINT', speed: 5.5 },
+] as const;
+
+/** Everything about the pace that is a choice. GAME TUNING. */
+export const PACE_TUNING = {
+  /** Where each ring begins, as a share of the stick's full push: rings 1, 2, 3 and 4. Below the first is the centre. */
+  ringsFrom: [0.15, 0.4, 0.65, 0.88] as const,
+  /** Seconds to change by one whole pace: easing down (ring 1), building slowly (ring 3), building quickly (ring 4). */
+  downSeconds: 2,
+  slowUpSeconds: 5,
+  fastUpSeconds: 2,
+  /** Pushed past what her stamina allows, she drops back a pace in this many seconds. */
+  tiredDownSeconds: 1,
+  /** With less stamina than this she cannot sprint; with less than the second, she cannot run either. */
+  sprintNeedsStamina: 0.15,
+  runNeedsStamina: 0.05,
+  /** How quickly her real speed follows the pace she is set to, metres a second each second (speeding up, slowing down). */
+  speedUp: 5,
+  slowDown: 9,
+} as const;
+
+/** What her body allows right now (from her vitals). */
+export interface PaceLimits {
+  /** her stamina, 0 empty .. 1 fresh */
+  readonly stamina: number;
+  /** the share of her full speed she can manage, 0..1 (tiredness, hunger and thirst) */
+  readonly speedShare: number;
+}
+
+/** Fresh and fed: no limits. For when the game has no vitals to ask. */
+export const NO_LIMITS: PaceLimits = { stamina: 1, speedShare: 1 };
+
+/** Which ring a push of the stick is in: 0 the centre .. 4 the outer ring. `push` is 0 (middle) .. 1 (the edge). */
+export function ringOf(push: number): number {
+  const from = PACE_TUNING.ringsFrom;
+  let ring = 0;
+  while (ring < from.length && push >= from[ring]) ring++;
+  return ring;
+}
+
+export class Pace {
+  /**
+   * Her pace as one number: 0 standing, 1 a walk, 2 a jog, 3 a run, 4 a sprint, and anywhere in between while she
+   * builds up or eases down (2.5 is half way from a jog to a run).
+   */
+  level = 0;
+  /** The ring the stick is in now, 0-4. */
+  ring = 0;
+  /** Her ground speed now, metres a second. */
+  speed = 0;
+
+  /** The name of the pace she is at (the nearest one), or '' standing. */
+  get name(): string {
+    return this.level < 0.5 ? '' : PACES[Math.min(PACES.length - 1, Math.round(this.level) - 1)].name;
+  }
+
+  /** The speed that goes with a pace level: the paces' own speeds, blended in between. */
+  static speedAt(level: number): number {
+    if (level <= 0) return 0;
+    if (level <= 1) return PACES[0].speed * level;
+    const lower = Math.min(PACES.length - 1, Math.floor(level) - 1), upper = Math.min(PACES.length - 1, lower + 1);
+    return PACES[lower].speed + (PACES[upper].speed - PACES[lower].speed) * (level - Math.floor(level));
+  }
+
+  /**
+   * One frame.
+   * @param dt      seconds since the last frame
+   * @param push    how far the stick is pushed, 0 (middle) .. 1 (the edge)
+   * @param limits  what her body allows (her stamina, her share of full speed)
+   */
+  step(dt: number, push: number, limits: PaceLimits = NO_LIMITS): void {
+    const t = PACE_TUNING;
+    this.ring = ringOf(push);
+
+    if (this.ring === 0) {
+      // the centre: she stops, and starts again from a walk
+      this.level = 0;
+    } else {
+      // any push at all walks her at once
+      if (this.level < 1) this.level = 1;
+      if (this.ring === 1) this.level = Math.max(1, this.level - dt / t.downSeconds);
+      else if (this.ring === 3) this.level += dt / t.slowUpSeconds;
+      else if (this.ring === 4) this.level += dt / t.fastUpSeconds;
+      // (ring 2 holds)
+
+      // what her stamina allows: a sprint, only a run, or only a jog
+      const most = limits.stamina < t.runNeedsStamina ? 2 : limits.stamina < t.sprintNeedsStamina ? 3 : 4;
+      if (this.level > most) this.level = Math.max(most, this.level - dt / t.tiredDownSeconds);
+    }
+
+    // her real speed follows the pace smoothly: nobody is at a sprint the instant she decides to be
+    const wanted = Pace.speedAt(this.level) * Math.max(0, Math.min(1, limits.speedShare));
+    const change = wanted - this.speed;
+    const most = (change > 0 ? t.speedUp : t.slowDown) * dt;
+    this.speed += Math.max(-most, Math.min(most, change));
+  }
+
+  /** She turned right round: she loses a pace (nobody reverses at a full sprint). Never below a walk. */
+  turnedBack(): void {
+    if (this.level > 1) this.level = Math.max(1, this.level - 1);
+  }
+}

@@ -190,8 +190,9 @@ export class Hud {
     const fast = options.graphics.body === 'performance';
     // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)
     const detailRow = choiceRow('Detail', 'detail', [['Auto live', 'autoLive'], ['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
-    const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: the DEV Room\'s own (3%, 2%, 1% by distance). Auto: full detail unless the frame rate falls under the target.');
+    const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: from 30% down to 1% by the frame rate, all her body shapes live. Auto: up to 100%, lighter only if the frame rate needs it.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
+    choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
       line.classList.toggle('is-off', !on);

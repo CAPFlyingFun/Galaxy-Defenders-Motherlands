@@ -71,23 +71,16 @@ const VIEW_BALL_RADIUS = 1.5;
 // ------------------------------------------------------------------ options and extras
 
 /**
- * Her detail: 'autoLive' (the DEV Room's own AUTO LIVE: 3 %, 2 % or 1 % by how far the camera is), 'auto' (ours: as
- * much as the eye can see at her size on screen, lighter only if the frame rate needs it), or one fixed level.
+ * Her detail: 'autoLive', 'auto', or one fixed level.
+ *   autoLive  SMART FPS turns her detail (Joshua, 2026-11-17: "Instead of Smart FPS controlling the amount of people,
+ *             have it control the details instead from a max up to 30% details down to 1%, but still auto depending
+ *             on FPS"): she starts at 30 %, goes a level lighter while the frame rate is under the target and comes
+ *             back a level when it has been over it for a while. At these levels all her body shapes are live.
+ *   auto      as much as the eye can see at her size on screen (up to 100 %), lighter only if the frame rate needs it.
  */
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
-/**
- * THE DEV ROOM'S AUTO LIVE TABLE (Anthill Airways devRoom.ts AUTO_LITE/AUTO_LIVE; Joshua's numbers there, and his
- * settings picture of 2026-11-17, "use these same settings"): her detail by the camera's distance from her middle,
- * in metres. Within 3 m: 3 %. Within 5 m: 2 %. Beyond: 1 %. The room's fading of far people is NOT taken ("no
- * fading since there is only one model and you need to see it").
- */
-const AUTO_LIVE: readonly { readonly within: number; readonly detail: Detail }[] = [
-  { within: 3, detail: 3 },
-  { within: 5, detail: 2 },
-  { within: Infinity, detail: 1 },
-];
-/** A row of that table is only left once she is this share past its edge (the DEV Room's own 10 %), so she does not flick between two. */
-const AUTO_LIVE_EDGE = 0.1;
+/** The heaviest level AUTO LIVE draws her at. */
+const AUTO_LIVE_TOP: Detail = 30;
 
 export interface FastHeroineOptions {
   /** The game's renderer (her materials are compiled with it before she is shown). */
@@ -197,6 +190,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const fileMoves = fileGeometry.morphAttributes.position ?? [], fileTurns = fileGeometry.morphAttributes.normal ?? [];
   const shapeMoves = (name: string) => (dictionary[name] !== undefined ? fileMoves[dictionary[name]] : undefined);
   const shapeTurns = (name: string) => (dictionary[name] !== undefined ? fileTurns[dictionary[name]] : undefined);
+  // (every body shape's name, in the file's own order)
+  const shapeNames = Object.entries(dictionary).sort((a, b) => a[1] - b[1]).map(([name]) => name);
   const fileIndex = fileGeometry.index;
   if (!fileIndex) throw new Error('[heroine] the body file has no triangle list');
   const fullIndex = Uint32Array.from(fileIndex.array);
@@ -214,6 +209,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     skinIndex: holdIndex,
     skinWeight: holdWeight,
     shapeMoves, shapeTurns,
+    shapeNames,
     bakedBelly: look.manifest.belly,
     navel: look.manifest.navel,
   });
@@ -232,6 +228,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const influences = [0, 0, 0, 0];
   skin.morphTargetDictionary = Object.fromEntries(MOTION_SHAPES.map((name, i) => [name, i]));
   skin.morphTargetInfluences = influences;
+  // ...and on a LIVE level (30 % and lighter: shapedBody.ts) every body shape of the file, by name, at her weights.
+  const bakedDictionary = skin.morphTargetDictionary;
+  const liveDictionary: Record<string, number> = Object.fromEntries(shapeNames.map((name, i) => [name, i]));
+  const liveInfluences: number[] = shapeNames.map(() => 0);
+  const liveMotionAt = MOTION_SHAPES.map((name) => liveDictionary[name] ?? -1);
+  /** Her size shapes' weights written into the live set (her belly, bust and navel as they are now). */
+  const setLiveShape = (): void => {
+    liveInfluences.fill(0);
+    for (const [name, weight] of Object.entries(body.shapeWeights())) if (liveDictionary[name] !== undefined) liveInfluences[liveDictionary[name]] = weight;
+  };
+  setLiveShape();
 
   // ---- 4. her outfit: the baked pictures on one plain material -----------------------------------------------------
   // (or, the DEV Room's way, the file's own skin material with a tee and leggings coloured over it in the shader)
@@ -382,14 +389,18 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const waitingFor = new Set<number>();
   /** How tall she was last drawn, in screen pixels: written by the draw itself (below), read by AUTO the next frame. */
   let pixels = 9999;
-  /** How far the camera was from her middle when she was last drawn, metres; and the row of AUTO_LIVE she is in. */
-  let cameraDistance = 0, liveRow = 0;
 
   const wear = (detail: Detail): void => {
     const geometry = body.geometry(detail);
     if (!geometry) return;
+    const before = drawnDetail;
     drawnDetail = detail;
     skin.geometry = geometry;
+    // which shapes this level's body carries: all of them live, or only her four motion shapes
+    if (body.isLive(detail)) { skin.morphTargetDictionary = liveDictionary; skin.morphTargetInfluences = liveInfluences; }
+    else { skin.morphTargetDictionary = bakedDictionary; skin.morphTargetInfluences = influences; }
+    // (a live level she has left is let go if it is a heavy one: its shapes are tens of megabytes)
+    if (before !== detail && body.isLive(before) && before > 5) body.release(before);
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
     hair?.show(detail, !firstPerson);
     pieces.setDetail(detail);
@@ -419,7 +430,6 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     // how many screen pixels her height covers at that distance, through this camera's lens
     renderer.getDrawingBufferSize(size);
     pixels = (height / distance) * camera.projectionMatrix.elements[5] * 0.5 * size.y;
-    cameraDistance = distance;
   };
 
   // ---- 11. compiled and uploaded before she is shown, so her first frame does not stutter ----------------------------
@@ -506,7 +516,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); layBreath(); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); }
 
       // Her breath: her skin's move from her vitals (or a quiet breath at rest), and her bones' at the same pace.
       // (the builder's stand breathes fifteen times a minute by its clock: the clock is run faster or slower)
@@ -518,6 +528,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       // Her pose (the builder's stand or walk, her fingers) and the weight of her belly and bust.
       motion.update(frame.dt, breathClock, walking ? speedNow : 0, body.belly);
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
+      // (the same four on a live level, where they sit among all her other shapes)
+      for (let i = 0; i < 4; i++) if (liveMotionAt[i] >= 0) liveInfluences[liveMotionAt[i]] = motion.weights[i];
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       aim.advance(frame.dt, target !== null);
@@ -528,13 +540,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       }
 
       // Her detail level: the fixed one asked for, or AUTO's.
-      if (choice === 'autoLive') {
-        // the DEV Room's table by distance (first person: the camera is at her head, the nearest row)
-        const d = firstPerson ? 0 : cameraDistance;
-        while (liveRow < AUTO_LIVE.length - 1 && d > AUTO_LIVE[liveRow].within * (1 + AUTO_LIVE_EDGE)) liveRow++;
-        while (liveRow > 0 && d < AUTO_LIVE[liveRow - 1].within * (1 - AUTO_LIVE_EDGE)) liveRow--;
-        wanted = AUTO_LIVE[liveRow].detail;
-      } else wanted = choice === 'auto' ? auto.update(frameMs, firstPerson ? 9999 : pixels) : choice;
+      // AUTO LIVE: Smart FPS turns her detail, from 30 % down to 1 %, by the frame rate alone.
+      if (choice === 'autoLive') wanted = auto.updateSmart(frameMs, AUTO_LIVE_TOP);
+      else wanted = choice === 'auto' ? auto.update(frameMs, firstPerson ? 9999 : pixels) : choice;
       want(wanted);
 
       updateMs += (performance.now() - now - updateMs) / 20;

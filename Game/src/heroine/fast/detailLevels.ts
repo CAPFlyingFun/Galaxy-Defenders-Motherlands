@@ -27,11 +27,15 @@
 import * as THREE from 'three';
 import { lighten, type DetailRequest, type DetailResult, type DetailSetup } from './detailWorker';
 
-/** The detail levels offered, percent of her triangles (the DEV Room's own list). */
-export const DETAILS = [100, 50, 25, 10, 5, 3, 2, 1] as const;
+/**
+ * The detail levels offered, percent of her triangles: the DEV Room's own list, with 30 and 15 added (Joshua,
+ * 2026-11-17: Smart FPS turns her detail "from a max up to 30% details down to 1%"; Anthill Airways' own crowd
+ * ladder starts at 30 and 15 too).
+ */
+export const DETAILS = [100, 50, 30, 25, 15, 10, 5, 3, 2, 1] as const;
 export type Detail = (typeof DETAILS)[number];
 
-/** The nearest offered level to any number (so `?detail=30` means 25). */
+/** The nearest offered level to any number (so `?detail=40` means 50). */
 export function nearestDetail(value: number): Detail {
   let best: Detail = 100;
   for (const d of DETAILS) if (Math.abs(d - value) < Math.abs(best - value)) best = d;

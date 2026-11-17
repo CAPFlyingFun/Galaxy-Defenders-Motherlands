@@ -24,7 +24,7 @@ import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { createCity } from './world/city';
-import { DOME_RADIUS, PALETTE, SECTION_MAX_HP } from './world/config';
+import { DOME_RADIUS, PALETTE, PLAZA_RADIUS, SECTION_MAX_HP } from './world/config';
 import { Dome } from './world/dome';
 import { createGround } from './world/ground';
 import { createSky } from './world/sky';
@@ -175,6 +175,25 @@ async function start(): Promise<void> {
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   keyLight.position.set(-4, 10, 6);
   scene.add(keyLight);
+  scene.add(keyLight.target);
+
+  // REAL SHADOWS (Joshua, 2026-11-17: "Allow real shadows"; the DEV Room's "Shadows: on", with its own numbers: a
+  // 2048-pixel shadow picture, softened). The key light draws her once more, from where it stands, into a picture of
+  // depths; anything that "receives" shadows then darkens where that picture says she is in the way.
+  // The plaza's own ground glows by itself and ignores lights, so a see-through disc lies just over it whose only
+  // job is to show her shadow (three.js's ShadowMaterial: invisible but for the shadow on it).
+  // The light's shadow box is small (6 m across) and follows her each frame, so the picture stays sharp.
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  keyLight.shadow.mapSize.set(2048, 2048);
+  const shadowBox = keyLight.shadow.camera;
+  shadowBox.left = -3; shadowBox.right = 3; shadowBox.top = 3; shadowBox.bottom = -3; shadowBox.near = 1; shadowBox.far = 30;
+  shadowBox.updateProjectionMatrix();
+  keyLight.shadow.bias = -0.0005;
+  const shadowFloor = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_RADIUS + 2, 48), new THREE.ShadowMaterial({ opacity: 0.5 }));
+  shadowFloor.rotation.x = -Math.PI / 2;   // laid flat
+  shadowFloor.position.y = 0.012;          // a centimetre over the ground, so the two never flicker
+  shadowFloor.receiveShadow = true;
+  scene.add(shadowFloor);
 
   // ---- Heroine, camera, controls -----------------------------------------------
   // A line of text in the middle of the screen while she loads (a character appears dressed, all at once).
@@ -184,6 +203,18 @@ async function start(): Promise<void> {
   const heroine = await createHeroine(renderer, scene, graphics, (text) => { loading.textContent = text; });
   loading.remove();
   scene.add(heroine.root);
+  // Real shadows on or off (Settings): the renderer's shadow pictures, the key light's, and every part of her casting.
+  let realShadows = false;
+  const applyShadows = (): void => {
+    realShadows = graphics.shadows === 'on';
+    renderer.shadowMap.enabled = realShadows;
+    keyLight.castShadow = realShadows;
+    shadowFloor.visible = realShadows;
+    heroine.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
+    // (materials are compiled with or without shadows: they are made again for the new setting)
+    scene.traverse((node) => { const m = (node as THREE.Mesh).material; if (m) for (const one of Array.isArray(m) ? m : [m]) one.needsUpdate = true; });
+  };
+  applyShadows();
   const motion = new PlayerMotion();
   const rig = new CameraRig();
   const controls = new Controls(renderer.domElement);
@@ -250,6 +281,7 @@ async function start(): Promise<void> {
       if (key === 'detail') heroine.setDetail?.(graphics.detail);
       else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
       else if (key === 'sharpness') fit();
+      else if (key === 'shadows') applyShadows();
       else location.reload();
     },
     onToggleView: toggleView,
@@ -343,11 +375,15 @@ async function start(): Promise<void> {
       // The camera swings round the plaza by the same angle she ran. (Let go, she slows to a stop the way she was going.)
       rig.swing(motion.updateRing(dt, ringHeading * ringFlip, pace.speed));
     }
+    // (the key light and its shadow box go with her)
+    keyLight.position.set(motion.x - 4, 10, motion.z + 6);
+    keyLight.target.position.set(motion.x, 0, motion.z);
     heroine.setPosition(motion.x, motion.z);
     heroine.setYaw(motion.yaw);
     heroine.setWalk(motion.speed);
     heroine.update(info);
-    ground.setHeroine(motion.x, motion.z);
+    // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)
+    if (realShadows) ground.setHeroine(1e6, 1e6); else ground.setHeroine(motion.x, motion.z);
 
     // 3. Put the camera where it belongs, now that she has moved.
     rig.update(dt, heroine);

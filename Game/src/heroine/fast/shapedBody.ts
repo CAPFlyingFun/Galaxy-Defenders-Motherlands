@@ -33,6 +33,14 @@ import { bellyWeights, breastGrowUnits, navelFlatFor, BELLY_MOTION, BREAST_TARGE
 export const MOTION_SHAPES: readonly string[] = [BELLY_MOTION.tilt, BELLY_MOTION.bob, BELLY_MOTION.sway, BREAST_TARGETS.bob];
 /** The bust's second growth shape in the body file (past the first's full size). */
 const BREAST_GROW_MORE = 'shape:breastGrowMore';
+/**
+ * ALL HER BODY SHAPES LIVE (Joshua, 2026-11-17: "Keep all 43 live for most flexibility"; the DEV Room's "Body
+ * shapes: live"). A level at or under this detail carries every body shape of the file for its own points, and the
+ * graphics chip blends them each frame by her weights, so her belly, bust and navel can change at any moment with
+ * nothing rewritten. Heavier levels keep her shape added in once with only her four motion shapes live: every shape
+ * of the full body is some 160 MB on the graphics chip, a 30 % body's about 50 MB (Anthill Airways' own measure).
+ */
+export const LIVE_UP_TO = 30;
 /** Below this detail her surface directions are worked out again from the triangles she has left (see `freshNormals`). */
 const FRESH_NORMALS_BELOW = 25;
 
@@ -53,6 +61,8 @@ export interface ShapedBodySource {
   /** A body shape from the file by name: how far it moves each point (and turns each direction), or undefined. */
   readonly shapeMoves: (name: string) => Numbers | undefined;
   readonly shapeTurns: (name: string) => Numbers | undefined;
+  /** The name of every body shape the file has, in the file's own order. */
+  readonly shapeNames: readonly string[];
   /** The belly (0-200 %) the baked points are for, and her NAVEL control's setting (-100..100). */
   readonly bakedBelly: number;
   readonly navel: number;
@@ -65,6 +75,8 @@ interface Level {
   /** `order[k]` is the number, in the full body, of this level's point k. */
   readonly order: Uint32Array;
   readonly triangles: Uint32Array;
+  /** True: this level carries every body shape, live (see LIVE_UP_TO). */
+  readonly live: boolean;
 }
 
 /** Every size-dependent shape's weight at a belly size, by name: the builder's own rules. */
@@ -87,6 +99,11 @@ export class ShapedBody {
   /** Her four motion shapes' moves for every point (x, y, z each), read from the file once. */
   private readonly motion: Float32Array[];
   private readonly levels = new Map<number, Level>();
+  /**
+   * Her points and directions with NO size shape added: her baked shape less every size shape at its baked weight.
+   * A live level starts from these, so that with her weights set it is exactly her baked shape. Made when first needed.
+   */
+  private neutral: { position: Float32Array; normal: Float32Array } | null = null;
 
   constructor(private readonly source: ShapedBodySource) {
     this.belly = source.bakedBelly;
@@ -103,6 +120,30 @@ export class ShapedBody {
 
   /** Her points as shaped now (x, y, z each, every point of the full body). Read only: do not write into it. */
   get points(): Float32Array { return this.position; }
+
+  /** Does a level of this detail carry all her body shapes live? */
+  isLive(detail: number): boolean { return detail <= LIVE_UP_TO; }
+  /** Every size shape's weight for her belly as it is now, by name (the builder's rules): a live level's weights. */
+  shapeWeights(): Record<string, number> { return shapeWeightsAt(this.belly, this.source.navel); }
+  /** Let a level's copy go (it is made again if she comes back to it): a live level is big. */
+  release(detail: number): void {
+    const level = this.levels.get(detail);
+    if (!level) return;
+    level.geometry.dispose();
+    this.levels.delete(detail);
+  }
+  private neutralShape(): { position: Float32Array; normal: Float32Array } {
+    if (this.neutral) return this.neutral;
+    const s = this.source, position = s.position.slice(), normal = s.normal.slice();
+    const baked = shapeWeightsAt(s.bakedBelly, s.navel);
+    for (const [name, weight] of Object.entries(baked)) {
+      if (!weight) continue;
+      const moves = s.shapeMoves(name), turns = s.shapeTurns(name);
+      if (moves) for (let v = 0; v < s.count; v++) { position[v * 3] -= moves.getX(v) * weight; position[v * 3 + 1] -= moves.getY(v) * weight; position[v * 3 + 2] -= moves.getZ(v) * weight; }
+      if (turns) for (let v = 0; v < s.count; v++) { normal[v * 3] -= turns.getX(v) * weight; normal[v * 3 + 1] -= turns.getY(v) * weight; normal[v * 3 + 2] -= turns.getZ(v) * weight; }
+    }
+    return (this.neutral = { position, normal });
+  }
 
   /** Has this level's copy been made? */
   has(detail: number): boolean { return this.levels.has(detail); }
@@ -145,7 +186,19 @@ export class ShapedBody {
     geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
     // HER MOTION SHAPES STAY LIVE: the four are carried over, for this level's own points only.
     // (their moves only; a 1 cm sway turns her surface too little for the lighting to show)
-    geometry.morphAttributes.position = this.motion.map((moves, m) => {
+    const live = this.isLive(detail);
+    if (live) {
+      // EVERY BODY SHAPE, for this level's own points: how each moves her points and turns her surface.
+      const carry = (get: (name: string) => Numbers | undefined) => s.shapeNames.map((name) => {
+        const from = get(name), own = new Float32Array(n * 3);
+        if (from) for (let k = 0; k < n; k++) { const o = order[k]; own[k * 3] = from.getX(o); own[k * 3 + 1] = from.getY(o); own[k * 3 + 2] = from.getZ(o); }
+        const attribute = new THREE.BufferAttribute(own, 3);
+        attribute.name = name;
+        return attribute;
+      });
+      geometry.morphAttributes.position = carry(s.shapeMoves);
+      geometry.morphAttributes.normal = carry(s.shapeTurns);
+    } else geometry.morphAttributes.position = this.motion.map((moves, m) => {
       const own = new Float32Array(n * 3);
       for (let k = 0; k < n; k++) { const o = order[k]; own[k * 3] = moves[o * 3]; own[k * 3 + 1] = moves[o * 3 + 1]; own[k * 3 + 2] = moves[o * 3 + 2]; }
       const attribute = new THREE.BufferAttribute(own, 3);
@@ -155,7 +208,7 @@ export class ShapedBody {
     geometry.morphTargetsRelative = true;
     geometry.setIndex(new THREE.BufferAttribute(triangles, 1));
 
-    const level: Level = { detail, geometry, order, triangles };
+    const level: Level = { detail, geometry, order, triangles, live };
     this.levels.set(detail, level);
     this.fill(level);
     return geometry;
@@ -191,13 +244,16 @@ export class ShapedBody {
   private fill(level: Level): void {
     const position = level.geometry.getAttribute('position') as THREE.BufferAttribute, normal = level.geometry.getAttribute('normal') as THREE.BufferAttribute;
     const P = position.array as Float32Array, N = normal.array as Float32Array, order = level.order;
+    // (a live level holds her with no size shape added: the graphics chip adds them by her weights)
+    const from = level.live ? this.neutralShape() : { position: this.position, normal: this.normal };
     for (let k = 0; k < order.length; k++) {
       const o = order[k] * 3;
-      P[k * 3] = this.position[o]; P[k * 3 + 1] = this.position[o + 1]; P[k * 3 + 2] = this.position[o + 2];
-      const x = this.normal[o], y = this.normal[o + 1], z = this.normal[o + 2], length = Math.hypot(x, y, z) || 1;
+      P[k * 3] = from.position[o]; P[k * 3 + 1] = from.position[o + 1]; P[k * 3 + 2] = from.position[o + 2];
+      const x = from.normal[o], y = from.normal[o + 1], z = from.normal[o + 2], length = Math.hypot(x, y, z) || 1;
       N[k * 3] = x / length; N[k * 3 + 1] = y / length; N[k * 3 + 2] = z / length;
     }
-    if (level.detail < FRESH_NORMALS_BELOW) freshNormals(P, N, level.triangles);
+    // (not on a live level: its directions must stay the ones its shapes' turns are added to)
+    if (level.detail < FRESH_NORMALS_BELOW && !level.live) freshNormals(P, N, level.triangles);
     position.needsUpdate = true;
     normal.needsUpdate = true;
   }

@@ -26,6 +26,7 @@ export type BodyMode = 'performance' | 'visual';
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
 export type Sharpness = 1 | 2;
 export type SkinChoice = 'light' | 'full';
+export type ShadowChoice = 'on' | 'off';
 
 export interface HeroineSettings {
   body: BodyMode;
@@ -33,6 +34,8 @@ export interface HeroineSettings {
   targetFps: TargetFps;
   sharpness: Sharpness;
   skin: SkinChoice;
+  /** Real shadows: she casts her own shadow on the plaza (the DEV Room's "Shadows: on"). */
+  shadows: ShadowChoice;
 }
 
 /** The keys the choices are remembered under on this device. */
@@ -42,6 +45,7 @@ export const SETTING_KEYS = Object.freeze({
   targetFps: 'gdm.targetFps',
   sharpness: 'gdm.sharpness',
   skin: 'gdm.skin',
+  shadows: 'gdm.shadows',
 });
 
 function read(key: string): string | null {
@@ -89,5 +93,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     targetFps: asFps(address.get('fps')) ?? asFps(read(SETTING_KEYS.targetFps)) ?? 30,
     sharpness: asSharpness(address.get('sharp')) ?? asSharpness(read(SETTING_KEYS.sharpness)) ?? 2,
     skin: asSkin(address.get('body')) ?? asSkin(read(SETTING_KEYS.skin)) ?? deviceSkin(),
+    shadows: (address.get('shadows') ?? read(SETTING_KEYS.shadows)) === 'off' ? 'off' : 'on',
   };
 }

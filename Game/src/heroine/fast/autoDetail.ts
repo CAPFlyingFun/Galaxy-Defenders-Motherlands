@@ -106,6 +106,19 @@ export class AutoDetail {
     return wished > floor ? wished : floor;
   }
 
+  /**
+   * SMART FPS ALONE, over the levels from `top` down to the lightest (Joshua, 2026-11-17: "Instead of Smart FPS
+   * controlling the amount of people, have it control the details instead from a max up to 30% details down to 1%,
+   * but still auto depending on FPS"). She starts at `top`; a frame rate under the target takes her one level
+   * lighter, a frame rate over it for a while brings her back one level, never above `top`. Her size on screen
+   * plays no part here.
+   */
+  updateSmart(frameMs: number, top: Detail): Detail {
+    const first = DETAILS.indexOf(top), steps = DETAILS.length - 1 - first;
+    this.judge(frameMs, steps);
+    return DETAILS[first + Math.min(this.lighter, steps)];
+  }
+
   /** Smart FPS: every half second, compare the frame rate with the target. `floorIndex`: the lightest level allowed now. */
   private judge(frameMs: number, floorIndex: number): void {
     // (back from the background, or a long freeze: not a frame time worth judging by)

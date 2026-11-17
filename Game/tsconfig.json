@@ -16,5 +16,5 @@
       "three/*": ["./node_modules/@types/three/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../Char_B/src/env.d.ts"]
 }

@@ -1,0 +1,18 @@
+{
+  "about": "The Character Builder files the heroine loads, relative to ../Char_B/public. `npm run build` copies ONLY these into dist/charb/. The dev server warns in its terminal when the builder asks for a file that is not listed here (and /__charb-requested lists everything asked for so far): add the path and build again.",
+  "files": [
+    "models/sarah-v2-body-slim.glb",
+    "models/sarah-v2-body-light.bin",
+    "models/sarah-v2-body-zero.bin",
+    "models/sarah-v2-body-womb.bin",
+    "models/sarah-v2-body-milk.bin",
+    "models/sarah-baby.glb",
+    "models/sarah-baby-straight.glb",
+    "models/hair/ponytail.glb",
+    "models/skins/sarah-v2-skin-even-2048.webp",
+    "models/sarah-v2-spandex-lite.glb",
+    "fabrics/athletic-plain.jpg",
+    "fabrics/jersey-plain.jpg",
+    "fabrics/jersey-trim.jpg"
+  ]
+}

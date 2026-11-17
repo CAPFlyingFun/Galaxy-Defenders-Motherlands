@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Heroine Lab · Galaxy Defenders: Motherlands</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #10141c; color: #eaf2ff; overflow: hidden;
+    font-family: -apple-system, 'Segoe UI', Arial, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; width: 100%; height: 100%; }
+  /* The lab's buttons: a strip along the top, so the bottom corners stay free as in the game. */
+  #panel { position: fixed; left: 8px; right: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #panel button { min-height: 36px; padding: 6px 12px; border-radius: 9px; border: 1px solid #ffffff40; background: #1a2230;
+    color: #eaf2ff; font: 700 12px system-ui, sans-serif; letter-spacing: .04em; }
+  #panel button.on { background: #b3187a; border-color: #ff5cc8; }
+  #panel label { font: 600 12px system-ui, sans-serif; display: flex; align-items: center; gap: 6px; }
+  #panel input[type=range] { width: 130px; accent-color: #ff5cc8; }
+  #status { position: fixed; left: 8px; bottom: 8px; right: 8px; font: 600 12px ui-monospace, monospace; opacity: .85;
+    white-space: pre-wrap; pointer-events: none; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="panel"></div>
+<div id="status">Loading the heroine…</div>
+<script type="module" src="/src/heroineLab.ts"></script>
+</body>
+</html>

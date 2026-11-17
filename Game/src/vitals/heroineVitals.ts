@@ -96,8 +96,20 @@ export const VITALS_TUNING = {
     pain: { heart: 15, breaths: 6, drain: 0.1, shallower: 0.25 },
     fear: { heart: 30, breaths: 8, drain: 0.2 },
     painFrom: 90,
-    fearRiseSeconds: 1.5,
-    fearFallSeconds: 20,
+    /** Her fear follows the danger quickly (it is what she feels), and fades a little slower once the danger has passed. */
+    fearRiseSeconds: 0.5,
+    fearFallSeconds: 6,
+    /**
+     * HER BODY CATCHES UP GRADUALLY (Joshua, 2026-11-17: "gradual over maybe 10-15s with heart rate first in the first
+     * 5-7s, and breathing later like 12-15s... to calm down in real life takes almost twice as long, especially if
+     * you're really high"). Seconds for each to get most of the way (95%) to where the stress puts it: her heart
+     * rises in 6 and her breathing in 13.5; calming down takes twice that, and up to twice as long again when she was
+     * at the very top (her heart 12 to 24 s, her breathing 27 to 54 s).
+     */
+    heartRiseSeconds: 6,
+    breathRiseSeconds: 13.5,
+    calmTimes: 2,
+    calmTimesWhenHigh: 2,
     /** A hit on her frightens her this much at once (a share of full fear for each point of health lost, at most 1). */
     fearPerHealthLost: 0.04,
   },
@@ -211,6 +223,9 @@ export class HeroineVitals {
   staminaDrain: number = VITALS_TUNING.staminaDrain;
   /** Her fear now, 0..1 (VITALS_TUNING.stress): rises toward the danger she is in, fades after it. */
   private fear = 0;
+  /** What thirst, pain and fear add to her heart (beats a minute) and breathing (breaths a minute) now: they lag behind. */
+  private extraBeats = 0;
+  private extraBreaths = 0;
   /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): it makes her tire sooner. */
   private readonly pregnancy: number;
   private gut: GutState = restingGut();
@@ -251,9 +266,17 @@ export class HeroineVitals {
     this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore) * dt, 0, 1);
     // ...and lift her heart and her breathing on top of what the work does. Her breath and her heartbeat are moved on
     // by the extra too, so what she shows (the heart on her card, her chest rising) goes at the rate the card says.
-    const moreBeats = st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear;
-    const moreBreaths = st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear;
-    if (moreBeats > 0 || moreBreaths > 0) {
+    // (each follows where the stress puts it at its own pace: her heart first, her breathing later; calming down
+    //  slower, and slower still from the very top. "95% of the way in S seconds" is a time constant of S / 3.)
+    const follow = (now: number, want: number, riseSeconds: number, most: number): number => {
+      const high = clamp(now / most, 0, 1);
+      const seconds = want >= now ? riseSeconds : riseSeconds * st.calmTimes * (1 + (st.calmTimesWhenHigh - 1) * high);
+      return now + (want - now) * (1 - Math.exp((-3 * dt) / seconds));
+    };
+    this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart);
+    this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths);
+    const moreBeats = this.extraBeats, moreBreaths = this.extraBreaths;
+    if (moreBeats > 0.01 || moreBreaths > 0.01) {
       const h = clamp(dt, 0, 0.5);
       this.vitals.pulse = (this.vitals.pulse + (h * moreBeats) / 60) % 1;
       this.vitals.cycle = (this.vitals.cycle + (h * moreBreaths) / 60) % 1;

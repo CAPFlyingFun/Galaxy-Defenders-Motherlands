@@ -16,20 +16,98 @@
     font-family: -apple-system, 'SF Pro Display', 'Segoe UI', Arial, sans-serif;
     touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent; }
-  /* THE STAGE: everything the game draws. It is kept landscape by src/core/orientation.ts, which sets its size and,
-     on a phone held upright, turns it a quarter turn about its top-left corner. The four --safe-* numbers are the
-     space the phone keeps for its notch and home bar, named by the side of the GAME they are on. */
-  #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; overflow: hidden;
+  /* THE STAGE: everything the game draws (the 3D picture and the controls). It simply fills the screen; the game is
+     played in landscape, and src/core/orientation.ts tells the game whenever the stage changes size. The four
+     --safe-* numbers are the space the phone keeps for its notch, rounded corners and home bar. */
+  #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden;
     --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);
     --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
-  /* Turned: the game's left edge is the TOP of the phone, its right edge the bottom, and so on round. */
-  #stage.is-rotated {
-    --safe-left: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-bottom, 0px);
-    --safe-top: env(safe-area-inset-right, 0px); --safe-bottom: env(safe-area-inset-left, 0px); }
   #app { position: absolute; inset: 0; }
   #app canvas { display: block; width: 100%; height: 100%; }
   /* The controls layer lies over the game. It lets touches through; each control switches them back on for itself (src/ui/hud.css). */
   #ui { position: absolute; inset: 0; pointer-events: none; }
+
+  /* ==================================================================================================================
+     THE SPLASH: the first thing on screen, while everything loads (Joshua, 2026-11-17: "a simple splash screen while
+     loading up everything with maybe an actual loading bar with percentage and estimated time remaining").
+
+     It is written straight into this page (its words below, its looks here), not made by the game's code, so it is on
+     screen from the very first moment: before the game's code has even arrived. The code then fills it in
+     (src/ui/splash.ts) from an honest measure of the loading (src/core/loadMeter.ts) and takes it away when the game
+     is ready. The colours are the controls' own (src/ui/hud.css).
+     ================================================================================================================== */
+  #splash { position: fixed; inset: 0; z-index: 900; box-sizing: border-box; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    /* (kept clear of the phone's notch, rounded corners and home bar) */
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 28px)
+             calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 28px);
+    background: radial-gradient(120% 95% at 50% 108%, #1a2740 0%, #101a2e 38%, #04060d 78%);
+    color: #eaf2ff; transition: opacity .4s ease; }
+  /* The game is ready: the splash fades away and stops taking touches (the code then removes it). */
+  #splash.is-done { opacity: 0; pointer-events: none; }
+  /* A faint outline of the dome, rising behind the words. */
+  #splash::before { content: ''; position: absolute; left: 6%; right: 6%; top: 9%; bottom: -2px;
+    border: 1px solid rgba(94, 232, 200, .3); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    box-shadow: inset 0 26px 60px -34px rgba(94, 232, 200, .5); pointer-events: none; }
+  .splash-box { position: relative; width: min(100%, 460px); text-align: center; }
+  .splash-kicker { font-size: 12px; font-weight: 700; letter-spacing: .42em; margin-right: -.42em; color: #5ee8c8; }
+  .splash-title { margin: 6px -.2em 22px 0; font-size: clamp(26px, 6.2vw, 40px); font-weight: 800; letter-spacing: .2em;
+    line-height: 1.1; color: #ffd56b; text-shadow: 0 0 22px rgba(255, 213, 107, .35); }
+  /* THE BAR: a track, and inside it the part that is done (its width is set by the code, 0% to 100%). */
+  .splash-bar { position: relative; height: 12px; border: 1px solid rgba(94, 232, 200, .55); border-radius: 8px;
+    background: rgba(16, 26, 46, .8); overflow: hidden; }
+  .splash-fill { width: 0%; height: 100%; border-radius: 7px; background: linear-gradient(90deg, #3fc9aa, #5ee8c8);
+    box-shadow: 0 0 14px rgba(94, 232, 200, .7); transition: width .35s ease-out; }
+  /* A soft light sweeping along the bar, so the screen is never quite still even while a long step is being worked
+     on. (It is moved by the phone's graphics chip, so it keeps going when the game's code is too busy to redraw.) */
+  .splash-bar::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 34%;
+    background: linear-gradient(90deg, transparent, rgba(234, 242, 255, .34), transparent);
+    transform: translateX(-110%); animation: splash-sweep 1.7s linear infinite; will-change: transform; }
+  @keyframes splash-sweep { to { transform: translateX(400%); } }
+  /* Under the bar: what is loading (left) and the percentage (right); under that, the time left. */
+  .splash-line { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-top: 10px;
+    font-size: 13px; letter-spacing: .03em; }
+  .splash-step { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .splash-percent { font-size: 17px; font-weight: 800; color: #5ee8c8; font-variant-numeric: tabular-nums; }
+  /* (its line keeps its height when it is empty, so nothing shifts when the time appears) */
+  .splash-time { min-height: 1.4em; margin-top: 4px; text-align: left; font-size: 12px; letter-spacing: .03em; color: #8fa3c8; }
+  /* Loading failed: the words say so, in gold, and the light stops sweeping. */
+  #splash.is-broken .splash-step { white-space: normal; }
+  #splash.is-broken .splash-bar::after { animation: none; opacity: 0; }
+
+  /* ==================================================================================================================
+     THE ROTATE COVER: the game is played in landscape (Joshua, 2026-11-17: "Make it like how Beyond Extinction does
+     it ... will say, game is played in landscape, please rotate your device to play").
+
+     Whenever a touch screen is held upright this covers everything: the splash while loading, the game while
+     playing (which pauses: src/ui/pauseMenu.ts). It is shown and hidden by the browser itself, with the rule just
+     below ("the screen is taller than wide AND is worked by a finger"), so no code can ever leave it stuck on.
+     A computer with a mouse is never covered, however narrow its window: it cannot be turned on its side.
+     (src/core/orientation.ts asks the browser the very same question to know when to pause. Keep the two the same.)
+     ================================================================================================================== */
+  #rotate-cover { display: none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate-cover { display: flex; position: fixed; inset: 0; z-index: 1000; box-sizing: border-box;
+      align-items: center; justify-content: center; text-align: center;
+      padding: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-right, 0px) + 28px)
+               calc(env(safe-area-inset-bottom, 0px) + 24px) calc(env(safe-area-inset-left, 0px) + 28px);
+      background: radial-gradient(95% 60% at 50% 46%, #101a2e 0%, #04060d 72%); color: #eaf2ff; pointer-events: auto; }
+  }
+  .rotate-box { max-width: 300px; }
+  /* A little phone that turns onto its side, over and over. */
+  .rotate-phone { width: 46px; height: 82px; margin: 0 auto 30px; border: 3px solid #5ee8c8; border-radius: 11px;
+    box-shadow: 0 0 18px rgba(94, 232, 200, .45); animation: rotate-phone 2.4s ease-in-out infinite; }
+  @keyframes rotate-phone { 0%, 28% { transform: rotate(0deg); } 62%, 100% { transform: rotate(-90deg); } }
+  .rotate-title { margin-bottom: 10px; font-size: 21px; font-weight: 800; letter-spacing: .14em; color: #ffd56b; }
+  .rotate-hint { margin: 0; font-size: 15px; line-height: 1.5; }
+  .rotate-note { margin: 18px 0 0; font-size: 12px; line-height: 1.5; color: #8fa3c8; }
+
+  /* Someone who has asked their device for less movement gets a still bar and a still phone. */
+  @media (prefers-reduced-motion: reduce) {
+    .splash-bar::after, .rotate-phone { animation: none; }
+    .splash-bar::after { opacity: 0; }
+    .rotate-phone { transform: rotate(-90deg); }
+  }
 </style>
 </head>
 <body>
@@ -37,6 +115,33 @@
   <div id="app"></div>
   <div id="ui"></div>
 </div>
+
+<!-- THE SPLASH (its looks are in the styles above; src/ui/splash.ts fills in the bar, the words and the time). -->
+<div id="splash" role="status">
+  <div class="splash-box">
+    <div class="splash-kicker">GALAXY DEFENDERS</div>
+    <div class="splash-title">MOTHERLANDS</div>
+    <div class="splash-bar" id="splash-bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="splash-fill" id="splash-fill"></div>
+    </div>
+    <div class="splash-line">
+      <span class="splash-step" id="splash-step">Starting…</span>
+      <span class="splash-percent" id="splash-percent">0%</span>
+    </div>
+    <div class="splash-time" id="splash-time"></div>
+  </div>
+</div>
+
+<!-- THE ROTATE COVER (shown by the styles above whenever a touch screen is held upright; there is no code behind it). -->
+<div id="rotate-cover" role="alert">
+  <div class="rotate-box">
+    <div class="rotate-phone"></div>
+    <div class="rotate-title">ROTATE YOUR DEVICE</div>
+    <p class="rotate-hint">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
+    <p class="rotate-note">Nothing happening? Switch off your phone's rotation lock.</p>
+  </div>
+</div>
+
 <script type="module" src="/src/main.ts"></script>
 <script type="module" src="/src/ui/versionTag.ts"></script>
 <script type="module" src="/src/ui/layoutEditor.ts"></script>

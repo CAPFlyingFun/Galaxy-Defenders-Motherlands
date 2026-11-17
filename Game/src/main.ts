@@ -13,6 +13,9 @@
 import * as THREE from 'three';
 import type { Hand, HeroineBody } from './core/contracts';
 import { keepLandscape, onStageResize } from './core/orientation';
+import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
+import { connectSplash, showSplashError } from './ui/splash';
+import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
 import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
@@ -60,7 +63,7 @@ type GameHeroine = HeroineBody & {
  *   Visual                     the Character Builder's own room, run out of sight (src/heroine/builderHeroine.ts):
  *                              the builder exactly, at several times the cost.
  *
- * Her code is fetched only when it is needed (the `import()`s below), and a line of text says she is loading.
+ * Her code is fetched only when it is needed (the `import()`s below), and the splash says what is loading (`say`).
  *
  *   ?heroine=fast|room|standin   force one of the two, or the simple stand-in figure (loads at once)
  *   ?look=blaze                  Joshua's own export (the all-pink two-piece), in place of the suit
@@ -139,7 +142,20 @@ async function start(): Promise<void> {
   const uiHost = document.getElementById('ui');
   const stage = document.getElementById('stage');
   if (!host || !uiHost || !stage) throw new Error('the page has no #stage, #app or #ui');
-  keepLandscape(stage); // the game is always drawn wide, turning itself on an upright phone (src/core/orientation.ts)
+
+  // ---- LOADING: the splash and its meter (Joshua, 2026-11-17) ---------------------------------------------------
+  // "Create a simple splash screen while loading up everything with maybe an actual loading bar with percentage and
+  // estimated time remaining" and "wait until it all loads in before starting for a smoother experience".
+  // The splash is already on screen (it is written into index.html). From here until the game's first picture has
+  // been drawn, every step below tells the METER what it is doing (`meter.step`), and the meter also counts the bytes
+  // of every file as it arrives; the splash shows what the meter says (src/core/loadMeter.ts, src/ui/splash.ts).
+  // Nothing of the game runs until all of it is in: the controls and the game loop are only made at the end.
+  const loadIs = loadKind(loadHeroineSettings()); // which kind of load this is: "fast live", "fast", "room"...
+  const meter = startLoadMeter(loadIs);
+  meter.step('world', 'Building the dome and the city…');
+  const splash = connectSplash(meter);
+
+  keepLandscape(stage); // keeps the game fitted to the screen, and knows when a phone is held upright (src/core/orientation.ts)
   preventPageZoom(); // no double-tap or pinch zoom of the page itself (src/input/noZoom.ts)
   // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
   let debugRemembered = false;
@@ -201,12 +217,8 @@ async function start(): Promise<void> {
   scene.add(shadowFloor);
 
   // ---- Heroine, camera, controls -----------------------------------------------
-  // A line of text in the middle of the screen while she loads (a character appears dressed, all at once).
-  const loading = document.createElement('div');
-  loading.style.cssText = 'position:absolute;left:0;right:0;top:45%;text-align:center;font-size:15px;letter-spacing:.08em;color:#5ee8c8;pointer-events:none;text-shadow:0 0 8px #04060d;';
-  uiHost.appendChild(loading);
-  const heroine = await createHeroine(renderer, scene, graphics, (text) => { loading.textContent = text; });
-  loading.remove();
+  // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
+  const heroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text));
   scene.add(heroine.root);
   // Real shadows on or off (Settings): the renderer's shadow pictures, the key light's, and every part of her casting.
   let realShadows = false;
@@ -222,20 +234,22 @@ async function start(): Promise<void> {
   applyShadows();
   // THE LIVE BODY (Joshua, 2026-11-17: "everything enabled but only the skin drawn"): the Character Builder's whole
   // room for her (baby, womb, organs and the rest) opened out of sight and run every frame, never drawn. It is slow
-  // to open, so it is opened now that she is on screen and attached when it is ready; the game is playable meanwhile.
-  let liveNote = graphics.liveBody === 'on' && heroine.attachLive ? 'live body: loading…' : '';
+  // to open, and the game WAITS for it behind the splash (Joshua, 2026-11-17: "Yes, wait until it all loads in before
+  // starting for a smoother experience"); each thing the room reports while opening is a step on the splash.
+  // If it cannot be opened the game starts without it, and the debug readout says so.
+  let liveNote = '';
+  let liveOpened = false;
   if (graphics.liveBody === 'on' && heroine.attachLive) {
-    void (async () => {
-      try {
-        const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
-        const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look'))]);
-        heroine.attachLive?.(live);
-        liveNote = '';
-      } catch (error) {
-        console.error('The live body could not be opened; she carries on without it.', error);
-        liveNote = 'live body: could not open';
-      }
-    })();
+    try {
+      meter.step('live body', 'Blaze\'s live body: fetching its code…');
+      const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
+      const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look'))], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
+      heroine.attachLive(live);
+      liveOpened = true;
+    } catch (error) {
+      console.error('The live body could not be opened; she carries on without it.', error);
+      liveNote = 'live body: could not open';
+    }
   }
 
   const motion = new PlayerMotion();
@@ -340,6 +354,43 @@ async function start(): Promise<void> {
     (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, rig, controls, targets, pace, vitals };
   }
 
+  // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
+  // Everything is in. Two last steps behind the splash, so the game does not stutter as it appears: the graphics
+  // chip is given every material to get ready, and then the game's FIRST picture is drawn (the first is by far the
+  // slowest: every shape and picture is handed to the chip as it is first drawn). The splash lifts when that
+  // picture is done: see the top of the loop below.
+  meter.step('picture', 'Getting the picture ready…');
+  try {
+    // (never waited on for more than 5 seconds, and never a reason not to start: it is only a head start)
+    await Promise.race([renderer.compileAsync(scene, rig.camera), new Promise((enough) => setTimeout(enough, 5000))]);
+  } catch (error) {
+    console.warn('The materials could not be got ready ahead of time; the first picture does it instead.', error);
+  }
+  meter.step('first picture', 'Drawing the first picture…');
+  /** How many frames have begun. The first one is drawn behind the splash; the game starts with the second. */
+  let framesBegun = 0;
+  // PAUSING (src/ui/pauseMenu.ts): "if it starts in portrait or you rotate from landscape to portrait, it will pause
+  // and basically open up and pause menu if in the game already". The pause menu is made as the game starts (so a
+  // phone that is upright at that moment starts paused). While `pause.paused` is true the loop below does nothing.
+  let pause: Pause | null = null;
+  const beginPlaying = (): void => {
+    // (this load is remembered as a guide for the next only if it went the way its kind says it should)
+    meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
+    splash.done();
+    pause = createPause({
+      stage, host: uiHost,
+      // Whatever the player was holding is let go: the sticks back to their middles, no button down.
+      onPause: () => {
+        controls.stickX = controls.stickY = controls.lookStickX = controls.lookStickY = 0;
+        controls.buttonLeft = controls.buttonRight = controls.buttonFire = false;
+      },
+    });
+    if (debug) Object.assign((window as unknown as { gdm: object }).gdm, { pause });
+  };
+  // The keys do nothing until the game has started, nor while it is paused (V would switch the view behind the menu).
+  const playKeys = controls.onKey;
+  controls.onKey = (key) => { if (pause && !pause.paused) playKeys?.(key); };
+
   // ---- The loop --------------------------------------------------------------------
   const muzzle = new THREE.Vector3();
   // One FrameInfo is reused every frame (nothing new is created inside the loop).
@@ -348,9 +399,26 @@ async function start(): Promise<void> {
   let elapsed = 0;
   let readoutTimer = 0;
   let readoutFrames = 0;
+  // (for the test scripts: the load meter, and the loop's own clock, to see that game time stands still)
+  if (debug) Object.assign((window as unknown as { gdm: object }).gdm, { meter, frame: info });
 
   const frame = (now: number) => {
     requestAnimationFrame(frame);
+
+    // ---- LOADING ENDS, AND PAUSED? (see just above the loop) --------------------------------------------------
+    // The second frame beginning means the first picture has been drawn: the splash lifts and the game starts.
+    if (framesBegun < 2 && ++framesBegun === 2) beginPlaying();
+    // PAUSED: no time passes. `last` is kept at "now", so when the game resumes it carries on from this instant
+    // and does not try to catch up (nothing jumps). Anything dragged or clicked meanwhile is thrown away. The
+    // still picture is drawn again only when it is wanted (after the screen changed size, and now and then).
+    if (pause?.paused) {
+      last = now;
+      controls.takeLookX(); controls.takeLookY(); controls.takeZoom(); controls.takeClicks();
+      if (pause.wantsPicture(now)) renderer.render(scene, rig.camera);
+      return;
+    }
+    // ---- (the game, as before) ---------------------------------------------------------------------------------
+
     const dt = document.hidden ? 0 : Math.min(MAX_STEP, Math.max(0, (now - last) / 1000));
     const realDt = (now - last) / 1000;
     last = now;
@@ -486,9 +554,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 start().catch((error: unknown) => {
   // If something fails while starting (for example the dome model does not load), say so on the page.
+  // (on the splash, which is still up: it covers the page, so a message under it would never be seen)
   console.error(error);
-  const message = document.createElement('p');
-  message.style.cssText = `position:fixed;inset:0;margin:auto;height:3em;text-align:center;color:${PALETTE.gold}`;
-  message.textContent = 'Galaxy Defenders could not start. Please reload the page.';
-  document.body.appendChild(message);
+  showSplashError('Galaxy Defenders could not start. Please reload the page.', PALETTE.gold);
 });

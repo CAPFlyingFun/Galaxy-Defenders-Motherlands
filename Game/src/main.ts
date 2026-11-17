@@ -15,6 +15,7 @@ import type { Hand, HeroineBody } from './core/contracts';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
 import { Controls } from './input/controls';
+import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { createCity } from './world/city';
@@ -66,6 +67,7 @@ const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const FREE_WALK_KEY = 'gdm.freeWalkThirdPerson'; // where the setting is remembered on this device
+const DEBUG_KEY = 'gdm.debug'; // "Show FPS and test tools" in Settings, remembered the same way
 
 /** Read the remembered "free walk" setting (private browsing may refuse; then it is simply off). */
 function loadFreeWalk(): boolean {
@@ -88,7 +90,11 @@ async function start(): Promise<void> {
   const host = document.getElementById('app');
   const uiHost = document.getElementById('ui');
   if (!host || !uiHost) throw new Error('the page has no #app or #ui');
-  const debug = new URLSearchParams(location.search).get('debug') === '1';
+  preventPageZoom(); // no double-tap or pinch zoom of the page itself (src/input/noZoom.ts)
+  // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
+  let debugRemembered = false;
+  try { debugRemembered = localStorage.getItem(DEBUG_KEY) === '1'; } catch { /* private browsing: just off */ }
+  const debug = new URLSearchParams(location.search).get('debug') === '1' || debugRemembered;
 
   // ---- Renderer ---------------------------------------------------------------
   // No shadows (the ground paints her shadow itself) and at most 2 device pixels
@@ -162,6 +168,11 @@ async function start(): Promise<void> {
   const hud = new Hud(uiHost, controls, {
     debug,
     freeWalk,
+    onDebugChange(on) {
+      // The readout is built when the game starts, so remember the choice and start again.
+      try { localStorage.setItem(DEBUG_KEY, on ? '1' : '0'); } catch { /* cannot remember it: nothing to do */ }
+      location.reload();
+    },
     onFreeWalkChange(on) {
       freeWalk = on;
       saveFreeWalk(on);

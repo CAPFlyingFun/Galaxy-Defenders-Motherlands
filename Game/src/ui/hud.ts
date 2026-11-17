@@ -24,6 +24,8 @@ export interface HudOptions {
   /** Whether "Free walk in third person" starts ticked. */
   freeWalk: boolean;
   onFreeWalkChange(on: boolean): void;
+  /** The "Show FPS and test tools" tick box in Settings was changed. */
+  onDebugChange(on: boolean): void;
   onToggleView(): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
@@ -109,6 +111,14 @@ export class Hud {
     freeWalk.checked = options.freeWalk;
     element('span', '', row, 'Free walk in third person');
     freeWalk.addEventListener('change', () => options.onFreeWalkChange(freeWalk.checked));
+    // A second tick box: the FPS readout and the dome test buttons, so they can be turned on from a phone
+    // without typing "?debug=1" into the address.
+    const debugRow = element('label', '', settings);
+    const debugBox = element('input', '', debugRow);
+    debugBox.type = 'checkbox';
+    debugBox.checked = options.debug;
+    element('span', '', debugRow, 'Show FPS and test tools');
+    debugBox.addEventListener('change', () => options.onDebugChange(debugBox.checked));
     gear.addEventListener('click', () => (settings.hidden = !settings.hidden));
 
     // ---- Top left: debug -----------------------------------------------------

@@ -120,6 +120,8 @@ export class ShapedBody {
 
   /** Her points as shaped now (x, y, z each, every point of the full body). Read only: do not write into it. */
   get points(): Float32Array { return this.position; }
+  /** How far one of her four motion shapes (MOTION_SHAPES' order) moves each point (x, y, z each). Read only. */
+  motionMoves(k: number): Float32Array { return this.motion[k]; }
 
   /** Does a level of this detail carry all her body shapes live? */
   isLive(detail: number): boolean { return detail <= LIVE_UP_TO; }

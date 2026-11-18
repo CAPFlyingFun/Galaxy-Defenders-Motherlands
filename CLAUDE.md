@@ -45,6 +45,10 @@ use the game's single copy of three.js.
   (again whenever her shape changes). A hand coming across at belly height stops at her belly; looking up it passes
   over, looking down it stops; an upper arm that would cut her breast is turned out at the shoulder and the elbow
   bends as needed. Her bust turns with her shoulders (her lower spine bone carries it).
+- Belt gear (Joshua, 2026-11-18; `Game/src/heroine/fast/beltGear.ts`): a belt pinned to her skin along her leggings'
+  grey waistband trim (found in her own picture), thigh straps and a drop strap each side, a holster on each thigh (rigid on
+  the thigh bone, gun barrel down, grip back) and six clip pouches, three behind each hip. Next: holster/draw one or both
+  guns on the go (like the table), then reloading one gun at a time from the belt (the other waits holstered).
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
 - Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces

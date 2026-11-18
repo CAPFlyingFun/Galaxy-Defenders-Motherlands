@@ -54,6 +54,7 @@ import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
+import { buildBeltGear, type BeltGear } from './beltGear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
@@ -201,6 +202,8 @@ export interface FastHeroine extends HeroineBody {
   readonly loaded: { readonly megabytes: number; readonly seconds: number };
   /** The week of pregnancy her belly stands for, off her own chart (0: not pregnant). Her vitals take it into account. */
   readonly weeks: number;
+  /** Her belt, thigh holsters and clip pouches (beltGear.ts): where a gun sits holstered, and the clips she carries. */
+  readonly gear: BeltGear;
   /** How long each lighter detail level took to work out, milliseconds (only levels made so far). */
   levelTimes(): Record<number, number>;
 }
@@ -581,6 +584,20 @@ if (uHideHead > 0.5) {
     guns[hand].object.matrix.copy(seat[hand]);
     arms[hand].hand.add(guns[hand].object);
   }
+  // ---- 8b. her belt, thigh holsters and clip pouches (beltGear.ts; Joshua, 2026-11-18): made now, while her arms
+  // hang relaxed, so each holster sits where her hand hangs. The belt follows her leggings' waistband.
+  const gear: BeltGear = buildBeltGear({
+    root, skin, belly: body.belly, points: body.points, meshToRest, skinIndex: holdIndex, skinWeight: holdWeight,
+    motionMoves: MOTION_SHAPES.map((_, k) => body.motionMoves(k)), influences,
+    uv: layout, picture: (look.albedo.image as CanvasImageSource | undefined) ?? null, pictureFlipY: look.albedo.flipY,
+    trunkBones: [hipsBone, pelvisBone, ...backBones],
+    thighBone: { left: bones[joints.hipL], right: bones[joints.hipR] },
+    leftSign,
+    gunHanging: {
+      left: new THREE.Matrix4().copy(arms.left.hand.matrixWorld).multiply(seat.left),
+      right: new THREE.Matrix4().copy(arms.right.hand.matrixWorld).multiply(seat.right),
+    },
+  });
   const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
   /** Whether each hand holds its gun (its fingers may close on other things too: a clip). */
   const gunIn: Record<Hand, boolean> = { left: true, right: true };
@@ -598,6 +615,7 @@ if (uHideHead > 0.5) {
   viewBall(skin);
   if (hair) { viewBall(hair.full); if (hair.light) viewBall(hair.light); }
   for (const mesh of pieces.meshes) viewBall(mesh);
+  for (const mesh of gear.meshes) if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) viewBall(mesh as THREE.SkinnedMesh);
 
   // ---- 10. detail: what she is drawn at, and what she is asked to be ---------------------------------------------------
   const auto = new AutoDetail();
@@ -690,6 +708,7 @@ if (uHideHead > 0.5) {
     get ready() { return !disposed; },
     loaded: { megabytes, seconds },
     weeks: look.manifest.weeks ?? weekForBump(body.belly),
+    gear,
 
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
@@ -812,7 +831,7 @@ if (uHideHead > 0.5) {
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); armClear.setEggs(measureEggs()); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); armClear.setEggs(measureEggs()); gear.reshape(body.points, body.belly); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
@@ -968,6 +987,7 @@ if (uHideHead > 0.5) {
       for (const hand of ['left', 'right'] as const) { guns[hand].object.removeFromParent(); guns[hand].dispose(); }
       hair?.dispose();
       pieces.dispose();
+      gear.dispose();
       skin.onBeforeRender = () => {};
       body.dispose();
       materials.dispose();

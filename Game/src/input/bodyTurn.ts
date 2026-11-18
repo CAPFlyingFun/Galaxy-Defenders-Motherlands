@@ -58,8 +58,11 @@ export const TURN = {
    * are 72, 54, 36 and 18 degrees.
    */
   shares: { shoulders: 0.8, belly: 0.6, upperLegs: 0.4, feet: 0.2 },
-  /** Once the looking stops, body North comes round the whole reach in this long (Joshua: "after 4s"); less to go takes less. */
-  catchUpSeconds: 4,
+  /**
+   * Once the looking stops, body North comes round the whole reach in this long; less to go takes less. (Joshua:
+   * "after 4s" at first; "can we lower that 4s down to 1.3s?", 2026-11-17.)
+   */
+  catchUpSeconds: 1.3,
   /** The look counts as stopped when it turns slower than this each second; faster than that body North waits. */
   stillBelow: 20 * DEG,
   /** How long the look's turning speed is read over (a thumb on a screen moves in small jumps). */

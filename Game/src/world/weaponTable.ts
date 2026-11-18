@@ -31,7 +31,7 @@ export const TABLE = Object.freeze({
   leg: 0.05,
   /** Each gun stand: how far from the middle to the side, how far into the table, and how tall. */
   standSide: 0.17,
-  standIn: -0.15,
+  standIn: -0.19,
   standTall: 0.07,
   /** Where she stands to use it: this far back from the table's middle. */
   standBack: 0.62,
@@ -103,9 +103,20 @@ export class WeaponTable {
     return out.premultiply(this.root.matrixWorld);
   }
 
-  /** Where she stands to use the table (world, on the floor). */
-  standSpot(out: THREE.Vector3): THREE.Vector3 {
-    return out.set(0, 0, -TABLE.standBack).applyMatrix4(this.root.matrixWorld);
+  /**
+   * Where she stands to use the table (world, on the floor): `standBack` from its middle, or further if her belly
+   * stands out more than that leaves room for (`bellyAhead`, metres in front of her middle; 2 cm to spare).
+   */
+  standSpot(out: THREE.Vector3, bellyAhead = 0): THREE.Vector3 {
+    const back = Math.max(TABLE.standBack, TABLE.depth / 2 + bellyAhead + 0.02);
+    return out.set(0, 0, -back).applyMatrix4(this.root.matrixWorld);
+  }
+
+  /** The face of its top nearest her, for her body to keep off: a point on it, its outward direction, its height. */
+  nearFace(point: THREE.Vector3, outward: THREE.Vector3): { point: THREE.Vector3; outward: THREE.Vector3; top: number } {
+    point.set(0, this.heightNow, -TABLE.depth / 2).applyMatrix4(this.root.matrixWorld);
+    outward.set(0, 0, -1).transformDirection(this.root.matrixWorld);
+    return { point, outward, top: this.heightNow };
   }
 
   /** The way she faces standing at it (radians, 0 = +Z). */

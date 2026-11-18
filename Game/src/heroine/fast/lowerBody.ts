@@ -50,9 +50,9 @@ export const LOWER = Object.freeze({
   /** How much of her arm's length (shoulder to the hand bone) she reaches with, before she bends in for more. */
   armReach: 0.88,
   /** The most she folds forward, degrees: with no belly, and with a full one (her belly is in the way). */
-  hingeMost: [75, 35] as const,
+  hingeMost: [75, 42] as const,
   /** Squatting and kneeling, the most she leans forward, degrees. */
-  hingeDownMost: [45, 30] as const,
+  hingeDownMost: [65, 42] as const,
   /** Of a forward bend, the share at her hips (the rest is shared up her back). */
   hingeAtHips: 0.65,
   /** LOW: how far her hips drop for each metre the target is below her mid-belly, and at most, metres. */
@@ -76,6 +76,14 @@ export const LOWER = Object.freeze({
   frontFootForward: 0.32,
   /** The kneeling foot's toes tipped down onto the floor, degrees. */
   kneelToesDown: 80,
+  /**
+   * KNEELING, HER KNEES APART (Joshua, 2026-11-17: "not only bend them but also spread the legs apart which would
+   * give more room regardless of belly size. Maybe try 10° added to each side for a 20° spread"): each thigh swung out
+   * this far from straight down, degrees, the knee (and its foot) moved out with it.
+   */
+  kneelSpread: 10,
+  /** KEPT OFF THE TABLE (her belly): how quickly her hips come forward again once she is clear, metres a second. */
+  keepOffBackPerSecond: 0.2,
 });
 
 type Mode = 'reach' | 'low' | 'squat' | 'kneelLeft' | 'kneelRight' | 'kneelBoth';
@@ -117,6 +125,8 @@ export class LowerBody {
   /** The most she may bend in this pose (her belly allows), radians; and how far she has leaned in further, metres. */
   private hingeMost = 0;
   private leanIn = 0;
+  /** How far her hips are held back to keep her belly off something in front of her (a table), metres. */
+  private pushBack = 0;
   /**
    * Her hips' place as her pose left it, and as this wrote it. Her pose sets every bone's TURN afresh each frame, but
    * not her hips' PLACE: so the place this moved them to is put back first, each frame, or she would sink a little
@@ -219,6 +229,13 @@ export class LowerBody {
    * How far short her hands stayed last frame, metres (handReach.ts): she leans in further, a little each frame, until
    * they arrive.
    */
+  /** Her belly against something in front of her: her hips are held back until it is clear (see `pushBack`). */
+  keepOff(into: number, dt: number): void {
+    // (into: how far her belly is into the thing in front of her, metres; less than 0, how far clear of it)
+    if (into > 0) this.pushBack = Math.min(0.4, this.pushBack + into * 0.8);
+    else if (into < -0.01) this.pushBack = Math.max(0, this.pushBack - LOWER.keepOffBackPerSecond * dt);
+  }
+
   stillShort(short: number, dt: number): void {
     if (this.weight < 1 || !this.wantDown) return;
     if (short > 0.004) this.leanIn = Math.min(this.trunk * this.hingeMost + LOWER.hipsForwardMost, this.leanIn + short * LOWER.leanInPerSecond * dt * 10);
@@ -234,7 +251,7 @@ export class LowerBody {
     this.weight = k;
     const kneeling = this.mode.startsWith('kneel');
     this.passive = this.mode === 'squat' || kneeling ? k : 0;
-    if (k <= 0) { if (!this.wantDown) this.lastTargetY = NaN; return; }
+    if (k <= 0) { if (!this.wantDown) { this.lastTargetY = NaN; this.pushBack = 0; } return; }
 
     // Her frame now: her left, her forward.
     this.root.getWorldQuaternion(rootQ);
@@ -251,7 +268,7 @@ export class LowerBody {
     // 1. her hips lowered, and moved back a little (or forward, leaning in)
     this.hips.getWorldPosition(v);
     v.y -= this.drop * k;
-    v.addScaledVector(forward, (hipsForward - this.back) * k);
+    v.addScaledVector(forward, (hipsForward - this.back) * k - this.pushBack);
     if (this.hips.parent) { this.hips.parent.worldToLocal(v); this.hips.position.copy(v); this.hipsWritten.copy(v); }
     this.hips.updateMatrixWorld(true);
 
@@ -279,6 +296,9 @@ export class LowerBody {
       poleWant.copy(forward);
       if (this.mode === 'squat') poleWant.multiplyScalar(Math.cos(spread)).addScaledVector(leftAxis, side * Math.sin(spread));
       if (down) poleWant.addScaledVector(up, -0.2);
+      // (kneeling, both knees open a little: kneelSpread out to each side)
+      const spreadOut = kneeling ? Math.sin(LOWER.kneelSpread * DEG) : 0;
+      if (kneeling) poleWant.addScaledVector(leftAxis, side * spreadOut);
       poleWant.normalize();
       const pole = poleNow.lerp(poleWant, k).normalize();
       // the foot: where it stands, or (kneeling) the shin flat on the floor behind the knee, or (the front foot) a step ahead
@@ -286,12 +306,13 @@ export class LowerBody {
       if (down) {
         // the knee under her hip on the floor, the foot a shin's length behind it, on its toes
         w.copy(hipAt).addScaledVector(forward, -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3);
+        w.addScaledVector(leftAxis, side * this.thigh * spreadOut);
         w.y = this.root.position.y + LOWER.kneeAboveFloor;
         v.copy(w).addScaledVector(forward, -this.shin * 0.97);
         v.y = this.root.position.y + LOWER.kneeAboveFloor + 0.03;
         footAt.lerp(v, k);
       } else if (front) {
-        footAt.addScaledVector(forward, LOWER.frontFootForward * k);
+        footAt.addScaledVector(forward, LOWER.frontFootForward * k).addScaledVector(leftAxis, side * this.thigh * spreadOut * k);
       }
       solveTwoBone(leg.hip, leg.knee, leg.ankle, footAt, pole, 1);
       // the foot turned as it was (flat on the floor), or, kneeling, its toes tipped down onto the floor

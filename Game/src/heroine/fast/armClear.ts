@@ -267,6 +267,24 @@ export class ArmClear {
   get eggs(): readonly Egg[] { return this.obstacles.map((o) => o.egg); }
 
   /**
+   * HER BELLY'S FURTHEST POINT ALONG A DIRECTION, in the world, as she is posed now (her bones' world matrices up to
+   * date): for keeping her off the weapon table (Joshua, 2026-11-17: "a simple collision to the table to belly/body so
+   * it doesn't matter the belly size"). Null if she has no belly egg.
+   */
+  bellyFurthest(direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 | null {
+    const o = this.obstacles[0];
+    if (!o) return null;
+    const egg = o.egg;
+    o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[egg.bone]);
+    o.fromFit.copy(o.toFit).invert();
+    // the direction in the egg's own frame; the point of an egg furthest along d is its middle + R²d / |Rd|
+    from.copy(direction).transformDirection(o.toFit);
+    const sx = egg.rx * egg.rx * from.x, sy = egg.ry * egg.ry * from.y, sz = egg.rz * egg.rz * from.z;
+    const n = Math.sqrt(sx * from.x + sy * from.y + sz * from.z) || 1;
+    return out.set(egg.cx + sx / n, egg.cy + sy / n, egg.cz + sz / n).applyMatrix4(o.fromFit);
+  }
+
+  /**
    * One frame, after her pose, her turns and her aim are on her bones (and their world matrices are up to date):
    * each arm is moved out of her belly and her breasts if it is in them.
    */

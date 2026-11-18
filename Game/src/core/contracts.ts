@@ -77,6 +77,13 @@ export interface HeroineHands {
   releaseGun(hand: Hand, parent: THREE.Object3D): THREE.Object3D;
   /** Take this hand's gun back (wherever it lies): it is held as before. */
   takeGun(hand: Hand): void;
+  /**
+   * Something in front of her that her body must keep off (a table): a vertical face (a point on it, and its
+   * outward direction, toward her), up to a height `top` (the table's top). Null: nothing.
+   */
+  keepOff(face: { point: THREE.Vector3; outward: THREE.Vector3; top: number } | null): void;
+  /** How far her belly stands out in front of her, metres from her middle (for where she stands at a table). */
+  bellyAhead(): number;
   /** How low she is (0 standing, 1 fully down) and how (reach, low, squat, kneelLeft, kneelRight, kneelBoth). */
   lowering(): { weight: number; mode: string; drop?: number; bend?: number };
 }

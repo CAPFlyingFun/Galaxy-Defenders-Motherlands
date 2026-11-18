@@ -534,6 +534,11 @@ if (uHideHead > 0.5) {
     bone(joints.shoulderL), bone(joints.wristL), leftSign);
   /** Where her hands are reaching (the middle of the hands that have a job), for her body to get down to. */
   const reachPoint = new THREE.Vector3(), reachOne = new THREE.Vector3();
+  /** What her body keeps off (the table's near face), and scratch for her belly's furthest point toward it. */
+  let keepFace: { point: THREE.Vector3; outward: THREE.Vector3; top: number } | null = null;
+  const bellyAt = new THREE.Vector3(), toward = new THREE.Vector3(), bellyLow = new THREE.Vector3(), DOWN = new THREE.Vector3(0, -1, 0);
+  /** How close her belly may come to what it keeps off, metres. */
+  const KEEP_GAP = 0.02;
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
   const turnUpright = (b: THREE.Bone, angle: number): void => {
@@ -704,6 +709,8 @@ if (uHideHead > 0.5) {
         gun.matrix.copy(seat[hand]);
         reach.holding[handIndex(hand)] = true;
       },
+      keepOff: (face) => { keepFace = face; },
+      bellyAhead: () => { const e = armClear.eggs[0]; return e ? e.cz + e.rz : 0.15; },
       lowering: () => ({ weight: lower.weight, mode: lower.mode, drop: lower.drop, bend: lower.hinge * 180 / Math.PI }),
     },
 
@@ -831,6 +838,14 @@ if (uHideHead > 0.5) {
         for (const i of [0, 1] as const) if (reach.hasJob(i) && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
         lower.aimAt(count > 0 ? reachPoint.multiplyScalar(1 / count) : null, armClear.eggs[0] ?? null, body.belly);
         lower.apply(frame.dt, body.belly);
+        // HER BELLY KEPT OFF THE TABLE (Joshua: "so it doesn't matter the belly size"): its point nearest the table's
+        // face; if that is closer than KEEP_GAP (and her belly is low enough to meet the table, not above its top),
+        // her hips are held back by as much (next frame on: lowerBody.ts `keepOff`).
+        if (keepFace && armClear.bellyFurthest(toward.copy(keepFace.outward).negate(), bellyAt) && armClear.bellyFurthest(DOWN, bellyLow)) {
+          const clear = bellyAt.sub(keepFace.point).dot(keepFace.outward);
+          const meets = bellyLow.y < keepFace.top + KEEP_GAP;
+          lower.keepOff(meets ? KEEP_GAP - clear : -1, frame.dt);
+        } else lower.keepOff(-1, frame.dt);
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

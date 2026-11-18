@@ -37,6 +37,7 @@ export const TABLE_USE = Object.freeze({
 type Step = 'idle' | 'walk' | 'face' | 'reach' | 'hold' | 'back';
 
 const spot = new THREE.Vector3(), pose = new THREE.Matrix4(), slotAt = new THREE.Matrix4();
+const facePoint = new THREE.Vector3(), faceOut = new THREE.Vector3();
 
 export class TableUse {
   step: Step = 'idle';
@@ -52,7 +53,7 @@ export class TableUse {
 
   /** How far she is from her spot at the table, metres (the buttons show when she is near). */
   distance(x: number, z: number): number {
-    this.table.standSpot(spot);
+    this.table.standSpot(spot, this.heroine.hands?.bellyAhead() ?? 0);
     return Math.hypot(spot.x - x, spot.z - z);
   }
 
@@ -84,6 +85,8 @@ export class TableUse {
     }
     this.step = 'walk';
     this.timer = 0;
+    // her body keeps off the table's edge while she is at it (whatever her belly's size)
+    h.keepOff(this.table.nearFace(facePoint, faceOut));
   }
 
   /**
@@ -99,7 +102,7 @@ export class TableUse {
     const face = this.table.faceYaw;
     switch (this.step) {
       case 'walk': {
-        this.table.standSpot(spot);
+        this.table.standSpot(spot, h.bellyAhead());
         if (Math.hypot(spot.x - atX, spot.z - atZ) > TABLE_USE.arrived) { out.walkTo = spot; out.look = face; break; }
         this.step = 'face'; this.timer = 0;
         // falls through to facing
@@ -140,6 +143,7 @@ export class TableUse {
         out.look = face;
         if (this.hands.some((hand) => h.reached(hand) > 0) || h.lowering().weight > 0) break;
         this.step = 'idle';
+        h.keepOff(null);
         break;
       }
     }

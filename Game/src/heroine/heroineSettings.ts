@@ -128,7 +128,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     liveBody: (address.get('live') ?? read(SETTING_KEYS.liveBody)) === 'off' ? 'off' : 'on',
     fovThird: asNumber(read(SETTING_KEYS.fovThird), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.third,
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
-    zoomThird: asNumber(read(SETTING_KEYS.zoomThird), 0, 1) ?? ZOOM_START_DEFAULT,
+    zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.1, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
   };
 }

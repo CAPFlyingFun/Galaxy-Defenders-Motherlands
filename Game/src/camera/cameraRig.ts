@@ -33,12 +33,21 @@ const THIRD_PITCH_START = 0.16; // looking slightly up
 const THIRD_PITCH_MIN = -0.45;
 const THIRD_PITCH_MAX = 1.25;
 const ZOOM_START = 0.17; // 0 = closest, 1 = furthest
-const ZOOM_OUT_SPEED = 0.55; // how much of the whole zoom one unit of pinch moves it, out...
-const ZOOM_IN_SPEED = 1.1; // ...and in (twice as fast)
+
 const DISTANCE_NEAR = 3.2; // metres behind the pivot at zoom 0
 const DISTANCE_FAR = 23; // ...and at zoom 1
 const PIVOT_NEAR = 2.1; // height of the pivot at zoom 0
 const PIVOT_FAR = 9; // ...and at zoom 1: zooming out also lifts the camera, to see over the plaza
+/**
+ * The closest the third-person camera comes: HALF the old closest distance (Joshua, 2026-11-17: "make zoom double for
+ * zoom inward... Out is good"). Zoom 0 is still where it was (3.2 m), so everything set before keeps its place; the
+ * zoom simply goes on below 0 to here, the pivot staying at its lowest above her head.
+ */
+export const ZOOM_MIN = -(DISTANCE_NEAR / 2) / (DISTANCE_FAR - DISTANCE_NEAR);
+/** How far behind the pivot the third-person camera is at a zoom, metres (for Settings to show). */
+export function thirdPersonDistance(zoom: number): number {
+  return DISTANCE_NEAR + (DISTANCE_FAR - DISTANCE_NEAR) * zoom;
+}
 /** The camera never goes lower than this. */
 const MIN_CAMERA_HEIGHT = 0.4;
 /** How quickly the camera settles (bigger = snappier). */
@@ -100,7 +109,7 @@ export class CameraRig {
 
   /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */
   setZoom(zoom: number): void {
-    this.zoom = clamp(zoom, 0, 1);
+    this.zoom = clamp(zoom, ZOOM_MIN, 1);
   }
 
   /** The field of view for the view she is in (a tall screen, which is never played, keeps its own). */
@@ -130,12 +139,9 @@ export class CameraRig {
         : clamp(this.pitch, FIRST_PITCH_MIN, FIRST_PITCH_MAX);
   }
 
-  /**
-   * Zoom the third-person camera: + moves it away, - brings it closer. Coming closer goes twice as fast as going
-   * away (Joshua, 2026-11-17: "make zoom double for zoom inward... Out is good").
-   */
+  /** Zoom the third-person camera: + moves it away, - brings it closer (as close as ZOOM_MIN). */
   applyZoom(amount: number): void {
-    this.zoom = clamp(this.zoom + amount * (amount < 0 ? ZOOM_IN_SPEED : ZOOM_OUT_SPEED), 0, 1);
+    this.zoom = clamp(this.zoom + amount * 0.55, ZOOM_MIN, 1);
   }
 
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */
@@ -156,7 +162,7 @@ export class CameraRig {
     // The pivot follows a point above her head, wherever on the map she is. Only the pivot moves with her: the
     // two angles are the player's alone, so the camera keeps the side of her it was dragged to while she runs.
     const feet = heroine.root.position;
-    const pivotHeight = PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * this.easedZoom;
+    const pivotHeight = PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * Math.max(0, this.easedZoom);
     if (this.pivotPlaced) {
       this.pivot.x += (feet.x - this.pivot.x) * ease;
       this.pivot.z += (feet.z - this.pivot.z) * ease;

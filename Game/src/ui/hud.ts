@@ -18,6 +18,7 @@ import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import { FOV_RANGE, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
@@ -291,8 +292,8 @@ export class Hud {
     element('h2', 'gd-settings-part', settings, 'CAMERA');
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
-    sliderRow('3rd person zoom', 'zoomThird', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`);
-    element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: where the 3rd person camera starts, close (0%) to far (100%); pinch to zoom in play.');
+    sliderRow('3rd person zoom', 'zoomThird', ZOOM_MIN, 1, 0.005, (v) => `${thirdPersonDistance(v).toFixed(1)} m`);
+    element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: how far behind her the 3rd person camera starts (1.6 m to 23 m); pinch to zoom in play.');
     // ---- Settings: the weapon table (Joshua, 2026-11-17: "how can you adjust the table height") ----------------
     element('h2', 'gd-settings-part', settings, 'WEAPON TABLE');
     sliderRow('Table height', 'tableHeight', TABLE_RANGE.least, TABLE_RANGE.most, 0.01, (v) => `${Math.round(v * 100)} cm`);

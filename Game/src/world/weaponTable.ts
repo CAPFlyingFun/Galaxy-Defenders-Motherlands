@@ -160,6 +160,9 @@ export class WeaponTable {
     return this.trayLocal(this.empties.length % TABLE.trayKeeps, out).premultiply(this.root.matrixWorld);
   }
 
+  /** The full clip standing in a rack slot (null: that slot is waiting to fill). */
+  rackClip(i: number): THREE.Object3D | null { return this.rack[i] ?? null; }
+
   /** An empty clip put in the tray (the oldest goes once there are `trayKeeps`). */
   dropInTray(clip: THREE.Object3D): void {
     if (this.empties.length >= TABLE.trayKeeps) {

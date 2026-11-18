@@ -68,6 +68,11 @@ const point: [number, number, number] = [0, 0, 0];
 export class FingerTouch {
   /** What each hand holds now [left, right], or null. */
   readonly shapes: [GripShape | null, GripShape | null] = [null, null];
+  /**
+   * Whether each hand KEEPS HOLD of its shape while it moves (a clip she carries): its fingers stay closed on it, and
+   * do not open on the way as they do while the hand goes to take something.
+   */
+  readonly firm: [boolean, boolean] = [false, false];
   /** How far each hand's fingers are closed onto its shape, 0 (its own grip) .. 1 (touching): eased. */
   readonly amount: [number, number] = [0, 0];
   /** Each finger's joints' closures where they last touched, percent, from the knuckle out (kept while a hand lets go). */
@@ -121,7 +126,7 @@ export class FingerTouch {
     const ease = 1 - Math.exp(-Math.max(0, dt) / TOUCH.seconds);
     for (const h of [0, 1] as const) {
       const shape = this.shapes[h];
-      const wanted = shape && reached[h] >= TOUCH.arrivedFrom ? 1 : 0;
+      const wanted = shape && (this.firm[h] || reached[h] >= TOUCH.arrivedFrom) ? 1 : 0;
       this.amount[h] += (wanted - this.amount[h]) * ease;
       if (Math.abs(this.amount[h] - wanted) < 0.002) this.amount[h] = wanted;
       if (this.amount[h] <= 0) continue;
@@ -174,6 +179,12 @@ export class FingerTouch {
     point[0] = at.x; point[1] = at.y; point[2] = at.z;
     return shapeDistance(shape, point);
   }
+
+  /** Which way a hand's fingers run, in the hand bone's own space (a direction). */
+  fingersAlong(hand: 0 | 1, out: THREE.Vector3): THREE.Vector3 { return out.setFromMatrixColumn(this.palm(hand).basis, 0); }
+
+  /** The middle of a hand's palm where a bar lies across it, in the hand bone's own space. */
+  palmPoint(hand: 0 | 1, out: THREE.Vector3): THREE.Vector3 { return out.copy(this.palm(hand).point); }
 
   /** A hand's palm, measured from her finger bones the first time it is asked for (it does not change). */
   private palm(h: 0 | 1): PalmFrame {

@@ -70,8 +70,11 @@ export interface HeroineHands {
   hasGun(hand: Hand): boolean;
   /** The pose (world) her hand bone must have to hold a gun that lies at `gunWorld` (the gun's own world matrix). */
   handPoseForGun(hand: Hand, gunWorld: THREE.Matrix4, out: THREE.Matrix4): THREE.Matrix4;
-  /** Send a hand to a pose (world), bending her down to it as needed; null brings it back to her own pose. */
-  reach(hand: Hand, pose: THREE.Matrix4 | null): void;
+  /**
+   * Send a hand to a pose (world), bending her down to it as needed; null brings it back to her own pose. `limit`
+   * holds her wrist within `most` radians of her own pose's, keeping `pivot` (a point in the hand) where the pose puts it.
+   */
+  reach(hand: Hand, pose: THREE.Matrix4 | null, limit?: { most: number; pivot: THREE.Vector3; along?: THREE.Vector3; tipsUpMost?: number }): void;
   /** How far a hand is on its way, 0..1 (1: arrived). */
   reached(hand: Hand): number;
   /** Let go of this hand's gun: it stays where it is, given to `parent` (a table). Returns the gun. */
@@ -100,8 +103,15 @@ export interface HeroineHands {
    * at `at` (a point on its axis), facing it along `palmTo`, the fingers going round toward `wrapToward`.
    */
   gripPose(hand: Hand, at: THREE.Vector3, axis: THREE.Vector3, palmTo: THREE.Vector3, wrapToward: THREE.Vector3, radius: number, out: THREE.Matrix4): THREE.Matrix4;
-  /** What this hand holds (its fingers close round it, each until it touches, once the hand is there), or null: let go. */
-  hold(hand: Hand, shape: GripShape | null): void;
+  /**
+   * What this hand holds (its fingers close round it, each until it touches, once the hand is there), or null: let go.
+   * `firm`: it already has hold and keeps it while it moves (a clip she carries).
+   */
+  hold(hand: Hand, shape: GripShape | null, firm?: boolean): void;
+  /** The middle of a hand's palm where a bar lies across it (the hand bone's own space). */
+  palmPoint(hand: Hand, out: THREE.Vector3): THREE.Vector3;
+  /** Which way a hand's fingers run (the hand bone's own space). */
+  fingersAlong(hand: Hand, out: THREE.Vector3): THREE.Vector3;
   /** How far a hand's fingers are closed onto what it holds, 0..1. */
   touching(hand: Hand): number;
   /** How low she is (0 standing, 1 fully down) and how (reach, low, squat, kneelLeft, kneelRight, kneelBoth). */

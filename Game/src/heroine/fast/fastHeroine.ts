@@ -179,6 +179,8 @@ export interface FastHeroine extends HeroineBody {
   feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number };
   /** Her belly's and her breasts' measured shapes, and how far each arm was moved to keep it clear of them this frame (armClear.ts), for the tests. */
   armInfo(): { eggs: readonly Egg[]; moved: readonly [number, number]; kneeMoved: readonly [number, number] };
+  /** For the tests: each hand's wrist this frame (degrees from her own pose: as asked, its limit, as laid). */
+  wristInfo(): readonly { asked: number; limit: number; laid: number; start: number; weight: number; raw: number; moved: number; limited: boolean }[];
   /** FOR THE LAB: switch the arm and belly collision off (her arms are left as her pose and aim have them) or on again. */
   keepArmsClear(on: boolean): void;
   /** How far past its real limit each kind of joint went this frame, degrees (jointGuard.ts), for the tests. */
@@ -696,7 +698,7 @@ if (uHideHead > 0.5) {
     hands: {
       hasGun: (hand) => gunIn[hand],
       handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
-      reach: (hand, pose) => reach.setJob(handIndex(hand), pose),
+      reach: (hand, pose, limit) => reach.setJob(handIndex(hand), pose, limit),
       reached: (hand) => reach.progress(handIndex(hand)),
       releaseGun(hand, parent) {
         const gun = guns[hand].object;
@@ -725,13 +727,16 @@ if (uHideHead > 0.5) {
       handBone: (hand) => arms[hand].hand,
       setHolding: (hand, holding) => { reach.holding[handIndex(hand)] = holding; },
       gripPose: (hand, at, axis, palmTo, wrapToward, radius, out) => touch.gripPose(handIndex(hand), at, axis, palmTo, wrapToward, radius, out),
-      hold(hand, shape) {
+      hold(hand, shape, firm = false) {
         const i = handIndex(hand);
         touch.shapes[i] = shape;
+        touch.firm[i] = firm && shape !== null;
         // (on the way to a bar the fingers open; letting go, they go back to holding a gun or resting)
         reach.holding[i] = shape ? false : gunIn[hand];
       },
       touching: (hand) => touch.amount[handIndex(hand)],
+      palmPoint: (hand, out) => touch.palmPoint(handIndex(hand), out),
+      fingersAlong: (hand, out) => touch.fingersAlong(handIndex(hand), out),
       lowering: () => ({ weight: lower.weight, mode: lower.mode, drop: lower.drop, bend: lower.hinge * 180 / Math.PI }),
     },
 
@@ -770,6 +775,7 @@ if (uHideHead > 0.5) {
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
+    wristInfo: () => reach.wristInfo,
     armInfo() { return { eggs: armClear.eggs, moved: armClear.moved, kneeMoved: armClear.kneeMoved }; },
     keepArmsClear(on: boolean): void { armClear.on = on; },
     jointInfo(): JointExcess { joints2.measure(); return { ...joints2.excess }; },
@@ -894,6 +900,8 @@ if (uHideHead > 0.5) {
       joints2.update();
       armClear.update(frame.dt);
       joints2.update();
+      // (her wrists within their limits once more: the corrections above may have turned a hand)
+      reach.holdWrists();
       // Her fingers closed onto a bar she holds, each until it touches (fingerTouch.ts): last, over her finished pose.
       touch.apply(frame.dt, reach.grip, [reach.progress(0), reach.progress(1)]);
 

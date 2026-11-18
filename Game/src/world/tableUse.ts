@@ -45,7 +45,7 @@ export const TABLE_USE = Object.freeze({
   chestForward: 0.36,
   /** ...and at least this far in front of her belly's front, metres (room for her other hand under the clip). */
   chestPastBelly: 0.14,
-  chestUp: 1.08,
+  chestUp: 0.98,
   chestIn: 0.06,
   chestPitchUp: 0.45,
   chestRollIn: 0.5,
@@ -53,7 +53,17 @@ export const TABLE_USE = Object.freeze({
   clipPull: 0.08,
   /** Her hand takes a clip from the rack this far below its middle; an old clip is let go this far above the tray. */
   clipHoldLow: 0.008,
+  /** ...and out of a gun, by its base: this far below its middle (it is 6 cm long; the gun's grip covers its top). */
+  clipHoldBase: 0.026,
   dropFrom: 0.1,
+  /** How far out from her middle her shoulder is (where her forearm comes from, reaching under a clip), metres. */
+  shoulderOut: 0.18,
+  /** The most her wrist turns from its own relaxed pose through the reload, radians (50 degrees). */
+  wristMost: 50 * Math.PI / 180,
+  /** How long a gun or a clip takes to settle into its place once handed over, seconds. */
+  settleHandOver: 0.2,
+  /** ...and her hand points at least this far below level (a sine: -0.1 is about 6 degrees down), never to the sky. */
+  tipsUpMost: -0.1,
   /** A hand waiting between steps of the reload: this far above its own gun stand, metres. */
   waitAbove: 0.07,
 });
@@ -76,6 +86,8 @@ const scratch2 = new THREE.Matrix4(), scratch3 = new THREE.Matrix4();
 const facePoint = new THREE.Vector3(), faceOut = new THREE.Vector3();
 const clipPlace = new THREE.Vector3(), clipTurn = new THREE.Quaternion(), clipSize = new THREE.Vector3();
 const clipUp = new THREE.Vector3(), clipAcross = new THREE.Vector3(), palmWay = new THREE.Vector3(), wrapWay = new THREE.Vector3();
+const gunWas = new THREE.Matrix4(), setA = new THREE.Vector3(), setB = new THREE.Vector3(), setSa = new THREE.Vector3(), setSb = new THREE.Vector3();
+const setQa = new THREE.Quaternion(), setQb = new THREE.Quaternion();
 const basisX = new THREE.Vector3(), basisY = new THREE.Vector3(), basisZ = new THREE.Vector3(), q = new THREE.Quaternion();
 
 export class TableUse {
@@ -92,6 +104,20 @@ export class TableUse {
   /** The clip in each gun now (a reload gives a gun a new one), and a clip a hand is holding. */
   private readonly clipIn: Record<Hand, THREE.Object3D | null>;
   private readonly clipHeld: Record<Hand, THREE.Object3D | null> = { left: null, right: null };
+  /**
+   * The clip each hand is closing its fingers onto (Joshua, 2026-11-18: "apply the same technique" as the pole): on its
+   * way to take it, and while it carries it. Its fingers close round it, joint by joint, until they touch.
+   */
+  private readonly clipTouched: Record<Hand, THREE.Object3D | null> = { left: null, right: null };
+  /** The hand poses that hold a gun (the fingertip rule is not for them). */
+  private readonly gunPoses = new WeakSet<THREE.Matrix4>();
+  /**
+   * The hand poses that set a gun on its stand or take it off (no wrist limit: the gun must sit exactly; a wrist held
+   * back left it to snap onto its stand, up to 18 cm and 57 degrees in a frame, as it was let go).
+   */
+  private readonly standPoses = new WeakSet<THREE.Matrix4>();
+  /** Things settling into their new places (see `settle`). */
+  private settling: { object: THREE.Object3D; from: THREE.Matrix4; to: THREE.Matrix4; t: number }[] = [];
 
   constructor(private readonly table: WeaponTable, private readonly heroine: HeroineBody) {
     const h = heroine.hands;
@@ -166,6 +192,7 @@ export class TableUse {
     out.walkTo = null;
     out.look = null;
     this.table.update(dt);
+    this.moveSettling(dt);
     if (this.action === 'idle') return;
     const h = this.heroine.hands!;
     this.timer += dt;
@@ -190,11 +217,12 @@ export class TableUse {
       const next = this.steps.shift();
       if (!next) { this.finish(h); return; }
       this.current = next();
-      for (const [hand, pose] of Object.entries(this.current.jobs) as [Hand, THREE.Matrix4 | null][]) h.reach(hand, pose);
+      for (const [hand, pose] of Object.entries(this.current.jobs) as [Hand, THREE.Matrix4 | null][]) h.reach(hand, pose, pose && this.action === 'reload' && !this.standPoses.has(pose) ? this.wristLimit(hand, this.gunPoses.has(pose)) : undefined);
       this.timer = 0;
       this.arrivedAt = -1;
       return;
     }
+    this.touchClips(h);
     const step = this.current;
     const arrived = (Object.entries(step.jobs) as [Hand, THREE.Matrix4 | null][])
       .every(([hand, pose]) => (pose ? h.reached(hand) >= 0.999 : h.reached(hand) <= 0));
@@ -212,7 +240,7 @@ export class TableUse {
   private planGuns(hands: Hand[], down: boolean): void {
     const h = this.heroine.hands!;
     this.steps.push(() => ({
-      jobs: Object.fromEntries(hands.map((hand) => [hand, h.handPoseForGun(hand, this.table.slot(hand, slotAt), new THREE.Matrix4())])),
+      jobs: Object.fromEntries(hands.map((hand) => [hand, this.standPose(h, hand, this.table.slot(hand, slotAt), new THREE.Matrix4())])),
       settle: true,
       hold: TABLE_USE.holdSeconds,
       done: () => { for (const hand of hands) { if (down) this.gunDown(hand); else this.gunUp(hand); } },
@@ -228,8 +256,8 @@ export class TableUse {
       // 1. her other hand's gun onto its stand (if she holds it), and this gun taken up (if it lies there)
       this.steps.push(() => {
         const jobs: Partial<Record<Hand, THREE.Matrix4 | null>> = {};
-        if (h.hasGun(b)) jobs[b] = h.handPoseForGun(b, this.table.slot(b, slotAt), new THREE.Matrix4());
-        if (!h.hasGun(a)) jobs[a] = h.handPoseForGun(a, this.table.slot(a, slotAt), new THREE.Matrix4());
+        if (h.hasGun(b)) jobs[b] = this.standPose(h, b, this.table.slot(b, slotAt), new THREE.Matrix4());
+        if (!h.hasGun(a)) jobs[a] = this.standPose(h, a, this.table.slot(a, slotAt), new THREE.Matrix4());
         if (!jobs.left && !jobs.right) return { jobs: {} };
         return { jobs, settle: true, done: () => { if (jobs[b]) this.gunDown(b); if (jobs[a]) this.gunUp(a); } };
       });
@@ -237,12 +265,13 @@ export class TableUse {
       const gunAt = new THREE.Matrix4();
       this.steps.push(() => {
         this.chestGun(a, gunAt);
-        return { jobs: { [a]: h.handPoseForGun(a, gunAt, new THREE.Matrix4()), [b]: this.waitOver(b) } };
+        return { jobs: { [a]: this.gunPose(h, a, gunAt, new THREE.Matrix4()), [b]: this.waitOver(b) } };
       });
       // 3. her other hand under the grip, on the clip; pulled out; dropped in the tray. (The gun is read where it really
       //    is now, in her hand: her arm may have stopped a little short of where it was sent.)
       this.steps.push(() => {
         gunAt.copy(h.gun(a).matrixWorld);
+        this.clipTouched[b] = this.clipIn[a];
         return { jobs: { [b]: this.handToClip(b, this.clipPose(gunAt, 0, scratch), 'below') }, done: () => this.takeClip(a, b) };
       });
       this.steps.push(() => ({ jobs: { [b]: this.handCarrying(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } }));
@@ -255,6 +284,7 @@ export class TableUse {
       // 4. a full clip from the rack
       this.steps.push(() => {
         const slot = Math.max(0, this.table.fullSlot());
+        this.clipTouched[b] = this.table.rackClip(slot);
         return { jobs: { [b]: this.handToClip(b, this.table.rackSlot(slot, scratch), 'side') }, settle: true, done: () => this.takeFromRack(slot, b) };
       });
       // 5. up under the grip, then pushed in: the gun is full
@@ -267,7 +297,7 @@ export class TableUse {
       //    (Joshua, 2026-11-18: sent back to her side between steps, it dropped and swung up again, nearly a metre in
       //    half a second: it read as a jump)
       this.steps.push(() => ({
-        jobs: { [a]: h.handPoseForGun(a, this.table.slot(a, slotAt), new THREE.Matrix4()), [b]: this.waitOver(b) },
+        jobs: { [a]: this.standPose(h, a, this.table.slot(a, slotAt), new THREE.Matrix4()), [b]: this.waitOver(b) },
         settle: true,
         done: () => this.gunDown(a),
       }));
@@ -277,7 +307,7 @@ export class TableUse {
       const hands = (['left', 'right'] as const).filter((hand) => !h.hasGun(hand));
       if (hands.length === 0) return { jobs: {} };
       return {
-        jobs: Object.fromEntries(hands.map((hand) => [hand, h.handPoseForGun(hand, this.table.slot(hand, slotAt), new THREE.Matrix4())])),
+        jobs: Object.fromEntries(hands.map((hand) => [hand, this.standPose(h, hand, this.table.slot(hand, slotAt), new THREE.Matrix4())])),
         settle: true,
         hold: TABLE_USE.holdSeconds,
         done: () => { for (const hand of hands) this.gunUp(hand); },
@@ -297,14 +327,45 @@ export class TableUse {
   private gunDown(hand: Hand): void {
     const h = this.heroine.hands!;
     const gun = h.releaseGun(hand, this.table.root);
-    // (set exactly on its stand: her hand is there to within a centimetre or so)
-    gun.matrix.copy(this.table.root.matrixWorld).invert().multiply(this.table.slot(hand, slotAt));
+    // (left where it is, then SETTLED onto its stand: her hand may be a little off it, and setting it there at once
+    //  jumped it, up to 18 cm and 57 degrees in a frame)
+    this.settle(gun, scratch2.copy(this.table.root.matrixWorld).invert().multiply(this.table.slot(hand, slotAt)));
     this.lying.set(hand, gun);
   }
 
   private gunUp(hand: Hand): void {
-    this.heroine.hands!.takeGun(hand);
+    const h = this.heroine.hands!, gun = h.gun(hand);
+    gun.updateWorldMatrix(true, false);
+    gunWas.copy(gun.matrixWorld);
+    h.takeGun(hand);
+    // (in her hand where it lay, then settled into her grip)
+    const bone = h.handBone(hand);
+    bone.updateWorldMatrix(true, false);
+    const seat = h.gunSeat(hand, scratch3);
+    gun.matrix.copy(bone.matrixWorld).invert().multiply(gunWas);
+    this.settle(gun, seat);
     this.lying.delete(hand);
+  }
+
+  /**
+   * SETTLING (Joshua, 2026-11-18: nothing jumps): an object just handed over (a gun to its stand or her hand, a clip
+   * into a gun) starts exactly where it was and eases into its place in its new holder over settleHandOver seconds.
+   */
+  private settle(object: THREE.Object3D, place: THREE.Matrix4): void {
+    this.settling = this.settling.filter((s) => s.object !== object);
+    this.settling.push({ object, from: object.matrix.clone(), to: place.clone(), t: 0 });
+  }
+
+  private moveSettling(dt: number): void {
+    for (const s of this.settling) {
+      s.t = Math.min(1, s.t + dt / TABLE_USE.settleHandOver);
+      const k = s.t * s.t * (3 - 2 * s.t);
+      s.from.decompose(setA, setQa, setSa);
+      s.to.decompose(setB, setQb, setSb);
+      s.object.matrix.compose(setA.lerp(setB, k), setQa.slerp(setQb, k), setSa.lerp(setSb, k));
+      s.object.matrixWorldNeedsUpdate = true;
+    }
+    this.settling = this.settling.filter((s) => s.t < 1);
   }
 
   /** Her hand `b` takes the clip out of gun `a` (it is kept where it is, now held). */
@@ -318,6 +379,7 @@ export class TableUse {
   }
 
   private dropClip(b: Hand): void {
+    this.letGoOfClip(b);
     const clip = this.clipHeld[b];
     if (clip) this.table.dropInTray(clip);
     this.clipHeld[b] = null;
@@ -334,11 +396,13 @@ export class TableUse {
 
   /** The clip in hand `b` clicked into gun `a`: seated exactly, and the gun is full. */
   private clipIntoGun(b: Hand, a: Hand): void {
+    this.letGoOfClip(b);
     const clip = this.clipHeld[b];
     if (!clip) return;
     const h = this.heroine.hands!;
-    h.gun(a).add(clip);
-    h.clipSeat(clip.matrix);
+    // (in the gun where it is, then settled into its seat)
+    this.give(clip, h.gun(a));
+    this.settle(clip, h.clipSeat(scratch3));
     this.clipIn[a] = clip;
     this.clipHeld[b] = null;
     h.setHolding(b, false);
@@ -383,6 +447,55 @@ export class TableUse {
     return out.premultiply(gunAt).multiply(scratch2.makeTranslation(0, -pull, 0));
   }
 
+  /** Each frame: every hand that has a clip to close on gets its shape where the clip is now (it may be moving). */
+  private touchClips(h: HeroineHands): void {
+    for (const hand of ['left', 'right'] as const) {
+      const clip = this.clipTouched[hand];
+      if (!clip) continue;
+      clip.updateWorldMatrix(true, false);
+      clip.matrixWorld.decompose(clipPlace, clipTurn, clipSize);
+      const axis = (x: number, y: number, z: number): [number, number, number] => { const v = new THREE.Vector3(x, y, z).applyQuaternion(clipTurn); return [v.x, v.y, v.z]; };
+      h.hold(hand, {
+        kind: 'box',
+        centre: [clipPlace.x, clipPlace.y, clipPlace.z],
+        axes: [axis(1, 0, 0), axis(0, 1, 0), axis(0, 0, 1)],
+        half: [CLIP.width / 2 * clipSize.x, CLIP.height / 2 * clipSize.y, CLIP.depth / 2 * clipSize.z],
+      }, this.clipHeld[hand] === clip);
+    }
+  }
+
+  /** A hand lets go of the clip it was closing on (it is in the tray, or in a gun). */
+  private letGoOfClip(hand: Hand): void {
+    if (!this.clipTouched[hand]) return;
+    this.clipTouched[hand] = null;
+    this.heroine.hands!.hold(hand, null);
+  }
+
+  /**
+   * HER WRIST WITHIN ITS LIMIT through the whole reload (Joshua, 2026-11-18: "less than +/-50 degrees"), turned about
+   * the middle of her palm so it still lands where it reaches.
+   */
+  private wristLimit(hand: Hand, holdsGun: boolean): { most: number; pivot: THREE.Vector3; along: THREE.Vector3; tipsUpMost: number } {
+    const h = this.heroine.hands!;
+    // (the fingertip rule is for a hand handling clips: a hand holding a gun upright points a little up, as it must,
+    //  and tipping it down laid the gun on its side)
+    return { most: TABLE_USE.wristMost, pivot: h.palmPoint(hand, new THREE.Vector3()), along: h.fingersAlong(hand, new THREE.Vector3()), tipsUpMost: holdsGun ? 1 : TABLE_USE.tipsUpMost };
+  }
+
+  /** The pose for a hand putting a gun on its stand or taking it off (remembered: see `standPoses`). */
+  private standPose(h: HeroineHands, hand: Hand, gunWorld: THREE.Matrix4, out: THREE.Matrix4): THREE.Matrix4 {
+    const pose = h.handPoseForGun(hand, gunWorld, out);
+    this.standPoses.add(pose);
+    return pose;
+  }
+
+  /** The pose for a hand holding a gun at `gunWorld` (remembered as a gun pose: see `wristLimit`). */
+  private gunPose(h: HeroineHands, hand: Hand, gunWorld: THREE.Matrix4, out: THREE.Matrix4): THREE.Matrix4 {
+    const pose = h.handPoseForGun(hand, gunWorld, out);
+    this.gunPoses.add(pose);
+    return pose;
+  }
+
   /** Where a hand waits between steps: as if about to take its gun, a little above its stand. */
   private waitOver(hand: Hand): THREE.Matrix4 {
     this.table.slot(hand, slotAt);
@@ -393,8 +506,8 @@ export class TableUse {
   /**
    * HER EMPTY HAND TAKING A CLIP that stands at `clipAt` (Joshua, 2026-11-18: no twisted wrists, no reaching across),
    * placed as she takes the pole (fingerTouch.ts `gripPose`):
-   *   below  out of a gun: palm up under the clip's base, fingers up round its front (as a magazine is pulled)
-   *   side   out of the rack: palm on its side toward her middle, thumb up, fingers round its front
+   *   below  out of a gun: by its base, just below the grip
+   *   side   out of the rack: a little below its middle
    * (Before, her hand copied a gun's grip under the clip: a right hand doing that under the left gun was twisted.)
    */
   private handToClip(b: Hand, clipAt: THREE.Matrix4, how: 'below' | 'side'): THREE.Matrix4 {
@@ -404,13 +517,16 @@ export class TableUse {
     clipUp.set(0, 1, 0).applyQuaternion(clipTurn);     // along the clip, from its base up into the grip
     clipAcross.set(1, 0, 0).applyQuaternion(clipTurn); // across its narrow width
     wrapWay.set(0, 0, 1).transformDirection(root.matrixWorld); // (her front: the fingers go round the far side)
-    if (how === 'below') {
-      // the palm faces up the clip into the grip, under its base; the fingers wrap round it across its width
-      return h.gripPose(b, clipPlace, clipAcross, clipUp, wrapWay, CLIP.height / 2, new THREE.Matrix4());
-    }
-    // the palm toward her middle (her left is her root's +x), on the clip's side a little below its middle
-    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
-    clipPlace.addScaledVector(clipUp, -TABLE_USE.clipHoldLow);
+    // A HANDSHAKE ON THE CLIP, as she takes the pole (Joshua, 2026-11-18: palm-up under the clip, a hand coming across her
+    // body was rolled right round at the forearm and looked turned backwards): thumb up, the palm facing the clip from
+    // her hand's own side (from her shoulder toward the clip), the fingers round its front. Out of a gun she takes it
+    // by its base, just below the grip (clear of the hand holding the gun); out of the rack, a little below its middle.
+    // (exactly the pole's handshake: the palm faces SIDEWAYS, toward her middle, so the fingers can wrap round the
+    //  front and the thumb is up. Facing the line from her shoulder to the clip, mostly forward, it came out thumb-down,
+    //  141 degrees from her relaxed hand: Joshua, 2026-11-18)
+    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld); // (her left is her root's +x)
+    palmWay.addScaledVector(clipUp, -palmWay.dot(clipUp)).normalize();
+    clipPlace.addScaledVector(clipUp, how === 'below' ? -TABLE_USE.clipHoldBase : -TABLE_USE.clipHoldLow);
     return h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay, CLIP.width / 2, new THREE.Matrix4());
   }
 

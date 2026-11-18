@@ -1,13 +1,21 @@
 // ============================================================================
 // hud.ts -- the on-screen controls, built from ordinary HTML elements.
 //
-//   bottom left    the MOVE stick (every view) and, in first person, the CAMERA stick beside it
-//   bottom right   the view switch (first / third person) and, in first person, FIRE
-//   centre         the first-person crosshair
-//   top right      the settings gear and its panel (how the heroine is drawn, the test tools)
-//   top middle     her vitals card (put there by main.ts: topSlot)
-//   top left       with ?debug=1 (or the tick box in Settings): the readout (FPS, triangles...) and buttons to
-//                  hurt the dome. It is only read: it never takes a touch and never covers a control.
+// JOSHUA'S LAYOUT (2026-11-18, his pick of five: "design 4", an edge rail and a prompt; "some buttons can hide
+// until needed"; a button "just for switching Manual vs Auto from Fire so fire is always there"):
+//
+//   top left       her vitals card (put there by main.ts: topSlot), one line under it (FPS and version), and with
+//                  "Show full readout" ticked in Settings the full readout under that. Only read: never a touch.
+//   top right      the settings gear and its panel; each gun's rounds under it
+//   bottom left    the MOVE stick (every view) and the CAMERA stick beside it (aimed by hand, and first person)
+//   right edge     THE RAIL, square buttons that show only when they have something to do: HOLSTER / DRAW,
+//                  RELOAD (at the table, or from her belt), CAM (third person camera styles), and AUTO / MANUAL
+//                  (her aim, fire and reload); L and R beside it pick the hand for the next action
+//   right middle   THE PROMPT: one bubble, only near something (PUT DOWN, PICK UP, GRAB POLE, LET GO...)
+//   bottom right   FIRE (always there) and the view switch (first / third person)
+//   centre         the crosshair (aimed by hand, and first person)
+//
+// Every one of these can be moved and sized in Settings -> Edit controls (layoutEditor.ts).
 //
 // The buttons and stick do not move the heroine themselves. They only write
 // what the player is doing into the Controls object (input/controls.ts); the
@@ -36,14 +44,16 @@ export interface HudOptions {
   /** One of those choices was changed in Settings. */
   onGraphicsChange<K extends keyof HeroineSettings>(key: K, value: HeroineSettings[K]): void;
   onToggleView(): void;
-  /** The weapon table's buttons (src/world/tableUse.ts): the main one ('both') or one hand's. */
-  onUse?(which: 'both' | 'left' | 'right' | 'reload'): void;
+  /** THE PROMPT was pressed (the table's PUT DOWN / PICK UP, a bar's GRAB / LET GO), for both hands or the hand picked. */
+  onPrompt?(which: 'both' | 'left' | 'right'): void;
+  /** RELOAD on the rail (at the table: the table's reload; anywhere else: from her belt). */
+  onReload?(): void;
+  /** AUTO / MANUAL on the rail: her aim, fire and reload switched over. */
+  onAimMode?(): void;
   /** The CAM button: the next third-person camera style (src/camera/cameraRig.ts). */
   onCameraStyle?(): void;
-  /** The grab button: take hold of the bar she is near, or let go (src/world/grabBars.ts). */
-  onGrab?(): void;
-  /** Her thigh holsters: put away or draw both ('both'), or one hand's gun (src/world/holsterUse.ts). */
-  onHolster?(which: 'both' | 'left' | 'right' | 'reload'): void;
+  /** Her thigh holsters: put away or draw both ('both'), or the gun of the hand picked (src/world/holsterUse.ts). */
+  onHolster?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -131,18 +141,21 @@ export class Hud {
   private readonly viewButton: HTMLElement;
   private readonly camButton: HTMLElement;
   private camText = '';
-  /** The weapon table's buttons: shown only when she is near it (`setUse`). */
-  private readonly useBar: HTMLElement;
-  private readonly useMain: HTMLElement;
-  private readonly useReload: HTMLElement;
-  private readonly grab: HTMLElement;
-  private grabLabel = '';
-  /** Her holsters' buttons (HOLSTER / DRAW, L, R): shown while she has a gun in a hand or a holster (`setHolster`). */
-  private readonly holsterBar: HTMLElement;
-  private readonly holsterMain: HTMLElement;
-  private readonly holsterReload: HTMLElement;
+  /** THE RAIL (each shown only when it has something to do): holster / draw, reload, aim mode; and the L / R pair. */
+  private readonly holsterButton: HTMLElement;
+  private readonly reloadButton: HTMLElement;
+  private readonly aimModeButton: HTMLElement;
+  private readonly handsBox: HTMLElement;
+  private readonly handButtons: Record<'left' | 'right', HTMLElement>;
+  /** The hand picked with L or R for the next action (null: both). */
+  private pickedHand: 'left' | 'right' | null = null;
   private holsterLabel = '';
-  private useLabel = '';
+  private aimModeLabel = '';
+  /** THE PROMPT: one bubble, only near something. */
+  private readonly prompt: HTMLElement;
+  private promptLabel = '';
+  /** The one line under her vitals card: FPS and version. */
+  private readonly fpsLine: HTMLElement;
   /** Each gun's rounds, shown near the top right (Joshua, 2026-11-17: 20 a gun). */
   private readonly ammo: HTMLElement;
   private ammoText = '';
@@ -169,12 +182,7 @@ export class Hud {
       this.debugPanel = debug;
       this.readout = element('pre', '', debug);
       this.domeLabel = element('pre', '', debug);
-      const buttons = element('div', 'gd-debug-row', debug);
-      const add = (label: string, action: DomeDebugAction) =>
-        element('button', '', buttons, label).addEventListener('click', () => options.onDomeDebug(action));
-      add('Hit -25', 'hit');
-      add('Shatter', 'shatter');
-      add('Repair all', 'repair-all');
+      // (the dome's test buttons are in Settings now, TEST TOOLS: Joshua, 2026-11-18, the corner was cluttered)
     }
 
     // ---- Bottom left: moving ------------------------------------------------
@@ -215,10 +223,6 @@ export class Hud {
 
     // ---- Bottom right: view switch and fire ----------------------------------
     const actions = element('div', 'gd-actions', this.root);
-    // (the CAM button, third person only: follow, shoulder, orbit, top, drone, cinematic)
-    this.camButton = element('button', 'gd-button gd-cam', actions, 'CAM');
-    this.camButton.setAttribute('aria-label', 'Camera style');
-    tapButton(this.camButton, () => options.onCameraStyle?.());
     this.viewButton = element('button', 'gd-button gd-view', actions);
     this.viewButton.setAttribute('aria-label', 'Switch view');
     // (its two lines of text are made once; only the big word changes, so the button a finger is on is never rebuilt)
@@ -226,53 +230,54 @@ export class Hud {
     element('small', '', this.viewButton, 'PERSON');
     // It answers as the finger LANDS, so the view can be switched while a thumb holds the MOVE stick (tapButton above).
     tapButton(this.viewButton, () => options.onToggleView());
-    this.fireButton = element('button', 'gd-button gd-fire', actions, 'FIRE');
+    // (FIRE is always there, Joshua 2026-11-18: in MANUAL it fires; in AUTO she fires on her own, and it adds bursts)
+    this.fireButton = element('button', 'gd-button gd-fire', this.root, 'FIRE');
     holdButton(this.fireButton, (down) => (controls.buttonFire = down));
 
-    // ---- Right side, above the view switch: the WEAPON TABLE's buttons --------------
-    // (Joshua, 2026-11-17: a table to put her guns down on and pick them up from.) Shown only when she is near it.
-    // Out of the bottom corners, which stay free for the player's controls: on the right, half way up.
-    this.useBar = element('div', 'gd-use', this.root);
-    this.useBar.hidden = true;
-    this.useMain = element('button', 'gd-button gd-use-main', this.useBar, 'PUT DOWN');
-    tapButton(this.useMain, () => options.onUse?.('both'));
-    // (RELOAD shows when a gun is not full: she reloads both from the table's clips)
-    this.useReload = element('button', 'gd-button gd-use-main gd-use-reload', this.useBar, 'RELOAD');
-    tapButton(this.useReload, () => options.onUse?.('reload'));
-    const oneHand = element('div', 'gd-use-hands', this.useBar);
-    for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
-      const button = element('button', 'gd-button gd-use-hand', oneHand, word);
-      button.setAttribute('aria-label', `${hand} hand`);
-      tapButton(button, () => options.onUse?.(hand));
-    }
+    // ---- Right edge: THE RAIL ------------------------------------------------------
+    // Square buttons down the right edge, each its own (so each can be moved in Edit controls), each shown only when
+    // it has something to do. Out of the bottom corners.
+    const railButton = (className: string, word: string, small: string, label: string): HTMLElement => {
+      const button = element('button', `gd-button gd-rail ${className}`, this.root);
+      button.setAttribute('aria-label', label);
+      element('span', '', button, word);
+      if (small) element('small', '', button, small);
+      return button;
+    };
+    this.holsterButton = railButton('gd-rail-holster', 'HOLSTER', '', 'Holster or draw');
+    tapButton(this.holsterButton, () => options.onHolster?.(this.takeHand()));
+    this.reloadButton = railButton('gd-rail-reload', 'RELOAD', '', 'Reload');
+    tapButton(this.reloadButton, () => options.onReload?.());
+    // (the CAM button, third person aimed on her own: follow, shoulder, orbit, top, drone, cinematic)
+    this.camButton = railButton('gd-rail-cam gd-cam', 'CAM', 'FOLLOW', 'Camera style');
+    tapButton(this.camButton, () => options.onCameraStyle?.());
+    this.aimModeButton = railButton('gd-rail-aim', 'MANUAL', '', 'Auto or manual aim and fire');
+    tapButton(this.aimModeButton, () => options.onAimMode?.());
+    // L and R: the hand the next action is for (tapped again: both). Beside the top of the rail.
+    this.handsBox = element('div', 'gd-hands', this.root);
+    const pick = (hand: 'left' | 'right'): HTMLElement => {
+      const button = element('button', 'gd-button gd-hand', this.handsBox, hand === 'left' ? 'L' : 'R');
+      button.setAttribute('aria-label', `${hand} hand only`);
+      tapButton(button, () => this.pickHand(this.pickedHand === hand ? null : hand));
+      return button;
+    };
+    this.handButtons = { left: pick('left'), right: pick('right') };
 
-    // The grab button (a pole, a rail): GRAB POLE, GRAB RAIL or LET GO; beside the table's buttons.
-    this.grab = element('button', 'gd-button gd-grab', this.root, 'GRAB');
-    this.grab.hidden = true;
-    tapButton(this.grab, () => options.onGrab?.());
-
-    // HER THIGH HOLSTERS (Joshua, 2026-11-18: guns away "on the go", one or both "like how we have now at the table"):
-    // HOLSTER or DRAW for both, and L / R for one hand. Under the grab button, out of the bottom corners.
-    this.holsterBar = element('div', 'gd-holster', this.root);
-    this.holsterBar.hidden = true;
-    this.holsterMain = element('button', 'gd-button gd-use-main', this.holsterBar, 'HOLSTER');
-    tapButton(this.holsterMain, () => options.onHolster?.('both'));
-    // (RELOAD from the clips on her belt, on the go: shown when a gun is not full and a pouch holds a clip)
-    this.holsterReload = element('button', 'gd-button gd-use-main gd-use-reload', this.holsterBar, 'RELOAD');
-    this.holsterReload.hidden = true;
-    tapButton(this.holsterReload, () => options.onHolster?.('reload'));
-    const holsterHands = element('div', 'gd-use-hands', this.holsterBar);
-    for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
-      const button = element('button', 'gd-button gd-use-hand', holsterHands, word);
-      button.setAttribute('aria-label', `${hand} holster`);
-      tapButton(button, () => options.onHolster?.(hand));
-    }
+    // ---- Right middle: THE PROMPT --------------------------------------------------
+    // One bubble, only when she is near something: the table (PUT DOWN, PICK UP) or a bar (GRAB POLE, LET GO).
+    this.prompt = element('button', 'gd-button gd-prompt', this.root, 'GRAB');
+    this.prompt.hidden = true;
+    tapButton(this.prompt, () => options.onPrompt?.(this.takeHand()));
 
     // ---- Top right, under the gear: each gun's rounds -----------------------------
     this.ammo = element('div', 'gd-ammo', this.root);
 
     // ---- Centre: crosshair ---------------------------------------------------
     this.crosshair = element('div', 'gd-crosshair', this.root);
+    // (the one line under her vitals card, put there with the card: topSlot)
+    this.fpsLine = document.createElement('div');
+    this.fpsLine.className = 'gd-fps';
+    this.handsBox.hidden = true;
 
     // ---- Top right: settings -------------------------------------------------
     const gear = element('button', 'gd-button gd-gear', this.root, '⚙'); // a gear
@@ -287,7 +292,7 @@ export class Hud {
     const debugBox = element('input', '', debugRow);
     debugBox.type = 'checkbox';
     debugBox.checked = options.debug;
-    element('span', '', debugRow, 'Show FPS and test tools');
+    element('span', '', debugRow, 'Show full readout');
     debugBox.addEventListener('change', () => options.onDebugChange(debugBox.checked));
     // (the gear answers as the finger lands too, so Settings opens even while the MOVE stick is held)
     tapButton(gear, () => (settings.hidden = !settings.hidden));
@@ -351,14 +356,22 @@ export class Hud {
     element('h2', 'gd-settings-part', settings, 'WEAPON TABLE');
     sliderRow('Table height', 'tableHeight', TABLE_RANGE.least, TABLE_RANGE.most, 0.01, (v) => `${Math.round(v * 100)} cm`);
     element('small', 'gd-note', settings, 'Low tables have her squat or kneel to reach her guns; the floor, kneel or squat at random.');
+    // ---- Settings: test tools (the dome's buttons used to sit in the readout, in the corner) -------------------------
+    element('h2', 'gd-settings-part', settings, 'TEST TOOLS');
+    const tools = element('div', 'gd-debug-row', settings);
+    const tool = (label: string, action: DomeDebugAction) => tapButton(element('button', 'gd-button', tools, label), () => options.onDomeDebug(action));
+    tool('Hit dome -25', 'hit');
+    tool('Shatter', 'shatter');
+    tool('Repair all', 'repair-all');
 
     this.setView('third');
   }
 
   /** The CAM button's word: the camera style now. */
   setCameraStyle(name: string): void {
-    const text = `CAM · ${name.toUpperCase()}`;
-    if (text !== this.camText) { this.camButton.textContent = text; this.camText = text; }
+    // (the style's name in small letters under CAM; the button itself is never rebuilt)
+    const text = name.toUpperCase();
+    if (text !== this.camText) { const small = this.camButton.querySelector('small'); if (small) small.textContent = text; this.camText = text; }
   }
 
   /** Each gun's rounds (null: no gun in that hand), and whether a gun just clicked empty. */
@@ -368,27 +381,55 @@ export class Hud {
     this.ammo.classList.toggle('is-empty', empty || (left === 0 && right === 0));
   }
 
-  /** The weapon table's buttons: shown with this word on the main one, or hidden (null); RELOAD when a gun is not full. */
-  /** The grab button: shown with this word, or hidden (null). */
-  setGrab(label: string | null): void {
-    this.grab.hidden = label === null;
-    if (label !== null && label !== this.grabLabel) { this.grab.textContent = label; this.grabLabel = label; }
+  /** THE RAIL's HOLSTER button: shown with this word (HOLSTER, DRAW), or hidden (null). */
+  setHolster(label: string | null): void {
+    this.holsterButton.hidden = label === null;
+    if (label !== null && label !== this.holsterLabel) { (this.holsterButton.firstChild as HTMLElement).textContent = label; this.holsterLabel = label; }
+    this.showHands();
   }
 
-  /** Her holsters' buttons: shown with this word on the main one (HOLSTER, DRAW), or hidden (null); RELOAD from her belt. */
-  setHolster(label: string | null, reload = false): void {
-    this.holsterReload.hidden = !reload;
-    this.holsterBar.hidden = label === null && !reload;
-    this.holsterMain.hidden = label === null;
-    if (label !== null && label !== this.holsterLabel) { this.holsterMain.textContent = label; this.holsterLabel = label; }
+  /** THE RAIL's RELOAD button: shown when a reload would do something (at the table, or from her belt). */
+  setReload(show: boolean): void { this.reloadButton.hidden = !show; }
+
+  /** THE RAIL's AUTO / MANUAL button: the mode she is in now (what tapping it changes). */
+  setAimMode(auto: boolean): void {
+    const word = auto ? 'AUTO' : 'MANUAL';
+    if (word === this.aimModeLabel) return;
+    this.aimModeLabel = word;
+    (this.aimModeButton.firstChild as HTMLElement).textContent = word;
+    this.aimModeButton.classList.toggle('is-auto', auto);
   }
 
-  setUse(label: string | null, reload = false): void {
-    this.useReload.hidden = !reload;
-    this.useBar.hidden = label === null;
-    // (the word is changed only when it changes: the button a finger is on is never rebuilt)
-    if (label !== null && label !== this.useLabel) { this.useMain.textContent = label; this.useLabel = label; }
+  /** THE PROMPT: shown with this word (PUT DOWN, PICK UP, GRAB POLE, LET GO...), or hidden (null). */
+  setPrompt(label: string | null): void {
+    this.prompt.hidden = label === null;
+    if (label !== null && label !== this.promptLabel) { this.prompt.textContent = label; this.promptLabel = label; }
+    this.showHands();
   }
+
+  /** L and R show only while an action they apply to does (HOLSTER, or the prompt); hidden, the pick is let go. */
+  private showHands(): void {
+    const show = !this.holsterButton.hidden || !this.prompt.hidden;
+    this.handsBox.hidden = !show;
+    if (!show && this.pickedHand) this.pickHand(null);
+  }
+
+  /** Pick the hand for the next action (null: both); its button is lit. */
+  private pickHand(hand: 'left' | 'right' | null): void {
+    this.pickedHand = hand;
+    this.handButtons.left.classList.toggle('is-on', hand === 'left');
+    this.handButtons.right.classList.toggle('is-on', hand === 'right');
+  }
+
+  /** The hand an action is for: the one picked (then the pick is let go), or both. */
+  private takeHand(): 'both' | 'left' | 'right' {
+    const hand = this.pickedHand ?? 'both';
+    this.pickHand(null);
+    return hand;
+  }
+
+  /** The one line under her vitals card: FPS and version. */
+  setFps(text: string): void { if (this.fpsLine.textContent !== text) this.fpsLine.textContent = text; }
 
   /** Show the controls that belong to the current view. */
   /**
@@ -397,10 +438,9 @@ export class Hud {
    */
   setView(mode: ViewMode, manual = mode === 'first'): void {
     const first = mode === 'first';
-    // The MOVE stick is there in every view; FIRE only when she is aimed by hand; the CAMERA stick and the crosshair
-    // when she is aimed by hand, and always in first person (on her own there, the stick looks round: an override)
+    // The MOVE stick and FIRE are there in every view (FIRE always: Joshua, 2026-11-18); the CAMERA stick and the
+    // crosshair when she is aimed by hand, and always in first person (on her own there, the stick looks round)
     this.lookStick.hidden = !(manual || first);
-    this.fireButton.hidden = !manual;
     this.crosshair.hidden = !(manual || first);
     // (the camera styles are for third person aimed on her own; aimed by hand, the camera is over her shoulder)
     this.camButton.hidden = first || manual;
@@ -411,11 +451,7 @@ export class Hud {
     // views and the thumb is still on it, so it keeps what the thumb is telling it and her pace carries straight
     // through the switch. (It used to be zeroed here, which stopped her dead each time the view changed.)
     // Only what is now hidden is let go of, because a hidden control cannot be let go of by a finger.
-    if (!first) {
-      this.controls.buttonFire = false;
-      this.fireButton.classList.remove('is-down');
-      this.releaseLookStick();
-    }
+    if (this.lookStick.hidden) this.releaseLookStick();
   }
 
   /** The readout's text: FPS, triangles and the rest, one short line each (debug only). */
@@ -488,10 +524,11 @@ export class Hud {
     }
   }
 
-  /** Where a card (her vitals) can be put: along the top edge, in the middle. */
+  /** Where a card (her vitals) can be put: the top left corner (the FPS line goes under it). */
   topSlot(): HTMLElement {
     if (!this.slot) {
       this.slot = element('div', 'gd-top-slot', this.root);
+      this.slot.appendChild(this.fpsLine);
       // The readout keeps clear of whatever is put here. A "ResizeObserver" tells us whenever the screen or the
       // card changes size (the phone is turned, the card is first filled in), and the readout is placed again.
       if (this.debugPanel && typeof ResizeObserver !== 'undefined') {
@@ -518,10 +555,11 @@ export class Hud {
   private placeReadout(): void {
     const panel = this.debugPanel, slot = this.slot;
     if (!panel || !slot) return;
-    // (the card is centred: the slot's box is as wide as the card, and its middle is the middle of the screen)
-    const cardLeft = (this.root.clientWidth - slot.offsetWidth) / 2;
-    const room = cardLeft - panel.offsetLeft - READOUT_GAP;
-    panel.style.maxWidth = slot.offsetWidth === 0 ? '' : `${Math.max(120, Math.floor(room))}px`;
+    // (Joshua's layout, 2026-11-18: her card and the FPS line are in the top left corner; the full readout goes
+    //  right under them, no wider than the card's own corner)
+    panel.style.left = `${slot.offsetLeft}px`;
+    panel.style.top = `${slot.offsetTop + slot.offsetHeight + READOUT_GAP}px`;
+    panel.style.maxWidth = '260px';
   }
 
   /** Let go of the CAMERA stick (used when the view changes and it is hidden, perhaps under a thumb). */

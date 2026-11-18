@@ -419,6 +419,7 @@ async function start(): Promise<void> {
     // (the HUD keeps hold of the MOVE stick through this, so she goes on at the pace she had: src/ui/hud.ts)
     hud.setView(rig.mode, aimedByHand());
     hud.setCameraStyle(cameraStyle);
+    hud.setAimMode(!aimedByHand());
   };
   const toggleView = () => {
     rig.setMode(rig.mode === 'third' ? 'first' : 'third');
@@ -504,12 +505,30 @@ async function start(): Promise<void> {
       applyView();
     },
     onDomeDebug: domeDebug,
-    onUse: (which) => useTable(which),
+    // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
+    onPrompt: (which) => {
+      if (promptIs === 'table') useTable(which);
+      else if (promptIs === 'grab') grabBar();
+    },
+    // RELOAD: at the table, the table's reload (it refills her pouches too); anywhere else, from her belt
+    onReload: () => {
+      if (tableUse.canUse(motion.x, motion.z) && tableUse.needsReload) useTable('reload');
+      else if (!busyNow() && !tableAfterDraw && !grabAfterHolster && !holsterUse.busy) beltReload.start();
+    },
+    // AUTO / MANUAL: her aim, fire and reload (the same as the choice in Settings, and remembered)
+    onAimMode: () => {
+      graphics.autoFire = graphics.autoFire === 'on' ? 'off' : 'on';
+      saveSetting('autoFire', graphics.autoFire);
+      applyView();
+    },
     onHolster: (which) => {
       if (busyNow() || tableAfterDraw || grabAfterHolster || beltReload.busy || holsterUse.busy) return;
-      if (which === 'reload') beltReload.start(); else holsterUse.start(which);
+      holsterUse.start(which);
     },
-    onGrab: () => {
+  });
+  /** Take hold of the bar she is near, or let go of the one she holds. */
+  function grabBar(): void {
+    {
       if (grabUse.holding) { grabUse.letGo(); return; }
       if (busyNow() || holsterUse.busy || beltReload.busy) return;
       const bar = grabUse.nearest(motion.x, motion.z).bar;
@@ -520,8 +539,10 @@ async function start(): Promise<void> {
       if (full.length > 0 && holsterUse.hasHolsters) { holsterUse.start(full.length === 2 ? 'both' : full[0]); grabAfterHolster = bar; }
       else if (full.length > 0) { tableUse.start(full.length === 2 ? 'both' : full[0]); grabAfterTable = bar; }
       else grabUse.start(bar);
-    },
-  });
+    }
+  }
+  /** What THE PROMPT is for this frame: the table, a bar, or nothing. */
+  let promptIs: 'table' | 'grab' | null = null;
 
   hud.topSlot().appendChild(vitalsPanel.element);
   // (the camera style and the buttons for the view she starts in)
@@ -705,12 +726,16 @@ async function start(): Promise<void> {
       // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
     }
-    // (its buttons show when she is near it and nothing is running)
+    // THE BUTTONS THAT SHOW ONLY WHEN NEEDED (Joshua, 2026-11-18): the prompt near the table or a bar (holding a bar,
+    // LET GO; else the table if she is near it; else the bar), HOLSTER / DRAW with a gun in a hand or a holster,
+    // RELOAD at the table or with a clip on her belt for a gun that is not full. Hidden while something else runs.
     const holstering = holsterUse.busy || beltReload.busy || tableAfterDraw !== null || grabAfterHolster !== null;
-    hud.setUse(tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering ? tableUse.label() : null, tableUse.needsReload);
-    hud.setGrab(tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z));
-    // (her holsters' buttons: whenever a gun is in her hand or a holster and nothing else is running)
-    hud.setHolster(busyNow() || holstering ? null : holsterUse.label(), !busyNow() && !holstering && beltReload.canStart);
+    const atTable = tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering;
+    const grabWord = tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z);
+    promptIs = grabUse.holding && grabWord ? 'grab' : atTable ? 'table' : grabWord ? 'grab' : null;
+    hud.setPrompt(promptIs === 'table' ? tableUse.label() : promptIs === 'grab' ? grabWord : null);
+    hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
+    hud.setReload((atTable && tableUse.needsReload) || (!busyNow() && !holstering && beltReload.canStart));
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -888,9 +913,10 @@ async function start(): Promise<void> {
     // with its 20 rounds (src/world/tableUse.ts). First person: FIRE held, or a tap for one burst. Third person, with
     // auto-fire on: whenever she is aimed at a target. Her guns take turns; each shot leaves a streak.
     const clicks = controls.takeClicks();
-    if (aimedByHand() && clicks > 0) burst.pull();
+    if (clicks > 0 && (aimedByHand() || turn.aimed)) burst.pull();
     const autoFiring = !aimedByHand() && turn.aimed;
-    const wantFire = !busyNow() && ((aimedByHand() && controls.fireHeld) || autoFiring);
+    // (FIRE is always on screen: in MANUAL it is how she fires; in AUTO, held, she fires at her target too)
+    const wantFire = !busyNow() && ((controls.fireHeld && (aimedByHand() || turn.aimed)) || autoFiring);
     let firedNow = false;
     burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
@@ -927,17 +953,23 @@ async function start(): Promise<void> {
     dome.update(info);
     renderer.render(scene, rig.camera);
 
-    // 7. Debug readout, twice a second.
+    // 7. The FPS line under her vitals card (always), and the full readout (Show full readout), twice a second.
+    readoutTimer += realDt;
+    readoutFrames++;
+    if (!debug && readoutTimer >= 0.5) {
+      hud.setFps(`${Math.round(readoutFrames / readoutTimer)} FPS · ${VERSION_NUMBER}`);
+      readoutTimer = 0;
+      readoutFrames = 0;
+    }
     if (debug) {
-      readoutTimer += realDt;
-      readoutFrames++;
       if (readoutTimer >= 0.5) {
         const fps = Math.round(readoutFrames / readoutTimer);
+        hud.setFps(`${fps} FPS · ${VERSION_NUMBER}`);
         // THE READOUT IS KEPT IN SHORT LINES, about 30 letters at most, so that on a phone held sideways it fits
         // in the top left corner beside her vitals card and stays clear of the gear and the MOVE stick.
         // (Joshua, 2026-11-17: two long lines added here had made it grow over the gear and the view switch.)
         // The game's version is beside the FPS, so it can be read without opening Settings.
-        const lines = [`${fps} FPS · ${VERSION_NUMBER}`, `${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} tris`];
+        const lines = [`${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} tris`];
         // the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
         const her = heroine.stats?.();
         if (her) {

@@ -90,9 +90,13 @@
 .gd-view { width: 60px; height: 60px; flex-direction: column; font-size: 15px; line-height: 1.05; }
 .gd-view small { font-size: 9px; font-weight: 600; opacity: 0.8; }
 .gd-fire {
-  width: 88px;
-  height: 88px;
-  font-size: 17px;
+  /* (always there, Joshua 2026-11-18: left of the view switch, low, where the right thumb rests) */
+  position: absolute;
+  right: calc(var(--safe-right) + var(--edge) + 72px);
+  bottom: calc(var(--safe-bottom) + var(--edge) + 18px);
+  width: 96px;
+  height: 96px;
+  font-size: 18px;
   border-color: rgba(255, 95, 162, 0.8);
   color: #ffd9e8;
 }
@@ -239,9 +243,6 @@
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { left: 0; }
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(var(--stick) + var(--gap)); }
 
-/* FIRE sits in from the right edge (Joshua, 2026-11-17: "move the Fire button to the left"), about two button
-   widths, where the right thumb lands naturally; the view switch stays out in the corner above it. */
-.gd-fire { margin-right: 170px; }
 
 /* THE BOXES THAT HOLD THE CONTROLS LET TOUCHES THROUGH (Joshua, 2026-11-17: dragging on the right of the picture had
    stopped turning the view in first person). The box round the view switch and FIRE reaches to the screen's edge
@@ -275,14 +276,18 @@
   color: var(--gold);
   pointer-events: none;
 }
-/* ---- Her vitals card: along the top edge, in the middle (the bottom corners stay free for the controls) ------ */
+/* ---- Her vitals card: the top left corner, the FPS line under it (Joshua's layout, 2026-11-18) ------------- */
 .gd-hud > .gd-top-slot {
   position: absolute;
   top: calc(var(--safe-top) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(var(--safe-left) + 10px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   pointer-events: none;
 }
+.gd-fps { order: 1; font: 11px/1.2 ui-monospace, Menlo, monospace; color: var(--teal); text-shadow: 0 0 3px #000; white-space: nowrap; }
 
 /* THE MOVE STICK IS BIGGER THAN THE CAMERA STICK (Joshua, 2026-11-17: "a little bit bigger so each 1/5 had a little
    more space... every 20 pixels is 1/5"): 200px across, so from its middle to its edge is 100px and each of its
@@ -292,32 +297,10 @@
 .gd-move:has(.gd-look-stick:not([hidden])) { width: calc(200px + var(--gap) + var(--stick)); height: 200px; }
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(200px + var(--gap)); }
 
-/* ---- THE WEAPON TABLE'S BUTTONS (src/world/tableUse.ts; Joshua, 2026-11-17) ----------------------------------
-   Shown only when she is near the table. On the right, half way up the screen: never in the bottom corners, which
-   are the player's controls. The main button puts down whatever she holds (or picks both up); L and R one hand. */
-.gd-use {
-  position: absolute;
-  right: calc(var(--safe-right) + var(--edge));
-  /* (just under the rounds counter: half way down they met the view button whenever FIRE showed, 2026-11-18) */
-  top: calc(var(--safe-top) + var(--edge) + 86px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-.gd-use[hidden] { display: none; }
-.gd-use-main { min-width: 96px; height: 40px; padding: 0 10px; font-size: 13px; letter-spacing: 0.06em; }
-.gd-use-hands { display: flex; gap: 8px; }
-.gd-use-hand { width: 44px; height: 36px; font-size: 14px; }
-
 /* ---- Settings: the camera's sliders (FOV for each view, the starting zoom) ---------------------------------- */
 .gd-settings label.gd-slider { flex-wrap: wrap; gap: 4px 8px; }
 .gd-settings label.gd-slider b { font-weight: 600; min-width: 40px; text-align: right; }
 .gd-settings label.gd-slider input[type="range"] { flex: 1 0 100%; accent-color: var(--teal, #5ee8c8); }
-
-/* While the controls are being arranged (Settings -> Edit controls), the table's buttons show wherever she is, so
-   they can be placed too. */
-.gd-hud.is-editing .gd-use[hidden] { display: flex; }
 
 /* ---- EACH GUN'S ROUNDS (Joshua, 2026-11-17): top right, under the gear; red when a gun clicks empty ---------- */
 .gd-ammo {
@@ -334,47 +317,55 @@
   pointer-events: none;
 }
 .gd-ammo.is-empty { border-color: #ff5fa2; color: #ffb3d1; }
-.gd-use-reload[hidden] { display: none; }
 
-/* ---- THE GRAB BUTTON (a pole, a rail; Joshua, 2026-11-18): left of the table's buttons, half way up ----------- */
-.gd-grab {
+
+/* ---- JOSHUA'S LAYOUT (2026-11-18, "design 4"): THE RAIL, L / R and THE PROMPT --------------------------------------
+   Square buttons down the right edge, each shown only when it has something to do (HOLSTER / DRAW, RELOAD, CAM,
+   and AUTO / MANUAL); L and R beside the top of it; the prompt bubble half way down, only near something. Each is
+   placed on its own, so each can be moved in Edit controls. Never in the bottom corners. */
+.gd-rail {
   position: absolute;
-  right: calc(var(--safe-right) + var(--edge) + 112px);
-  top: calc(var(--safe-top) + var(--edge) + 86px);
-  min-width: 96px;
-  height: 40px;
-  padding: 0 10px;
-  font-size: 13px;
-  letter-spacing: 0.06em;
+  right: calc(var(--safe-right) + 12px);
+  width: 54px;
+  height: 46px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  border-radius: 12px;
 }
-.gd-grab[hidden] { display: none; }
-.gd-hud.is-editing .gd-grab[hidden] { display: block; }
-
-/* ---- THE CAM BUTTON (Joshua, 2026-11-18): third person's camera styles, beside the view button -------------- */
-.gd-cam {
-  /* (beside the view button, to its left, level with its middle: above it, it met the table's buttons) */
+.gd-rail small { font-size: 8px; font-weight: 600; opacity: 0.75; letter-spacing: 0.02em; }
+.gd-rail-holster { top: calc(var(--safe-top) + 100px); }
+.gd-rail-reload { top: calc(var(--safe-top) + 152px); }
+.gd-rail-cam { top: calc(var(--safe-top) + 204px); }
+.gd-rail-aim { top: calc(var(--safe-top) + 256px); height: 32px; border-color: rgba(255, 201, 60, 0.75); color: #ffd77a; }
+.gd-rail-aim.is-auto { border-color: rgba(94, 232, 200, 0.8); color: #c9fff1; }
+.gd-hands {
   position: absolute;
-  right: 72px;
-  bottom: 15px;
-  height: 30px;
-  padding: 0 10px;
-  font-size: 11px;
+  right: calc(var(--safe-right) + 74px);
+  top: calc(var(--safe-top) + 100px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gd-hand { width: 40px; height: 30px; font-size: 13px; border-radius: 10px; }
+.gd-hand.is-on { background: rgba(94, 232, 200, 0.35); border-color: var(--teal); }
+.gd-prompt {
+  position: absolute;
+  right: calc(var(--safe-right) + 150px);
+  top: calc(var(--safe-top) + 150px);
+  min-width: 140px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 21px;
+  border-color: rgba(255, 95, 162, 0.9);
+  color: #ffd6e7;
+  font-size: 14px;
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
-.gd-cam[hidden] { display: none; }
-
-/* ---- HER THIGH HOLSTERS' BUTTONS (src/world/holsterUse.ts; Joshua, 2026-11-18): under the grab button ---------
-   HOLSTER puts away whatever she holds (DRAW takes both out); L and R one hand. Never in the bottom corners. */
-.gd-holster {
-  position: absolute;
-  right: calc(var(--safe-right) + var(--edge) + 112px);
-  top: calc(var(--safe-top) + var(--edge) + 134px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-.gd-holster[hidden] { display: none; }
-.gd-holster .gd-use-main[hidden] { display: none; }
-.gd-hud.is-editing .gd-holster[hidden] { display: flex; }
+/* (while arranging the controls, everything shows, so it can be placed) */
+.gd-hud.is-editing .gd-rail[hidden], .gd-hud.is-editing .gd-prompt[hidden] { display: flex !important; }
+.gd-hud.is-editing .gd-hands[hidden] { display: flex !important; }

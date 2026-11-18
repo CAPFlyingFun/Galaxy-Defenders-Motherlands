@@ -44,14 +44,24 @@ const CONTROLS = [
   { id: 'camera', selector: '.gd-look-stick', label: 'CAMERA stick' },
   { id: 'fire', selector: '.gd-fire', label: 'FIRE' },
   { id: 'view', selector: '.gd-view', label: 'View switch' },
-  // (the weapon table's buttons, Joshua 2026-11-17: shown in play only near the table; always shown while editing)
-  { id: 'use', selector: '.gd-use', label: 'Table buttons' },
-  { id: 'grab', selector: '.gd-grab', label: 'Grab button' },
-  { id: 'holster', selector: '.gd-holster', label: 'Holster buttons' },
+  // (Joshua's layout, 2026-11-18: the rail's buttons, L / R and the prompt show in play only when needed; while
+  //  editing they all show, so each can be placed)
+  { id: 'railHolster', selector: '.gd-rail-holster', label: 'HOLSTER / DRAW' },
+  { id: 'railReload', selector: '.gd-rail-reload', label: 'RELOAD' },
+  { id: 'railCam', selector: '.gd-rail-cam', label: 'CAM (camera style)' },
+  { id: 'railAim', selector: '.gd-rail-aim', label: 'AUTO / MANUAL' },
+  { id: 'hands', selector: '.gd-hands', label: 'L / R hand' },
+  { id: 'prompt', selector: '.gd-prompt', label: 'Prompt (grab, put down...)' },
+  { id: 'ammo', selector: '.gd-ammo', label: 'Rounds' },
+  { id: 'vitals', selector: '.gd-top-slot', label: 'Vitals card' },
+  // (The table's, grab and holster buttons of before 2026-11-18 were listed here as 'use', 'grab', 'holster': they
+  //  are gone. A place saved for them is simply never read again.)
   // (The "Run left / right" arrow buttons of the old ring track were listed here; they are gone from the game.
   //  A place saved for them on a device is simply never read again.)
 ] as const;
 type ControlId = (typeof CONTROLS)[number]['id'];
+/** The controls that show in play only when they have something to do (always shown while editing). */
+const WHEN_NEEDED: ReadonlySet<ControlId> = new Set<ControlId>(['railHolster', 'railReload', 'railCam', 'railAim', 'hands', 'prompt']);
 
 /** One control's saved place: its centre as a fraction of the stage, and its size. */
 interface Placement { x: number; y: number; size: number }
@@ -221,7 +231,8 @@ function openEditor(): void {
     for (const control of CONTROLS) {
       const element = document.querySelector<HTMLElement>(control.selector);
       let handle = handles.get(control.id);
-      const showing = !!element && (!element.hidden || control.id === 'use' || control.id === 'grab') && element.offsetWidth > 0;
+      // (the controls that show only when needed are shown while editing: hud.css .is-editing)
+      const showing = !!element && (!element.hidden || WHEN_NEEDED.has(control.id)) && element.offsetWidth > 0;
       if (!showing) {
         if (handle) handle.style.display = 'none';
         continue;

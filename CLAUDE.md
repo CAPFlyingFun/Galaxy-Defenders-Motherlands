@@ -54,6 +54,11 @@ use the game's single copy of three.js.
   clip hand takes a fresh clip from a pouch on ITS side, holds the empty beside it, clicks the fresh one in, and tucks the
   empty (upright, dark top) into the pouch the fresh one came from; the table's RELOAD swaps empties for full clips.
   Clip grips (table and belt) come from `Game/src/world/clipGrip.ts`.
+- HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
+  line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
+  square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,
+  AUTO/MANUAL); L/R beside it pick the hand for the next action; one prompt bubble near the table or a bar; FIRE always
+  on screen. Every control is in Edit controls (`layoutEditor.ts`). Aim/fire/reload start MANUAL (`gdm.autoFire2`).
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
 - Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces

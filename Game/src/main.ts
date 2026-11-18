@@ -125,7 +125,13 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
-const TABLE_WALK = 1.1; // her pace walking up to the weapon table, metres a second (a walk)
+const TABLE_WALK = 1.1;
+/**
+ * BLAZE'S PREGNANCY, from her Character Builder export (Joshua, 2026-11-17): her first visible belly (firstWeekBump)
+ * and full term (deliveryBump, week 41). How far along she is between them slows her paces and tires her sooner
+ * (src/input/pace.ts PACES_FULL_TERM, src/vitals/heroineVitals.ts byPaceFullTerm). LATER: read from her look.
+ */
+const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const SHADOW_FLOOR_RADIUS = 4; // metres: the patch of ground round her feet that can show her real shadow
@@ -531,7 +537,10 @@ async function start(): Promise<void> {
       if (x * lastMoveX + y * lastMoveY < -0.5) pace.turnedBack();
       lastMoveX = x; lastMoveY = y;
     }
+    // HOW FAR ALONG SHE IS, by her belly now: 0 at her first visible belly, 1 at full term (PREGNANCY_ARC).
+    const carrying = Math.max(0, Math.min(1, ((heroine.bellyNow?.() ?? 100) - PREGNANCY_ARC.firstBump) / (PREGNANCY_ARC.fullTermBump - PREGNANCY_ARC.firstBump)));
     // THE WEAPON TABLE'S ACTION, while one runs: it walks her to the table and turns her to it, and the stick waits.
+    pace.carrying = carrying;
     tableAsk.yaw = turn.base;
     tableUse.update(dt, motion.x, motion.z, tableAsk);
     if (tableUse.busy) {
@@ -540,7 +549,7 @@ async function start(): Promise<void> {
         // (straight to her spot at a walk, the last step no further than the spot)
         const away = Math.hypot(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
         const toward = Math.atan2(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
-        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(TABLE_WALK, away / dt) : 0);
+        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
     } else {
       pace.step(dt, push, limits);
@@ -624,7 +633,7 @@ async function start(): Promise<void> {
     //  enemies coming close will add to it.)
     let threat = 0;
     for (const section of dome.sections) threat = Math.max(threat, section.shattered ? 1 : 0.6 * (1 - section.hp / SECTION_MAX_HP));
-    vitals.step(dt, { speed: motion.speed, firing: shooting, threat });
+    vitals.step(dt, { speed: motion.speed, firing: shooting, threat, carrying });
     const reading = vitals.reading;
     limits = reading;
     heroine.setVitals?.(reading);

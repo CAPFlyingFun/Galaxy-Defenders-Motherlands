@@ -743,6 +743,7 @@ if (uHideHead > 0.5) {
     },
 
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); },
+    bellyNow: () => body.belly,
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },

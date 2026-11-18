@@ -125,6 +125,8 @@ export interface HeroineBody {
   setFirstPerson(on: boolean): void;
   /** Belly size, 0-200 (%), as in the Character Builder. */
   setBelly(percent: number): void;
+  /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */
+  bellyNow?(): number;
 
   /** Her vitals this frame, for a body that can show them (optional: a body without it breathes at rest). */
   setVitals?(vitals: BodyVitals): void;

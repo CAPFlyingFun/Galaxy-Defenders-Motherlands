@@ -34,6 +34,14 @@ export const PACES = [
   { name: 'SPRINT', speed: 5.5 },
 ] as const;
 
+/**
+ * HER PACES AT FULL TERM (Joshua, 2026-11-17; Blaze at 150%, week 41): walk 2.0 mph, jog 3.5, run 4.9, sprint 7.0
+ * (short bursts), in metres a second. From her first visible belly (25%) to full term, each pace's top speed goes from
+ * PACES to these in a straight line (`Pace.carrying`); research: walking in the third trimester measured about 19%
+ * slower, and runners lose about a minute a mile each trimester.
+ */
+export const PACES_FULL_TERM = [0.894, 1.565, 2.19, 3.13] as const;
+
 /** Everything about the pace that is a choice. GAME TUNING. */
 export const PACE_TUNING = {
   /** Where each ring begins, as a share of the stick's full push: rings 1, 2, 3 and 4. Below the first is the centre. */
@@ -97,6 +105,11 @@ export class Pace {
   ring = 0;
   /** Her ground speed now, metres a second. */
   speed = 0;
+  /**
+   * How far along her pregnancy is by her belly, 0 (her first visible belly) to 1 (full term): each pace's top speed
+   * goes from PACES to PACES_FULL_TERM by this. Set by the game each frame (src/main.ts).
+   */
+  carrying = 0;
   /** Out of stamina: true from empty until her breath is back (walking only, after the hold). */
   winded = false;
   /** Seconds left of the winded hold (she cannot move at all while this is above 0). */
@@ -108,12 +121,18 @@ export class Pace {
     return this.level < 0.5 ? '' : PACES[Math.min(PACES.length - 1, Math.round(this.level) - 1)].name;
   }
 
-  /** The speed that goes with a pace level: the paces' own speeds, blended in between. */
-  static speedAt(level: number): number {
+  /** One pace's top speed now (0 walk .. 3 sprint), metres a second: slower the further along she is. */
+  paceSpeed(index: number): number {
+    const c = Math.max(0, Math.min(1, this.carrying));
+    return PACES[index].speed + (PACES_FULL_TERM[index] - PACES[index].speed) * c;
+  }
+
+  /** The speed that goes with a pace level: the paces' own speeds (as far along as she is), blended in between. */
+  speedAt(level: number): number {
     if (level <= 0) return 0;
-    if (level <= 1) return PACES[0].speed * level;
+    if (level <= 1) return this.paceSpeed(0) * level;
     const lower = Math.min(PACES.length - 1, Math.floor(level) - 1), upper = Math.min(PACES.length - 1, lower + 1);
-    return PACES[lower].speed + (PACES[upper].speed - PACES[lower].speed) * (level - Math.floor(level));
+    return this.paceSpeed(lower) + (this.paceSpeed(upper) - this.paceSpeed(lower)) * (level - Math.floor(level));
   }
 
   /**
@@ -150,7 +169,7 @@ export class Pace {
     }
 
     // her real speed follows the pace smoothly: nobody is at a sprint the instant she decides to be
-    const wanted = Pace.speedAt(this.level) * Math.max(0, Math.min(1, limits.speedShare));
+    const wanted = this.speedAt(this.level) * Math.max(0, Math.min(1, limits.speedShare));
     const change = wanted - this.speed;
     const most = (change > 0 ? t.speedUp : t.slowDown) * dt;
     this.speed += Math.max(-most, Math.min(most, change));

@@ -70,6 +70,12 @@ export const VITALS_TUNING = {
   stamina: {
     /** [speed m/s (the paces in input/pace.ts), seconds, +1 refills / -1 drains] */
     byPace: [[0, 30, +1], [1.1, 60, +1], [2.4, 120, -1], [3.8, 75, -1], [5.5, 35, -1]] as ReadonlyArray<readonly [number, number, number]>,
+    /**
+     * ...and AT FULL TERM (Joshua, 2026-11-17, Blaze at 150%): her slower paces (input/pace.ts PACES_FULL_TERM), the
+     * jog draining her in 120 s, the run in 60, the sprint in 30; walking and standing refill as before. From her
+     * first visible belly to full term each row goes from `byPace` to this in a straight line (VitalsInput.carrying).
+     */
+    byPaceFullTerm: [[0, 30, +1], [0.894, 60, +1], [1.565, 120, -1], [2.19, 60, -1], [3.13, 30, -1]] as ReadonlyArray<readonly [number, number, number]>,
     /** Firing drains a little too: this many seconds of firing alone would empty her. */
     firingSeconds: 240,
   },
@@ -79,6 +85,8 @@ export const VITALS_TUNING = {
    * builder's own pregnancy curve) her stamina drains this much faster and refills this much slower.
    */
   pregnant: { drainFaster: 0.3, refillSlower: 0.2 },
+  // (drainFaster is used only when the game does not say how far along she is by her belly: Joshua's full-term table,
+  //  byPaceFullTerm, already holds her faster tiring, and counting both would tire her twice. refillSlower always holds.)
   /**
    * WHAT ELSE RAISES HER HEART AND BREATHING (Joshua, 2026-11-17: "what other real life stuff affects the heart rate and
    * breathing?"). Three, each 0..1, each adding to her heart rate (beats a minute) and her breathing (breaths a minute)
@@ -146,6 +154,8 @@ export interface VitalsInput {
   readonly firing: boolean;
   /** how much danger she is in, 0 calm .. 1 terrifying (a breach, enemies close): it frightens her. Left out: none. */
   readonly threat?: number;
+  /** how far along she is by her belly, 0 (first visible) .. 1 (full term): her stamina by byPaceFullTerm. Left out: by weeks. */
+  readonly carrying?: number;
 }
 
 /** One reading of her vitals, for the display and for her body. */
@@ -199,8 +209,14 @@ export function intensityAtSpeed(speed: number): number {
  * @param pregnancy  0 not pregnant .. 1 late pregnancy (VITALS_TUNING.pregnant)
  * @param drain      the exercise upgrade's multiplier on every drain (1 = as tuned)
  */
-export function staminaRate(speed: number, firing: boolean, pregnancy: number, drain = 1): number {
-  const T = VITALS_TUNING, table = T.stamina.byPace;
+export function staminaRate(speed: number, firing: boolean, pregnancy: number, drain = 1, carrying: number | null = null): number {
+  const T = VITALS_TUNING;
+  // (her table, from the not-pregnant one to the full-term one as far along as she is; each row blended)
+  const c = carrying === null ? 0 : Math.max(0, Math.min(1, carrying));
+  const table: ReadonlyArray<readonly [number, number, number]> = c > 0 ? T.stamina.byPace.map((row, i) => {
+    const full = T.stamina.byPaceFullTerm[i];
+    return [row[0] + (full[0] - row[0]) * c, row[1] + (full[1] - row[1]) * c, row[2]] as const;
+  }) : T.stamina.byPace;
   const rateOf = (row: readonly [number, number, number]): number => row[2] / row[1];
   // (the rate at this speed: between the two paces it lies between, or the last one past a sprint)
   let rate = rateOf(table[table.length - 1]);
@@ -209,7 +225,8 @@ export function staminaRate(speed: number, firing: boolean, pregnancy: number, d
     if (speed <= table[i][0]) { const t = (speed - table[i - 1][0]) / (table[i][0] - table[i - 1][0]); rate = rateOf(table[i - 1]) + t * (rateOf(table[i]) - rateOf(table[i - 1])); break; }
   }
   if (firing) rate -= 1 / T.stamina.firingSeconds;
-  return rate < 0 ? rate * drain * (1 + T.pregnant.drainFaster * pregnancy) : rate / (1 + T.pregnant.refillSlower * pregnancy);
+  const faster = carrying === null ? T.pregnant.drainFaster * pregnancy : 0;
+  return rate < 0 ? rate * drain * (1 + faster) : rate / (1 + T.pregnant.refillSlower * pregnancy);
 }
 
 /** The heroine's vitals. Make one per heroine, `step` it every frame, and read `reading`. */
@@ -263,7 +280,7 @@ export class HeroineVitals {
     const thirst = this.needs.thirst, pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1), fear = this.fear;
     // ...they make her stamina drain faster
     const drainMore = 1 + st.thirst.drain * thirst + st.pain.drain * pain + st.fear.drain * fear;
-    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore) * dt, 0, 1);
+    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore, input.carrying ?? null) * dt, 0, 1);
     // ...and lift her heart and her breathing on top of what the work does. Her breath and her heartbeat are moved on
     // by the extra too, so what she shows (the heart on her card, her chest rising) goes at the rate the card says.
     // (each follows where the stress puts it at its own pace: her heart first, her breathing later; calming down

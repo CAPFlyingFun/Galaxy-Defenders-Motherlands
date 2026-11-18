@@ -697,7 +697,7 @@ if (uHideHead > 0.5) {
       hasGun: (hand) => gunIn[hand],
       handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
       reach: (hand, pose) => reach.setJob(handIndex(hand), pose),
-      reached: (hand) => reach.weight(handIndex(hand)),
+      reached: (hand) => reach.progress(handIndex(hand)),
       releaseGun(hand, parent) {
         const gun = guns[hand].object;
         gun.updateWorldMatrix(true, false);
@@ -895,7 +895,7 @@ if (uHideHead > 0.5) {
       armClear.update(frame.dt);
       joints2.update();
       // Her fingers closed onto a bar she holds, each until it touches (fingerTouch.ts): last, over her finished pose.
-      touch.apply(frame.dt, reach.grip, [reach.weight(0), reach.weight(1)]);
+      touch.apply(frame.dt, reach.grip, [reach.progress(0), reach.progress(1)]);
 
       // First person: where the base of her skull is now, in her skin's own space (her head is folded into it).
       if (firstPerson) {

@@ -25,6 +25,13 @@
 // arrives and leaves gently and travels along an arc (its turns are blended,
 // not its position: a blend of turns swings, it does not slide).
 //
+// ONE JOB AFTER ANOTHER glides too (Joshua, 2026-11-18: in the reload "something
+// looks off... the elbows and wrists"): a hand already on a job that is given
+// the next one (onto the clip, the clip pulled out, over to the tray) moves
+// from where it is to the new place over REACH.glideSeconds, eased, its turn
+// swung round the short way. Before, it jumped there in one frame (its elbow
+// up to 18 cm, its hand turned up to 110 degrees).
+//
 // The joint guard (jointGuard.ts) and the keep-clear (armClear.ts) run after
 // this, so a reach never bends a joint past its limit or goes into her belly.
 // ============================================================================
@@ -36,6 +43,8 @@ import { solveTwoBone } from './twoBone';
 export const REACH = Object.freeze({
   /** How long a hand takes to reach its job, or to go back to her own pose, seconds (the story's 0.55). */
   seconds: 0.55,
+  /** How long a hand takes to glide from one job straight on to the next (a shorter move), seconds. */
+  glideSeconds: 0.35,
   /** The most of her arm's full length she reaches with (a little short of straight). */
   most: 0.97,
   /** Where her elbow hangs: straight down, plus this much out to her side, plus this much back. */
@@ -54,19 +63,48 @@ const targetQ = new THREE.Quaternion(), scratchScale = new THREE.Vector3();
 
 /** One hand's job and how far on it is. */
 class HandJob {
-  /** The pose her hand bone is to have, in the world (position and turn), or null: no job. */
+  /** The pose her hand bone has on its job NOW, in the world (on its way from the last job to this one). */
   readonly pose = new THREE.Matrix4();
+  /** The pose the job asks for, and the one the hand set out from (the last job's, where it was when it was asked). */
+  readonly goal = new THREE.Matrix4();
+  readonly from = new THREE.Matrix4();
   has = false;
   /** 0 her own pose, 1 on the job: eased by `seconds`. */
   weight = 0;
+  /** How far from the last job to this one, 0..1, eased (1 when it came from her own pose: the weight does that). */
+  moved = 1;
   /** The time along the way, 0..1, before easing (the weight is this, smoothed at both ends). */
   private along = 0;
+  private movedAlong = 1;
+
+  /** A new job: from her own pose (the weight eases it in), or from the job it is on now (it glides across). */
+  set(goal: THREE.Matrix4): void {
+    if (this.weight > 0) { this.from.copy(this.pose); this.movedAlong = 0; this.moved = 0; }
+    else { this.pose.copy(goal); this.movedAlong = 1; this.moved = 1; }
+    this.goal.copy(goal);
+    this.has = true;
+  }
+
   advance(dt: number): void {
     this.along = Math.max(0, Math.min(1, this.along + (this.has ? 1 : -1) * dt / REACH.seconds));
-    const x = this.along;
-    this.weight = x * x * (3 - 2 * x); // (smoothstep: leaves gently, arrives gently)
+    this.weight = smooth(this.along); // (leaves gently, arrives gently)
+    if (this.movedAlong < 1) {
+      this.movedAlong = Math.min(1, this.movedAlong + dt / REACH.glideSeconds);
+      this.moved = smooth(this.movedAlong);
+      // (its place straight across, its turn swung round the short way)
+      this.from.decompose(fromAt, fromQ, scratchScale);
+      this.goal.decompose(goalAt, goalQ, goalScale);
+      fromAt.lerp(goalAt, this.moved);
+      fromQ.slerp(goalQ, this.moved);
+      this.pose.compose(fromAt, fromQ, goalScale);
+    } else if (this.has) this.pose.copy(this.goal);
   }
 }
+
+/** Smoothstep, 0..1. */
+const smooth = (x: number): number => x * x * (3 - 2 * x);
+const fromAt = new THREE.Vector3(), goalAt = new THREE.Vector3(), fromQ = new THREE.Quaternion(), goalQ = new THREE.Quaternion();
+const goalScale = new THREE.Vector3();
 
 export class HandReach {
   /** Each hand's job: [left, right]. */
@@ -87,15 +125,18 @@ export class HandReach {
   /** Give a hand a job: the pose its hand bone is to reach (world), or null to bring it back to her own pose. */
   setJob(hand: 0 | 1, pose: THREE.Matrix4 | null): void {
     const job = this.jobs[hand];
-    if (pose) job.pose.copy(pose);
-    job.has = pose !== null;
+    if (pose) job.set(pose);
+    else job.has = false;
   }
 
   /** Whether a hand has a job now (it may still be on its way). */
   hasJob(hand: 0 | 1): boolean { return this.jobs[hand].has; }
 
-  /** How far a hand is on its job, 0..1 (1: arrived). */
+  /** How far a hand is laid over her own pose, 0..1 (1: wholly on its job). */
   weight(hand: 0 | 1): number { return this.jobs[hand].weight; }
+
+  /** How far a hand is on its way to its job, 0..1 (1: arrived), counting a glide from one job to the next. */
+  progress(hand: 0 | 1): number { const job = this.jobs[hand]; return Math.min(job.weight, job.has ? job.moved : 1); }
 
   /** Where a hand's job is (world), or null when it has none: for her body to bend toward. */
   jobPoint(hand: 0 | 1, out: THREE.Vector3): THREE.Vector3 | null {

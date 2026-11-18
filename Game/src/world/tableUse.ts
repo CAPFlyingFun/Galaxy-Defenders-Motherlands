@@ -359,10 +359,13 @@ export class TableUse {
     return out.premultiply(gunAt).multiply(scratch2.makeTranslation(0, -pull, 0));
   }
 
-  /** The pose hand `b` must have to hold a clip at `clipAt`: its fist under the clip's base, the clip standing up out of it. */
+  /**
+   * Her hand on a clip at `clipAt`: held as a gun's grip is, lifted by clipHandBelow along its length (her hand sits
+   * under it). (Tried 2026-11-18: taking it from the side, as the pole is taken; it bent her wrist further, up to 87
+   * degrees against this one's 70, so this stays.)
+   */
   private handOnClip(b: Hand, clipAt: THREE.Matrix4): THREE.Matrix4 {
     const h = this.heroine.hands!;
-    // (a clip held as a gun's grip is, lifted by clipHandBelow along its length: the hand sits under it)
     const clipInHand = h.gunSeat(b, new THREE.Matrix4()).multiply(h.clipSeat(scratch2)).multiply(scratch3.makeTranslation(0, TABLE_USE.clipHandBelow, 0));
     return new THREE.Matrix4().copy(clipAt).multiply(clipInHand.invert());
   }

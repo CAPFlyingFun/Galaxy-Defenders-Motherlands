@@ -43,6 +43,8 @@ const DEG = Math.PI / 180;
 
 /** GAME TUNING, plain numbers to tune by eye. */
 export const LOWER = Object.freeze({
+  /** A reach asking for a deeper or shallower version of the same pose: it gets there over about this long, seconds. */
+  reshapeSeconds: 0.25,
   /** How long going down (or coming back up) takes, seconds: bending to reach, and squatting or kneeling (deeper, slower). */
   seconds: 0.6,
   secondsDeep: 0.9,
@@ -174,6 +176,18 @@ export class LowerBody {
   /** The most she may bend in this pose (her belly allows), radians; and how far she has leaned in further, metres. */
   private hingeMost = 0;
   private leanIn = 0;
+  /**
+   * THE POSE ASKED FOR NEXT (Joshua, 2026-11-18: "something looks off" in the reload). A new reach can ask for a
+   * different depth and bend (a hand going from her chest down to the rack). They wait here, and the pose in use moves
+   * to them smoothly (the same pose), or takes them only once she has come back up (a different pose). Before, they
+   * were written over the pose in use at once: her whole body jumped (her elbows up to 30 cm in one frame).
+   */
+  private wantDrop = 0;
+  private wantHinge = 0;
+  private wantBack = 0;
+  private wantHingeMost = 0;
+  /** Her lean-in fades out when a new reach begins, instead of dropping to nothing at once. */
+  private leanInFading = false;
   /** How far her hips are held back to keep her belly off something in front of her (a table), metres. */
   private pushBack = 0;
   /**
@@ -243,25 +257,26 @@ export class LowerBody {
 
     // HOW FAR DOWN: her hips' height in this pose (for each, worked out from her own legs)
     let hipsAt: number;
-    this.back = 0;
+    let back = 0;
     if (mode === 'reach') hipsAt = this.hipY;
     else if (mode === 'low') hipsAt = this.hipY - Math.min(LOWER.lowDropMost, (midBelly - y) * LOWER.lowDropPerMetre);
     else if (mode === 'squat') {
       // (the builder's squat: down the shin from the ankle at its angle, then the thigh at its)
       hipsAt = this.ankleY + this.shin * Math.cos((LOWER.squatFlex - LOWER.squatKnee) * DEG) + this.thigh * Math.cos(LOWER.squatFlex * DEG);
-      this.back = LOWER.squatBack;
+      back = LOWER.squatBack;
     } else {
       if (mode === 'kneelBoth') {
         // sitting back on her heels: her hips low, over where her feet stood
         hipsAt = LOWER.sitBackHips;
-        this.back = 0;
+        back = 0;
       } else {
         const lean = LOWER.kneelThighLean * DEG;
         hipsAt = LOWER.kneeAboveFloor + this.thigh * Math.cos(lean);
-        this.back = this.thigh * Math.sin(lean) * 0.5;
+        back = this.thigh * Math.sin(lean) * 0.5;
       }
     }
-    this.drop = Math.max(0, this.hipY - hipsAt);
+    this.wantDrop = Math.max(0, this.hipY - hipsAt);
+    this.wantBack = back;
 
     // HOW FAR FORWARD: the least bend that brings her shoulder within `armReach` of the target (her hips staying
     // where this pose puts them: the bend swings her shoulder forward and down round them). Tried every 2 degrees up
@@ -269,16 +284,16 @@ export class LowerBody {
     const most = (mode === 'reach' || mode === 'low' ? LOWER.hingeMost : LOWER.hingeDownMost);
     const hingeMost = (most[0] + (most[1] - most[0]) * full) * DEG;
     const reachOf = this.arm * LOWER.armReach;
-    const fromHipsAhead = ahead + this.back, fromHipsUp = y - hipsAt;
+    const fromHipsAhead = ahead + back, fromHipsUp = y - hipsAt;
     let best = 0, bestGap = Infinity;
     for (let h = 0; h <= hingeMost + 1e-6; h += 2 * DEG) {
       const gap = Math.hypot(fromHipsAhead - this.trunk * Math.sin(h), fromHipsUp - this.trunk * Math.cos(h)) - reachOf;
       if (gap <= 0) { best = h; bestGap = gap; break; }
       if (gap < bestGap) { best = h; bestGap = gap; }
     }
-    this.hinge = best;
-    this.hingeMost = hingeMost;
-    this.leanIn = 0;
+    this.wantHinge = best;
+    this.wantHingeMost = hingeMost;
+    this.leanInFading = true;
   }
 
   /** Move the easing on, and lay the lowering over her pose as it is now (the bones' world matrices up to date). */
@@ -315,7 +330,20 @@ export class LowerBody {
     this.hipsBefore.copy(this.hips.position);
     // (a new pose is begun only from standing: if the pose wanted changes while she is down, she comes up first)
     const going = this.wantDown && (this.weight <= 0 || this.mode === this.wantMode);
-    if (this.weight <= 0) this.mode = this.wantMode;
+    if (this.weight <= 0) {
+      // (standing: the pose asked for is taken as it is)
+      this.mode = this.wantMode;
+      this.drop = this.wantDrop; this.hinge = this.wantHinge; this.back = this.wantBack; this.hingeMost = this.wantHingeMost;
+      this.leanIn = 0; this.leanInFading = false;
+    } else if (this.mode === this.wantMode && this.wantDown) {
+      // (the same pose, asked for a little deeper or shallower: it moves there smoothly)
+      const e = 1 - Math.exp(-Math.max(0, dt) / LOWER.reshapeSeconds);
+      this.drop += (this.wantDrop - this.drop) * e;
+      this.hinge += (this.wantHinge - this.hinge) * e;
+      this.back += (this.wantBack - this.back) * e;
+      this.hingeMost = this.wantHingeMost;
+    }
+    if (this.leanInFading) this.leanIn *= Math.exp(-Math.max(0, dt) / LOWER.reshapeSeconds);
     const deep = this.mode === 'squat' || this.mode.startsWith('kneel');
     this.along = Math.max(0, Math.min(1, this.along + (going ? 1 : -1) * dt / (deep ? LOWER.secondsDeep : LOWER.seconds)));
     const x = this.along, k = x * x * (3 - 2 * x);

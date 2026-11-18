@@ -41,6 +41,13 @@
 //      near as it can to where she aims, and it is kept pointing as it pointed,
 //      so her gun still points there.
 //
+// HER THIGHS TOO (Joshua, 2026-11-17: "the same for the upper leg, and it stops
+// the same distance and/or offset away from the belly so her legs spread apart
+// a little more depending what she is trying to do"). Balls along each thigh
+// and at the knee are kept off her belly the same way; her knee is swung OUT
+// round the line from her hip to her ankle, so her foot stays exactly where it
+// stands (a planted foot never slides) and her legs simply open a little.
+//
 // It is done after her pose and her aim are on her bones, so it corrects
 // whatever they did: aiming across herself, her arms swinging as she runs, her
 // shoulders turned further than her belly.
@@ -61,6 +68,19 @@ export const ARM_CLEAR = {
   forearm: 0.04,
   wrist: 0.032,
   palm: 0.045,
+  /** Her thigh as balls: two along it (from her hip, 0, to her knee, 1) and her knee. A thigh is thick near the hip. */
+  thigh: 0.075,
+  thighAt: [0.5, 0.8],
+  knee: 0.06,
+  /**
+   * How quickly her knee swings out when her thigh meets her belly, and back in when it clears, seconds (about two
+   * thirds of the way there in that time). Out quickly so her leg never sinks into her belly for long; back in more
+   * slowly so a running stride does not snap her knee in and out every step.
+   */
+  kneeOutSeconds: 0.06,
+  kneeInSeconds: 0.3,
+  /** The most her knee is swung round its circle in one go, radians (about 35 degrees). */
+  kneeMostTurn: 0.6,
   /** Where her upper arm's two balls sit, from her shoulder (0) to her elbow (1), and her forearm's from elbow to wrist. */
   upperArmAt: [0.5, 0.8],
   forearmAt: 0.55,
@@ -192,6 +212,9 @@ export function fitBreasts(skin: SkinToMeasure, low: number, high: number): [Egg
   return [egg(0), egg(1)];
 }
 
+/** One leg's bones, for keeping the thigh off her belly. */
+export interface LegBonesForClear { readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
+
 /** One egg in use: its shape, the bone that carries it, and this frame's way from the world into the egg's own frame and back. */
 interface Obstacle { egg: Egg; carrier: THREE.Bone; readonly toFit: THREE.Matrix4; readonly fromFit: THREE.Matrix4 }
 
@@ -207,6 +230,17 @@ export class ArmClear {
   on = true;
   /** How far each arm was moved this frame to keep it clear, metres (left, right). For a readout and the tests. */
   readonly moved: [number, number] = [0, 0];
+  /** How far each knee was moved this frame to keep its thigh off her belly, metres (left, right). */
+  readonly kneeMoved: [number, number] = [0, 0];
+  /**
+   * Each knee's swing out round the hip-to-ankle line, as the distance along that circle, metres, eased from frame
+   * to frame (see kneeOutSeconds). Kept in metres, not an angle: with her leg nearly straight the circle is tiny and
+   * the same angle would mean almost nothing, then a big swing a moment later as her knee bends.
+   */
+  private kneeSwing: [number, number] = [0, 0];
+  private legs: readonly LegBonesForClear[] = [];
+  /** Her legs (call once): their thighs are kept off her belly too. */
+  setLegs(legs: readonly LegBonesForClear[]): void { this.legs = legs; }
 
   private readonly arms: readonly [ArmBones, ArmBones];
   private obstacles: Obstacle[] = [];
@@ -236,7 +270,8 @@ export class ArmClear {
    * One frame, after her pose, her turns and her aim are on her bones (and their world matrices are up to date):
    * each arm is moved out of her belly and her breasts if it is in them.
    */
-  update(): void {
+  /** @param dt seconds since the last frame (her knees ease out and back in over time; see kneeOutSeconds) */
+  update(dt = 1 / 30): void {
     this.moved[0] = 0;
     this.moved[1] = 0;
     if (!this.on || this.obstacles.length === 0) return;
@@ -245,6 +280,7 @@ export class ArmClear {
       o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[o.egg.bone]);
       o.fromFit.copy(o.toFit).invert();
     }
+    this.updateLegs(dt);
     for (let side = 0; side < 2; side++) {
       const arm = this.arms[side];
       // her arm as two rods: shoulder to elbow, elbow to wrist; and where the middle of her palm is from her wrist
@@ -296,6 +332,65 @@ export class ArmClear {
       arm.hand.quaternion.copy(parentQ.invert()).multiply(handQ);
       arm.hand.updateMatrixWorld(true);
     }
+  }
+
+  /**
+   * HER THIGHS (see the top of this file): each thigh's balls kept off her belly (her first egg) by swinging her knee
+   * out round the line from her hip to her ankle. Her foot does not move.
+   */
+  private updateLegs(dt: number): void {
+    this.kneeMoved[0] = this.kneeMoved[1] = 0;
+    const belly = this.obstacles.slice(0, 1);
+    if (!this.on || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
+    const all = this.obstacles;
+    this.obstacles = belly; // (only her belly: her thighs never reach her breasts)
+    try {
+      this.legs.forEach((leg, side) => {
+        leg.hip.getWorldPosition(shoulderAt);   // (the scratch names are the arm's: here hip, knee, ankle)
+        leg.knee.getWorldPosition(elbowAt);
+        leg.ankle.getWorldPosition(wristAt);
+        elbowWas.copy(elbowAt);
+        // the circle her knee can move on with her hip and her ankle where they are: round the line between them
+        const axis = from.copy(wristAt).sub(shoulderAt).normalize();
+        const centre = to.copy(shoulderAt).addScaledVector(axis, inFit.copy(elbowAt).sub(shoulderAt).dot(axis));
+        const radius = elbowAt.distanceTo(centre);
+        if (radius < 1e-4) return; // (leg dead straight: no circle to swing on, and nothing to swing)
+        // 1. WHERE HER KNEE WOULD HAVE TO BE: the thigh's balls pushed off her belly, back onto the circle each round
+        for (let round = 0; round < ARM_CLEAR.rounds; round++) {
+          let pushed = false;
+          for (const at of ARM_CLEAR.thighAt) if (this.pushOut(ballAt.copy(shoulderAt).lerp(elbowAt, at), ARM_CLEAR.thigh)) { elbowAt.addScaledVector(push, 1 / at); pushed = true; }
+          if (this.pushOut(ballAt.copy(elbowAt), ARM_CLEAR.knee)) { elbowAt.add(push); pushed = true; }
+          if (!pushed) break;
+          elbowAt.sub(centre);
+          elbowAt.addScaledVector(axis, -elbowAt.dot(axis));
+          if (elbowAt.lengthSq() < 1e-10) elbowAt.copy(elbowWas).sub(centre);
+          elbowAt.setLength(radius).add(centre);
+        }
+        // 2. THAT AS A SWING ROUND THE LINE (metres along the circle, + one way, - the other), eased so a stride never
+        //    snaps it
+        const a = ballAt.copy(elbowWas).sub(centre), b = knuckle.copy(elbowAt).sub(centre);
+        const want = Math.atan2(axis.dot(push.copy(a).cross(b)), a.dot(b)) * radius;
+        const had = this.kneeSwing[side];
+        const seconds = Math.abs(want) > Math.abs(had) ? ARM_CLEAR.kneeOutSeconds : ARM_CLEAR.kneeInSeconds;
+        const swing = had + (want - had) * (1 - Math.exp(-Math.max(0, dt) / seconds));
+        this.kneeSwing[side] = swing;
+        if (Math.abs(swing) <= ARM_CLEAR.least) return;
+        // 3. HER KNEE SWUNG THAT FAR round the circle (never more than kneeMostTurn: her hip's own limit is kept by
+        //    the joint guard after this)
+        const angle = THREE.MathUtils.clamp(swing / radius, -ARM_CLEAR.kneeMostTurn, ARM_CLEAR.kneeMostTurn);
+        elbowAt.copy(a).applyAxisAngle(axis, angle).add(centre);
+        this.kneeMoved[side] = elbowAt.distanceTo(elbowWas);
+        // her thigh turned to the new knee, her shin back onto her ankle, her foot left pointing as it pointed
+        leg.ankle.getWorldQuaternion(handQ);
+        turnInWorld(leg.hip, turn.setFromUnitVectors(ballAt.copy(elbowWas).sub(shoulderAt).normalize(), knuckle.copy(elbowAt).sub(shoulderAt).normalize()));
+        leg.knee.getWorldPosition(elbowAt);
+        leg.ankle.getWorldPosition(ballAt);
+        turnInWorld(leg.knee, turn.setFromUnitVectors(ballAt.sub(elbowAt).normalize(), knuckle.copy(wristAt).sub(elbowAt).normalize()));
+        leg.knee.getWorldQuaternion(parentQ);
+        leg.ankle.quaternion.copy(parentQ.invert()).multiply(handQ);
+        leg.ankle.updateMatrixWorld(true);
+      });
+    } finally { this.obstacles = all; }
   }
 
   /**

@@ -48,6 +48,7 @@ import { loadBodyFile } from './bodyFile';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist } from './footGround';
 import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
+import { JointGuard, type JointExcess } from './jointGuard';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -174,9 +175,13 @@ export interface FastHeroine extends HeroineBody {
   /** Her feet on the floor this frame, for a readout and the tests: how far she is lowered, which feet are planted, how far each was raised by bending its knee (metres). */
   feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number };
   /** Her belly's and her breasts' measured shapes, and how far each arm was moved to keep it clear of them this frame (armClear.ts), for the tests. */
-  armInfo(): { eggs: readonly Egg[]; moved: readonly [number, number] };
+  armInfo(): { eggs: readonly Egg[]; moved: readonly [number, number]; kneeMoved: readonly [number, number] };
   /** FOR THE LAB: switch the arm and belly collision off (her arms are left as her pose and aim have them) or on again. */
   keepArmsClear(on: boolean): void;
+  /** How far past its real limit each kind of joint went this frame, degrees (jointGuard.ts), for the tests. */
+  jointInfo(): JointExcess;
+  /** FOR THE LAB: switch the joint limits off (still measured) or on again. */
+  keepJointsReal(on: boolean): void;
   /** Her stride as measured from her own foot bones, walking and running (bodyMotion.ts), for a readout and the tests. */
   strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null;
   /**
@@ -507,6 +512,17 @@ if (uHideHead > 0.5) {
     };
   })();
   armClear.setEggs(measureEggs());
+  armClear.setLegs([
+    { hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
+    { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] },
+  ]);
+
+  // HER JOINTS STAY WITHIN WHAT A REAL BODY CAN DO (jointGuard.ts; Joshua, 2026-11-17): shoulders, elbows, wrists,
+  // hips, knees and ankles kept within the normal ranges, a little looser. Made now, while she stands at rest.
+  const joints2 = new JointGuard(root, bone(joints.chest), pelvisBone, [arms.left, arms.right], [
+    { side: leftSign, hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
+    { side: -leftSign, hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] },
+  ]);
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
   const turnUpright = (b: THREE.Bone, angle: number): void => {
@@ -684,8 +700,10 @@ if (uHideHead > 0.5) {
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
-    armInfo() { return { eggs: armClear.eggs, moved: armClear.moved }; },
+    armInfo() { return { eggs: armClear.eggs, moved: armClear.moved, kneeMoved: armClear.kneeMoved }; },
     keepArmsClear(on: boolean): void { armClear.on = on; },
+    jointInfo(): JointExcess { joints2.measure(); return { ...joints2.excess }; },
+    keepJointsReal(on: boolean): void { joints2.on = on; },
     feetInfo() { return { drop: ground.drop, planted: ground.planted, raised: ground.raised, held: ground.held, stepFoot: ground.stepFoot, phase: motion.phase, walk: motion.walkBlend, run: motion.runBlend, speed: motion.speed, sway: motion.sway }; },
     breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
       const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
@@ -769,9 +787,12 @@ if (uHideHead > 0.5) {
         aim.apply(target);
       }
 
-      // Her arms kept clear of her belly and her breasts (armClear.ts): after everything that poses them, so it
-      // corrects all of it.
-      armClear.update();
+      // Her joints within their real ranges (jointGuard.ts), then her arms kept clear of her belly and her breasts
+      // (armClear.ts), then her joints checked once more (so keeping clear never bends one past its limit). After
+      // everything that poses her, so these correct all of it.
+      joints2.update();
+      armClear.update(frame.dt);
+      joints2.update();
 
       // First person: where the base of her skull is now, in her skin's own space (her head is folded into it).
       if (firstPerson) {

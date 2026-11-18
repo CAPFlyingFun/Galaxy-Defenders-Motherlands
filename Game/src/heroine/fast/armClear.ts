@@ -364,7 +364,7 @@ export class ArmClear {
   private updateLegs(dt: number): void {
     this.kneeMoved[0] = this.kneeMoved[1] = 0;
     const belly = this.obstacles.slice(0, 1);
-    if (!this.on || !this.thighs || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
+    if (!this.on || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
     const all = this.obstacles;
     this.obstacles = belly; // (only her belly: her thighs never reach her breasts)
     try {
@@ -392,7 +392,8 @@ export class ArmClear {
         // 2. THAT AS A SWING ROUND THE LINE (metres along the circle, + one way, - the other), eased so a stride never
         //    snaps it
         const a = ballAt.copy(elbowWas).sub(centre), b = knuckle.copy(elbowAt).sub(centre);
-        const want = Math.atan2(axis.dot(push.copy(a).cross(b)), a.dot(b)) * radius;
+        // (while she kneels her knees are not swung: the swing eases away to nothing instead of stopping at once)
+        const want = this.thighs ? Math.atan2(axis.dot(push.copy(a).cross(b)), a.dot(b)) * radius : 0;
         const had = this.kneeSwing[side];
         const seconds = Math.abs(want) > Math.abs(had) ? ARM_CLEAR.kneeOutSeconds : ARM_CLEAR.kneeInSeconds;
         const swing = had + (want - had) * (1 - Math.exp(-Math.max(0, dt) / seconds));

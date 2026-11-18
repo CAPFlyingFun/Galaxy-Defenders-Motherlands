@@ -45,8 +45,17 @@ export class TableUse {
   private hands: Hand[] = [];
   private puttingDown = true;
   private timer = 0;
+  /** The guns lying on the table, by hand (to move them with their stands when the table's height changes). */
+  private readonly lying = new Map<Hand, THREE.Object3D>();
 
   constructor(private readonly table: WeaponTable, private readonly heroine: HeroineBody) {}
+
+  /** Change the table's height (Settings); the guns lying on it go up or down with their stands. */
+  setHeight(height: number): void {
+    if (this.busy) return;
+    this.table.setHeight(height);
+    for (const [hand, gun] of this.lying) gun.matrix.copy(this.table.root.matrixWorld).invert().multiply(this.table.slot(hand, slotAt));
+  }
 
   /** Whether an action is running (the player's stick does not move her meanwhile). */
   get busy(): boolean { return this.step !== 'idle'; }
@@ -127,7 +136,8 @@ export class TableUse {
           if (this.puttingDown) {
             const gun = h.releaseGun(hand, this.table.root);
             gun.matrix.copy(this.table.root.matrixWorld).invert().multiply(this.table.slot(hand, slotAt));
-          } else h.takeGun(hand);
+            this.lying.set(hand, gun);
+          } else { h.takeGun(hand); this.lying.delete(hand); }
         }
         this.step = 'hold'; this.timer = 0;
         break;

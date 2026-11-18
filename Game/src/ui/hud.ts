@@ -17,7 +17,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { FOV_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
@@ -274,7 +274,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird' | 'tableHeight'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -293,6 +293,10 @@ export class Hud {
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('3rd person zoom', 'zoomThird', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`);
     element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: where the 3rd person camera starts, close (0%) to far (100%); pinch to zoom in play.');
+    // ---- Settings: the weapon table (Joshua, 2026-11-17: "how can you adjust the table height") ----------------
+    element('h2', 'gd-settings-part', settings, 'WEAPON TABLE');
+    sliderRow('Table height', 'tableHeight', TABLE_RANGE.least, TABLE_RANGE.most, 0.01, (v) => `${Math.round(v * 100)} cm`);
+    element('small', 'gd-note', settings, 'Low tables have her squat or kneel to reach her guns; the floor, kneel or squat at random.');
 
     this.setView('third');
   }

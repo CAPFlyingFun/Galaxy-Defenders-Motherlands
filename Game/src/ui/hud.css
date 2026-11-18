@@ -313,3 +313,7 @@
 .gd-settings label.gd-slider { flex-wrap: wrap; gap: 4px 8px; }
 .gd-settings label.gd-slider b { font-weight: 600; min-width: 40px; text-align: right; }
 .gd-settings label.gd-slider input[type="range"] { flex: 1 0 100%; accent-color: var(--teal, #5ee8c8); }
+
+/* While the controls are being arranged (Settings -> Edit controls), the table's buttons show wherever she is, so
+   they can be placed too. */
+.gd-hud.is-editing .gd-use[hidden] { display: flex; }

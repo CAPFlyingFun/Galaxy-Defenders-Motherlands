@@ -274,7 +274,7 @@ async function start(): Promise<void> {
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
   // where she starts, so she can walk up to it, put her guns down on it and take them up again
   // (src/world/weaponTable.ts, src/world/tableUse.ts; her hands: src/heroine/fast/handReach.ts, lowerBody.ts).
-  const table = new WeaponTable();
+  const table = new WeaponTable(graphics.tableHeight);
   table.place(1.6, 9.85, 0);
   scene.add(table.root);
   const tableUse = new TableUse(table, heroine);
@@ -384,6 +384,7 @@ async function start(): Promise<void> {
       else if (key === 'shadows') applyShadows();
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
+      else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else restart();
     },
     onToggleView: toggleView,

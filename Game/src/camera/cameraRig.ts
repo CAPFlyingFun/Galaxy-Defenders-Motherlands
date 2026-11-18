@@ -33,6 +33,8 @@ const THIRD_PITCH_START = 0.16; // looking slightly up
 const THIRD_PITCH_MIN = -0.45;
 const THIRD_PITCH_MAX = 1.25;
 const ZOOM_START = 0.17; // 0 = closest, 1 = furthest
+const ZOOM_OUT_SPEED = 0.55; // how much of the whole zoom one unit of pinch moves it, out...
+const ZOOM_IN_SPEED = 1.1; // ...and in (twice as fast)
 const DISTANCE_NEAR = 3.2; // metres behind the pivot at zoom 0
 const DISTANCE_FAR = 23; // ...and at zoom 1
 const PIVOT_NEAR = 2.1; // height of the pivot at zoom 0
@@ -128,9 +130,12 @@ export class CameraRig {
         : clamp(this.pitch, FIRST_PITCH_MIN, FIRST_PITCH_MAX);
   }
 
-  /** Zoom the third-person camera: + moves it away, - brings it closer. */
+  /**
+   * Zoom the third-person camera: + moves it away, - brings it closer. Coming closer goes twice as fast as going
+   * away (Joshua, 2026-11-17: "make zoom double for zoom inward... Out is good").
+   */
   applyZoom(amount: number): void {
-    this.zoom = clamp(this.zoom + amount * 0.55, 0, 1);
+    this.zoom = clamp(this.zoom + amount * (amount < 0 ? ZOOM_IN_SPEED : ZOOM_OUT_SPEED), 0, 1);
   }
 
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */

@@ -43,8 +43,9 @@ const DEG = Math.PI / 180;
 
 /** GAME TUNING, plain numbers to tune by eye. */
 export const LOWER = Object.freeze({
-  /** How long going down (or coming back up) takes, seconds. */
+  /** How long going down (or coming back up) takes, seconds: bending to reach, and squatting or kneeling (deeper, slower). */
   seconds: 0.6,
+  secondsDeep: 0.9,
   /** Below this height above the floor, metres, she kneels. */
   floorBelow: 0.28,
   /** How much of her arm's length (shoulder to the hand bone) she reaches with, before she bends in for more. */
@@ -117,6 +118,8 @@ export const LOWER = Object.freeze({
   kneesOut: 0.3,
   /** KEPT OFF THE TABLE (her belly): how quickly her hips come forward again once she is clear, metres a second. */
   keepOffBackPerSecond: 0.2,
+  /** ...and the fastest it holds them back, metres a second. */
+  keepOffBackFastest: 0.5,
 });
 
 type Mode = 'reach' | 'low' | 'squat' | 'kneelLeft' | 'kneelRight' | 'kneelBoth';
@@ -131,6 +134,9 @@ const v = new THREE.Vector3(), w = new THREE.Vector3(), poleNow = new THREE.Vect
 const leftAxis = new THREE.Vector3(), forward = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
 const rootQ = new THREE.Quaternion(), turn = new THREE.Quaternion();
 const NO_TURN = new THREE.Quaternion();
+/** Her pose's own leg eases into the solved one over the first 1 / LEG_EASE_IN of going down (and the last of coming up). */
+const LEG_EASE_IN = 2;
+const hipWas = new THREE.Quaternion(), kneeWas = new THREE.Quaternion();
 const ankleAt = [new THREE.Vector3(), new THREE.Vector3()], ankleQ = [new THREE.Quaternion(), new THREE.Quaternion()];
 const kneeAt = new THREE.Vector3(), footAt = new THREE.Vector3(), hipAt = new THREE.Vector3();
 
@@ -293,15 +299,16 @@ export class LowerBody {
   /** Her belly against something in front of her: her hips are held back until it is clear (see `pushBack`). */
   keepOff(into: number, dt: number): void {
     // (into: how far her belly is into the thing in front of her, metres; less than 0, how far clear of it)
-    if (into > 0) this.pushBack = Math.min(0.4, this.pushBack + into * 0.8);
+    // (back at most keepOffBackFastest a second: smoothly, never a jolt)
+    if (into > 0) this.pushBack = Math.min(0.4, this.pushBack + Math.min(into * 0.8, LOWER.keepOffBackFastest * dt));
     else if (into < -0.01) this.pushBack = Math.max(0, this.pushBack - LOWER.keepOffBackPerSecond * dt);
   }
 
   stillShort(short: number, dt: number): void {
-    if (this.weight < 1 || !this.wantDown) return;
+    if (this.weight < 0.5 || !this.wantDown) return;
     const down = this.mode === 'squat' || this.mode.startsWith('kneel');
     const most = this.trunk * this.hingeMost + LOWER.hipsForwardMost + (down ? LOWER.extraDropMost : 0);
-    if (short > 0.004) this.leanIn = Math.min(most, this.leanIn + short * LOWER.leanInPerSecond * dt * 10);
+    if (short > 0.004) this.leanIn = Math.min(most, this.leanIn + short * LOWER.leanInPerSecond * dt);
   }
 
   apply(dt: number, bellyPercent: number): void {
@@ -309,11 +316,15 @@ export class LowerBody {
     // (a new pose is begun only from standing: if the pose wanted changes while she is down, she comes up first)
     const going = this.wantDown && (this.weight <= 0 || this.mode === this.wantMode);
     if (this.weight <= 0) this.mode = this.wantMode;
-    this.along = Math.max(0, Math.min(1, this.along + (going ? 1 : -1) * dt / LOWER.seconds));
+    const deep = this.mode === 'squat' || this.mode.startsWith('kneel');
+    this.along = Math.max(0, Math.min(1, this.along + (going ? 1 : -1) * dt / (deep ? LOWER.secondsDeep : LOWER.seconds)));
     const x = this.along, k = x * x * (3 - 2 * x);
     this.weight = k;
     const kneeling = this.mode.startsWith('kneel');
-    this.passive = this.mode === 'squat' || kneeling ? k : 0;
+    // (her hips' looser, loaded range is in full from early on: shrinking it with her rising squat clamped her
+    //  knees in part way up, a jolt; by the time it does go, her legs are nearly straight and well inside it)
+    const p0 = Math.min(1, k * LEG_EASE_IN);
+    this.passive = this.mode === 'squat' || kneeling ? p0 * p0 * (3 - 2 * p0) : 0;
     if (k <= 0) { if (!this.wantDown) { this.lastTargetY = NaN; this.pushBack = 0; } return; }
 
     // Her frame now: her left, her forward.
@@ -334,7 +345,7 @@ export class LowerBody {
     // 1. her hips lowered, and moved back a little (or forward, leaning in)
     this.hips.getWorldPosition(v);
     v.y -= (this.drop + extraDrop) * k;
-    v.addScaledVector(forward, (hipsForward - this.back) * k - this.pushBack);
+    v.addScaledVector(forward, (hipsForward - this.back - this.pushBack) * k);
     if (this.hips.parent) { this.hips.parent.worldToLocal(v); this.hips.position.copy(v); this.hipsWritten.copy(v); }
     this.hips.updateMatrixWorld(true);
 
@@ -356,8 +367,7 @@ export class LowerBody {
       w.copy(ankleAt[i]).sub(hipAt).normalize();
       poleNow.copy(kneeAt).sub(hipAt);
       poleNow.addScaledVector(w, -poleNow.dot(w));
-      if (poleNow.lengthSq() < 1e-8) poleNow.copy(forward);
-      poleNow.normalize();
+      // (kept as it is, metres: how far the knee stands off that line. Not made one long: see the blend below)
       // ...and where the pose wants it: forward, or forward and out round her belly in a squat
       poleWant.copy(forward);
       if (this.mode === 'squat') poleWant.multiplyScalar(Math.cos(spread)).addScaledVector(leftAxis, side * Math.sin(spread));
@@ -368,7 +378,13 @@ export class LowerBody {
       const spreadOut = kneeling ? Math.sin((LOWER.kneelSpread + LOWER.kneelSpreadPerBump * Math.min(2, bellyPercent / 100)) * DEG) : 0;
       if (kneeling) poleWant.addScaledVector(leftAxis, side * spreadOut);
       poleWant.normalize();
-      const pole = poleNow.lerp(poleWant, k).normalize();
+      // THE KNEE'S DIRECTION is always the pose's own. Blending from where her knee pointed was the WOBBLE Joshua saw
+      // (2026-11-17): part way down, that direction swings about, and her knee swung across and back with it. Instead
+      // her leg's own turns are eased into the solved ones as she starts to go down (and out as she finishes coming
+      // up), so nothing jumps at either end.
+      const pole = poleWant;
+      // (her leg's turns as her pose had them, to ease from: see the end of the leg)
+      hipWas.copy(leg.hip.quaternion); kneeWas.copy(leg.knee.quaternion);
       if (down) { this.kneelLeg(leg, hipAt, kneeAt, ankleAt[i], ankleQ[i], side, spreadOut, forward, k); continue; }
       // the foot: where it stands, or (the front foot, kneeling on the other knee) a step ahead
       footAt.copy(ankleAt[i]);
@@ -380,6 +396,13 @@ export class LowerBody {
         if (half < this.shoulderWidth / 2) footAt.addScaledVector(leftAxis, side * (this.shoulderWidth / 2 - half) * k);
       }
       solveTwoBone(leg.hip, leg.knee, leg.ankle, footAt, pole, 1);
+      // (in the first and last part of going down, her pose's own leg eased into the solved one)
+      const e0 = Math.min(1, k * LEG_EASE_IN), ease = e0 * e0 * (3 - 2 * e0); // (smoothly at both its ends too)
+      if (ease < 1) {
+        leg.hip.quaternion.copy(hipWas.slerp(leg.hip.quaternion, ease));
+        leg.knee.quaternion.copy(kneeWas.slerp(leg.knee.quaternion, ease));
+        leg.hip.updateMatrixWorld(true);
+      }
       // the foot turned as it was (flat on the floor)
       leg.knee.getWorldQuaternion(turn);
       leg.ankle.quaternion.copy(turn.invert()).multiply(ankleQ[i]);
@@ -399,7 +422,9 @@ export class LowerBody {
     const floor = this.root.position.y;
     // the knee's place on the floor
     const kneeAhead = this.mode === 'kneelBoth'
-      ? Math.sqrt(Math.max(0, this.thigh * this.thigh - Math.max(0, hipAt.y - floor - LOWER.kneeAboveFloor) ** 2))
+      // (from her hips' height in the finished pose, not as they are on the way down: that rose steeply from nothing
+      //  the moment her hips came within a thigh's length of the floor, and jerked her knees forward)
+      ? Math.sqrt(Math.max(0, this.thigh * this.thigh - (LOWER.sitBackHips - LOWER.kneeAboveFloor) ** 2))
       : -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3;
     kneeWant.copy(hipAt).addScaledVector(forward, kneeAhead).addScaledVector(leftAxis, side * this.thigh * spreadOut);
     kneeWant.y = floor + LOWER.kneeAboveFloor;

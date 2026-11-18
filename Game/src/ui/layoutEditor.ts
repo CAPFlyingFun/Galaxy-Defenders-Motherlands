@@ -44,6 +44,8 @@ const CONTROLS = [
   { id: 'camera', selector: '.gd-look-stick', label: 'CAMERA stick' },
   { id: 'fire', selector: '.gd-fire', label: 'FIRE' },
   { id: 'view', selector: '.gd-view', label: 'View switch' },
+  // (the weapon table's buttons, Joshua 2026-11-17: shown in play only near the table; always shown while editing)
+  { id: 'use', selector: '.gd-use', label: 'Table buttons' },
   // (The "Run left / right" arrow buttons of the old ring track were listed here; they are gone from the game.
   //  A place saved for them on a device is simply never read again.)
 ] as const;
@@ -160,6 +162,8 @@ function openEditor(): void {
   sheet.style.cssText = 'position:absolute;inset:0;z-index:50;background:rgba(4,6,13,.45);touch-action:none;pointer-events:auto;';
   root.appendChild(sheet);
   editor = sheet;
+  // (while editing, the controls that only show now and then, like the table's buttons, are shown to be placed)
+  root.classList.add('is-editing');
 
   // ---- The bar along the top: which control is picked, its size, and the buttons --------------------------------
   const bar = document.createElement('div');
@@ -215,7 +219,7 @@ function openEditor(): void {
     for (const control of CONTROLS) {
       const element = document.querySelector<HTMLElement>(control.selector);
       let handle = handles.get(control.id);
-      const showing = !!element && !element.hidden && element.offsetWidth > 0;
+      const showing = !!element && (!element.hidden || control.id === 'use') && element.offsetWidth > 0;
       if (!showing) {
         if (handle) handle.style.display = 'none';
         continue;
@@ -321,6 +325,7 @@ function closeEditor(): void {
   editor.dispatchEvent(new Event('gdm-close'));
   editor.remove();
   editor = null;
+  hudRoot()?.classList.remove('is-editing');
 }
 
 // ---- Starting up ------------------------------------------------------------------------------------------------------

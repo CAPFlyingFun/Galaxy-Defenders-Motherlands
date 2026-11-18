@@ -46,7 +46,12 @@ export interface HeroineSettings {
   fovThird: number;
   fovFirst: number;
   zoomThird: number;
+  /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
+  tableHeight: number;
 }
+
+/** The heights the weapon table may be set to, metres, and its own (src/world/weaponTable.ts TABLE.height). */
+export const TABLE_RANGE = Object.freeze({ least: 0.05, most: 1.1, start: 0.78 });
 
 /** The field of view a player may choose, degrees, and each view's own to begin with (the game's view before). */
 export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first: 58 });
@@ -65,6 +70,7 @@ export const SETTING_KEYS = Object.freeze({
   fovThird: 'gdm.fovThird',
   fovFirst: 'gdm.fovFirst',
   zoomThird: 'gdm.zoomThird',
+  tableHeight: 'gdm.tableHeight',
 });
 
 function read(key: string): string | null {
@@ -123,5 +129,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     fovThird: asNumber(read(SETTING_KEYS.fovThird), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.third,
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
     zoomThird: asNumber(read(SETTING_KEYS.zoomThird), 0, 1) ?? ZOOM_START_DEFAULT,
+    tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
   };
 }

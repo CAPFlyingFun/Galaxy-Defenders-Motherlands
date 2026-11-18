@@ -85,6 +85,12 @@ export const LOWER = Object.freeze({
   kneeAboveFloor: 0.06,
   kneelThighLean: 12,
   kneelBothLean: 18,
+  /**
+   * BOTH KNEES: SITTING BACK ON HER HEELS (Joshua, 2026-11-17, with a picture: kneeling "like this pose... lowering
+   * the body closer to the ground, almost in a praying pose"): her hips this far above the floor (her hip joints; her
+   * seat on her heels), her knees forward of them on the floor, her shins flat behind, her feet under her seat.
+   */
+  sitBackHips: 0.3,
   frontFootForward: 0.32,
   /** The kneeling foot's toes tipped down onto the floor, degrees. */
   kneelToesDown: 80,
@@ -203,9 +209,10 @@ export class LowerBody {
     else if (y >= this.kneeY + LOWER.lowAboveKnee) mode = 'low';
     else if (y >= LOWER.floorBelow) mode = 'squat';
     else {
-      // ON THE FLOOR: kneeling (one knee or both) or squatting, at random. With a big belly she squats: kneeling,
-      // her belly keeps her hands about 10 cm off the floor, and the builder's squat gets them there.
-      const ways = bellyPercent >= LOWER.squatOnlyFromBelly ? (['squat'] as const) : (['kneelLeft', 'kneelRight', 'kneelBoth', 'squat'] as const);
+      // ON THE FLOOR: kneeling (one knee or both) or squatting, at random. With a big belly she squats or kneels on
+      // both knees sitting back on her heels (her belly between her knees): on one knee her belly keeps her hands
+      // about 10 cm off the floor.
+      const ways = bellyPercent >= LOWER.squatOnlyFromBelly ? (['squat', 'kneelBoth'] as const) : (['kneelLeft', 'kneelRight', 'kneelBoth', 'squat'] as const);
       mode = ways[Math.floor(Math.random() * ways.length)];
     }
     this.wantMode = mode;
@@ -220,9 +227,15 @@ export class LowerBody {
       hipsAt = this.ankleY + this.shin * Math.cos((LOWER.squatFlex - LOWER.squatKnee) * DEG) + this.thigh * Math.cos(LOWER.squatFlex * DEG);
       this.back = LOWER.squatBack;
     } else {
-      const lean = (mode === 'kneelBoth' ? LOWER.kneelBothLean : LOWER.kneelThighLean) * DEG;
-      hipsAt = LOWER.kneeAboveFloor + this.thigh * Math.cos(lean);
-      this.back = this.thigh * Math.sin(lean) * 0.5;
+      if (mode === 'kneelBoth') {
+        // sitting back on her heels: her hips low, over where her feet stood
+        hipsAt = LOWER.sitBackHips;
+        this.back = 0;
+      } else {
+        const lean = LOWER.kneelThighLean * DEG;
+        hipsAt = LOWER.kneeAboveFloor + this.thigh * Math.cos(lean);
+        this.back = this.thigh * Math.sin(lean) * 0.5;
+      }
     }
     this.drop = Math.max(0, this.hipY - hipsAt);
 
@@ -341,8 +354,12 @@ export class LowerBody {
       // the foot: where it stands, or (kneeling) the shin flat on the floor behind the knee, or (the front foot) a step ahead
       footAt.copy(ankleAt[i]);
       if (down) {
-        // the knee under her hip on the floor, the foot a shin's length behind it, on its toes
-        w.copy(hipAt).addScaledVector(forward, -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3);
+        // the knee on the floor: under her hip (one knee down), or forward of it, her thigh sloping down to it (both
+        // knees, sitting back on her heels); the foot a shin's length behind the knee, on its toes
+        const kneeAhead = this.mode === 'kneelBoth'
+          ? Math.sqrt(Math.max(0, this.thigh * this.thigh - Math.max(0, hipAt.y - this.root.position.y - LOWER.kneeAboveFloor) ** 2))
+          : -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3;
+        w.copy(hipAt).addScaledVector(forward, kneeAhead);
         w.addScaledVector(leftAxis, side * this.thigh * spreadOut);
         w.y = this.root.position.y + LOWER.kneeAboveFloor;
         v.copy(w).addScaledVector(forward, -this.shin * 0.97);

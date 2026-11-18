@@ -261,6 +261,14 @@ export class ArmClear {
    * kneel puts them (lowerBody.ts opens them round her belly itself), and swinging them would lift them off it.
    */
   thighs = true;
+  /**
+   * A HAND HELD WHERE IT IS (Joshua, 2026-11-18: in the reload "it's grabbing the clips from the fingertips not the
+   * inside palms like grabbing the pole"): while a hand holds something (a clip, a bar), it must stay on it. Pushing her
+   * wrist and palm off her belly moved her palm 4 to 6 cm off the clip, and only her fingertips reached it. For such a
+   * hand her arm keeps clear by her ELBOW alone: swung round the line from her shoulder to her wrist (as her knee is
+   * round her hip and ankle), her hand left exactly where it is. [left, right]
+   */
+  readonly holdHand: [boolean, boolean] = [false, false];
   /** Her legs (call once): their thighs are kept off her belly too. */
   setLegs(legs: readonly LegBonesForClear[]): void { this.legs = legs; }
 
@@ -338,7 +346,8 @@ export class ArmClear {
       wristWas.copy(wristAt);
 
       let touched = false;
-      for (let round = 0; round < ARM_CLEAR.rounds; round++) {
+      if (this.holdHand[side]) touched = this.clearByElbow(shoulderAt, upperLength, foreLength);
+      else for (let round = 0; round < ARM_CLEAR.rounds; round++) {
         let pushed = false;
         // HER UPPER ARM AND ELBOW move her ELBOW (her shoulder rotates her arm out of the way). A ball part of the
         // way along the rod moves less than the rod's end does, so the end is moved further than the ball needs.
@@ -380,6 +389,37 @@ export class ArmClear {
       arm.hand.quaternion.copy(parentQ.invert()).multiply(handQ);
       arm.hand.updateMatrixWorld(true);
     }
+  }
+
+  /**
+   * HER ARM KEPT CLEAR BY HER ELBOW ONLY (`holdHand`): her shoulder and wrist stay; her elbow can go anywhere on the
+   * circle where both her arm's lengths still fit, and is pushed round it until her upper arm, elbow and forearm are
+   * out of her belly and breasts. Works on `elbowAt` (`wristAt` is left as it is). Returns whether anything touched.
+   */
+  private clearByElbow(shoulder: THREE.Vector3, upperLength: number, foreLength: number): boolean {
+    // the circle: round the line from her shoulder to her wrist, where her elbow is both lengths from them
+    const line = from.copy(wristAt).sub(shoulder), reachLength = line.length();
+    if (reachLength < 1e-4 || reachLength >= upperLength + foreLength - 1e-4) return false; // (arm straight: no circle)
+    line.multiplyScalar(1 / reachLength);
+    const along = (upperLength * upperLength - foreLength * foreLength + reachLength * reachLength) / (2 * reachLength);
+    const radius = Math.sqrt(Math.max(0, upperLength * upperLength - along * along));
+    const centre = to.copy(shoulder).addScaledVector(line, along);
+    let touched = false;
+    for (let round = 0; round < ARM_CLEAR.rounds; round++) {
+      let pushed = false;
+      for (const at of ARM_CLEAR.upperArmAt) if (this.pushOut(ballAt.copy(shoulder).lerp(elbowAt, at), ARM_CLEAR.upperArm)) { elbowAt.addScaledVector(push, 1 / at); pushed = true; }
+      if (this.pushOut(ballAt.copy(elbowAt), ARM_CLEAR.elbow)) { elbowAt.add(push); pushed = true; }
+      // (her forearm's ball moves only her elbow end of it: the further from her elbow, the more it must move)
+      if (this.pushOut(ballAt.copy(elbowAt).lerp(wristAt, ARM_CLEAR.forearmAt), ARM_CLEAR.forearm)) { elbowAt.addScaledVector(push, 1 / (1 - ARM_CLEAR.forearmAt)); pushed = true; }
+      if (!pushed) break;
+      touched = true;
+      // back onto the circle (both lengths kept, her wrist where it is)
+      elbowAt.sub(centre);
+      elbowAt.addScaledVector(line, -elbowAt.dot(line));
+      if (elbowAt.lengthSq() < 1e-10) elbowAt.copy(elbowWas).sub(centre).addScaledVector(line, -elbowAt.dot(line));
+      elbowAt.setLength(radius).add(centre);
+    }
+    return touched;
   }
 
   /**

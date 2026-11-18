@@ -190,6 +190,10 @@ export class WeaponTable {
     this.root.add(clip);
     this.root.updateMatrixWorld(true);
     this.rackSlot(i, clip.matrix).premultiply(inverse.copy(this.root.matrixWorld).invert());
+    // (its place in the world worked out NOW: a clip's matrix is set by hand, and three.js does not work out its world
+    //  place again on its own. A refilled clip was drawn at the table's foot, on the floor, and a hand that took it
+    //  carried it from there: her arm went up over her head with the reload's second clip. Joshua, 2026-11-18.)
+    clip.updateMatrixWorld(true);
     this.rack[i] = clip;
   }
 

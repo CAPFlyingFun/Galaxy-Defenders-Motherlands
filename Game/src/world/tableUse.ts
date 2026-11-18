@@ -93,6 +93,11 @@ const clipUp = new THREE.Vector3(), clipAcross = new THREE.Vector3(), palmWay = 
 const gunWas = new THREE.Matrix4(), setA = new THREE.Vector3(), setB = new THREE.Vector3(), setSa = new THREE.Vector3(), setSb = new THREE.Vector3();
 const setQa = new THREE.Quaternion(), setQb = new THREE.Quaternion();
 const basisX = new THREE.Vector3(), basisY = new THREE.Vector3(), basisZ = new THREE.Vector3(), q = new THREE.Quaternion();
+const handshake = new THREE.Vector3(), clipDeep = new THREE.Vector3(), handNow = new THREE.Quaternion(), shoulderTo = new THREE.Vector3(), roundA = new THREE.Vector3(), roundB = new THREE.Vector3();
+const gripAt = new THREE.Vector3(), gripTurn = new THREE.Quaternion(), gripSize = new THREE.Vector3();
+/** How many grips round a clip are tried (every 15 degrees), and how near the handshake they stay (cosine: 35 degrees). */
+const GRIP_TRIES = 24;
+const GRIP_FROM_HANDSHAKE = 0.82;
 
 export class TableUse {
   action: Action = 'idle';
@@ -550,10 +555,47 @@ export class TableUse {
     // (exactly the pole's handshake: the palm faces SIDEWAYS, toward her middle, so the fingers can wrap round the
     //  front and the thumb is up. Facing the line from her shoulder to the clip, mostly forward, it came out thumb-down,
     //  141 degrees from her relaxed hand: Joshua, 2026-11-18)
-    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld); // (her left is her root's +x)
-    palmWay.addScaledVector(clipUp, -palmWay.dot(clipUp)).normalize();
     clipPlace.addScaledVector(clipUp, how === 'below' ? -TABLE_USE.clipHoldBase : -TABLE_USE.clipHoldLow);
-    return h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay, CLIP.width / 2, new THREE.Matrix4());
+    // THE GRIP HER HAND TURNS LEAST TO TAKE (Joshua, 2026-11-18: always palm-sideways, a hand coming at the clip from
+    // another side was rolled over and her fingers looked "bent backwards"). An upright clip can be held from any side
+    // round it with her thumb up (along the clip, into the grip); of those that put her palm on HER side of the clip
+    // (facing away from her shoulder, so she never reaches round it), the one nearest how her hand is turned now.
+    const hand = h.handBone(b);
+    hand.updateWorldMatrix(true, false);
+    hand.getWorldQuaternion(handNow);
+    shoulderTo.set(b === 'left' ? TABLE_USE.shoulderOut : -TABLE_USE.shoulderOut, 1.35, 0).applyMatrix4(root.matrixWorld); // (her left is her root's +x)
+    shoulderTo.subVectors(clipPlace, shoulderTo);
+    shoulderTo.addScaledVector(clipUp, -shoulderTo.dot(clipUp)).normalize();
+    // (two directions square to the clip, to go round it with)
+    roundA.set(1, 0, 0).transformDirection(root.matrixWorld);
+    roundA.addScaledVector(clipUp, -roundA.dot(clipUp));
+    if (roundA.lengthSq() < 1e-6) roundA.set(0, 0, 1).addScaledVector(clipUp, -clipUp.z);
+    roundA.normalize();
+    roundB.crossVectors(clipUp, roundA);
+    // (the handshake: her palm toward her middle, the pole's grip; the grips tried stay within GRIP_FROM_HANDSHAKE of it)
+    handshake.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
+    handshake.addScaledVector(clipUp, -handshake.dot(clipUp)).normalize();
+    let best: THREE.Matrix4 | null = null, bestTurn = Infinity;
+    const tryPose = new THREE.Matrix4();
+    for (let k = 0; k < GRIP_TRIES; k++) {
+      const angle = (k / GRIP_TRIES) * Math.PI * 2;
+      palmWay.copy(roundA).multiplyScalar(Math.cos(angle)).addScaledVector(roundB, Math.sin(angle));
+      if (palmWay.dot(shoulderTo) < 0.1) continue; // (her palm would face back at her: her hand round the far side)
+      if (palmWay.dot(handshake) < GRIP_FROM_HANDSHAKE) continue; // (kept near the handshake: palm toward her middle)
+      wrapWay.crossVectors(clipUp, palmWay); // (this way round, her thumb points up the clip)
+      // (how far the clip's side is from its middle the way her palm faces: it is a box, 2.4 cm one way, 3.6 the other;
+      //  taken as a 2.4 cm bar her palm sank into its wide side and her fingers bent backwards to get out of it)
+      const reach = Math.abs(palmWay.dot(clipAcross)) * CLIP.width / 2 + Math.abs(palmWay.dot(clipDeep.set(0, 0, 1).applyQuaternion(clipTurn))) * CLIP.depth / 2;
+      h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay, reach, tryPose);
+      tryPose.decompose(gripAt, gripTurn, gripSize);
+      const turn = gripTurn.angleTo(handNow);
+      if (turn < bestTurn) { bestTurn = turn; best = (best ?? new THREE.Matrix4()).copy(tryPose); }
+    }
+    if (best) return best;
+    // (none on her side: the handshake as before, palm toward her middle)
+    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
+    palmWay.addScaledVector(clipUp, -palmWay.dot(clipUp)).normalize();
+    return h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay.set(0, 0, 1).transformDirection(root.matrixWorld), CLIP.width / 2, new THREE.Matrix4());
   }
 
   /** HER HAND CARRYING THE CLIP IT HOLDS so that the clip ends at `clipAt`: held just as she took it (nothing slides). */

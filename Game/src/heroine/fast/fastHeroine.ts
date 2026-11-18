@@ -958,6 +958,8 @@ if (uHideHead > 0.5) {
       joints2.update();
       // (a holstered gun is kept clear of too, by the hand that is not reaching for it: see holsterRoom)
       holsterRoom();
+      // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
+      for (const i of [0, 1] as const) armClear.holdHand[i] = touch.shapes[i] !== null && reach.weight(i) > 0.5;
       armClear.update(frame.dt);
       joints2.update();
       // (her wrists within their limits once more: the corrections above may have turned a hand)

@@ -731,8 +731,9 @@ if (uHideHead > 0.5) {
         const i = handIndex(hand);
         touch.shapes[i] = shape;
         touch.firm[i] = firm && shape !== null;
-        // (on the way to a bar the fingers open; letting go, they go back to holding a gun or resting)
+        // (on the way to a bar the fingers open wide; letting go, they go back to holding a gun or resting)
         reach.holding[i] = shape ? false : gunIn[hand];
+        reach.opening[i] = shape !== null && !firm;
       },
       touching: (hand) => touch.amount[handIndex(hand)],
       palmPoint: (hand, out) => touch.palmPoint(handIndex(hand), out),

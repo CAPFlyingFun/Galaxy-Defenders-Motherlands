@@ -62,6 +62,8 @@ export const TABLE_USE = Object.freeze({
   wristMost: 50 * Math.PI / 180,
   /** How long a gun or a clip takes to settle into its place once handed over, seconds. */
   settleHandOver: 0.2,
+  /** Her fingers open on a clip over the tray this long before it drops, seconds. */
+  openBeforeDrop: 0.18,
   /** ...and her hand points at least this far below level (a sine: -0.1 is about 6 degrees down), never to the sky. */
   tipsUpMost: -0.1,
   /** A hand waiting between steps of the reload: this far above its own gun stand, metres. */
@@ -279,8 +281,10 @@ export class TableUse {
       this.steps.push(() => {
         this.table.trayPose(scratch);
         scratch.elements[13] += TABLE_USE.dropFrom;
-        return { jobs: { [b]: this.handCarrying(b, scratch) }, settle: true, done: () => this.dropClip(b) };
+        // (her fingers open first, THEN the clip drops: Joshua, 2026-11-18)
+        return { jobs: { [b]: this.handCarrying(b, scratch) }, settle: true, done: () => this.letGoOfClip(b), hold: TABLE_USE.openBeforeDrop };
       });
+      this.steps.push(() => ({ jobs: {}, done: () => this.dropClip(b) }));
       // 4. a full clip from the rack
       this.steps.push(() => {
         const slot = Math.max(0, this.table.fullSlot());

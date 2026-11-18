@@ -65,6 +65,8 @@ export const REACH = Object.freeze({
   /** Her fingers: closed round a gun's grip, and an empty hand's rest (percent, the builder's FINGERS slider). */
   gripHolding: 55,
   gripEmpty: 18,
+  /** ...and a hand on its way to take something: open wide, ready to close round it. */
+  gripOpen: 3,
   /** How quickly her fingers close or open (seconds for about two thirds of the way). */
   gripSeconds: 0.12,
 });
@@ -180,6 +182,8 @@ export class HandReach {
   readonly short: [number, number] = [0, 0];
   /** Whether each hand holds something (its fingers close round it) [left, right]. */
   readonly holding: [boolean, boolean] = [true, true];
+  /** Whether each hand is on its way to take something (its fingers open wide) [left, right]. */
+  readonly opening: [boolean, boolean] = [false, false];
 
   /**
    * @param root her root (which way she faces: her left-right axis, for which side is "out")
@@ -229,7 +233,7 @@ export class HandReach {
   advance(dt: number): void {
     for (let i = 0; i < 2; i++) {
       this.jobs[i].advance(dt);
-      const wanted = this.holding[i] ? REACH.gripHolding : REACH.gripEmpty;
+      const wanted = this.opening[i] ? REACH.gripOpen : this.holding[i] ? REACH.gripHolding : REACH.gripEmpty;
       this.grip[i] += (wanted - this.grip[i]) * (1 - Math.exp(-Math.max(0, dt) / REACH.gripSeconds));
       if (Math.abs(this.grip[i] - wanted) < 0.05) this.grip[i] = wanted;
     }

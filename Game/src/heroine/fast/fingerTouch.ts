@@ -43,6 +43,11 @@ export const TOUCH = Object.freeze({
   palmAlong: 0.95,
   /** How quickly the fingers close round (or open off) the bar once the hand is there. */
   seconds: 0.12,
+  /**
+   * A finger that meets nothing (it would close right round into a fist) stops here instead, 0..1 of a full close:
+   * a relaxed curl (Joshua, 2026-11-18: "it still looks like it's closed fist most of the time").
+   */
+  missMost: 0.35,
   /** The hand counts as there once its reach is this far on (0..1). */
   arrivedFrom: 0.97,
   /** The search for the first touch: so many steps out, then halved so many times. */
@@ -145,8 +150,13 @@ export class FingerTouch {
               return this.clearance(i, this.trying, shape, k);
             }, 1, 0.0015, TOUCH.steps, TOUCH.halvings);
             const at = from + found.closure * (100 - from);
+            if (!found.touched) {
+              // (nothing in the way: not a fist, a relaxed curl, no further than it had come)
+              const relaxed = Math.max(from, TOUCH.missMost * 100);
+              for (let j = k; j < n; j++) touched[j] = Math.min(at, relaxed);
+              break;
+            }
             for (let j = k; j < n; j++) touched[j] = at;
-            if (!found.touched) break; // (nothing in the way: the rest of it is closed right round)
           }
         }
         for (let j = 0; j < n; j++) this.trying[j] = base[h] + (touched[j] - base[h]) * this.amount[h];

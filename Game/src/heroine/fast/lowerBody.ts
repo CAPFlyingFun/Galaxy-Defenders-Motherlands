@@ -94,6 +94,14 @@ export const LOWER = Object.freeze({
    * this far from straight down, degrees, the knee (and its foot) moved out with it.
    */
   kneelSpread: 10,
+  /**
+   * HER FEET AT LEAST SHOULDER WIDTH APART while she is down (Joshua, 2026-11-17: "are all the legs at least shoulder
+   * width apart?"): the middles of her ankles at least her shoulder width apart, which is the distance between her
+   * shoulder joints times this (to the outside of her shoulders). A foot closer in steps out as she goes down.
+   */
+  shoulderWidthFromJoints: 1.2,
+  /** Knees bent to reach (not squatting), each knee pointed out this much (as a share of forward), over her feet. */
+  kneesOut: 0.3,
   /** KEPT OFF THE TABLE (her belly): how quickly her hips come forward again once she is clear, metres a second. */
   keepOffBackPerSecond: 0.2,
 });
@@ -125,6 +133,8 @@ export class LowerBody {
   private readonly thigh: number;
   private readonly shin: number;
   private readonly arm: number;
+  /** Her shoulder width, metres (her feet go at least this far apart when she is down). */
+  private readonly shoulderWidth: number;
   /** How far down and how far forward she is going, at full weight (worked out when the target is given). */
   /** (read by the tests: how far her hips drop and how far she bends forward, at full weight; metres, radians) */
   drop = 0;
@@ -154,10 +164,11 @@ export class LowerBody {
    * @param legs      left then right
    * @param shoulder  one shoulder bone and its hand bone (to measure her arm)
    * @param leftSign  +1 if her left is her root's +x (measured from her joints, as the heroine does), else -1
+   * @param shoulderR her other shoulder (to measure her shoulder width)
    * She must be standing at rest when this is made.
    */
   constructor(private readonly root: THREE.Object3D, private readonly hips: THREE.Bone, private readonly backBones: readonly THREE.Bone[],
-              private readonly legs: readonly [LowerLeg, LowerLeg], shoulder: THREE.Bone, hand: THREE.Bone, private readonly leftSign = 1) {
+              private readonly legs: readonly [LowerLeg, LowerLeg], shoulder: THREE.Bone, hand: THREE.Bone, private readonly leftSign = 1, shoulderR: THREE.Bone | null = null) {
     root.updateMatrixWorld(true);
     const inFrame = (o: THREE.Object3D): THREE.Vector3 => root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
     const l = legs[0];
@@ -168,6 +179,7 @@ export class LowerBody {
     this.thigh = inFrame(l.hip).distanceTo(inFrame(l.knee));
     this.shin = inFrame(l.knee).distanceTo(inFrame(l.ankle));
     this.arm = inFrame(shoulder).distanceTo(inFrame(hand)); // (to her hand bone: the bone a hand's job places)
+    this.shoulderWidth = shoulderR ? Math.abs(inFrame(shoulder).x - inFrame(shoulderR).x) * LOWER.shoulderWidthFromJoints : 0.37;
   }
 
   /**
@@ -318,6 +330,8 @@ export class LowerBody {
       // ...and where the pose wants it: forward, or forward and out round her belly in a squat
       poleWant.copy(forward);
       if (this.mode === 'squat') poleWant.multiplyScalar(Math.cos(spread)).addScaledVector(leftAxis, side * Math.sin(spread));
+      // (bending her knees to reach, they point out over her feet a little, never in toward each other)
+      else poleWant.addScaledVector(leftAxis, side * LOWER.kneesOut);
       if (down) poleWant.addScaledVector(up, -0.2);
       // (kneeling, both knees open a little: kneelSpread out to each side)
       const spreadOut = kneeling ? Math.sin(LOWER.kneelSpread * DEG) : 0;
@@ -336,6 +350,12 @@ export class LowerBody {
         footAt.lerp(v, k);
       } else if (front) {
         footAt.addScaledVector(forward, LOWER.frontFootForward * k).addScaledVector(leftAxis, side * this.thigh * spreadOut * k);
+      }
+      // (at least shoulder width apart: a foot too close to her middle, the middle between where her feet stood, steps
+      //  out as she goes down; kneeling too)
+      {
+        const half = ((footAt.x - (ankleAt[0].x + ankleAt[1].x) / 2) * leftAxis.x + (footAt.z - (ankleAt[0].z + ankleAt[1].z) / 2) * leftAxis.z) * side;
+        if (half < this.shoulderWidth / 2) footAt.addScaledVector(leftAxis, side * (this.shoulderWidth / 2 - half) * k);
       }
       solveTwoBone(leg.hip, leg.knee, leg.ankle, footAt, pole, 1);
       // the foot turned as it was (flat on the floor), or, kneeling, its toes tipped down onto the floor

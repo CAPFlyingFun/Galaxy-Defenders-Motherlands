@@ -531,7 +531,7 @@ if (uHideHead > 0.5) {
   const lower = new LowerBody(root, hipsBone, backBones,
     [{ hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
      { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] }],
-    bone(joints.shoulderL), bone(joints.wristL), leftSign);
+    bone(joints.shoulderL), bone(joints.wristL), leftSign, bone(joints.shoulderR));
   /** Where her hands are reaching (the middle of the hands that have a job), for her body to get down to. */
   const reachPoint = new THREE.Vector3(), reachOne = new THREE.Vector3();
   /** What her body keeps off (the table's near face), and scratch for her belly's furthest point toward it. */

@@ -25,6 +25,7 @@
 import * as THREE from 'three';
 import type { Hand, HeroineBody, HeroineHands } from '../core/contracts';
 import { TABLE, type WeaponTable } from './weaponTable';
+import { CLIP } from '../heroine/guns';
 
 /** GAME TUNING. */
 export const TABLE_USE = Object.freeze({
@@ -42,13 +43,17 @@ export const TABLE_USE = Object.freeze({
   rounds: 20,
   /** RELOAD: where she holds a gun up (from her middle, metres: forward, up, toward her other hand) and how tipped. */
   chestForward: 0.36,
+  /** ...and at least this far in front of her belly's front, metres (room for her other hand under the clip). */
+  chestPastBelly: 0.14,
   chestUp: 1.08,
-  chestIn: 0.04,
+  chestIn: 0.06,
   chestPitchUp: 0.45,
   chestRollIn: 0.5,
   /** How far below the gun's grip a clip is pulled out, metres, and how far her other hand sits below the clip it holds. */
   clipPull: 0.08,
-  clipHandBelow: 0.075,
+  /** Her hand takes a clip from the rack this far below its middle; an old clip is let go this far above the tray. */
+  clipHoldLow: 0.008,
+  dropFrom: 0.1,
   /** A hand waiting between steps of the reload: this far above its own gun stand, metres. */
   waitAbove: 0.07,
 });
@@ -69,6 +74,8 @@ const other = (hand: Hand): Hand => (hand === 'left' ? 'right' : 'left');
 const spot = new THREE.Vector3(), slotAt = new THREE.Matrix4(), scratch = new THREE.Matrix4(), toward = new THREE.Vector3();
 const scratch2 = new THREE.Matrix4(), scratch3 = new THREE.Matrix4();
 const facePoint = new THREE.Vector3(), faceOut = new THREE.Vector3();
+const clipPlace = new THREE.Vector3(), clipTurn = new THREE.Quaternion(), clipSize = new THREE.Vector3();
+const clipUp = new THREE.Vector3(), clipAcross = new THREE.Vector3(), palmWay = new THREE.Vector3(), wrapWay = new THREE.Vector3();
 const basisX = new THREE.Vector3(), basisY = new THREE.Vector3(), basisZ = new THREE.Vector3(), q = new THREE.Quaternion();
 
 export class TableUse {
@@ -236,21 +243,26 @@ export class TableUse {
       //    is now, in her hand: her arm may have stopped a little short of where it was sent.)
       this.steps.push(() => {
         gunAt.copy(h.gun(a).matrixWorld);
-        return { jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, 0, scratch)) }, done: () => this.takeClip(a, b) };
+        return { jobs: { [b]: this.handToClip(b, this.clipPose(gunAt, 0, scratch), 'below') }, done: () => this.takeClip(a, b) };
       });
-      this.steps.push(() => ({ jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } }));
-      this.steps.push(() => ({ jobs: { [b]: this.handOnClip(b, this.table.trayPose(scratch)) }, settle: true, done: () => this.dropClip(b) }));
+      this.steps.push(() => ({ jobs: { [b]: this.handCarrying(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } }));
+      // (carried to just above the tray and let go: it drops in. Her hand stays above the tray, never in it.)
+      this.steps.push(() => {
+        this.table.trayPose(scratch);
+        scratch.elements[13] += TABLE_USE.dropFrom;
+        return { jobs: { [b]: this.handCarrying(b, scratch) }, settle: true, done: () => this.dropClip(b) };
+      });
       // 4. a full clip from the rack
       this.steps.push(() => {
         const slot = Math.max(0, this.table.fullSlot());
-        return { jobs: { [b]: this.handOnClip(b, this.table.rackSlot(slot, scratch)) }, settle: true, done: () => this.takeFromRack(slot, b) };
+        return { jobs: { [b]: this.handToClip(b, this.table.rackSlot(slot, scratch), 'side') }, settle: true, done: () => this.takeFromRack(slot, b) };
       });
       // 5. up under the grip, then pushed in: the gun is full
       this.steps.push(() => {
         gunAt.copy(h.gun(a).matrixWorld);
-        return { jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } };
+        return { jobs: { [b]: this.handCarrying(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } };
       });
-      this.steps.push(() => ({ jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, 0, scratch)) }, hold: TABLE_USE.holdSeconds, done: () => this.clipIntoGun(b, a) }));
+      this.steps.push(() => ({ jobs: { [b]: this.handCarrying(b, this.clipPose(gunAt, 0, scratch)) }, hold: TABLE_USE.holdSeconds, done: () => this.clipIntoGun(b, a) }));
       // 6. the gun set on its stand; her other hand waits just over its own stand, ready for what comes next
       //    (Joshua, 2026-11-18: sent back to her side between steps, it dropped and swung up again, nearly a metre in
       //    half a second: it read as a jump)
@@ -356,7 +368,12 @@ export class TableUse {
     basisY.addScaledVector(basisZ, -basisY.dot(basisZ)).normalize();
     basisX.crossVectors(basisY, basisZ).normalize();
     out.makeBasis(basisX, basisY, basisZ);
-    toward.set(side * TABLE_USE.chestIn, TABLE_USE.chestUp, TABLE_USE.chestForward).applyMatrix4(root.matrixWorld);
+    // (past her middle toward her other hand, so that hand works on its own side and does not reach across her:
+    //  Joshua, 2026-11-18. The sign was the wrong way round before: the gun sat on its own side.)
+    // (and out past her belly, whatever its size: at 36 cm a big belly was right under the clip, and her other hand
+    //  reached for it through her belly, Joshua, 2026-11-18)
+    const ahead = Math.max(TABLE_USE.chestForward, this.heroine.hands!.bellyAhead() + TABLE_USE.chestPastBelly);
+    toward.set(-side * TABLE_USE.chestIn, TABLE_USE.chestUp, ahead).applyMatrix4(root.matrixWorld);
     return out.setPosition(toward);
   }
 
@@ -374,13 +391,34 @@ export class TableUse {
   }
 
   /**
-   * Her hand on a clip at `clipAt`: held as a gun's grip is, lifted by clipHandBelow along its length (her hand sits
-   * under it). (Tried 2026-11-18: taking it from the side, as the pole is taken; it bent her wrist further, up to 87
-   * degrees against this one's 70, so this stays.)
+   * HER EMPTY HAND TAKING A CLIP that stands at `clipAt` (Joshua, 2026-11-18: no twisted wrists, no reaching across),
+   * placed as she takes the pole (fingerTouch.ts `gripPose`):
+   *   below  out of a gun: palm up under the clip's base, fingers up round its front (as a magazine is pulled)
+   *   side   out of the rack: palm on its side toward her middle, thumb up, fingers round its front
+   * (Before, her hand copied a gun's grip under the clip: a right hand doing that under the left gun was twisted.)
    */
-  private handOnClip(b: Hand, clipAt: THREE.Matrix4): THREE.Matrix4 {
-    const h = this.heroine.hands!;
-    const clipInHand = h.gunSeat(b, new THREE.Matrix4()).multiply(h.clipSeat(scratch2)).multiply(scratch3.makeTranslation(0, TABLE_USE.clipHandBelow, 0));
-    return new THREE.Matrix4().copy(clipAt).multiply(clipInHand.invert());
+  private handToClip(b: Hand, clipAt: THREE.Matrix4, how: 'below' | 'side'): THREE.Matrix4 {
+    const h = this.heroine.hands!, root = this.heroine.root;
+    root.updateWorldMatrix(true, false);
+    clipAt.decompose(clipPlace, clipTurn, clipSize);
+    clipUp.set(0, 1, 0).applyQuaternion(clipTurn);     // along the clip, from its base up into the grip
+    clipAcross.set(1, 0, 0).applyQuaternion(clipTurn); // across its narrow width
+    wrapWay.set(0, 0, 1).transformDirection(root.matrixWorld); // (her front: the fingers go round the far side)
+    if (how === 'below') {
+      // the palm faces up the clip into the grip, under its base; the fingers wrap round it across its width
+      return h.gripPose(b, clipPlace, clipAcross, clipUp, wrapWay, CLIP.height / 2, new THREE.Matrix4());
+    }
+    // the palm toward her middle (her left is her root's +x), on the clip's side a little below its middle
+    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
+    clipPlace.addScaledVector(clipUp, -TABLE_USE.clipHoldLow);
+    return h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay, CLIP.width / 2, new THREE.Matrix4());
   }
+
+  /** HER HAND CARRYING THE CLIP IT HOLDS so that the clip ends at `clipAt`: held just as she took it (nothing slides). */
+  private handCarrying(b: Hand, clipAt: THREE.Matrix4): THREE.Matrix4 {
+    const clip = this.clipHeld[b];
+    if (!clip) return this.handToClip(b, clipAt, 'side');
+    return new THREE.Matrix4().copy(clipAt).multiply(scratch3.copy(clip.matrix).invert());
+  }
+
 }

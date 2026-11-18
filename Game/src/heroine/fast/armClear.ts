@@ -86,6 +86,12 @@ export const ARM_CLEAR = {
   forearmAt: 0.55,
   /** How many rounds of pushing out and putting her arm's two lengths right are done in one frame. */
   rounds: 6,
+  /**
+   * THE MOST ITS CORRECTION MAY CHANGE, metres a second (Joshua, 2026-11-18: a hand "jumped" in the reload). The push
+   * that keeps her arm clear can switch on, off or across in one frame; it is let move only this fast, so her arm
+   * eases out of her belly's way (and back) instead of popping. Fast enough to keep up with a reach.
+   */
+  easeSpeed: 0.8,
   /** A move smaller than this is not worth turning her arm's bones for. */
   least: 0.0008,
 } as const;
@@ -225,11 +231,22 @@ const inFit = new THREE.Vector3(), push = new THREE.Vector3(), out = new THREE.V
 const from = new THREE.Vector3(), to = new THREE.Vector3(), knuckle = new THREE.Vector3();
 const turn = new THREE.Quaternion(), handQ = new THREE.Quaternion(), parentQ = new THREE.Quaternion();
 
+const wantMove = new THREE.Vector3(), easeStep = new THREE.Vector3();
+/** Move `kept` toward `want` by at most `most` metres. */
+function easeToward(kept: THREE.Vector3, want: THREE.Vector3, most: number): void {
+  easeStep.copy(want).sub(kept);
+  const length = easeStep.length();
+  if (length > most) easeStep.multiplyScalar(most / length);
+  kept.add(easeStep);
+}
+
 export class ArmClear {
   /** Switched off, her arms are left exactly as her pose and her aim have them (for comparing, in the lab). */
   on = true;
   /** How far each arm was moved this frame to keep it clear, metres (left, right). For a readout and the tests. */
   readonly moved: [number, number] = [0, 0];
+  /** Each arm's correction last frame: how far its elbow and its wrist were moved (world), for easing it. */
+  private readonly eased = [{ elbow: new THREE.Vector3(), wrist: new THREE.Vector3() }, { elbow: new THREE.Vector3(), wrist: new THREE.Vector3() }];
   /** How far each knee was moved this frame to keep its thigh off her belly, metres (left, right). */
   readonly kneeMoved: [number, number] = [0, 0];
   /**
@@ -338,8 +355,16 @@ export class ArmClear {
         if (!pushed) break;
         touched = true;
       }
+      // THE CORRECTION EASED: it moves toward what is wanted now by at most easeSpeed a second (when nothing touches,
+      // what is wanted is none, and it eases off the same way)
+      const kept = this.eased[side], most = ARM_CLEAR.easeSpeed * Math.max(1e-3, dt);
+      if (!touched) { elbowAt.copy(elbowWas); wristAt.copy(wristWas); }
+      easeToward(kept.elbow, wantMove.copy(elbowAt).sub(elbowWas), most);
+      easeToward(kept.wrist, wantMove.copy(wristAt).sub(wristWas), most);
+      elbowAt.copy(elbowWas).add(kept.elbow).sub(shoulderAt).setLength(upperLength).add(shoulderAt);
+      wristAt.copy(wristWas).add(kept.wrist).sub(elbowAt).setLength(foreLength).add(elbowAt);
       const moved = Math.max(elbowAt.distanceTo(elbowWas), wristAt.distanceTo(wristWas));
-      if (!touched || moved <= ARM_CLEAR.least) continue;
+      if (moved <= ARM_CLEAR.least) continue;
       this.moved[side] = moved;
 
       // Her bones turned to match: her upper arm to point at where her elbow now is, her forearm at her wrist, and

@@ -239,6 +239,11 @@ export class ArmClear {
    */
   private kneeSwing: [number, number] = [0, 0];
   private legs: readonly LegBonesForClear[] = [];
+  /**
+   * Whether her thighs are kept off her belly this frame. Off while she kneels: her knees are on the floor where the
+   * kneel puts them (lowerBody.ts opens them round her belly itself), and swinging them would lift them off it.
+   */
+  thighs = true;
   /** Her legs (call once): their thighs are kept off her belly too. */
   setLegs(legs: readonly LegBonesForClear[]): void { this.legs = legs; }
 
@@ -359,7 +364,7 @@ export class ArmClear {
   private updateLegs(dt: number): void {
     this.kneeMoved[0] = this.kneeMoved[1] = 0;
     const belly = this.obstacles.slice(0, 1);
-    if (!this.on || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
+    if (!this.on || !this.thighs || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
     const all = this.obstacles;
     this.obstacles = belly; // (only her belly: her thighs never reach her breasts)
     try {

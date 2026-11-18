@@ -92,14 +92,18 @@ export const LOWER = Object.freeze({
    */
   sitBackHips: 0.3,
   frontFootForward: 0.32,
-  /** The kneeling foot's toes tipped down onto the floor, degrees. */
-  kneelToesDown: 80,
+  /** KNEELING, each foot stands on its toes, toes tucked under: the ankle is this share of the foot's length up. */
+  tuckedAnkleUp: 0.8,
+  /** ...and the foot leans back this much (as a share of straight down) from the ankle to its toes. */
+  tuckedToesBack: 0.35,
   /**
    * KNEELING, HER KNEES APART (Joshua, 2026-11-17: "not only bend them but also spread the legs apart which would
    * give more room regardless of belly size. Maybe try 10° added to each side for a 20° spread"): each thigh swung out
    * this far from straight down, degrees, the knee (and its foot) moved out with it.
    */
   kneelSpread: 10,
+  /** ...and this much more for each 100% of belly, degrees (round her belly, as the squat does). */
+  kneelSpreadPerBump: 8,
   /**
    * HER FEET AT LEAST SHOULDER WIDTH APART while she is down (Joshua, 2026-11-17: "are all the legs at least shoulder
    * width apart?"): the middles of her ankles at least her shoulder width apart, which is the distance between her
@@ -114,12 +118,16 @@ export const LOWER = Object.freeze({
 
 type Mode = 'reach' | 'low' | 'squat' | 'kneelLeft' | 'kneelRight' | 'kneelBoth';
 
+const kneeWant = new THREE.Vector3(), ankleWant = new THREE.Vector3(), dirNow = new THREE.Vector3(), dirWant = new THREE.Vector3();
+const toeAt = new THREE.Vector3(), ankleNow = new THREE.Vector3(), turnQ = new THREE.Quaternion();
+
 /** One leg's bones. */
 export interface LowerLeg { readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
 
 const v = new THREE.Vector3(), w = new THREE.Vector3(), poleNow = new THREE.Vector3(), poleWant = new THREE.Vector3();
 const leftAxis = new THREE.Vector3(), forward = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
 const rootQ = new THREE.Quaternion(), turn = new THREE.Quaternion();
+const NO_TURN = new THREE.Quaternion();
 const ankleAt = [new THREE.Vector3(), new THREE.Vector3()], ankleQ = [new THREE.Quaternion(), new THREE.Quaternion()];
 const kneeAt = new THREE.Vector3(), footAt = new THREE.Vector3(), hipAt = new THREE.Vector3();
 
@@ -139,6 +147,8 @@ export class LowerBody {
   private readonly thigh: number;
   private readonly shin: number;
   private readonly arm: number;
+  /** Her foot's length from the ankle to its first joint, metres (kneeling, it stands up on its toes). */
+  private readonly footLength: number;
   /** Her shoulder width, metres (her feet go at least this far apart when she is down). */
   private readonly shoulderWidth: number;
   /** How far down and how far forward she is going, at full weight (worked out when the target is given). */
@@ -185,6 +195,8 @@ export class LowerBody {
     this.thigh = inFrame(l.hip).distanceTo(inFrame(l.knee));
     this.shin = inFrame(l.knee).distanceTo(inFrame(l.ankle));
     this.arm = inFrame(shoulder).distanceTo(inFrame(hand)); // (to her hand bone: the bone a hand's job places)
+    const toe = l.ankle.children.find((c) => (c as THREE.Bone).isBone);
+    this.footLength = toe ? inFrame(l.ankle).distanceTo(inFrame(toe)) : 0.14;
     this.shoulderWidth = shoulderR ? Math.abs(inFrame(shoulder).x - inFrame(shoulderR).x) * LOWER.shoulderWidthFromJoints : 0.37;
   }
 
@@ -347,40 +359,71 @@ export class LowerBody {
       else poleWant.addScaledVector(leftAxis, side * LOWER.kneesOut);
       if (down) poleWant.addScaledVector(up, -0.2);
       // (kneeling, both knees open a little: kneelSpread out to each side)
-      const spreadOut = kneeling ? Math.sin(LOWER.kneelSpread * DEG) : 0;
+      const spreadOut = kneeling ? Math.sin((LOWER.kneelSpread + LOWER.kneelSpreadPerBump * Math.min(2, bellyPercent / 100)) * DEG) : 0;
       if (kneeling) poleWant.addScaledVector(leftAxis, side * spreadOut);
       poleWant.normalize();
       const pole = poleNow.lerp(poleWant, k).normalize();
-      // the foot: where it stands, or (kneeling) the shin flat on the floor behind the knee, or (the front foot) a step ahead
+      if (down) { this.kneelLeg(leg, hipAt, kneeAt, ankleAt[i], ankleQ[i], side, spreadOut, forward, k); continue; }
+      // the foot: where it stands, or (the front foot, kneeling on the other knee) a step ahead
       footAt.copy(ankleAt[i]);
-      if (down) {
-        // the knee on the floor: under her hip (one knee down), or forward of it, her thigh sloping down to it (both
-        // knees, sitting back on her heels); the foot a shin's length behind the knee, on its toes
-        const kneeAhead = this.mode === 'kneelBoth'
-          ? Math.sqrt(Math.max(0, this.thigh * this.thigh - Math.max(0, hipAt.y - this.root.position.y - LOWER.kneeAboveFloor) ** 2))
-          : -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3;
-        w.copy(hipAt).addScaledVector(forward, kneeAhead);
-        w.addScaledVector(leftAxis, side * this.thigh * spreadOut);
-        w.y = this.root.position.y + LOWER.kneeAboveFloor;
-        v.copy(w).addScaledVector(forward, -this.shin * 0.97);
-        v.y = this.root.position.y + LOWER.kneeAboveFloor + 0.03;
-        footAt.lerp(v, k);
-      } else if (front) {
-        footAt.addScaledVector(forward, LOWER.frontFootForward * k).addScaledVector(leftAxis, side * this.thigh * spreadOut * k);
-      }
+      if (front) footAt.addScaledVector(forward, LOWER.frontFootForward * k).addScaledVector(leftAxis, side * this.thigh * spreadOut * k);
       // (at least shoulder width apart: a foot too close to her middle, the middle between where her feet stood, steps
-      //  out as she goes down; kneeling too)
+      //  out as she goes down)
       {
         const half = ((footAt.x - (ankleAt[0].x + ankleAt[1].x) / 2) * leftAxis.x + (footAt.z - (ankleAt[0].z + ankleAt[1].z) / 2) * leftAxis.z) * side;
         if (half < this.shoulderWidth / 2) footAt.addScaledVector(leftAxis, side * (this.shoulderWidth / 2 - half) * k);
       }
       solveTwoBone(leg.hip, leg.knee, leg.ankle, footAt, pole, 1);
-      // the foot turned as it was (flat on the floor), or, kneeling, its toes tipped down onto the floor
+      // the foot turned as it was (flat on the floor)
       leg.knee.getWorldQuaternion(turn);
-      if (down) ankleQ[i].premultiply(rootQ.setFromAxisAngle(leftAxis, LOWER.kneelToesDown * DEG * k));
       leg.ankle.quaternion.copy(turn.invert()).multiply(ankleQ[i]);
       leg.ankle.updateMatrixWorld(true);
       this.root.getWorldQuaternion(rootQ); // (rootQ was borrowed for the toes' turn)
+    }
+  }
+
+  /**
+   * A LEG KNEELING (Joshua's drawing, 2026-11-17): the knee ON THE FLOOR (under her hip on one knee; forward of her
+   * hips, her thigh sloping down to it, when she sits back on both), the shin lying back along the floor from it, and
+   * the foot at its end on its toes, toes tucked under (the foot standing up from the floor). Each bone is pointed at
+   * its own place, so the knee and the foot are exactly where they belong; `k` blends from where they were.
+   */
+  private kneelLeg(leg: LowerLeg, hipAt: THREE.Vector3, kneeAt: THREE.Vector3, ankleWas: THREE.Vector3, ankleTurn: THREE.Quaternion,
+                   side: number, spreadOut: number, forward: THREE.Vector3, k: number): void {
+    const floor = this.root.position.y;
+    // the knee's place on the floor
+    const kneeAhead = this.mode === 'kneelBoth'
+      ? Math.sqrt(Math.max(0, this.thigh * this.thigh - Math.max(0, hipAt.y - floor - LOWER.kneeAboveFloor) ** 2))
+      : -this.thigh * Math.sin(LOWER.kneelThighLean * DEG) * 0.3;
+    kneeWant.copy(hipAt).addScaledVector(forward, kneeAhead).addScaledVector(leftAxis, side * this.thigh * spreadOut);
+    kneeWant.y = floor + LOWER.kneeAboveFloor;
+    kneeWant.lerp(kneeAt, 1 - k);
+    // the ankle: a shin's length back from the knee, raised by the foot standing on its toes
+    const ankleUp = LOWER.kneeAboveFloor + this.footLength * LOWER.tuckedAnkleUp;
+    const along = Math.sqrt(Math.max(0, this.shin * this.shin - (ankleUp - LOWER.kneeAboveFloor) ** 2));
+    ankleWant.copy(kneeWant).addScaledVector(forward, -along);
+    ankleWant.y = floor + ankleUp;
+    ankleWant.lerp(ankleWas, 1 - k);
+    // thigh to the knee, shin to the ankle
+    leg.knee.getWorldPosition(dirNow).sub(hipAt).normalize();
+    turnInWorld(leg.hip, turnQ.setFromUnitVectors(dirNow, dirWant.copy(kneeWant).sub(hipAt).normalize()));
+    leg.knee.getWorldPosition(kneeAt);
+    leg.ankle.getWorldPosition(ankleNow);
+    turnInWorld(leg.knee, turnQ.setFromUnitVectors(dirNow.copy(ankleNow).sub(kneeAt).normalize(), dirWant.copy(ankleWant).sub(kneeAt).normalize()));
+    // the foot as it stood (flat), then turned so it points from the ankle down to its toes on the floor
+    leg.knee.getWorldQuaternion(turnQ);
+    leg.ankle.quaternion.copy(turnQ.invert()).multiply(ankleTurn);
+    leg.ankle.updateMatrixWorld(true);
+    const toe = leg.ankle.children.find((c) => (c as THREE.Bone).isBone);
+    if (toe) {
+      leg.ankle.getWorldPosition(ankleNow);
+      toe.getWorldPosition(toeAt);
+      dirNow.copy(toeAt).sub(ankleNow).normalize();
+      // toes down onto the floor, a little behind the ankle (the sole facing back)
+      dirWant.set(0, -1, 0).addScaledVector(forward, -LOWER.tuckedToesBack).normalize();
+      turnQ.setFromUnitVectors(dirNow, dirWant);
+      if (k < 1) turnQ.slerp(NO_TURN, 1 - k);
+      turnInWorld(leg.ankle, turnQ);
     }
   }
 }

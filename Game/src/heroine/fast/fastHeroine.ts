@@ -868,6 +868,7 @@ if (uHideHead > 0.5) {
       lower.stillShort(Math.max(reach.short[0], reach.short[1]), frame.dt);
 
       joints2.passive = lower.passive;
+      armClear.thighs = !(lower.weight > 0 && lower.mode.startsWith('kneel'));
       joints2.update();
       armClear.update(frame.dt);
       joints2.update();

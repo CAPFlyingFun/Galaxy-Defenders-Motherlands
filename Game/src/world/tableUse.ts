@@ -144,11 +144,17 @@ export class TableUse {
     return !!this.heroine.hands && !this.busy && this.distance(x, z) < TABLE.near;
   }
 
-  /** The main button's word: PUT DOWN while she holds any gun, PICK UP when both lie on the table. */
+  /**
+   * The main button's word: PICK UP when a gun lies on the table and none is in her hands; otherwise PUT DOWN (her guns
+   * in her hands, or in her holsters: those are drawn first, src/main.ts).
+   */
   label(): string {
     const h = this.heroine.hands;
-    return h && (h.hasGun('left') || h.hasGun('right')) ? 'PUT DOWN' : 'PICK UP';
+    return h && !h.hasGun('left') && !h.hasGun('right') && this.lying.size > 0 ? 'PICK UP' : 'PUT DOWN';
   }
+
+  /** Whether this hand's gun lies on the table. */
+  lies(hand: Hand): boolean { return this.lying.has(hand); }
 
   /** Whether a reload would do anything (a gun is not full). */
   get needsReload(): boolean { return this.rounds.left < TABLE_USE.rounds || this.rounds.right < TABLE_USE.rounds; }
@@ -178,11 +184,13 @@ export class TableUse {
       if (which === 'both') {
         const held = (['left', 'right'] as const).filter((hand) => h.hasGun(hand));
         down = held.length > 0;
-        hands = down ? held : ['left', 'right'];
+        // (taken up: only the guns that lie here; one in a holster stays there)
+        hands = down ? held : (['left', 'right'] as const).filter((hand) => this.lying.has(hand));
       } else {
         down = h.hasGun(which);
-        hands = [which];
+        hands = down || this.lying.has(which) ? [which] : [];
       }
+      if (hands.length === 0) return;
       this.action = down ? 'putDown' : 'pickUp';
       this.planGuns(hands, down);
     }

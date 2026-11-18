@@ -214,6 +214,15 @@ export class HandReach {
     } else job.has = false;
   }
 
+  /**
+   * Move a hand's job to a new pose WITHOUT starting its glide again (its target moves: her holster swings with her
+   * thigh as she walks). The glide carries on toward the new place; a hand already there simply follows it.
+   */
+  moveJob(hand: 0 | 1, pose: THREE.Matrix4): void {
+    const job = this.jobs[hand];
+    if (job.has) job.goal.copy(pose);
+  }
+
   /** Whether a hand has a job now (it may still be on its way). */
   hasJob(hand: 0 | 1): boolean { return this.jobs[hand].has; }
 

@@ -78,10 +78,21 @@ export interface HeroineHands {
   /**
    * Send a hand to a pose (world), bending her down to it as needed; null brings it back to her own pose. `limit`
    * holds her wrist within `most` radians of her own pose's, keeping `pivot` (a point in the hand) where the pose puts it.
+   * `stayUp`: her body does not get down to it (her own holster: it is within reach as she stands).
    */
-  reach(hand: Hand, pose: THREE.Matrix4 | null, limit?: { most: number; pivot: THREE.Vector3; along?: THREE.Vector3; tipsUpMost?: number }): void;
+  reach(hand: Hand, pose: THREE.Matrix4 | null, limit?: { most: number; pivot: THREE.Vector3; along?: THREE.Vector3; tipsUpMost?: number }, stayUp?: boolean): void;
   /** How far a hand is on its way, 0..1 (1: arrived). */
   reached(hand: Hand): number;
+  /**
+   * Move a hand's job (given with `reach`) to a new pose without starting its glide again: for something that moves
+   * with her as she walks (her own holster, on her swinging thigh). Ignored when the hand has no job.
+   */
+  moveReach(hand: Hand, pose: THREE.Matrix4): void;
+  /**
+   * HER HOLSTERS (her belt gear: beltGear.ts), if she wears them: the bone each rides, and where a holstered gun sits
+   * in that bone's own space. Null: no holsters.
+   */
+  holster(hand: Hand): { bone: THREE.Object3D; seat: THREE.Matrix4 } | null;
   /** Let go of this hand's gun: it stays where it is, given to `parent` (a table). Returns the gun. */
   releaseGun(hand: Hand, parent: THREE.Object3D): THREE.Object3D;
   /** Take this hand's gun back (wherever it lies): it is held as before. */

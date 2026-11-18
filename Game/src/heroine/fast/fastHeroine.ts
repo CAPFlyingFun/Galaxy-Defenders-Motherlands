@@ -521,7 +521,9 @@ if (uHideHead > 0.5) {
       return [fitBelly(skinNow, hips, underBust, lowerSpine), ...fitBreasts(skinNow, underBust - 0.01, shoulders)];
     };
   })();
-  armClear.setEggs(measureEggs());
+  /** Her belly's and breasts' eggs as last measured (a holstered gun's room is added to these: holsterRoom). */
+  let bodyEggs = measureEggs();
+  armClear.setEggs(bodyEggs);
   armClear.setLegs([
     { hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
     { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] },
@@ -599,6 +601,21 @@ if (uHideHead > 0.5) {
     },
   });
   const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
+  /** Each hand's reach is to something within reach as she stands (her own holster): her body does not get down to it. */
+  const stayUp: [boolean, boolean] = [false, false];
+  /**
+   * HER FREE HAND HANGS BESIDE A HOLSTERED GUN, NOT THROUGH IT (Joshua, 2026-11-18): while a gun is in its holster,
+   * the room it takes (an egg on her thigh: beltGear.ts) is one more thing her arms keep clear of (armClear.ts), as her
+   * belly is. Not while that hand reaches for it (it must get to the grip). Given to her arms only when that changes.
+   */
+  let roomFor = '';
+  const holsterRoom = (): void => {
+    const sides = (['left', 'right'] as const).filter((hand) => guns[hand].object.parent === gear.holsterBone(hand) && reach.weight(handIndex(hand)) <= 0 && !reach.hasJob(handIndex(hand)));
+    const key = sides.join(',');
+    if (key === roomFor) return;
+    roomFor = key;
+    armClear.setEggs([...bodyEggs, ...sides.map((hand) => gear.holsterEgg(hand))]);
+  };
   /** Whether each hand holds its gun (its fingers may close on other things too: a clip). */
   const gunIn: Record<Hand, boolean> = { left: true, right: true };
   const gunSeen = new THREE.Matrix4();
@@ -727,8 +744,10 @@ if (uHideHead > 0.5) {
     hands: {
       hasGun: (hand) => gunIn[hand],
       handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
-      reach: (hand, pose, limit) => reach.setJob(handIndex(hand), pose, limit),
+      reach: (hand, pose, limit, up = false) => { reach.setJob(handIndex(hand), pose, limit); if (pose) stayUp[handIndex(hand)] = up; },
       reached: (hand) => reach.progress(handIndex(hand)),
+      moveReach: (hand, pose) => reach.moveJob(handIndex(hand), pose),
+      holster: (hand) => ({ bone: gear.holsterBone(hand), seat: gear.holsterSeat(hand, new THREE.Matrix4()) }),
       releaseGun(hand, parent) {
         const gun = guns[hand].object;
         gun.updateWorldMatrix(true, false);
@@ -831,7 +850,7 @@ if (uHideHead > 0.5) {
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); armClear.setEggs(measureEggs()); gear.reshape(body.points, body.belly); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
@@ -902,7 +921,7 @@ if (uHideHead > 0.5) {
       {
         let count = 0;
         reachPoint.set(0, 0, 0);
-        for (const i of [0, 1] as const) if (reach.hasJob(i) && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
+        for (const i of [0, 1] as const) if (reach.hasJob(i) && !stayUp[i] && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
         lower.aimAt(count > 0 ? reachPoint.multiplyScalar(1 / count) : null, armClear.eggs[0] ?? null, body.belly);
         lower.apply(frame.dt, body.belly);
         // HER BELLY KEPT OFF THE TABLE (Joshua: "so it doesn't matter the belly size"): its point nearest the table's
@@ -937,6 +956,8 @@ if (uHideHead > 0.5) {
       joints2.passive = lower.passive;
       armClear.thighs = !(lower.weight > 0 && lower.mode.startsWith('kneel'));
       joints2.update();
+      // (a holstered gun is kept clear of too, by the hand that is not reaching for it: see holsterRoom)
+      holsterRoom();
       armClear.update(frame.dt);
       joints2.update();
       // (her wrists within their limits once more: the corrections above may have turned a hand)

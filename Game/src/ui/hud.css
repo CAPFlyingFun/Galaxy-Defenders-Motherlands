@@ -363,3 +363,17 @@
   white-space: nowrap;
 }
 .gd-cam[hidden] { display: none; }
+
+/* ---- HER THIGH HOLSTERS' BUTTONS (src/world/holsterUse.ts; Joshua, 2026-11-18): under the grab button ---------
+   HOLSTER puts away whatever she holds (DRAW takes both out); L and R one hand. Never in the bottom corners. */
+.gd-holster {
+  position: absolute;
+  right: calc(var(--safe-right) + var(--edge) + 112px);
+  top: calc(var(--safe-top) + var(--edge) + 134px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.gd-holster[hidden] { display: none; }
+.gd-hud.is-editing .gd-holster[hidden] { display: flex; }

@@ -47,6 +47,7 @@ const CONTROLS = [
   // (the weapon table's buttons, Joshua 2026-11-17: shown in play only near the table; always shown while editing)
   { id: 'use', selector: '.gd-use', label: 'Table buttons' },
   { id: 'grab', selector: '.gd-grab', label: 'Grab button' },
+  { id: 'holster', selector: '.gd-holster', label: 'Holster buttons' },
   // (The "Run left / right" arrow buttons of the old ring track were listed here; they are gone from the game.
   //  A place saved for them on a device is simply never read again.)
 ] as const;

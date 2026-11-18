@@ -42,6 +42,8 @@ export interface HudOptions {
   onCameraStyle?(): void;
   /** The grab button: take hold of the bar she is near, or let go (src/world/grabBars.ts). */
   onGrab?(): void;
+  /** Her thigh holsters: put away or draw both ('both'), or one hand's gun (src/world/holsterUse.ts). */
+  onHolster?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -135,6 +137,10 @@ export class Hud {
   private readonly useReload: HTMLElement;
   private readonly grab: HTMLElement;
   private grabLabel = '';
+  /** Her holsters' buttons (HOLSTER / DRAW, L, R): shown while she has a gun in a hand or a holster (`setHolster`). */
+  private readonly holsterBar: HTMLElement;
+  private readonly holsterMain: HTMLElement;
+  private holsterLabel = '';
   private useLabel = '';
   /** Each gun's rounds, shown near the top right (Joshua, 2026-11-17: 20 a gun). */
   private readonly ammo: HTMLElement;
@@ -244,6 +250,19 @@ export class Hud {
     this.grab.hidden = true;
     tapButton(this.grab, () => options.onGrab?.());
 
+    // HER THIGH HOLSTERS (Joshua, 2026-11-18: guns away "on the go", one or both "like how we have now at the table"):
+    // HOLSTER or DRAW for both, and L / R for one hand. Under the grab button, out of the bottom corners.
+    this.holsterBar = element('div', 'gd-holster', this.root);
+    this.holsterBar.hidden = true;
+    this.holsterMain = element('button', 'gd-button gd-use-main', this.holsterBar, 'HOLSTER');
+    tapButton(this.holsterMain, () => options.onHolster?.('both'));
+    const holsterHands = element('div', 'gd-use-hands', this.holsterBar);
+    for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
+      const button = element('button', 'gd-button gd-use-hand', holsterHands, word);
+      button.setAttribute('aria-label', `${hand} holster`);
+      tapButton(button, () => options.onHolster?.(hand));
+    }
+
     // ---- Top right, under the gear: each gun's rounds -----------------------------
     this.ammo = element('div', 'gd-ammo', this.root);
 
@@ -349,6 +368,12 @@ export class Hud {
   setGrab(label: string | null): void {
     this.grab.hidden = label === null;
     if (label !== null && label !== this.grabLabel) { this.grab.textContent = label; this.grabLabel = label; }
+  }
+
+  /** Her holsters' buttons: shown with this word on the main one (HOLSTER, DRAW), or hidden (null). */
+  setHolster(label: string | null): void {
+    this.holsterBar.hidden = label === null;
+    if (label !== null && label !== this.holsterLabel) { this.holsterMain.textContent = label; this.holsterLabel = label; }
   }
 
   setUse(label: string | null, reload = false): void {

@@ -36,6 +36,7 @@
 import * as THREE from 'three';
 import type { Hand } from '../../core/contracts';
 import { CLIP, createClip } from '../guns';
+import type { Egg } from './armClear';
 
 /** GAME TUNING (metres, degrees). */
 export const BELT = Object.freeze({
@@ -125,6 +126,11 @@ export interface BeltGear {
   /** Each holster's bone, and where a gun sits in it, in that bone's own space (a gun given to the bone at this matrix is holstered). */
   holsterBone(hand: Hand): THREE.Bone;
   holsterSeat(hand: Hand, out: THREE.Matrix4): THREE.Matrix4;
+  /**
+   * The room a holstered gun takes, as an egg shape on its thigh bone (armClear.ts): her free hand hangs beside the
+   * gun's grip instead of through it.
+   */
+  holsterEgg(hand: Hand): Egg;
   /** How many pouches (six), and how many hold a clip now. Pouches 0-2 are on her left side, 3-5 on her right. */
   readonly pouches: number;
   readonly clips: number;
@@ -499,6 +505,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   const holsterMeshes: THREE.Mesh[] = [];
   const holsterMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide });
   const holsterInfo: Record<Hand, number[]> = { left: [], right: [] };
+  const holsterEggs: Record<Hand, Egg> = { left: { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, rz: 0, bone: 0 }, right: { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, rz: 0, bone: 0 } };
   for (const hand of ['left', 'right'] as const) {
     const s = sideOf[hand];
     // Her thigh's points on this side.
@@ -530,6 +537,9 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     const gunZ = thighZ + BELT.holsterForward - slideMiddle;
     holsterRest[hand].makeBasis(across, top, barrel).setPosition(gunX, grip.y, gunZ);
     holsterInfo[hand] = [+gunX.toFixed(3), +grip.y.toFixed(3), +gunZ.toFixed(3), +(outer * s).toFixed(3)];
+    // (the room it takes, round its grip and the top of the holster: an egg a little wider than the gun, from the grip
+    //  sticking out behind to the holster's front, from just above the grip to a little down the holster)
+    holsterEggs[hand] = { cx: gunX, cy: grip.y - 0.03, cz: gunZ + 0.035, rx: GUN.halfWidth + 0.008, ry: 0.06, rz: 0.08, bone: thigh[hand] };
 
     // Its shape, in the gun's own frame: a sleeve round the slide and barrel (from the trigger guard to past the
     // muzzle, open at the top for the gun), a plate on her thigh's side, and a magenta stripe down its outer face.
@@ -813,6 +823,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     meshes: [belt, ...holsterMeshes, pouchMesh, clipMesh],
     holsterBone: (hand) => src.thighBone[hand],
     holsterSeat: (hand, out) => out.copy(holsterSeat[hand]),
+    holsterEgg: (hand) => holsterEggs[hand],
     pouches: pouchCount,
     get clips() { return full.filter(Boolean).length; },
     setClips,

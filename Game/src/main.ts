@@ -40,6 +40,7 @@ import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
+import { HolsterUse } from './world/holsterUse';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
@@ -323,6 +324,28 @@ async function start(): Promise<void> {
   const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
   /** A bar to take hold of once her guns are on the table (a hand with a gun in it puts it down first). */
   let grabAfterTable: BarName | null = null;
+  // HER THIGH HOLSTERS (Joshua, 2026-11-18: her guns away "on the go"; src/world/holsterUse.ts). She keeps walking.
+  const holsterUse = new HolsterUse(heroine);
+  /** Where she glances while she holsters or draws (one object, rewritten). */
+  const holsterAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
+  /** A table action waiting for her holstered guns to be drawn first; a bar waiting for her guns to be put away. */
+  let tableAfterDraw: 'both' | 'left' | 'right' | 'reload' | null = null;
+  let grabAfterHolster: BarName | null = null;
+  /**
+   * The table's buttons, with her holsters in mind: a holstered gun the action needs (to put on the table, to reload)
+   * is drawn first, then the action begins.
+   */
+  const useTable = (which: 'both' | 'left' | 'right' | 'reload'): void => {
+    const h = heroine.hands;
+    if (!h || grabUse.busy || holsterUse.busy || tableUse.busy) return;
+    const holding = h.hasGun('left') || h.hasGun('right');
+    const draw = which === 'reload' ? holsterUse.holstered.left || holsterUse.holstered.right
+      : which === 'both' ? !holding && !tableUse.lies('left') && !tableUse.lies('right') && (holsterUse.holstered.left || holsterUse.holstered.right)
+      : holsterUse.holstered[which];
+    if (!draw) { tableUse.start(which); return; }
+    if (which === 'left' || which === 'right') holsterUse.start(which); else holsterUse.drawAll();
+    tableAfterDraw = which;
+  };
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
   const busyNow = (): boolean => tableUse.busy || grabUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
@@ -357,6 +380,8 @@ async function start(): Promise<void> {
   const eyeAt = new THREE.Vector3(), handsAt = new THREE.Vector3(), handOne = new THREE.Vector3();
   /** Where she looks, up and down, while she does something: wanted this frame, and eased (radians). */
   let actionPitchWant = 0, actionPitch = 0;
+  /** First person: how far the view is tipped down on top of the player's look, glancing at a holster (radians). */
+  let fpGlance = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
@@ -469,14 +494,18 @@ async function start(): Promise<void> {
       applyView();
     },
     onDomeDebug: domeDebug,
-    onUse: (which) => { if (!grabUse.busy) tableUse.start(which); },
+    onUse: (which) => useTable(which),
+    onHolster: (which) => { if (!busyNow() && !tableAfterDraw && !grabAfterHolster) holsterUse.start(which); },
     onGrab: () => {
       if (grabUse.holding) { grabUse.letGo(); return; }
-      if (busyNow()) return;
+      if (busyNow() || holsterUse.busy) return;
       const bar = grabUse.nearest(motion.x, motion.z).bar;
-      // (the hands that hold the bar must be empty: their guns go on the table first, then she goes to the bar)
+      // (the hands that hold the bar must be empty: their guns go into her holsters, on the way, then she goes to the
+      //  bar; Joshua, 2026-11-18: hands free "without having to go all the way to the table". With no holsters, onto
+      //  the table first as before.)
       const full = bars.hands(bar).filter((hand) => heroine.hands?.hasGun(hand));
-      if (full.length > 0) { tableUse.start(full.length === 2 ? 'both' : full[0]); grabAfterTable = bar; }
+      if (full.length > 0 && holsterUse.hasHolsters) { holsterUse.start(full.length === 2 ? 'both' : full[0]); grabAfterHolster = bar; }
+      else if (full.length > 0) { tableUse.start(full.length === 2 ? 'both' : full[0]); grabAfterTable = bar; }
       else grabUse.start(bar);
     },
   });
@@ -513,7 +542,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -630,6 +659,10 @@ async function start(): Promise<void> {
     tableUse.update(dt, motion.x, motion.z, tableAsk);
     grabAsk.yaw = turn.base;
     grabUse.update(dt, motion.x, motion.z, grabAsk);
+    holsterUse.update(dt, holsterAsk);
+    // (her guns are drawn: on to the table; her guns are away: on to the bar)
+    if (tableAfterDraw && !holsterUse.busy) { const which = tableAfterDraw; tableAfterDraw = null; tableUse.start(which); }
+    if (grabAfterHolster && !holsterUse.busy) { grabUse.start(grabAfterHolster); grabAfterHolster = null; }
     // (her guns are down: on to the bar)
     if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable); grabAfterTable = null; }
     // (whichever is running walks her and turns her)
@@ -656,8 +689,11 @@ async function start(): Promise<void> {
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
     }
     // (its buttons show when she is near it and nothing is running)
-    hud.setUse(tableUse.canUse(motion.x, motion.z) && !grabUse.busy ? tableUse.label() : null, tableUse.needsReload);
-    hud.setGrab(tableUse.busy || grabAfterTable ? null : grabUse.label(motion.x, motion.z));
+    const holstering = holsterUse.busy || tableAfterDraw !== null || grabAfterHolster !== null;
+    hud.setUse(tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering ? tableUse.label() : null, tableUse.needsReload);
+    hud.setGrab(tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z));
+    // (her holsters' buttons: whenever a gun is in her hand or a holster and nothing else is running)
+    hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -685,6 +721,11 @@ async function start(): Promise<void> {
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
     // hands. Her head tips that way in third person, and in first person the view does.
     actionPitchWant = 0;
+    // (holstering or drawing on the go: a glance down at the holster, then back)
+    if (!busyNow() && holsterAsk.lookAt) {
+      heroine.eye(eyeAt);
+      actionPitchWant = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(holsterAsk.lookAt.y - eyeAt.y, Math.max(0.05, Math.hypot(holsterAsk.lookAt.x - eyeAt.x, holsterAsk.lookAt.z - eyeAt.z))));
+    }
     if (busyNow()) {
       heroine.eye(eyeAt);
       const lookAt = ask.lookAt;
@@ -779,6 +820,18 @@ async function start(): Promise<void> {
       rig.yaw = busyView.setYaw = busyView.yaw + busyView.lookYaw;
       rig.pitch = busyView.setPitch = busyView.pitch + busyView.lookPitch;
     } else busyView.on = false;
+    // FIRST PERSON, HOLSTERING OR DRAWING ON THE GO (Joshua, 2026-11-18: her head leads): the view glances down at the
+    // holster and comes back, on top of wherever the player looks (taken off again before the next frame's look, so
+    // the player's own aim is never moved).
+    {
+      const base = busyView.on ? rig.pitch : rig.pitch - fpGlance;
+      const glanceTo = rig.mode === 'first' && !busyNow() && holsterAsk.lookAt ? Math.min(0, actionPitchWant - base) : 0;
+      fpGlance += (glanceTo - fpGlance) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+      if (Math.abs(fpGlance) < 1e-4 && glanceTo === 0) fpGlance = 0;
+      rig.pitch = base + fpGlance;
+      // (following a target, the view's own look is worked out from the last frame's: the glance is not a drag)
+      if (busyView.on) busyView.setPitch = rig.pitch;
+    }
     // THE OVER-THE-SHOULDER CAMERA IS LOCKED TO HER HEAD (Joshua, 2026-11-18): it sits behind her right shoulder and
     // looks where her head looks, turning and tipping with it. Up and down: where the player aims (aimed by hand),
     // where she is looking while she does something, or at the target she is aimed at.
@@ -823,7 +876,7 @@ async function start(): Promise<void> {
     let firedNow = false;
     burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
-      (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0,
+      (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0 && !holsterUse.handBusy(hand),
       (hand) => {
         heroine.fire(hand);
         tracers.fire(heroine.muzzle(hand, muzzle), aim);
@@ -831,7 +884,7 @@ async function start(): Promise<void> {
         firedNow = true;
       });
     // (third person: with both guns empty she goes to the table and reloads on her own)
-    if (!aimedByHand() && !busyNow() && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
+    if (!aimedByHand() && !busyNow() && !holsterUse.busy && !tableAfterDraw && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) useTable('reload');
     hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
     tracers.update(info);
 

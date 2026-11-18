@@ -17,7 +17,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import type { HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
@@ -264,12 +264,35 @@ export class Hud {
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
     choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
+
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
       line.classList.toggle('is-off', !on);
       const list = line.querySelector('select');
       if (list) list.disabled = !on;
     }
+
+    // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
+    // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+      const line = element('label', 'gd-choice gd-slider', settings);
+      element('span', '', line, label);
+      const value = element('b', '', line, show(options.graphics[key]));
+      const slider = element('input', '', line);
+      slider.type = 'range';
+      slider.min = String(least); slider.max = String(most); slider.step = String(step);
+      slider.value = String(options.graphics[key]);
+      slider.addEventListener('input', () => {
+        const v = Number(slider.value);
+        value.textContent = show(v);
+        options.onGraphicsChange(key, v as HeroineSettings[K]);
+      });
+    };
+    element('h2', 'gd-settings-part', settings, 'CAMERA');
+    sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
+    sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
+    sliderRow('3rd person zoom', 'zoomThird', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`);
+    element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: where the 3rd person camera starts, close (0%) to far (100%); pinch to zoom in play.');
 
     this.setView('third');
   }

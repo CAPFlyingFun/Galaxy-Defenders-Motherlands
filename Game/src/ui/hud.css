@@ -308,3 +308,8 @@
 .gd-use-main { min-width: 96px; height: 40px; padding: 0 10px; font-size: 13px; letter-spacing: 0.06em; }
 .gd-use-hands { display: flex; gap: 8px; }
 .gd-use-hand { width: 44px; height: 36px; font-size: 14px; }
+
+/* ---- Settings: the camera's sliders (FOV for each view, the starting zoom) ---------------------------------- */
+.gd-settings label.gd-slider { flex-wrap: wrap; gap: 4px 8px; }
+.gd-settings label.gd-slider b { font-weight: 600; min-width: 40px; text-align: right; }
+.gd-settings label.gd-slider input[type="range"] { flex: 1 0 100%; accent-color: var(--teal, #5ee8c8); }

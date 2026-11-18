@@ -64,11 +64,23 @@ export const LOWER = Object.freeze({
    */
   leanInPerSecond: 4,
   hipsForwardMost: 0.18,
-  /** SQUAT (the builder's birth squat): her hip-to-ankle distance as a share of her leg, knees out (degrees, plus per 100% of belly), hips back. */
-  squatLeg: 0.48,
+  /**
+   * SQUAT: the Character Builder's own squat (actor/humanBirth.ts BIRTH_POSES.squat, which works for every belly;
+   * Joshua, 2026-11-17: "try the same squat pose from CCBS"): her thigh brought forward 118 degrees from hanging, her
+   * knee bent 112, her knees swung out 62 degrees (6 more for each 100% of belly), her feet flat. Her hips' height
+   * comes from those angles and her own leg; they sit a little back over her heels.
+   */
+  squatFlex: 118,
+  squatKnee: 112,
   squatSpread: 62,
   squatSpreadPerBump: 6,
-  squatBack: 0.08,
+  squatBack: 0.06,
+  /** On the floor, from this belly size (percent) she squats rather than kneels (kneeling, her belly is in the way). */
+  squatOnlyFromBelly: 100,
+  /** LOW (knees bent, leaning in) is for things at least this far above her knees; lower than that she squats. */
+  lowAboveKnee: 0.15,
+  /** Leaning in further, last of all (squatting or kneeling): her hips lowered, at most this far, metres. */
+  extraDropMost: 0.2,
   /** KNEEL: the knee's middle above the floor, the thigh's lean back from upright (degrees), the front foot forward. */
   kneeAboveFloor: 0.06,
   kneelThighLean: 12,
@@ -176,9 +188,14 @@ export class LowerBody {
     const full = Math.min(1, bellyPercent / 150);
     let mode: Mode;
     if (y >= midBelly) mode = 'reach';
-    else if (y >= this.kneeY) mode = 'low';
+    else if (y >= this.kneeY + LOWER.lowAboveKnee) mode = 'low';
     else if (y >= LOWER.floorBelow) mode = 'squat';
-    else mode = (['kneelLeft', 'kneelRight', 'kneelBoth'] as const)[Math.floor(Math.random() * 3)];
+    else {
+      // ON THE FLOOR: kneeling (one knee or both) or squatting, at random. With a big belly she squats: kneeling,
+      // her belly keeps her hands about 10 cm off the floor, and the builder's squat gets them there.
+      const ways = bellyPercent >= LOWER.squatOnlyFromBelly ? (['squat'] as const) : (['kneelLeft', 'kneelRight', 'kneelBoth', 'squat'] as const);
+      mode = ways[Math.floor(Math.random() * ways.length)];
+    }
     this.wantMode = mode;
 
     // HOW FAR DOWN: her hips' height in this pose (for each, worked out from her own legs)
@@ -187,7 +204,8 @@ export class LowerBody {
     if (mode === 'reach') hipsAt = this.hipY;
     else if (mode === 'low') hipsAt = this.hipY - Math.min(LOWER.lowDropMost, (midBelly - y) * LOWER.lowDropPerMetre);
     else if (mode === 'squat') {
-      hipsAt = this.ankleY + (this.thigh + this.shin) * LOWER.squatLeg * 0.92;
+      // (the builder's squat: down the shin from the ankle at its angle, then the thigh at its)
+      hipsAt = this.ankleY + this.shin * Math.cos((LOWER.squatFlex - LOWER.squatKnee) * DEG) + this.thigh * Math.cos(LOWER.squatFlex * DEG);
       this.back = LOWER.squatBack;
     } else {
       const lean = (mode === 'kneelBoth' ? LOWER.kneelBothLean : LOWER.kneelThighLean) * DEG;
@@ -238,7 +256,9 @@ export class LowerBody {
 
   stillShort(short: number, dt: number): void {
     if (this.weight < 1 || !this.wantDown) return;
-    if (short > 0.004) this.leanIn = Math.min(this.trunk * this.hingeMost + LOWER.hipsForwardMost, this.leanIn + short * LOWER.leanInPerSecond * dt * 10);
+    const down = this.mode === 'squat' || this.mode.startsWith('kneel');
+    const most = this.trunk * this.hingeMost + LOWER.hipsForwardMost + (down ? LOWER.extraDropMost : 0);
+    if (short > 0.004) this.leanIn = Math.min(most, this.leanIn + short * LOWER.leanInPerSecond * dt * 10);
   }
 
   apply(dt: number, bellyPercent: number): void {
@@ -264,10 +284,13 @@ export class LowerBody {
     // (leaning in further: first more bend, as far as her belly allows; then her hips forward)
     const moreBend = Math.min(Math.max(0, this.hingeMost - this.hinge), this.leanIn / this.trunk);
     const hipsForward = Math.min(LOWER.hipsForwardMost, Math.max(0, this.leanIn - moreBend * this.trunk));
+    // (and, squatting or kneeling, last of all her hips a little lower)
+    const extraDrop = this.mode === 'squat' || this.mode.startsWith('kneel')
+      ? Math.min(LOWER.extraDropMost, Math.max(0, this.leanIn - moreBend * this.trunk - hipsForward)) : 0;
 
     // 1. her hips lowered, and moved back a little (or forward, leaning in)
     this.hips.getWorldPosition(v);
-    v.y -= this.drop * k;
+    v.y -= (this.drop + extraDrop) * k;
     v.addScaledVector(forward, (hipsForward - this.back) * k - this.pushBack);
     if (this.hips.parent) { this.hips.parent.worldToLocal(v); this.hips.position.copy(v); this.hipsWritten.copy(v); }
     this.hips.updateMatrixWorld(true);

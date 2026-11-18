@@ -285,6 +285,9 @@ async function start(): Promise<void> {
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
+  // (the camera as the player set it up in Settings: each view's field of view, and where the zoom starts)
+  rig.setFov(graphics.fovThird, graphics.fovFirst);
+  rig.setZoom(graphics.zoomThird);
   const controls = new Controls(renderer.domElement);
 
   /** The stick's direction last frame, to notice her turning right round. */
@@ -379,6 +382,8 @@ async function start(): Promise<void> {
       else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
+      else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
+      else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else restart();
     },
     onToggleView: toggleView,

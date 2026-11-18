@@ -79,11 +79,32 @@ export class CameraRig {
     this.camera.rotation.order = 'YXZ';
   }
 
+  /** Each view's field of view, degrees (Settings, CAMERA: 50-120). */
+  fovThird = FOV_LANDSCAPE;
+  fovFirst = FOV_LANDSCAPE;
+
   /** Call when the canvas changes shape. */
   resize(width: number, height: number): void {
     this.camera.aspect = width / Math.max(1, height);
-    this.camera.fov = this.camera.aspect < 1 ? FOV_PORTRAIT : FOV_LANDSCAPE;
-    this.camera.updateProjectionMatrix();
+    this.fitFov();
+  }
+
+  /** Set each view's field of view (degrees), taking hold at once. */
+  setFov(third: number, first: number): void {
+    this.fovThird = third;
+    this.fovFirst = first;
+    this.fitFov();
+  }
+
+  /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */
+  setZoom(zoom: number): void {
+    this.zoom = clamp(zoom, 0, 1);
+  }
+
+  /** The field of view for the view she is in (a tall screen, which is never played, keeps its own). */
+  private fitFov(): void {
+    const fov = this.camera.aspect < 1 ? FOV_PORTRAIT : this.mode === 'first' ? this.fovFirst : this.fovThird;
+    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 
   /** Switch between third and first person. The camera keeps looking the same compass direction. */
@@ -93,6 +114,7 @@ export class CameraRig {
     this.pitch = mode === 'third' ? THIRD_PITCH_START : 0;
     this.easedYaw = this.yaw;
     this.easedPitch = this.pitch;
+    this.fitFov(); // (each view has its own field of view)
   }
 
   /** The view was dragged by this many pixels. */

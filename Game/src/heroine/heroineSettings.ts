@@ -38,7 +38,20 @@ export interface HeroineSettings {
   shadows: ShadowChoice;
   /** The live body: her baby, womb, organs and the rest kept and run but not drawn (fast/liveBody.ts). */
   liveBody: ShadowChoice;
+  /**
+   * THE CAMERA (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both... 50-120°"):
+   * each view's field of view, degrees (FOV_RANGE), and how far out the third-person camera starts, 0 (closest) to 1
+   * (furthest). A pinch still zooms in play; this is where it starts.
+   */
+  fovThird: number;
+  fovFirst: number;
+  zoomThird: number;
 }
+
+/** The field of view a player may choose, degrees, and each view's own to begin with (the game's view before). */
+export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first: 58 });
+/** Where the third-person zoom begins unless the player chose (the camera's own start before). */
+export const ZOOM_START_DEFAULT = 0.17;
 
 /** The keys the choices are remembered under on this device. */
 export const SETTING_KEYS = Object.freeze({
@@ -49,6 +62,9 @@ export const SETTING_KEYS = Object.freeze({
   skin: 'gdm.skin',
   shadows: 'gdm.shadows',
   liveBody: 'gdm.liveBody',
+  fovThird: 'gdm.fovThird',
+  fovFirst: 'gdm.fovFirst',
+  zoomThird: 'gdm.zoomThird',
 });
 
 function read(key: string): string | null {
@@ -83,6 +99,12 @@ const asFps = (text: string | null): TargetFps | null => {
 };
 const asSharpness = (text: string | null): Sharpness | null => (text === '1' ? 1 : text === '2' ? 2 : null);
 const asSkin = (text: string | null): SkinChoice | null => (text === 'light' || text === 'full' ? text : null);
+/** A number within [least, most], or null. */
+const asNumber = (text: string | null, least: number, most: number): number | null => {
+  if (text === null || text === '') return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? Math.max(least, Math.min(most, n)) : null;
+};
 
 /** The settings in force: what the address says, else what is remembered, else the defaults. */
 export function loadHeroineSettings(address: URLSearchParams = new URLSearchParams(location.search)): HeroineSettings {
@@ -98,5 +120,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skin: asSkin(address.get('body')) ?? asSkin(read(SETTING_KEYS.skin)) ?? deviceSkin(),
     shadows: (address.get('shadows') ?? read(SETTING_KEYS.shadows)) === 'off' ? 'off' : 'on',
     liveBody: (address.get('live') ?? read(SETTING_KEYS.liveBody)) === 'off' ? 'off' : 'on',
+    fovThird: asNumber(read(SETTING_KEYS.fovThird), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.third,
+    fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
+    zoomThird: asNumber(read(SETTING_KEYS.zoomThird), 0, 1) ?? ZOOM_START_DEFAULT,
   };
 }

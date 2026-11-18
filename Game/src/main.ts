@@ -144,8 +144,16 @@ const FIRST_PERSON_BUSY_PITCH_MOST = 1.4;
 /** ...and how far the player may still look round meanwhile: 90 degrees to each side of it, 70 up and down. */
 const BUSY_LOOK_SIDE = Math.PI / 2;
 const BUSY_LOOK_UP_DOWN = 70 * Math.PI / 180;
-/** ...and once the player lets go of the camera, it is back on her look this long after (seconds), starting at once. */
+/**
+ * ...and once the player lets go of the camera, it is back on her look this long after (seconds), starting at once;
+ * a look turned further than BUSY_LOOK_RETURN_PER (radians, 60 degrees) takes longer in proportion, up to
+ * BUSY_LOOK_RETURN_MOST.
+ */
 const BUSY_LOOK_RETURN_SECONDS = 1.5;
+const BUSY_LOOK_RETURN_PER = Math.PI / 3;
+const BUSY_LOOK_RETURN_MOST = 3;
+/** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
+const FIRST_PERSON_WALK_PITCH = -0.14;
 const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
@@ -343,7 +351,7 @@ async function start(): Promise<void> {
    * top of it, and what was set last frame (to tell the player's drag from it).
    */
   const eyeAt = new THREE.Vector3(), handsAt = new THREE.Vector3(), handOne = new THREE.Vector3();
-  const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false };
+  const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
 
@@ -688,7 +696,7 @@ async function start(): Promise<void> {
         // (the action has just begun: the view follows from where it is, with no look of the player's added yet)
         busyView.on = true;
         busyView.yaw = rig.yaw; busyView.pitch = rig.pitch;
-        busyView.lookYaw = 0; busyView.lookPitch = 0; busyView.idle = BUSY_LOOK_RETURN_SECONDS;
+        busyView.lookYaw = 0; busyView.lookPitch = 0; busyView.idle = busyView.returnSeconds = BUSY_LOOK_RETURN_SECONDS;
         busyView.fromYaw = 0; busyView.fromPitch = 0;
       } else {
         // (what the player dragged since last frame: rig.applyLook moved the view from where it was set)
@@ -701,9 +709,9 @@ async function start(): Promise<void> {
         if (Math.abs(draggedYaw) > 1e-5 || Math.abs(draggedPitch) > 1e-5) {
           busyView.idle = 0;
           busyView.dragging = true;
-        } else if (busyView.idle < BUSY_LOOK_RETURN_SECONDS) {
-          busyView.idle = Math.min(BUSY_LOOK_RETURN_SECONDS, busyView.idle + dt);
-          const x = busyView.idle / BUSY_LOOK_RETURN_SECONDS, left = 1 - x * x * (3 - 2 * x);
+        } else if (busyView.idle < busyView.returnSeconds) {
+          busyView.idle = Math.min(busyView.returnSeconds, busyView.idle + dt);
+          const x = busyView.idle / busyView.returnSeconds, left = 1 - x * x * (3 - 2 * x);
           busyView.lookYaw = busyView.fromYaw * left;
           busyView.lookPitch = busyView.fromPitch * left;
         }
@@ -712,22 +720,31 @@ async function start(): Promise<void> {
       busyView.yaw += Math.atan2(Math.sin(turn.head - busyView.yaw), Math.cos(turn.head - busyView.yaw)) * ease;
       // (tipped down to HER HANDS, between the two: when she leans over the table her head is ahead of them, and a
       //  fixed tip passed right over them. Never quite straight down.)
-      let wantPitch = FIRST_PERSON_BUSY_PITCH;
+      // (WALKING OVER she looks nearly level, as in third person; the view tips down to her hands only as they start to
+      //  reach for something, as far as they have come: Joshua, 2026-11-18)
+      let wantPitch = FIRST_PERSON_WALK_PITCH;
       const hands = heroine.hands;
-      if (hands) {
+      const working = hands ? Math.max(hands.reached('left'), hands.reached('right')) : 0;
+      if (hands && working > 0) {
         heroine.eye(eyeAt);
         hands.handBone('left').getWorldPosition(handsAt);
         handsAt.add(hands.handBone('right').getWorldPosition(handOne)).multiplyScalar(0.5);
         // (how far ahead the hands are along the way she looks; behind her eye counts as a little ahead, looking down)
         const ahead = Math.max(0.02, (handsAt.x - eyeAt.x) * Math.sin(busyView.yaw) + (handsAt.z - eyeAt.z) * Math.cos(busyView.yaw));
-        wantPitch = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(handsAt.y - eyeAt.y, ahead));
+        const atHands = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(handsAt.y - eyeAt.y, ahead));
+        wantPitch = FIRST_PERSON_WALK_PITCH + (atHands - FIRST_PERSON_WALK_PITCH) * Math.min(1, working * 1.5);
       }
       busyView.pitch += (wantPitch - busyView.pitch) * ease;
       busyView.lookYaw = Math.max(-BUSY_LOOK_SIDE, Math.min(BUSY_LOOK_SIDE, busyView.lookYaw));
       // (up and down: the view's own pitch stays within +/- BUSY_LOOK_UP_DOWN, so the player's look is held to what fits)
       busyView.lookPitch = Math.max(-BUSY_LOOK_UP_DOWN - busyView.pitch, Math.min(BUSY_LOOK_UP_DOWN - busyView.pitch, busyView.lookPitch));
       // (the look the return starts from is where the view really is: within the limits, not as far as it was dragged)
-      if (busyView.dragging) { busyView.fromYaw = busyView.lookYaw; busyView.fromPitch = busyView.lookPitch; busyView.dragging = false; }
+      if (busyView.dragging) {
+        busyView.fromYaw = busyView.lookYaw; busyView.fromPitch = busyView.lookPitch; busyView.dragging = false;
+        // (THE FURTHER IT WAS TURNED, THE LONGER IT TAKES BACK, so it never whips round: Joshua, 2026-11-18)
+        const turned = Math.hypot(busyView.lookYaw, busyView.lookPitch);
+        busyView.returnSeconds = Math.min(BUSY_LOOK_RETURN_MOST, BUSY_LOOK_RETURN_SECONDS * Math.max(1, turned / BUSY_LOOK_RETURN_PER));
+      }
       rig.yaw = busyView.setYaw = busyView.yaw + busyView.lookYaw;
       rig.pitch = busyView.setPitch = busyView.pitch + busyView.lookPitch;
     } else busyView.on = false;

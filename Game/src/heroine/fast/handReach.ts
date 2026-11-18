@@ -307,8 +307,7 @@ export class HandReach {
     // THE HAND turned to the job's pose (in its parent's frame), blended by `weight`
     arm.fore.getWorldQuaternion(parentQ);
     localQ.copy(parentQ.invert()).multiply(targetQ);
-    { const i = this.wristInfo[arm === this.arms[0] ? 0 : 1] as Record<string, unknown>; i.raw = ownQ.angleTo(localQ) * 57.3; i.moved = job.moved; i.limited = limited;
-      i.target = target.toArray().map((v) => +v.toFixed(3)); i.from = new THREE.Vector3().setFromMatrixPosition(job.from).toArray().map((v) => +v.toFixed(3)); i.pose = new THREE.Vector3().setFromMatrixPosition(job.pose).toArray().map((v) => +v.toFixed(3)); }
+    { const i = this.wristInfo[arm === this.arms[0] ? 0 : 1]; i.raw = ownQ.angleTo(localQ) * 57.3; i.moved = job.moved; i.limited = limited; }
     if (limited || Number.isFinite(job.wristMost)) {
       const angle = ownQ.angleTo(localQ);
       if (angle > job.wristNow) localQ.copy(capQ.copy(ownQ).slerp(localQ, job.wristNow / angle));

@@ -317,12 +317,44 @@ async function start(): Promise<void> {
   // it is no longer read, so it is forgotten.)
   try { localStorage.removeItem('gdm.freeWalkThirdPerson'); } catch { /* private browsing: nothing was remembered */ }
 
+  /**
+   * STARTING THE GAME AGAIN, CLEANLY (Joshua, 2026-11-17: changing the body in Settings restarted the game, then it
+   * loaded a second time and iOS said it had run into a problem). A reload used to come straight away, with the old
+   * game's graphics (her body, her live body, the whole scene) still held on the graphics chip while the new game began
+   * loading its own, both at once for a moment. Now everything is let go of first, the graphics chip is told to drop
+   * the lot, and the page is loaded again a moment later.
+   */
+  let restarting = false;
+  const restart = (): void => {
+    if (restarting) return;
+    restarting = true;
+    const note = document.createElement('div');
+    note.textContent = 'Restarting…';
+    note.style.cssText = 'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:#04060d;color:#5ee8c8;font:600 15px system-ui;letter-spacing:.08em;';
+    document.body.appendChild(note);
+    try {
+      heroine.dispose();
+      scene.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        mesh.geometry?.dispose?.();
+        for (const m of mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : []) {
+          for (const value of Object.values(m)) if ((value as THREE.Texture)?.isTexture) (value as THREE.Texture).dispose();
+          m.dispose();
+        }
+      });
+      renderer.renderLists.dispose();
+      renderer.dispose();
+      renderer.forceContextLoss();
+    } catch (error) { console.warn('Letting go before the restart did not finish; restarting anyway.', error); }
+    window.setTimeout(() => location.reload(), 300);
+  };
+
   const hud = new Hud(uiHost, controls, {
     debug,
     onDebugChange(on) {
       // The readout is built when the game starts, so remember the choice and start again.
       try { localStorage.setItem(DEBUG_KEY, on ? '1' : '0'); } catch { /* cannot remember it: nothing to do */ }
-      location.reload();
+      restart();
     },
     graphics,
     onGraphicsChange(key, value) {
@@ -334,7 +366,7 @@ async function start(): Promise<void> {
       else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
-      else location.reload();
+      else restart();
     },
     onToggleView: toggleView,
     onDomeDebug: domeDebug,
@@ -431,6 +463,7 @@ async function start(): Promise<void> {
   if (debug) Object.assign((window as unknown as { gdm: object }).gdm, { meter, frame: info });
 
   const frame = (now: number) => {
+    if (restarting) return; // (the game is letting go of everything before it starts again: the loop stops)
     requestAnimationFrame(frame);
 
     // ---- LOADING ENDS, AND PAUSED? (see just above the loop) --------------------------------------------------

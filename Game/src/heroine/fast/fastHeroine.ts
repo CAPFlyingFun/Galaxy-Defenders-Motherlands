@@ -810,6 +810,9 @@ if (uHideHead > 0.5) {
       if (disposed) return;
       disposed = true;
       root.removeFromParent();
+      // (her hidden live body too: the Character Builder's whole room, the largest thing she holds)
+      live?.dispose();
+      live = null;
       for (const hand of ['left', 'right'] as const) { guns[hand].object.removeFromParent(); guns[hand].dispose(); }
       hair?.dispose();
       pieces.dispose();

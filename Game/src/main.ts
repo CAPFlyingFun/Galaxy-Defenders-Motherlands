@@ -142,6 +142,9 @@ const FIRST_PERSON_BUSY_PITCH = -0.8;
 /** ...and how far the player may still look round meanwhile: 90 degrees to each side of it, 70 up and down. */
 const BUSY_LOOK_SIDE = Math.PI / 2;
 const BUSY_LOOK_UP_DOWN = 70 * Math.PI / 180;
+/** ...and once the player lets go of the camera this long (seconds), it eases back to her look over about this long. */
+const BUSY_LOOK_RETURN_AFTER = 1.5;
+const BUSY_LOOK_RETURN_SECONDS = 0.35;
 const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
@@ -338,7 +341,7 @@ async function start(): Promise<void> {
    * First person while she is busy: where the view follows (her head, tipped to her hands), the player's own look on
    * top of it, and what was set last frame (to tell the player's drag from it).
    */
-  const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0 };
+  const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0 };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
 
@@ -683,11 +686,22 @@ async function start(): Promise<void> {
         // (the action has just begun: the view follows from where it is, with no look of the player's added yet)
         busyView.on = true;
         busyView.yaw = rig.yaw; busyView.pitch = rig.pitch;
-        busyView.lookYaw = 0; busyView.lookPitch = 0;
+        busyView.lookYaw = 0; busyView.lookPitch = 0; busyView.idle = 0;
       } else {
         // (what the player dragged since last frame: rig.applyLook moved the view from where it was set)
-        busyView.lookYaw += Math.atan2(Math.sin(rig.yaw - busyView.setYaw), Math.cos(rig.yaw - busyView.setYaw));
-        busyView.lookPitch += rig.pitch - busyView.setPitch;
+        const draggedYaw = Math.atan2(Math.sin(rig.yaw - busyView.setYaw), Math.cos(rig.yaw - busyView.setYaw));
+        const draggedPitch = rig.pitch - busyView.setPitch;
+        busyView.lookYaw += draggedYaw;
+        busyView.lookPitch += draggedPitch;
+        // AN OVERRIDE, NOT A NEW PLACE (Joshua, 2026-11-18): once the player has let go of the camera for
+        // BUSY_LOOK_RETURN_AFTER seconds, the view eases back to what she is looking at
+        if (Math.abs(draggedYaw) > 1e-5 || Math.abs(draggedPitch) > 1e-5) busyView.idle = 0;
+        else busyView.idle += dt;
+        if (busyView.idle > BUSY_LOOK_RETURN_AFTER) {
+          const back = Math.exp(-dt / BUSY_LOOK_RETURN_SECONDS);
+          busyView.lookYaw *= back;
+          busyView.lookPitch *= back;
+        }
       }
       const ease = 1 - Math.exp(-dt / FIRST_PERSON_FOLLOW_SECONDS);
       busyView.yaw += Math.atan2(Math.sin(turn.head - busyView.yaw), Math.cos(turn.head - busyView.yaw)) * ease;

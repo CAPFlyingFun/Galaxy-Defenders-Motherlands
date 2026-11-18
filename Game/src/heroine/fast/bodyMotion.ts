@@ -237,6 +237,15 @@ export class BodyMotion {
   private readonly walkTurns: MutableJointTurn[] = [];
   private readonly weighedTurns: MutableJointTurn[] = [];
   private readonly fingerTurns: MutableJointTurn[] = [];
+  /** For each finger turn: which hand (0 left, 1 right), how far along its finger (0 the knuckle) and whether a thumb. */
+  private readonly fingerOf: { hand: number; k: number; thumb: boolean }[] = [];
+  /**
+   * HOW FAR EACH HAND'S FINGERS ARE CLOSED, percent (the builder's FINGERS slider), left and right: round a gun's
+   * grip when she holds one, relaxed when her hand is empty, eased between as she takes hold or lets go (the hand
+   * reach sets these each frame: handReach.ts).
+   */
+  readonly grip: [number, number];
+  private readonly gripWas: [number, number] = [NaN, NaN];
   /** A pose's bone rotations kept aside while the other pose is worked out (x, y, z, w for each bone). */
   private readonly kept: Float32Array;
   private readonly keptQ = new THREE.Quaternion();
@@ -264,10 +273,18 @@ export class BodyMotion {
     this.unitsPerMetre = inBind / Math.max(1e-6, inWorld);
     this.legMetres = this.measure.legLength / this.unitsPerMetre;
 
-    // Her fingers' curl never changes, so its turns are written once.
+    // Her fingers: each joint's turn, and which hand it is on (found up its bones to her left or her right wrist).
+    // Their curl is worked out again only when a hand's grip changes.
+    this.grip = [gripCurl, gripCurl];
+    const bones = this.rig.bind, { wristL, wristR } = this.measure.joints;
+    const handOf = (joint: number): number => {
+      for (let j = joint; j >= 0; j = bones[j].parent) { if (j === wristL) return 0; if (j === wristR) return 1; }
+      return 1;
+    };
     for (const finger of findFingers(this.rig.bind, this.measure)) {
       finger.joints.forEach((joint, k) => {
         this.fingerTurns.push({ joint, ax: finger.axis.x, ay: finger.axis.y, az: finger.axis.z, radians: fingerBend(gripCurl, k, finger.thumb) });
+        this.fingerOf.push({ hand: handOf(joint), k, thumb: finger.thumb });
       });
     }
   }
@@ -362,7 +379,11 @@ export class BodyMotion {
       if (blend < 1) this.mixWithKept(blend);
       this.sway = sway * this.legMetres * blend;
     }
-    // her fingers round the grips, over whichever pose she is in
+    // her fingers round the grips (or relaxed, an empty hand), over whichever pose she is in
+    if (this.grip[0] !== this.gripWas[0] || this.grip[1] !== this.gripWas[1]) {
+      this.fingerTurns.forEach((turn, i) => { const f = this.fingerOf[i]; turn.radians = fingerBend(this.grip[f.hand], f.k, f.thumb); });
+      this.gripWas[0] = this.grip[0]; this.gripWas[1] = this.grip[1];
+    }
     this.rig.set(this.fingerTurns as readonly JointTurn[]);
 
     // ---- the weight of her belly and bust: springs that feel the walk's bounce and sway ----

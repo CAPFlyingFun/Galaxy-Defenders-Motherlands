@@ -26,6 +26,7 @@ import { BLAZE_LOOK } from './heroine/looks/blaze';
 import { BLAZE_SUIT_LOOK } from './heroine/looks/blazeSuit';
 import { DEFAULT_BELLY, type HeroineLook } from './heroine/heroineLook';
 import * as THREE from 'three';
+import { WeaponTable } from './world/weaponTable';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FrameInfo, Hand } from './core/contracts';
 import { createBuilderHeroine, type BuilderHeroine } from './heroine/builderHeroine';
@@ -274,6 +275,8 @@ async function start(): Promise<void> {
 
   (window as unknown as Record<string, unknown>).heroineLab = {
     heroine, scene, camera, renderer, orbit, state, THREE,
+    // (the weapon table, for scripts that test her hands: made and placed by the script)
+    WeaponTable,
     hold: (on: boolean) => { held = on; },
     // run `frames` frames; only the last one is drawn (a software renderer takes about a second a picture)
     /** Move her at this ground speed, metres a second, along the way she faces (negative: backing up; 0: as the WALK button says). */

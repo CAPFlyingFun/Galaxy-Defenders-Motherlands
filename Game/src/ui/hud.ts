@@ -35,6 +35,8 @@ export interface HudOptions {
   /** One of those choices was changed in Settings. */
   onGraphicsChange<K extends keyof HeroineSettings>(key: K, value: HeroineSettings[K]): void;
   onToggleView(): void;
+  /** The weapon table's buttons (src/world/tableUse.ts): the main one ('both') or one hand's. */
+  onUse?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -120,6 +122,10 @@ export class Hud {
   private readonly lookStick: HTMLElement;
   private readonly lookStickKnob: HTMLElement;
   private readonly viewButton: HTMLElement;
+  /** The weapon table's buttons: shown only when she is near it (`setUse`). */
+  private readonly useBar: HTMLElement;
+  private readonly useMain: HTMLElement;
+  private useLabel = '';
   /** The big word on the view button ("1st" or "3rd"): the view it switches TO. */
   private readonly viewName: HTMLElement;
   private readonly fireButton: HTMLElement;
@@ -199,6 +205,20 @@ export class Hud {
     this.fireButton = element('button', 'gd-button gd-fire', actions, 'FIRE');
     holdButton(this.fireButton, (down) => (controls.buttonFire = down));
 
+    // ---- Right side, above the view switch: the WEAPON TABLE's buttons --------------
+    // (Joshua, 2026-11-17: a table to put her guns down on and pick them up from.) Shown only when she is near it.
+    // Out of the bottom corners, which stay free for the player's controls: on the right, half way up.
+    this.useBar = element('div', 'gd-use', this.root);
+    this.useBar.hidden = true;
+    this.useMain = element('button', 'gd-button gd-use-main', this.useBar, 'PUT DOWN');
+    tapButton(this.useMain, () => options.onUse?.('both'));
+    const oneHand = element('div', 'gd-use-hands', this.useBar);
+    for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
+      const button = element('button', 'gd-button gd-use-hand', oneHand, word);
+      button.setAttribute('aria-label', `${hand} hand`);
+      tapButton(button, () => options.onUse?.(hand));
+    }
+
     // ---- Centre: crosshair ---------------------------------------------------
     this.crosshair = element('div', 'gd-crosshair', this.root);
 
@@ -252,6 +272,13 @@ export class Hud {
     }
 
     this.setView('third');
+  }
+
+  /** The weapon table's buttons: shown with this word on the main one, or hidden (null). */
+  setUse(label: string | null): void {
+    this.useBar.hidden = label === null;
+    // (the word is changed only when it changes: the button a finger is on is never rebuilt)
+    if (label !== null && label !== this.useLabel) { this.useMain.textContent = label; this.useLabel = label; }
   }
 
   /** Show the controls that belong to the current view. */

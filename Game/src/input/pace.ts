@@ -48,6 +48,14 @@ export const PACE_TUNING = {
   /** With less stamina than this she cannot sprint; with less than the second, she cannot run either. */
   sprintNeedsStamina: 0.15,
   runNeedsStamina: 0.05,
+  /**
+   * OUT OF STAMINA (Joshua, 2026-11-17: "as soon as you run out of stamina, the max speed is walk... after a 5s hold
+   * which will prevent any walking"): at empty she stands winded this long, seconds, the MOVE stick doing nothing
+   * (looking round, the camera and everything else still work); then she can only walk until her stamina is back
+   * to `windedUntil` (GAME TUNING: a quarter).
+   */
+  windedHoldSeconds: 5,
+  windedUntil: 0.25,
   /** How quickly her real speed follows the pace she is set to, metres a second each second (speeding up, slowing down). */
   speedUp: 5,
   slowDown: 9,
@@ -82,9 +90,14 @@ export class Pace {
   ring = 0;
   /** Her ground speed now, metres a second. */
   speed = 0;
+  /** Out of stamina: true from empty until it is back to `windedUntil` (walking only, after the hold). */
+  winded = false;
+  /** Seconds left of the winded hold (she cannot move at all while this is above 0). */
+  holdLeft = 0;
 
   /** The name of the pace she is at (the nearest one), or '' standing. */
   get name(): string {
+    if (this.holdLeft > 0) return 'Winded';
     return this.level < 0.5 ? '' : PACES[Math.min(PACES.length - 1, Math.round(this.level) - 1)].name;
   }
 
@@ -106,7 +119,13 @@ export class Pace {
     const t = PACE_TUNING;
     this.ring = ringOf(push);
 
-    if (this.ring === 0) {
+    // OUT OF STAMINA: the hold first (the stick does nothing), then walking only until she has her breath back
+    if (!this.winded && limits.stamina <= 0.001) { this.winded = true; this.holdLeft = t.windedHoldSeconds; }
+    if (this.winded && this.holdLeft <= 0 && limits.stamina >= t.windedUntil) this.winded = false;
+    if (this.holdLeft > 0) {
+      this.holdLeft = Math.max(0, this.holdLeft - dt);
+      this.level = 0;
+    } else if (this.ring === 0) {
       // the centre: she stops, and starts again from a walk
       this.level = 0;
     } else {
@@ -118,7 +137,7 @@ export class Pace {
       // (ring 2 holds)
 
       // what her stamina allows: a sprint, only a run, or only a jog
-      const most = limits.stamina < t.runNeedsStamina ? 2 : limits.stamina < t.sprintNeedsStamina ? 3 : 4;
+      const most = this.winded ? 1 : limits.stamina < t.runNeedsStamina ? 2 : limits.stamina < t.sprintNeedsStamina ? 3 : 4;
       if (this.level > most) this.level = Math.max(most, this.level - dt / t.tiredDownSeconds);
     }
 

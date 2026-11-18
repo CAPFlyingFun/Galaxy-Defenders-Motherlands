@@ -63,6 +63,24 @@ export interface BodyFacing {
   readonly feet: number;
 }
 
+/** What a body's hands can do in the world: reach for a pose, and hand a gun over (see HeroineBody.hands). */
+export interface HeroineHands {
+  /** Whether this hand holds its gun. */
+  hasGun(hand: Hand): boolean;
+  /** The pose (world) her hand bone must have to hold a gun that lies at `gunWorld` (the gun's own world matrix). */
+  handPoseForGun(hand: Hand, gunWorld: THREE.Matrix4, out: THREE.Matrix4): THREE.Matrix4;
+  /** Send a hand to a pose (world), bending her down to it as needed; null brings it back to her own pose. */
+  reach(hand: Hand, pose: THREE.Matrix4 | null): void;
+  /** How far a hand is on its way, 0..1 (1: arrived). */
+  reached(hand: Hand): number;
+  /** Let go of this hand's gun: it stays where it is, given to `parent` (a table). Returns the gun. */
+  releaseGun(hand: Hand, parent: THREE.Object3D): THREE.Object3D;
+  /** Take this hand's gun back (wherever it lies): it is held as before. */
+  takeGun(hand: Hand): void;
+  /** How low she is (0 standing, 1 fully down) and how (reach, low, squat, kneelLeft, kneelRight, kneelBoth). */
+  lowering(): { weight: number; mode: string; drop?: number; bend?: number };
+}
+
 export interface HeroineBody {
   /** Add this to the scene. Her feet are at its origin. */
   readonly root: THREE.Object3D;
@@ -110,6 +128,12 @@ export interface HeroineBody {
    * its clock again here, so a pause is never mistaken for one very slow frame. Optional.
    */
   resumed?(): void;
+
+  /**
+   * HER HANDS IN THE WORLD (the weapon table; Joshua, 2026-11-17: "a table you can actually grab to pick up and drop
+   * your guns"). Optional: a body without hands that reach leaves these out, and her guns never leave her hands.
+   */
+  hands?: HeroineHands;
 
   update(frame: FrameInfo): void;
   dispose(): void;

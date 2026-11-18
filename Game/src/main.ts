@@ -38,6 +38,8 @@ import { createGround } from './world/ground';
 import { createSky } from './world/sky';
 import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
+import { WeaponTable } from './world/weaponTable';
+import { TableUse } from './world/tableUse';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
 interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
@@ -123,6 +125,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
+const TABLE_WALK = 1.1; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const SHADOW_FLOOR_RADIUS = 4; // metres: the patch of ground round her feet that can show her real shadow
@@ -267,6 +270,16 @@ async function start(): Promise<void> {
   // can turn its parts apart is handed this once and reads it every frame.
   const turn = new BodyTurn();
   heroine.setFacing?.(turn);
+
+  // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
+  // where she starts, so she can walk up to it, put her guns down on it and take them up again
+  // (src/world/weaponTable.ts, src/world/tableUse.ts; her hands: src/heroine/fast/handReach.ts, lowerBody.ts).
+  const table = new WeaponTable();
+  table.place(1.6, 9.85, 0);
+  scene.add(table.root);
+  const tableUse = new TableUse(table, heroine);
+  /** What the table's action asks for this frame (one object, rewritten). */
+  const tableAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number } = { walkTo: null, look: null, yaw: 0 };
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
   const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null } = { view: 'third', look: null, move: null };
   /** The sky target her auto-aim picked this frame (third person). */
@@ -370,6 +383,7 @@ async function start(): Promise<void> {
     },
     onToggleView: toggleView,
     onDomeDebug: domeDebug,
+    onUse: (which) => tableUse.start(which),
   });
 
   hud.topSlot().appendChild(vitalsPanel.element);
@@ -402,7 +416,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -511,10 +525,25 @@ async function start(): Promise<void> {
       if (x * lastMoveX + y * lastMoveY < -0.5) pace.turnedBack();
       lastMoveX = x; lastMoveY = y;
     }
-    pace.step(dt, push, limits);
-    // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right
-    // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
-    motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
+    // THE WEAPON TABLE'S ACTION, while one runs: it walks her to the table and turns her to it, and the stick waits.
+    tableAsk.yaw = turn.base;
+    tableUse.update(dt, motion.x, motion.z, tableAsk);
+    if (tableUse.busy) {
+      pace.step(dt, 0, limits);
+      if (tableAsk.walkTo) {
+        // (straight to her spot at a walk, the last step no further than the spot)
+        const away = Math.hypot(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
+        const toward = Math.atan2(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
+        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(TABLE_WALK, away / dt) : 0);
+      } else motion.update(dt, 0, 0, turn.base, 0);
+    } else {
+      pace.step(dt, push, limits);
+      // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right
+      // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
+      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
+    }
+    // (its buttons show when she is near it and nothing is running)
+    hud.setUse(tableUse.canUse(motion.x, motion.z) ? tableUse.label() : null);
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -529,6 +558,8 @@ async function start(): Promise<void> {
       const at = targets.position(aimTarget);
       turnInput.look = Math.atan2(at.x - motion.x, at.z - motion.z);
     }
+    // (while the table's action runs, she looks at the table)
+    if (tableAsk.look !== null) turnInput.look = tableAsk.look;
     turn.step(dt, turnInput);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     keyLight.position.set(motion.x - 4, 10, motion.z + 6);
@@ -549,7 +580,11 @@ async function start(): Promise<void> {
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.
     targets.update(info);
-    if (rig.mode === 'first') {
+    if (tableUse.busy) {
+      // (busy at the table: no aiming)
+      targets.setAimed(-1);
+      heroine.aimAt(null);
+    } else if (rig.mode === 'first') {
       targets.setAimed(-1);
       heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
     } else if (turn.aimed) {
@@ -565,7 +600,10 @@ async function start(): Promise<void> {
     // 5. Fire (first person only): hands take turns, and each shot leaves a streak.
     fireCooldown -= dt;
     const clicks = controls.takeClicks();
-    if (rig.mode === 'first' && fireCooldown <= 0 && (controls.fireHeld || clicks > 0)) {
+    // (only a hand that holds its gun fires: with one gun down, the other fires every shot; with both down, none)
+    const armed = (hand: Hand): boolean => heroine.hands?.hasGun(hand) ?? true;
+    if (!armed(nextHand)) nextHand = nextHand === 'right' ? 'left' : 'right';
+    if (rig.mode === 'first' && !tableUse.busy && armed(nextHand) && fireCooldown <= 0 && (controls.fireHeld || clicks > 0)) {
       fireCooldown = FIRE_INTERVAL;
       heroine.fire(nextHand);
       tracers.fire(heroine.muzzle(nextHand, muzzle), aim);

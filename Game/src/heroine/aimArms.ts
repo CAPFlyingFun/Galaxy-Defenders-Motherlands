@@ -121,6 +121,11 @@ export class ArmAim {
    * 0 for the builder's room, where she always faces +Z; her root's yaw for a body that stands in the game's world.
    */
   facing = 0;
+  /**
+   * Each arm's own share of the aim, 0..1: an arm with no gun in its hand, or busy reaching for something, does not
+   * aim (handReach.ts and the fast heroine set these each frame).
+   */
+  readonly armWeight = { left: 1, right: 1 };
   private readonly kick = { left: 0, right: 0 };
   private readonly worldTurn = new THREE.Quaternion();
   /** Where she last aimed: kept so the arms come DOWN from where they were, not from nowhere. */
@@ -163,8 +168,8 @@ export class ArmAim {
 
     // ---- 2. each arm ----
     // (`torso` is measured from her own facing; the arms work in the bones' space, so her facing is added back)
-    this.aimArm(this.bones.left, t, this.facing + torso, this.kick.left, w);
-    this.aimArm(this.bones.right, t, this.facing + torso, this.kick.right, w);
+    if (this.armWeight.left > 0) this.aimArm(this.bones.left, t, this.facing + torso, this.kick.left, w * this.armWeight.left);
+    if (this.armWeight.right > 0) this.aimArm(this.bones.right, t, this.facing + torso, this.kick.right, w * this.armWeight.right);
   }
 
   /** `torso`: the way her turned chest faces, radians about the upright axis in the bones' space. */

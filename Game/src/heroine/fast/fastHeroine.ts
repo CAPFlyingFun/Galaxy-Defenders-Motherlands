@@ -49,6 +49,8 @@ import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist } from './footGround';
 import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
 import { JointGuard, type JointExcess } from './jointGuard';
+import { HandReach } from './handReach';
+import { LowerBody } from './lowerBody';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -523,6 +525,15 @@ if (uHideHead > 0.5) {
     { side: leftSign, hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
     { side: -leftSign, hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] },
   ]);
+  // HER HANDS REACH FOR THINGS, AND SHE GETS DOWN TO THEM (handReach.ts, lowerBody.ts; Joshua, 2026-11-17: the weapon
+  // table). Made now, while she stands at rest.
+  const reach = new HandReach(root, [arms.left, arms.right]);
+  const lower = new LowerBody(root, hipsBone, backBones,
+    [{ hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
+     { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] }],
+    bone(joints.shoulderL), bone(joints.wristL), leftSign);
+  /** Where her hands are reaching (the middle of the hands that have a job), for her body to get down to. */
+  const reachPoint = new THREE.Vector3(), reachOne = new THREE.Vector3();
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
   const turnUpright = (b: THREE.Bone, angle: number): void => {
@@ -542,11 +553,16 @@ if (uHideHead > 0.5) {
 
   // ---- 8. her guns: each one a child of its hand's bone, so it costs nothing to move ---------------------------------
   const guns: Record<Hand, Gun> = { left: createGun(), right: createGun() };
+  /** Where each gun sits in its hand (in the hand bone's frame): kept, so a gun put down can be taken up again exactly. */
+  const seat: Record<Hand, THREE.Matrix4> = { left: new THREE.Matrix4(), right: new THREE.Matrix4() };
   for (const hand of ['left', 'right'] as const) {
     // (worked out as she stands now, facing +Z, in metres: guns.ts)
-    seatGunInHand(arms[hand], 1, guns[hand].object.matrix);
+    seatGunInHand(arms[hand], 1, seat[hand]);
+    guns[hand].object.matrix.copy(seat[hand]);
     arms[hand].hand.add(guns[hand].object);
   }
+  const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
+  const gunSeen = new THREE.Matrix4();
 
   // ---- 9. never drawn when she is out of the camera's view --------------------------------------------------------
   // three.js tests a skinned mesh against the view with a ball it would otherwise work out by posing every one of her
@@ -664,7 +680,32 @@ if (uHideHead > 0.5) {
       if (!point) { target = null; return; }
       (target ??= new THREE.Vector3()).copy(point);
     },
-    fire(hand: Hand): void { aim.fire(hand); },
+    // (a hand that has put its gun down has nothing to fire)
+    fire(hand: Hand): void { if (reach.holding[handIndex(hand)]) aim.fire(hand); },
+
+    hands: {
+      hasGun: (hand) => reach.holding[handIndex(hand)],
+      handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
+      reach: (hand, pose) => reach.setJob(handIndex(hand), pose),
+      reached: (hand) => reach.weight(handIndex(hand)),
+      releaseGun(hand, parent) {
+        const gun = guns[hand].object;
+        gun.updateWorldMatrix(true, false);
+        parent.updateWorldMatrix(true, false);
+        // (kept exactly where it is: its place in the world, seen from its new parent)
+        gun.matrix.copy(parent.matrixWorld).invert().multiply(gun.matrixWorld);
+        parent.add(gun);
+        reach.holding[handIndex(hand)] = false;
+        return gun;
+      },
+      takeGun(hand) {
+        const gun = guns[hand].object;
+        arms[hand].hand.add(gun);
+        gun.matrix.copy(seat[hand]);
+        reach.holding[handIndex(hand)] = true;
+      },
+      lowering: () => ({ weight: lower.weight, mode: lower.mode, drop: lower.drop, bend: lower.hinge * 180 / Math.PI }),
+    },
 
     muzzle(hand: Hand, out: THREE.Vector3): THREE.Vector3 {
       const gun = guns[hand];
@@ -752,6 +793,10 @@ if (uHideHead > 0.5) {
       if (treadmill !== 0) along = treadmill * frame.dt;
 
       // Her pose (the builder's stand, walk or run, her fingers) and the weight of her belly and bust.
+      // (each hand's fingers: closed round its gun, or relaxed when it holds nothing: handReach.ts eases them)
+      lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
+      reach.advance(frame.dt);
+      motion.grip[0] = reach.grip[0]; motion.grip[1] = reach.grip[1];
       motion.update(frame.dt, breathClock, along, body.belly);
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
       // (the same four on a live level, where they sit among all her other shapes)
@@ -778,8 +823,21 @@ if (uHideHead > 0.5) {
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
 
+      // GETTING DOWN TO WHAT HER HANDS REACH FOR (lowerBody.ts): toward the middle of the hands that have a job.
+      root.updateMatrixWorld(true);
+      {
+        let count = 0;
+        reachPoint.set(0, 0, 0);
+        for (const i of [0, 1] as const) if (reach.hasJob(i) && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
+        lower.aimAt(count > 0 ? reachPoint.multiplyScalar(1 / count) : null, armClear.eggs[0] ?? null, body.belly);
+        lower.apply(frame.dt, body.belly);
+      }
+
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       // (her shoulders face `shouldersYaw`: her arms point from there, as far to each side as arms go)
+      // (each arm aims only with its gun in its hand, and not while it reaches for something)
+      aim.armWeight.left = reach.holding[0] ? 1 - reach.weight(0) : 0;
+      aim.armWeight.right = reach.holding[1] ? 1 - reach.weight(1) : 0;
       aim.advance(frame.dt, target !== null);
       root.updateMatrixWorld(true);
       if (aim.weight > 0) {
@@ -790,6 +848,11 @@ if (uHideHead > 0.5) {
       // Her joints within their real ranges (jointGuard.ts), then her arms kept clear of her belly and her breasts
       // (armClear.ts), then her joints checked once more (so keeping clear never bends one past its limit). After
       // everything that poses her, so these correct all of it.
+      // Her hands on their jobs (handReach.ts), over the aim. A hand that cannot get there makes her lean in.
+      reach.apply();
+      lower.stillShort(Math.max(reach.short[0], reach.short[1]), frame.dt);
+
+      joints2.passive = lower.passive;
       joints2.update();
       armClear.update(frame.dt);
       joints2.update();

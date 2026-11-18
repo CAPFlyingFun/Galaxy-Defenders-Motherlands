@@ -291,3 +291,20 @@
 .gd-walk-stick, .gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { width: 200px; height: 200px; }
 .gd-move:has(.gd-look-stick:not([hidden])) { width: calc(200px + var(--gap) + var(--stick)); height: 200px; }
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(200px + var(--gap)); }
+
+/* ---- THE WEAPON TABLE'S BUTTONS (src/world/tableUse.ts; Joshua, 2026-11-17) ----------------------------------
+   Shown only when she is near the table. On the right, half way up the screen: never in the bottom corners, which
+   are the player's controls. The main button puts down whatever she holds (or picks both up); L and R one hand. */
+.gd-use {
+  position: absolute;
+  right: calc(var(--safe-right) + var(--edge));
+  top: 34%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.gd-use[hidden] { display: none; }
+.gd-use-main { min-width: 96px; height: 40px; padding: 0 10px; font-size: 13px; letter-spacing: 0.06em; }
+.gd-use-hands { display: flex; gap: 8px; }
+.gd-use-hand { width: 44px; height: 36px; font-size: 14px; }

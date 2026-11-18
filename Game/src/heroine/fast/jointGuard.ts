@@ -24,8 +24,10 @@
 //   (her neck, back and the turn of each part of her are already kept within
 //    their ranges by the game's turning rule: input/bodyTurn.ts)
 //
-// LATER: squatting, sitting or a birth pose put her weight on a joint, and the
-// table's PASSIVE range (further) is the one to use then, as the builder does.
+// SQUATTING AND KNEELING put her weight on her hips, and the table's PASSIVE
+// range (how far a joint gives when it is loaded: further) is the one used then,
+// as the builder does for its squat and lunge (`passive`, 0 to 1, set by
+// lowerBody.ts while she is down).
 //
 // HOW. Every frame, after everything that poses her (her walk, her turns, her
 // aim, her arms kept off her belly), each joint is looked at in the frame of
@@ -69,6 +71,13 @@ export const JOINT_LIMITS = {
   ankle: rangeDeg('ankle', 'plantarflexion', F),
 } as const;
 
+/** Her hips' PASSIVE limits (loaded: squatting, kneeling), degrees, before LOOSER: the table's passive column. */
+export const HIP_PASSIVE = {
+  forward: rangeDeg('hip', 'flexion', F, 'passive'),
+  out: rangeDeg('hip', 'abduction', F, 'passive'),
+  across: rangeDeg('hip', 'adduction', F, 'passive'),
+} as const;
+
 /** One leg's bones, for the guard. */
 export interface LegGuardBones { readonly side: number; readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
 
@@ -88,6 +97,8 @@ function restInRoot(root: THREE.Object3D, bone: THREE.Object3D): THREE.Quaternio
 
 export class JointGuard {
   on = true;
+  /** 0 standing, 1 squatting or kneeling (her weight on her hips): her hips' limits go from active to PASSIVE. */
+  passive = 0;
   /** How far past its limit each kind of joint went this frame (the most of either side), degrees. */
   readonly excess: JointExcess = { shoulder: 0, elbow: 0, wrist: 0, hip: 0, knee: 0, ankle: 0 };
 
@@ -165,13 +176,17 @@ export class JointGuard {
 
   /** A HIP: which way the thigh points, in her pelvis's frame: not too far back, out, across, or up in front. */
   private hip(leg: LegGuardBones): number {
-    const H = JOINT_LIMITS;
+    const H = JOINT_LIMITS, p = this.passive;
+    // (active standing, passive with her weight on them: blended by how far down she is)
+    const forward = H.hipForward + (Math.max(H.hipForward, HIP_PASSIVE.forward) - H.hipForward) * p;
+    const out = H.hipOut + (Math.max(H.hipOut, HIP_PASSIVE.out) - H.hipOut) * p;
+    const across = H.hipAcross + (Math.max(H.hipAcross, HIP_PASSIVE.across) - H.hipAcross) * p;
     return this.region(this.pelvis, this.pelvisRest, leg.hip, leg.knee, leg.side, () => ({
       minForward: -Math.sin(H.hipBack * LOOSER * DEG),
-      minOut: -Math.sin(H.hipAcross * LOOSER * DEG),
-      maxOut: Math.sin(H.hipOut * LOOSER * DEG),
+      minOut: -Math.sin(across * LOOSER * DEG),
+      maxOut: Math.sin(Math.min(89, out * LOOSER) * DEG),
       // (forward and up: at most this far from hanging straight down)
-      maxUp: -Math.cos(Math.min(179, H.hipForward * LOOSER) * DEG),
+      maxUp: -Math.cos(Math.min(179, forward * LOOSER) * DEG),
     }));
   }
 

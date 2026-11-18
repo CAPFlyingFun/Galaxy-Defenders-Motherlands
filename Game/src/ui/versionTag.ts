@@ -36,6 +36,9 @@ function addTo(panel: Element): void {
   panel.appendChild(line);
 }
 
+// THE VERSION ON THE LOADING SCREEN too (Joshua, 2026-11-17), and on the upright cover's loading bar: written in at once.
+for (const id of ['splash-version', 'rotate-version']) { const node = document.getElementById(id); if (node) node.textContent = VERSION_NUMBER; }
+
 // The Settings panel (class "gd-settings", made in src/ui/hud.ts) appears a moment after the page starts, so
 // watch the page until it does. Keep watching: the panel is made again if the heads-up display is rebuilt.
 const find = () => {

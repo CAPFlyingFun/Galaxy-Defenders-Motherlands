@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { SHADOW_ONLY_LAYER, type Hand, type HeroineBody } from './core/contracts';
 import './core/screenFit'; // first: the screen measured once, the game box sized from it (Joshua, 2026-11-17)
-import { keepLandscape, onStageResize } from './core/orientation';
+import { isUpright, keepLandscape, onStageResize } from './core/orientation';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { createPause, type Pause } from './ui/pauseMenu';
@@ -341,9 +341,14 @@ async function start(): Promise<void> {
   };
 
   // ---- Fit the canvas to the screen ----------------------------------------------
+  let fitted = false;
   const fit = () => {
-    const width = host.clientWidth;
-    const height = host.clientHeight;
+    // (upright, the game is hidden behind the cover: its picture keeps its landscape shape and is not resized for
+    //  nothing. Opened upright, it has no landscape shape yet: it is given the upright screen's turned on its side.)
+    if (isUpright() && fitted) return;
+    const width = isUpright() ? host.clientHeight : host.clientWidth;
+    const height = isUpright() ? host.clientWidth : host.clientHeight;
+    fitted = true;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, graphics.sharpness);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
@@ -385,6 +390,8 @@ async function start(): Promise<void> {
     splash.done();
     pause = createPause({
       stage, host: uiHost,
+      // A still picture of the game for the upright screen's strip: drawn once more, and read straight off.
+      snapshot: () => { renderer.render(scene, rig.camera); return renderer.domElement.toDataURL('image/jpeg', 0.7); },
       // Whatever the player was holding is let go: the sticks back to their middles, no button down.
       onPause: () => {
         // (the two arrow buttons of the old ring track are gone: FIRE is the only button there is to let go of)

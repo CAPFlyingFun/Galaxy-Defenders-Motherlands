@@ -70,13 +70,4 @@
    arrange the controls; the card steps out of its way until "Done". */
 #ui:has(.gd-layout-editor) .gd-pause-card { visibility: hidden; }
 
-/* UPRIGHT (Joshua, 2026-11-17): the game is a strip along the bottom of the phone, under the cover's pause menu
-   (index.html). The card is not shown there; the game is half blacked out with a big yellow double pause sign.
-   (These sizes are the game's own pixels: the strip shows them at about half size.) */
-html.gd-upright .gd-pause { background: rgba(4, 6, 13, 0.55); }
-html.gd-upright .gd-pause-card { display: none; }
-html.gd-upright .gd-pause::before,
-html.gd-upright .gd-pause::after { content: ''; width: 46px; height: 190px; margin: 0 22px; border-radius: 8px; background: #ffd56b;
-  box-shadow: 0 0 30px rgba(255, 213, 107, 0.35); }
-/* (upright, Settings opens on the cover, not beside the card: the pause sign stays in the middle of the strip) */
-html.gd-upright .gd-pause.has-settings { justify-content: center; }
+/* (Upright, the game is hidden behind the cover, which shows a still picture of it with the pause sign: index.html.) */

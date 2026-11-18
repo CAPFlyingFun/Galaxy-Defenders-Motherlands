@@ -19,10 +19,9 @@
   /* THE STAGE: everything the game draws (the 3D picture and the controls). It simply fills the screen; the game is
      played in landscape, and src/core/orientation.ts tells the game whenever the stage changes size. The four
      --safe-* numbers are the space the phone keeps for its notch, rounded corners and home bar. */
-  /* (Its size comes from src/core/screenFit.ts: the screen measured once as a landscape pair, --gd-w x --gd-h, so it
-     stays landscape even while the phone is upright behind the cover, and a turn never resizes the 3D picture.
-     Until that code has run, it simply fills the screen.) */
-  #stage { position: fixed; left: 0; top: 0; width: var(--gd-w, 100%); height: var(--gd-h, 100%); overflow: hidden;
+  /* (TRADDOMIUM's way, Joshua 2026-11-17: sized by the browser itself, the full width and 100dvh tall, so it turns
+     together with the page as iOS spins it. "dvh" is the screen's live height; 100% stands in on older browsers.) */
+  #stage { position: fixed; left: 0; top: 0; right: 0; height: 100%; height: 100dvh; overflow: hidden;
     --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);
     --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
   #app { position: absolute; inset: 0; }
@@ -39,7 +38,7 @@
      (src/ui/splash.ts) from an honest measure of the loading (src/core/loadMeter.ts) and takes it away when the game
      is ready. The colours are the controls' own (src/ui/hud.css).
      ================================================================================================================== */
-  #splash { position: fixed; left: 0; top: 0; width: var(--gd-w, 100%); height: var(--gd-h, 100%); z-index: 900; box-sizing: border-box; overflow: hidden;
+  #splash { position: fixed; left: 0; top: 0; right: 0; height: 100%; height: 100dvh; z-index: 900; box-sizing: border-box; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     /* (kept clear of the phone's notch, rounded corners and home bar) */
     padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 28px)
@@ -73,6 +72,7 @@
   .splash-step { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .splash-percent { font-size: 17px; font-weight: 800; color: #5ee8c8; font-variant-numeric: tabular-nums; }
   /* (its line keeps its height when it is empty, so nothing shifts when the time appears) */
+  .splash-version { margin-top: 14px; font-size: 11px; letter-spacing: .08em; color: #5d6f94; text-align: center; }
   .splash-time { min-height: 1.4em; margin-top: 4px; text-align: left; font-size: 12px; letter-spacing: .03em; color: #8fa3c8; }
   /* Loading failed: the words say so, in gold, and the light stops sweeping. */
   #splash.is-broken .splash-step { white-space: normal; }
@@ -88,29 +88,27 @@
      A computer with a mouse is never covered, however narrow its window: it cannot be turned on its side.
      (src/core/orientation.ts asks the browser the very same question to know when to pause. Keep the two the same.)
      ================================================================================================================== */
-  /* WHEN IT SHOWS: src/core/screenFit.ts reads the phone's own ANGLE (never stuck, unlike the page's size after a
-     turn) and labels the page "gd-upright". Before that code has run, the browser's own portrait test stands in. */
-  #rotate-cover { display: none; position: fixed; left: 0; top: 0; z-index: 1000; box-sizing: border-box;
-      width: var(--gd-cw, 100%); height: var(--gd-ch, 100%);
-      align-items: center; justify-content: center; text-align: center;
-      padding: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-right, 0px) + 28px)
-               calc(env(safe-area-inset-bottom, 0px) + 24px) calc(env(safe-area-inset-left, 0px) + 28px);
-      background: radial-gradient(95% 60% at 50% 46%, #101a2e 0%, #04060d 72%); color: #eaf2ff; pointer-events: auto; }
-  html.gd-fit.gd-upright #rotate-cover { display: flex; }
-
-  /* UPRIGHT WHILE PLAYING (Joshua, 2026-11-17): "a hybrid of the pause menu and message on the top, and the last part
-     the game", with a yellow double pause sign over the game, half blacked out. The game's box keeps its landscape
-     size and is only SHRUNK (a transform: nothing is resized or rebuilt) to the phone's width, along the bottom.
-     The cover stops above it and carries the pause menu. (While still loading, the cover fills the screen.) */
-  html.gd-playing.gd-upright #stage { transform-origin: 0 0; transform: translate(0, var(--gd-strip-top)) scale(var(--gd-scale)); }
-  html.gd-playing.gd-upright #rotate-cover { height: var(--gd-strip-top); border-bottom: 1px solid rgba(94, 232, 200, .35);
-    overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; align-items: safe center; }
-  /* the controls are hidden in the strip (it is a picture of the game, not something to play) */
-  html.gd-upright .gd-hud { visibility: hidden; }
-  /* the pause menu's own card is not shown in the strip: the yellow pause sign is (src/ui/pauseMenu.css) */
-  @media (orientation: portrait) and (pointer: coarse) { html:not(.gd-fit) #rotate-cover { display: flex; width: 100%; height: 100%; } }
-  /* Upright, the splash is hidden behind the cover (it keeps loading). */
-  html.gd-upright #splash { visibility: hidden; }
+  #rotate-cover { display: none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate-cover { display: flex; flex-direction: column; position: fixed; inset: 0; z-index: 1000; box-sizing: border-box;
+      text-align: center; background: radial-gradient(95% 60% at 50% 46%, #101a2e 0%, #04060d 72%); color: #eaf2ff; pointer-events: auto; }
+    /* Nothing behind the cover is drawn or touched while upright (as in TRADDOMIUM). */
+    #stage, #splash { visibility: hidden; }
+  }
+  /* The words and buttons fill the cover, centred, kept clear of the notch and home bar; they scroll if Settings is open. */
+  .rotate-top { flex: 1; min-height: 0; display: flex; align-items: safe center; justify-content: center; overflow-y: auto;
+    overscroll-behavior: contain; touch-action: pan-y;
+    padding: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-right, 0px) + 28px) 18px calc(env(safe-area-inset-left, 0px) + 28px); }
+  /* UPRIGHT WHILE PLAYING (Joshua, 2026-11-17: the pause menu on top, "the last part the game", with a yellow double
+     pause sign over it, half blacked out). The strip is a STILL PICTURE of the game, taken as the phone was turned
+     upright (src/ui/pauseMenu.ts), so the 3D picture never has to be drawn in two shapes. As wide as the phone, the
+     game's own shape. (While still loading there is no strip: the cover's words fill the screen.) */
+  .rotate-strip { display: none; position: relative; flex: none; width: 100%; background: #04060d; border-top: 1px solid rgba(94, 232, 200, .35);
+    margin-bottom: env(safe-area-inset-bottom, 0px); }
+  html.gd-playing .rotate-strip.has-shot { display: block; }
+  .rotate-strip img { display: block; width: 100%; height: auto; opacity: .45; }
+  .rotate-strip-sign { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .rotate-strip-sign i { width: 20px; height: 56%; border-radius: 4px; background: #ffd56b; box-shadow: 0 0 18px rgba(255, 213, 107, .4); }
   .rotate-box { max-width: 300px; }
   /* A little phone that turns onto its side, over and over. */
   .rotate-phone { width: 46px; height: 82px; margin: 0 auto 30px; border: 3px solid #5ee8c8; border-radius: 11px;
@@ -163,12 +161,14 @@
       <span class="splash-percent" id="splash-percent">0%</span>
     </div>
     <div class="splash-time" id="splash-time"></div>
+    <!-- the game's version (src/ui/versionTag.ts), so the one on the phone can be told at a glance -->
+    <div class="splash-version" id="splash-version"></div>
   </div>
 </div>
 
 <!-- THE ROTATE COVER (shown by the styles above whenever a touch screen is held upright; there is no code behind it). -->
 <div id="rotate-cover" role="alert">
-  <div class="rotate-box">
+  <div class="rotate-top"><div class="rotate-box">
     <div class="rotate-phone"></div>
     <div class="rotate-title rotate-load">ROTATE YOUR DEVICE</div>
     <p class="rotate-hint rotate-load">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
@@ -178,6 +178,7 @@
       <div class="splash-bar"><div class="splash-fill" id="rotate-fill"></div></div>
       <div class="splash-line"><span class="splash-step" id="rotate-step">Starting…</span><span class="splash-percent" id="rotate-percent">0%</span></div>
       <div class="splash-time" id="rotate-time"></div>
+      <div class="splash-version" id="rotate-version"></div>
     </div>
     <div class="rotate-title rotate-play">PAUSED</div>
     <p class="rotate-hint rotate-play">Turn your phone on its side to keep playing.</p>
@@ -188,7 +189,9 @@
       <button class="rotate-settings" type="button">Settings</button>
       <div class="rotate-settings-slot"></div>
     </div>
-  </div>
+  </div></div>
+  <!-- the game, as a still picture with the pause sign over it (src/ui/pauseMenu.ts takes the picture) -->
+  <div class="rotate-strip"><img id="rotate-shot" alt=""><div class="rotate-strip-sign"><i></i><i></i></div></div>
 </div>
 
 <script type="module" src="/src/core/screenFit.ts"></script>

@@ -56,6 +56,8 @@ export interface PauseOptions {
   readonly host: HTMLElement;
   /** Called as the game pauses, after the fingers and keys have been let go: the game zeroes its own controls here. */
   readonly onPause: () => void;
+  /** A still picture of the game (an image address), for the upright screen's strip. Optional. */
+  readonly snapshot?: () => string | null;
 }
 
 /** While paused, the still picture is drawn again this often (milliseconds): four times a second. */
@@ -237,15 +239,25 @@ export function createPause(options: PauseOptions): Pause {
   }
 
   // Turned upright: pause. Turned back: the menu is already open and waits for Resume (Settings goes home first).
-  onUprightChange((upright) => { if (upright) pause(); else settingsHome(); });
-  if (isUpright()) pause();
+  // Upright: a still picture of the game for the strip under the menu (index.html .rotate-strip), taken as it turns.
+  const shot = document.getElementById('rotate-shot') as HTMLImageElement | null;
+  const takeShot = (): void => {
+    if (!shot || !options.snapshot) return;
+    try {
+      const picture = options.snapshot();
+      if (picture) { shot.src = picture; shot.parentElement?.classList.add('has-shot'); }
+    } catch { /* no picture: the cover simply has no strip */ }
+  };
+  onUprightChange((upright) => { if (upright) { takeShot(); pause(); } else settingsHome(); });
+  if (isUpright()) { takeShot(); pause(); }
 
   return {
     get paused(): boolean { return paused; },
     pause,
     resume,
     wantsPicture(now: number): boolean {
-      // (upright too: the game is shown in the strip under the pause menu)
+      // (never upright: the game is hidden behind the cover, which shows a still picture of it)
+      if (isUpright()) return false;
       if (!pictureWanted && now - pictureAt < STILL_PICTURE_MS) return false;
       pictureWanted = false;
       pictureAt = now;

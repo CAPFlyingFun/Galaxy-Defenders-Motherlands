@@ -49,6 +49,8 @@ export const TABLE_USE = Object.freeze({
   /** How far below the gun's grip a clip is pulled out, metres, and how far her other hand sits below the clip it holds. */
   clipPull: 0.08,
   clipHandBelow: 0.075,
+  /** A hand waiting between steps of the reload: this far above its own gun stand, metres. */
+  waitAbove: 0.07,
 });
 
 /** What she is doing. */
@@ -224,11 +226,11 @@ export class TableUse {
         if (!jobs.left && !jobs.right) return { jobs: {} };
         return { jobs, settle: true, done: () => { if (jobs[b]) this.gunDown(b); if (jobs[a]) this.gunUp(a); } };
       });
-      // 2. the gun held up in front of her chest, tipped toward her other hand (which comes back to her)
+      // 2. the gun held up in front of her chest, tipped toward her other hand (which waits just over its own stand)
       const gunAt = new THREE.Matrix4();
       this.steps.push(() => {
         this.chestGun(a, gunAt);
-        return { jobs: { [a]: h.handPoseForGun(a, gunAt, new THREE.Matrix4()), [b]: null } };
+        return { jobs: { [a]: h.handPoseForGun(a, gunAt, new THREE.Matrix4()), [b]: this.waitOver(b) } };
       });
       // 3. her other hand under the grip, on the clip; pulled out; dropped in the tray. (The gun is read where it really
       //    is now, in her hand: her arm may have stopped a little short of where it was sent.)
@@ -249,9 +251,11 @@ export class TableUse {
         return { jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, TABLE_USE.clipPull, scratch)) } };
       });
       this.steps.push(() => ({ jobs: { [b]: this.handOnClip(b, this.clipPose(gunAt, 0, scratch)) }, hold: TABLE_USE.holdSeconds, done: () => this.clipIntoGun(b, a) }));
-      // 6. the gun set on its stand; her other hand back to her
+      // 6. the gun set on its stand; her other hand waits just over its own stand, ready for what comes next
+      //    (Joshua, 2026-11-18: sent back to her side between steps, it dropped and swung up again, nearly a metre in
+      //    half a second: it read as a jump)
       this.steps.push(() => ({
-        jobs: { [a]: h.handPoseForGun(a, this.table.slot(a, slotAt), new THREE.Matrix4()), [b]: null },
+        jobs: { [a]: h.handPoseForGun(a, this.table.slot(a, slotAt), new THREE.Matrix4()), [b]: this.waitOver(b) },
         settle: true,
         done: () => this.gunDown(a),
       }));
@@ -360,6 +364,13 @@ export class TableUse {
   private clipPose(gunAt: THREE.Matrix4, pull: number, out: THREE.Matrix4): THREE.Matrix4 {
     this.heroine.hands!.clipSeat(out);
     return out.premultiply(gunAt).multiply(scratch2.makeTranslation(0, -pull, 0));
+  }
+
+  /** Where a hand waits between steps: as if about to take its gun, a little above its stand. */
+  private waitOver(hand: Hand): THREE.Matrix4 {
+    this.table.slot(hand, slotAt);
+    slotAt.elements[13] += TABLE_USE.waitAbove;
+    return this.heroine.hands!.handPoseForGun(hand, slotAt, new THREE.Matrix4());
   }
 
   /**

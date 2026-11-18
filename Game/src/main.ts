@@ -136,9 +136,11 @@ const TABLE_WALK = 1.1;
 /** Where the third-person camera style is kept on this device. */
 const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
 // First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
-// it tips down toward her hands (radians, about 45 degrees).
+// it tips down when she has no hands to look at (radians, about 45 degrees; with hands it looks at them).
 const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
 const FIRST_PERSON_BUSY_PITCH = -0.8;
+/** ...and the most it tips down to see her hands (radians, about 80 degrees: never quite straight down). */
+const FIRST_PERSON_BUSY_PITCH_MOST = 1.4;
 /** ...and how far the player may still look round meanwhile: 90 degrees to each side of it, 70 up and down. */
 const BUSY_LOOK_SIDE = Math.PI / 2;
 const BUSY_LOOK_UP_DOWN = 70 * Math.PI / 180;
@@ -340,6 +342,7 @@ async function start(): Promise<void> {
    * First person while she is busy: where the view follows (her head, tipped to her hands), the player's own look on
    * top of it, and what was set last frame (to tell the player's drag from it).
    */
+  const eyeAt = new THREE.Vector3(), handsAt = new THREE.Vector3(), handOne = new THREE.Vector3();
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
@@ -707,7 +710,19 @@ async function start(): Promise<void> {
       }
       const ease = 1 - Math.exp(-dt / FIRST_PERSON_FOLLOW_SECONDS);
       busyView.yaw += Math.atan2(Math.sin(turn.head - busyView.yaw), Math.cos(turn.head - busyView.yaw)) * ease;
-      busyView.pitch += (FIRST_PERSON_BUSY_PITCH - busyView.pitch) * ease;
+      // (tipped down to HER HANDS, between the two: when she leans over the table her head is ahead of them, and a
+      //  fixed tip passed right over them. Never quite straight down.)
+      let wantPitch = FIRST_PERSON_BUSY_PITCH;
+      const hands = heroine.hands;
+      if (hands) {
+        heroine.eye(eyeAt);
+        hands.handBone('left').getWorldPosition(handsAt);
+        handsAt.add(hands.handBone('right').getWorldPosition(handOne)).multiplyScalar(0.5);
+        // (how far ahead the hands are along the way she looks; behind her eye counts as a little ahead, looking down)
+        const ahead = Math.max(0.02, (handsAt.x - eyeAt.x) * Math.sin(busyView.yaw) + (handsAt.z - eyeAt.z) * Math.cos(busyView.yaw));
+        wantPitch = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(handsAt.y - eyeAt.y, ahead));
+      }
+      busyView.pitch += (wantPitch - busyView.pitch) * ease;
       busyView.lookYaw = Math.max(-BUSY_LOOK_SIDE, Math.min(BUSY_LOOK_SIDE, busyView.lookYaw));
       // (up and down: the view's own pitch stays within +/- BUSY_LOOK_UP_DOWN, so the player's look is held to what fits)
       busyView.lookPitch = Math.max(-BUSY_LOOK_UP_DOWN - busyView.pitch, Math.min(BUSY_LOOK_UP_DOWN - busyView.pitch, busyView.lookPitch));

@@ -28,8 +28,8 @@
 // ONE JOB AFTER ANOTHER glides too (Joshua, 2026-11-18: in the reload "something
 // looks off... the elbows and wrists"): a hand already on a job that is given
 // the next one (onto the clip, the clip pulled out, over to the tray) moves
-// from where it is to the new place over REACH.glideSeconds, eased, its turn
-// swung round the short way. Before, it jumped there in one frame (its elbow
+// from where it is to the new place, eased, its turn swung round the short
+// way: longer for a longer move, lifting in an arc on the way (REACH.glide...). Before, it jumped there in one frame (its elbow
 // up to 18 cm, its hand turned up to 110 degrees).
 //
 // The joint guard (jointGuard.ts) and the keep-clear (armClear.ts) run after
@@ -43,8 +43,20 @@ import { solveTwoBone } from './twoBone';
 export const REACH = Object.freeze({
   /** How long a hand takes to reach its job, or to go back to her own pose, seconds (the story's 0.55). */
   seconds: 0.55,
-  /** How long a hand takes to glide from one job straight on to the next (a shorter move), seconds. */
-  glideSeconds: 0.35,
+  /**
+   * A HAND GLIDING FROM ONE JOB STRAIGHT ON TO THE NEXT (Joshua, 2026-11-18: "add more points for the animation... so
+   * it will naturally look smoother"): it takes longer the further it goes and the more it turns (glideBase, plus so
+   * much a metre, plus so much a radian, between the least and the most), and on its way it lifts in an arc (by
+   * glideLiftPerMetre of the distance at the middle, at most glideLiftMost) instead of sliding straight. A fixed 0.35 s
+   * whatever the move rushed the long ones (up to 2.6 m/s and 530 degrees a second at their fastest).
+   */
+  glideBase: 0.25,
+  glidePerMetre: 1.2,
+  glidePerRadian: 0.18,
+  glideLeast: 0.3,
+  glideMost: 0.9,
+  glideLiftPerMetre: 0.25,
+  glideLiftMost: 0.06,
   /** The most of her arm's full length she reaches with (a little short of straight). */
   most: 0.97,
   /** Where her elbow hangs: straight down, plus this much out to her side, plus this much back. */
@@ -76,11 +88,21 @@ class HandJob {
   /** The time along the way, 0..1, before easing (the weight is this, smoothed at both ends). */
   private along = 0;
   private movedAlong = 1;
+  /** This glide's length (seconds) and how high it lifts at its middle (metres). */
+  private glideSeconds: number = REACH.glideLeast;
+  private lift = 0;
 
   /** A new job: from her own pose (the weight eases it in), or from the job it is on now (it glides across). */
   set(goal: THREE.Matrix4): void {
-    if (this.weight > 0) { this.from.copy(this.pose); this.movedAlong = 0; this.moved = 0; }
-    else { this.pose.copy(goal); this.movedAlong = 1; this.moved = 1; }
+    if (this.weight > 0) {
+      this.from.copy(this.pose); this.movedAlong = 0; this.moved = 0;
+      // (how far and how much it turns: the glide's length and its arc)
+      this.from.decompose(fromAt, fromQ, scratchScale);
+      goal.decompose(goalAt, goalQ, goalScale);
+      const metres = fromAt.distanceTo(goalAt), radians = fromQ.angleTo(goalQ);
+      this.glideSeconds = Math.min(REACH.glideMost, Math.max(REACH.glideLeast, REACH.glideBase + metres * REACH.glidePerMetre + radians * REACH.glidePerRadian));
+      this.lift = Math.min(REACH.glideLiftMost, metres * REACH.glideLiftPerMetre);
+    } else { this.pose.copy(goal); this.movedAlong = 1; this.moved = 1; }
     this.goal.copy(goal);
     this.has = true;
   }
@@ -89,12 +111,13 @@ class HandJob {
     this.along = Math.max(0, Math.min(1, this.along + (this.has ? 1 : -1) * dt / REACH.seconds));
     this.weight = smooth(this.along); // (leaves gently, arrives gently)
     if (this.movedAlong < 1) {
-      this.movedAlong = Math.min(1, this.movedAlong + dt / REACH.glideSeconds);
+      this.movedAlong = Math.min(1, this.movedAlong + dt / this.glideSeconds);
       this.moved = smooth(this.movedAlong);
-      // (its place straight across, its turn swung round the short way)
+      // (its place across, lifted in an arc that is highest half way; its turn swung round the short way)
       this.from.decompose(fromAt, fromQ, scratchScale);
       this.goal.decompose(goalAt, goalQ, goalScale);
       fromAt.lerp(goalAt, this.moved);
+      fromAt.y += this.lift * 4 * this.moved * (1 - this.moved);
       fromQ.slerp(goalQ, this.moved);
       this.pose.compose(fromAt, fromQ, goalScale);
     } else if (this.has) this.pose.copy(this.goal);

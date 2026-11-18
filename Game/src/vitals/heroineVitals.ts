@@ -203,6 +203,9 @@ export function intensityAtSpeed(speed: number): number {
   return table[table.length - 1][1];
 }
 
+/** A little over walking speed still counts as walking (her speed eases up to a pace and wavers about it). */
+const WALK_LEEWAY = 1.05;
+
 /**
  * How fast her stamina changes at a ground speed, a share of a full bar each second (+ refilling, - draining).
  * @param pregnancy  0 not pregnant .. 1 late pregnancy (VITALS_TUNING.pregnant)
@@ -219,7 +222,12 @@ export function staminaRate(speed: number, firing: boolean, pregnancy: number, d
   // (the rate at this speed: between the two paces it lies between, or the last one past a sprint)
   let rate = rateOf(table[table.length - 1]);
   if (speed <= table[0][0]) rate = rateOf(table[0]);
-  else for (let i = 1; i < table.length; i++) {
+  else if (speed > table[1][0] * WALK_LEEWAY && speed <= table[2][0]) {
+    // ANYTHING FASTER THAN A WALK DRAINS, at the jog's rate at least (Joshua's table: walking refills, a jog and up
+    // drain). Blended from the walk's refill to the jog's drain, a tired "jog" just over walking speed still refilled
+    // a little: her stamina never reached empty, and she never stopped winded (Joshua, 2026-11-18).
+    rate = rateOf(table[2]);
+  } else for (let i = 1; i < table.length; i++) {
     if (speed <= table[i][0]) { const t = (speed - table[i - 1][0]) / (table[i][0] - table[i - 1][0]); rate = rateOf(table[i - 1]) + t * (rateOf(table[i]) - rateOf(table[i - 1])); break; }
   }
   if (firing) rate -= 1 / T.stamina.firingSeconds;

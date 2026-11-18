@@ -124,6 +124,8 @@
   html.gd-playing .rotate-pause { display: block; }
   html.gd-playing .rotate-load { display: none; }
   html.gd-playing .rotate-phone { margin-bottom: 20px; }
+  /* (while loading, no turning phone: it does not ask for a turn until the game is ready) */
+  html:not(.gd-playing) .rotate-phone { display: none; }
   /* The pause buttons, as in the pause menu (src/ui/pauseMenu.css); and the game's Settings panel when it is moved
      in here (it uses the controls' colours, so they are given here too). */
   .rotate-pause { margin-top: 18px; --line: rgba(94, 232, 200, 0.55); --navy: rgba(16, 26, 46, 0.72); --teal: #5ee8c8; --gold: #ffd56b; --text: #eaf2ff; }
@@ -170,8 +172,10 @@
 <div id="rotate-cover" role="alert">
   <div class="rotate-top"><div class="rotate-box">
     <div class="rotate-phone"></div>
-    <div class="rotate-title rotate-load">ROTATE YOUR DEVICE</div>
-    <p class="rotate-hint rotate-load">Galaxy Defenders is played in landscape. Please turn your device on its side to play.</p>
+    <!-- (while loading upright it does not ask for a turn yet, Joshua 2026-11-17: a turn while the game is busy
+         loading lags, because the page cannot redraw meanwhile; once loaded, turns are instant) -->
+    <div class="rotate-title rotate-load">LOADING</div>
+    <p class="rotate-hint rotate-load">Galaxy Defenders is played in landscape. Turn your phone on its side when it's ready.</p>
     <!-- LOADING, UPRIGHT (Joshua, 2026-11-17: let it load at first launch in portrait for a head start). It does load
          behind this cover; this shows how far along it is (filled in by src/ui/splash.ts, the same as the splash). -->
     <div class="rotate-loading rotate-load">

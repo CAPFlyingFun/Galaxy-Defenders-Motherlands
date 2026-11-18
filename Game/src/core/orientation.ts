@@ -173,5 +173,17 @@ export function keepLandscape(stage: HTMLElement): void {
   onTurn(() => { measure(); measureSoon(); });
   window.addEventListener('orientationchange', checkScreen);
 
+  // (for the game to ask, when it knows the page may have been left at an old size: see refitNow)
+  refit = (): void => { kickViewport(); measureSoon(); };
+
   measure();
 }
+
+let refit: () => void = () => {};
+/**
+ * Re-check the page's size now and over the next moments, as after a turn. The game calls this when loading ends
+ * (Joshua, 2026-11-17): a turn made while the game was busy loading may have left the page laid out at the old
+ * shape, because the page cannot redraw while the game's code is working; this puts it right at once.
+ */
+export function refitNow(): void { refit(); }
+

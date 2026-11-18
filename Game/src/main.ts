@@ -13,7 +13,8 @@
 import * as THREE from 'three';
 import { SHADOW_ONLY_LAYER, type Hand, type HeroineBody } from './core/contracts';
 import './core/screenFit'; // first: the screen measured once, the game box sized from it (Joshua, 2026-11-17)
-import { isUpright, keepLandscape, onStageResize } from './core/orientation';
+import { isUpright, keepLandscape, onStageResize, refitNow } from './core/orientation';
+import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { createPause, type Pause } from './ui/pauseMenu';
@@ -143,6 +144,12 @@ async function start(): Promise<void> {
   const loadIs = loadKind(loadHeroineSettings()); // which kind of load this is: "fast live", "fast", "room"...
   const meter = startLoadMeter(loadIs);
   meter.step('world', 'Building the dome and the city…');
+  /**
+   * A SHORT BREAK between loading steps (Joshua, 2026-11-17). The page can only redraw (a turn of the phone, the
+   * loading bar) when the game's code stops for a moment; one picture's time, here and there, lets it catch up.
+   * (The Character Builder's own long step, opening her live body, cannot be broken up from here.)
+   */
+  const breathe = (): Promise<void> => new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
   const splash = connectSplash(meter);
 
   keepLandscape(stage); // keeps the game fitted to the screen, and knows when a phone is held upright (src/core/orientation.ts)
@@ -214,7 +221,9 @@ async function start(): Promise<void> {
 
   // ---- Heroine, camera, controls -----------------------------------------------
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
+  await breathe();
   const heroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text));
+  await breathe();
   scene.add(heroine.root);
   // Real shadows on or off (Settings): the renderer's shadow pictures, the key light's, and every part of her casting.
   let realShadows = false;
@@ -237,6 +246,7 @@ async function start(): Promise<void> {
   let liveOpened = false;
   if (graphics.liveBody === 'on' && heroine.attachLive) {
     try {
+      await breathe();
       meter.step('live body', 'Blaze\'s live body: fetching its code…');
       const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
       const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look'))], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
@@ -368,6 +378,7 @@ async function start(): Promise<void> {
   // chip is given every material to get ready, and then the game's FIRST picture is drawn (the first is by far the
   // slowest: every shape and picture is handed to the chip as it is first drawn). The splash lifts when that
   // picture is done: see the top of the loop below.
+  await breathe();
   meter.step('picture', 'Getting the picture ready…');
   try {
     // (never waited on for more than 5 seconds, and never a reason not to start: it is only a head start)
@@ -388,6 +399,9 @@ async function start(): Promise<void> {
     // (this load is remembered as a guide for the next only if it went the way its kind says it should)
     meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
     splash.done();
+    // A turn made while loading may have left the page at the old shape (it could not redraw meanwhile): put it right.
+    checkScreen();
+    refitNow();
     pause = createPause({
       stage, host: uiHost,
       // A still picture of the game for the upright screen's strip: drawn once more, and read straight off.

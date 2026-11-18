@@ -374,7 +374,8 @@ async function start(): Promise<void> {
    * also shoot in 3rd person... over the shoulder view and a simple cross hair"). Then the camera is over her
    * shoulder, she looks where it looks, and FIRE shoots at the crosshair.
    */
-  const aimedByHand = (): boolean => rig.mode === 'first' || graphics.autoFire === 'off';
+  // (Joshua, 2026-11-18: one setting for BOTH views, so she can be watched working on her own in either, or played)
+  const aimedByHand = (): boolean => graphics.autoFire === 'off';
   /** Everything that follows from the view and the aiming: the camera's style, the buttons, what a click does. */
   const applyView = (): void => {
     rig.setStyle(rig.mode === 'third' && aimedByHand() ? 'shoulder' : cameraStyle);
@@ -665,11 +666,15 @@ async function start(): Promise<void> {
     //   third person  she looks at the sky target most in front of her shoulders (her auto-aim).
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
-    if (rig.mode === 'first') turnInput.look = rig.yaw;
-    // (third person aimed by hand: she looks where the camera over her shoulder looks)
-    else if (aimedByHand()) turnInput.look = rig.yaw;
+    // (aimed by hand: she looks where the camera looks, in either view)
+    if (aimedByHand()) turnInput.look = rig.yaw;
     else {
-      aimTarget = targets.pick(motion.x, motion.z, turn.shoulders);
+      // ON HER OWN she picks a target. With a camera that follows her (first person, over the shoulder) she picks the
+      // one nearest where that camera already looks, so she keeps to it: picked by where her body faces, walking
+      // turned her body, she picked another, the camera swung to it, "forward" changed and she turned again: the
+      // camera spun round (Joshua, 2026-11-18).
+      const cameraFollows = rig.mode === 'first' || rig.style === 'shoulder';
+      aimTarget = targets.pick(motion.x, motion.z, cameraFollows ? rig.viewYaw : turn.shoulders);
       const at = targets.position(aimTarget);
       turnInput.look = Math.atan2(at.x - motion.x, at.z - motion.z);
     }
@@ -718,7 +723,9 @@ async function start(): Promise<void> {
     // THE PLAYER STILL LOOKS AROUND ON TOP OF THAT (Joshua, 2026-11-18: "would like to be able to look around +/- 90
     // degrees left and right and +/- 70 up and down... while it still does what it's doing"): the drag since last
     // frame is kept as a look of its own, added to where the view follows, and held within those limits.
-    if (rig.mode === 'first' && busyNow()) {
+    // (and FIRST PERSON ON HER OWN: the view follows her head to the target she aims at, with the same override)
+    const followTarget = rig.mode === 'first' && !busyNow() && !aimedByHand() && turn.aimed;
+    if (rig.mode === 'first' && (busyNow() || followTarget)) {
       if (!busyView.on) {
         // (the action has just begun: the view follows from where it is, with no look of the player's added yet)
         busyView.on = true;
@@ -750,10 +757,18 @@ async function start(): Promise<void> {
       // (WALKING OVER she looks nearly level, as in third person; the view tips down to her hands only as they start to
       //  reach for something, as far as they have come: Joshua, 2026-11-18)
       // (the view looks where she looks: see actionPitchWant above)
-      busyView.pitch += (actionPitchWant - busyView.pitch) * ease;
-      busyView.lookYaw = Math.max(-BUSY_LOOK_SIDE, Math.min(BUSY_LOOK_SIDE, busyView.lookYaw));
-      // (up and down: the view's own pitch stays within +/- BUSY_LOOK_UP_DOWN, so the player's look is held to what fits)
-      busyView.lookPitch = Math.max(-BUSY_LOOK_UP_DOWN - busyView.pitch, Math.min(BUSY_LOOK_UP_DOWN - busyView.pitch, busyView.lookPitch));
+      let wantPitch = actionPitchWant;
+      if (followTarget) {
+        heroine.eye(eyeAt);
+        const at = targets.position(aimTarget);
+        wantPitch = Math.atan2(at.y - eyeAt.y, Math.max(1, Math.hypot(at.x - eyeAt.x, at.z - eyeAt.z)));
+      }
+      busyView.pitch += (wantPitch - busyView.pitch) * ease;
+      // (the player's look is limited while she holds on to something fixed; following a target it is not)
+      const side = busyNow() ? BUSY_LOOK_SIDE : Math.PI, upDown = busyNow() ? BUSY_LOOK_UP_DOWN : 1.5;
+      busyView.lookYaw = Math.max(-side, Math.min(side, busyView.lookYaw));
+      // (up and down: the view's own pitch stays within its limit, so the player's look is held to what fits)
+      busyView.lookPitch = Math.max(-upDown - busyView.pitch, Math.min(upDown - busyView.pitch, busyView.lookPitch));
       // (the look the return starts from is where the view really is: within the limits, not as far as it was dragged)
       if (busyView.dragging) {
         busyView.fromYaw = busyView.lookYaw; busyView.fromPitch = busyView.lookPitch; busyView.dragging = false;

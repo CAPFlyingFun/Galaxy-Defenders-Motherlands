@@ -130,6 +130,9 @@ export class CameraRig {
   /** CINEMATIC: which shot, and how long it has run. */
   private shot = 0;
   private shotTime = 0;
+  /** The way she faced when this shot began (the shot's frame keeps it), and whether it has been read yet. */
+  private shotYaw = 0;
+  private shotYawSet = false;
   private readonly shotAt = new THREE.Vector3();
 
   /** Where the player WANTS to look; the third-person camera eases toward these. */
@@ -191,7 +194,7 @@ export class CameraRig {
     this.style = style;
     // (each starts where it makes sense: the drone where the camera is now, the cinematic at its first shot, top looking down)
     this.dronePlaced = false;
-    this.shot = 0; this.shotTime = 0;
+    this.shot = 0; this.shotTime = 0; this.shotYawSet = false;
     if (style === 'top') this.pitch = STYLE.topPitch;
     else if (this.pitch < THIRD_PITCH_MIN) this.pitch = THIRD_PITCH_START;
     if (style === 'shoulder') this.pitch = clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
@@ -329,8 +332,11 @@ export class CameraRig {
     }
     // CINEMATIC: the shot's place in her own frame, drifting as it runs; cut to the next when its time is up
     this.shotTime += dt;
-    if (this.shotTime > STYLE.shotSeconds) { this.shotTime = 0; this.shot = (this.shot + 1) % SHOTS.length; }
-    const shot = SHOTS[this.shot], yaw = heroine.root.rotation.y, along = this.shotTime / STYLE.shotSeconds;
+    if (this.shotTime > STYLE.shotSeconds) { this.shotTime = 0; this.shot = (this.shot + 1) % SHOTS.length; this.shotYawSet = false; }
+    // (each shot keeps the way she faced WHEN IT BEGAN: turning with her as she turned, the camera spun round her
+    //  whenever she walked, Joshua, 2026-11-18. It still goes where she goes, so she stays in it.)
+    if (!this.shotYawSet) { this.shotYaw = heroine.root.rotation.y; this.shotYawSet = true; }
+    const shot = SHOTS[this.shot], yaw = this.shotYaw, along = this.shotTime / STYLE.shotSeconds;
     const toWorld = (local: readonly number[], drift: number, out: THREE.Vector3): THREE.Vector3 => {
       const x = local[0] + shot.drift[0] * drift, y = local[1] + shot.drift[1] * drift, z = local[2] + shot.drift[2] * drift;
       // (her left is x, her front z: turned by her yaw)

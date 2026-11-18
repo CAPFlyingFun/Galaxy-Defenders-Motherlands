@@ -39,11 +39,11 @@ export const TOUCH = Object.freeze({
    * The thumb may first open past straight by this much (percent): with the palm on a bar the straight thumb is often
    * already inside it, so it opens out, then closes until it rests on the bar's surface.
    */
-  thumbOpen: 60,
+  thumbOpen: 100,
   /** ...tried at so many places across its range; it "rests" when within this of the surface (metres); relaxed is here. */
   thumbSamples: 28,
-  thumbRests: 0.004,
-  thumbRelaxed: 30,
+  /** The thumbs-up: straight, opened this far out to the side (percent, below 0 opens). */
+  thumbUp: -15,
   /** The palm's flesh: the palm's middle line is laid this far from the bar's surface. */
   palmThick: 0.016,
   /**
@@ -179,10 +179,9 @@ export class FingerTouch {
   }
 
   /**
-   * THE THUMB RESTS ON THE OUTSIDE of what the hand holds (Joshua, 2026-11-18: it cut into the pole and the rail): of
-   * its whole range, from opened past straight to closed, the place where it lies on the surface (just touching, not
-   * in it), nearest a relaxed half-close; if nowhere touches, the nearest it comes without going in; if it is in it
-   * everywhere, the least far in.
+   * THE THUMB STANDS OUT TO THE SIDE, a thumbs-up, while the four fingers wrap over the bar (Joshua, 2026-11-18: "not
+   * wrap underneath towards the palm like in a fist"): of its whole range, the place nearest `thumbUp` (straight, a
+   * little opened) that does not go into the bar; if every place does, the least far in.
    */
   private restThumb(i: number, shape: GripShape, out: Float32Array): void {
     const n = out.length, samples = TOUCH.thumbSamples, least = -TOUCH.thumbOpen;
@@ -190,9 +189,10 @@ export class FingerTouch {
     for (let s = 0; s <= samples; s++) {
       const percent = least + (100 - least) * s / samples;
       for (let j = 0; j < n; j++) this.trying[j] = percent;
-      const clear = this.clearance(i, this.trying, shape, 0);
-      // (resting on it scores best, nearest the relaxed close; clear of it next, nearest; in it worst, least far in)
-      const score = clear < 0 ? 10 - clear * 100 : clear <= TOUCH.thumbRests ? Math.abs(percent - TOUCH.thumbRelaxed) / 1000 : 1 + clear * 100;
+      // (from its second bone out: its first lies under the ball of her palm, where the bar sits against her palm)
+      const clear = this.clearance(i, this.trying, shape, 1);
+      // (clear of the bar, nearest the thumbs-up; in it worst, least far in)
+      const score = clear < 0 ? 1000 - clear * 1000 : Math.abs(percent - TOUCH.thumbUp);
       if (score < bestScore) { bestScore = score; best = percent; }
     }
     out.fill(best);

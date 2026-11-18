@@ -293,7 +293,7 @@ export class Hud {
     choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
     element('h2', 'gd-settings-part', settings, 'COMBAT');
-    choiceRow('Auto-fire (3rd person)', 'autoFire', [['On', 'on'], ['Off', 'off']], 'On: in 3rd person she fires bursts on her own at the target she is aimed at. When both guns are empty she walks to the table and reloads.');
+    choiceRow('Auto aim, fire & reload', 'autoFire', [['Auto', 'on'], ['Manual', 'off']], 'Auto: in either view she aims at targets, fires bursts and, when both guns are empty, walks to the table and reloads on her own (first person: the view follows her; drag to look away). Manual: you aim with the crosshair, hold FIRE, and press RELOAD at the table (3rd person: over her shoulder).');
 
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
@@ -365,10 +365,11 @@ export class Hud {
    */
   setView(mode: ViewMode, manual = mode === 'first'): void {
     const first = mode === 'first';
-    // The MOVE stick is there in every view; the CAMERA stick, FIRE and the crosshair only when she is aimed by hand.
-    this.lookStick.hidden = !manual;
+    // The MOVE stick is there in every view; FIRE only when she is aimed by hand; the CAMERA stick and the crosshair
+    // when she is aimed by hand, and always in first person (on her own there, the stick looks round: an override)
+    this.lookStick.hidden = !(manual || first);
     this.fireButton.hidden = !manual;
-    this.crosshair.hidden = !manual;
+    this.crosshair.hidden = !(manual || first);
     // (the camera styles are for third person aimed on her own; aimed by hand, the camera is over her shoulder)
     this.camButton.hidden = first || manual;
     // The button names the view it switches TO.

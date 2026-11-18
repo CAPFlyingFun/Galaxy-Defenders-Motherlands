@@ -164,7 +164,10 @@ export class TableUse {
     out.look = face;
     if (this.phase === 'walk') {
       this.table.standSpot(spot, h.bellyAhead());
+      // (on her way she looks AT the table, not the way she will face once there: Joshua, 2026-11-18)
+      out.look = Math.atan2(this.table.root.position.x - atX, this.table.root.position.z - atZ);
       if (Math.hypot(spot.x - atX, spot.z - atZ) > TABLE_USE.arrived) { out.walkTo = spot; return; }
+      out.look = face;
       this.phase = 'face'; this.timer = 0;
     }
     if (this.phase === 'face') {

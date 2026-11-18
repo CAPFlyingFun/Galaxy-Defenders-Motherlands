@@ -132,6 +132,10 @@ const TABLE_WALK = 1.1;
  * and full term (deliveryBump, week 41). How far along she is between them slows her paces and tires her sooner
  * (src/input/pace.ts PACES_FULL_TERM, src/vitals/heroineVitals.ts byPaceFullTerm). LATER: read from her look.
  */
+// First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
+// it tips down toward her hands (radians, about 45 degrees).
+const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
+const FIRST_PERSON_BUSY_PITCH = -0.8;
 const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
@@ -620,6 +624,14 @@ async function start(): Promise<void> {
     if (realShadows) ground.setHeroine(1e6, 1e6); else ground.setHeroine(motion.x, motion.z);
 
     // 3. Put the camera where it belongs, now that she has moved.
+    // FIRST PERSON, WHILE SHE IS BUSY AT THE TABLE OR A BAR (Joshua, 2026-11-18): you are her, so the view turns with
+    // her head (to the table, the bar) and tips down a little to her hands. Left where the player had it, her head
+    // turned away from it and the camera ended up in front of her face. The player has the camera back after.
+    if (rig.mode === 'first' && busyNow()) {
+      const ease = 1 - Math.exp(-dt / FIRST_PERSON_FOLLOW_SECONDS);
+      rig.yaw += Math.atan2(Math.sin(turn.head - rig.yaw), Math.cos(turn.head - rig.yaw)) * ease;
+      rig.pitch += (FIRST_PERSON_BUSY_PITCH - rig.pitch) * ease;
+    }
     rig.update(dt, heroine);
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.

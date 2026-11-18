@@ -221,7 +221,11 @@ export class GrabUse {
     out.look = face;
     if (this.phase === 'walk') {
       this.bars.standSpot(bar, this.spot, h.bellyAhead());
+      // (on her way she looks AT the bar, not the way she will face once there: Joshua, 2026-11-18)
+      const at = this.bars[bar].position;
+      out.look = Math.atan2(at.x - atX, at.z - atZ);
       if (Math.hypot(this.spot.x - atX, this.spot.z - atZ) > BARS.arrived) { out.walkTo = this.spot; return; }
+      out.look = face;
       this.phase = 'face'; this.timer = 0;
     }
     if (this.phase === 'face') {

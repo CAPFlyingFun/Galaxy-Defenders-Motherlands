@@ -322,7 +322,8 @@ export class BodyMotion {
   /** The same, each joint of the finger closed its own amount (percent, from the knuckle out). */
   curlFingerJoints(finger: number, percents: ArrayLike<number>): void {
     const own = this.fingerOwnTurns[finger], thumb = this.fingers[finger].thumb;
-    for (let k = 0; k < own.length; k++) own[k].radians = fingerBend(percents[k], k, thumb);
+    // (below 0 it opens PAST straight, as far as the same amount closes it: a thumb lifting off what the hand holds)
+    for (let k = 0; k < own.length; k++) own[k].radians = percents[k] >= 0 ? fingerBend(percents[k], k, thumb) : -fingerBend(-percents[k], k, thumb);
     this.rig.set(own as readonly JointTurn[]);
   }
 

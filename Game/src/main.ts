@@ -154,6 +154,10 @@ const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
 const FIRST_PERSON_WALK_PITCH = -0.14;
+/** How quickly her look tips up or down to what she does (seconds, for about two thirds of the way). */
+const ACTION_PITCH_SECONDS = 0.3;
+/** The over-the-shoulder camera with nothing to look at: a little up (radians, about 10 degrees). */
+const SHOULDER_REST_PITCH = 0.17;
 const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
@@ -308,7 +312,7 @@ async function start(): Promise<void> {
   scene.add(table.root);
   const tableUse = new TableUse(table, heroine);
   /** What the table's action asks for this frame (one object, rewritten). */
-  const tableAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number } = { walkTo: null, look: null, yaw: 0 };
+  const tableAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
   // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): an upright pole and a waist-high rail beside the table, the
   // other side of the street (src/world/grabBars.ts; her fingers: src/heroine/fast/fingerTouch.ts).
   const bars = new GrabBars();
@@ -316,7 +320,7 @@ async function start(): Promise<void> {
   bars.place('rail', -3.0, 10.3, 0);
   scene.add(bars.pole, bars.rail);
   const grabUse = new GrabUse(bars, heroine);
-  const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number } = { walkTo: null, look: null, yaw: 0 };
+  const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
   /** A bar to take hold of once her guns are on the table (a hand with a gun in it puts it down first). */
   let grabAfterTable: BarName | null = null;
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
@@ -351,6 +355,8 @@ async function start(): Promise<void> {
    * top of it, and what was set last frame (to tell the player's drag from it).
    */
   const eyeAt = new THREE.Vector3(), handsAt = new THREE.Vector3(), handOne = new THREE.Vector3();
+  /** Where she looks, up and down, while she does something: wanted this frame, and eased (radians). */
+  let actionPitchWant = 0, actionPitch = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
@@ -661,7 +667,7 @@ async function start(): Promise<void> {
     turnInput.move = motion.heading;
     if (rig.mode === 'first') turnInput.look = rig.yaw;
     // (third person aimed by hand: she looks where the camera over her shoulder looks)
-    else if (aimedByHand()) turnInput.look = rig.viewYaw;
+    else if (aimedByHand()) turnInput.look = rig.yaw;
     else {
       aimTarget = targets.pick(motion.x, motion.z, turn.shoulders);
       const at = targets.position(aimTarget);
@@ -670,6 +676,27 @@ async function start(): Promise<void> {
     // (while the table's action runs, she looks at the table)
     if (ask.look !== null) turnInput.look = ask.look;
     turn.step(dt, turnInput);
+    // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
+    // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
+    // hands. Her head tips that way in third person, and in first person the view does.
+    actionPitchWant = 0;
+    if (busyNow()) {
+      heroine.eye(eyeAt);
+      const lookAt = ask.lookAt;
+      actionPitchWant = lookAt ? Math.atan2(lookAt.y - eyeAt.y, Math.max(0.05, Math.hypot(lookAt.x - eyeAt.x, lookAt.z - eyeAt.z))) : FIRST_PERSON_WALK_PITCH;
+      const hands = heroine.hands;
+      const working = hands ? Math.max(hands.reached('left'), hands.reached('right')) : 0;
+      if (hands && working > 0) {
+        hands.handBone('left').getWorldPosition(handsAt);
+        handsAt.add(hands.handBone('right').getWorldPosition(handOne)).multiplyScalar(0.5);
+        // (how far ahead the hands are along the way she looks; behind her eye counts as a little ahead, looking down)
+        const ahead = Math.max(0.02, (handsAt.x - eyeAt.x) * Math.sin(turn.head) + (handsAt.z - eyeAt.z) * Math.cos(turn.head));
+        const atHands = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(handsAt.y - eyeAt.y, ahead));
+        actionPitchWant += (atHands - actionPitchWant) * Math.min(1, working * 1.5);
+      }
+    }
+    actionPitch += (actionPitchWant - actionPitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+    turn.headPitch = rig.mode === 'third' ? actionPitch : 0;
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     keyLight.position.set(motion.x - 4, 10, motion.z + 6);
     keyLight.target.position.set(motion.x, 0, motion.z);
@@ -722,19 +749,8 @@ async function start(): Promise<void> {
       //  fixed tip passed right over them. Never quite straight down.)
       // (WALKING OVER she looks nearly level, as in third person; the view tips down to her hands only as they start to
       //  reach for something, as far as they have come: Joshua, 2026-11-18)
-      let wantPitch = FIRST_PERSON_WALK_PITCH;
-      const hands = heroine.hands;
-      const working = hands ? Math.max(hands.reached('left'), hands.reached('right')) : 0;
-      if (hands && working > 0) {
-        heroine.eye(eyeAt);
-        hands.handBone('left').getWorldPosition(handsAt);
-        handsAt.add(hands.handBone('right').getWorldPosition(handOne)).multiplyScalar(0.5);
-        // (how far ahead the hands are along the way she looks; behind her eye counts as a little ahead, looking down)
-        const ahead = Math.max(0.02, (handsAt.x - eyeAt.x) * Math.sin(busyView.yaw) + (handsAt.z - eyeAt.z) * Math.cos(busyView.yaw));
-        const atHands = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(handsAt.y - eyeAt.y, ahead));
-        wantPitch = FIRST_PERSON_WALK_PITCH + (atHands - FIRST_PERSON_WALK_PITCH) * Math.min(1, working * 1.5);
-      }
-      busyView.pitch += (wantPitch - busyView.pitch) * ease;
+      // (the view looks where she looks: see actionPitchWant above)
+      busyView.pitch += (actionPitchWant - busyView.pitch) * ease;
       busyView.lookYaw = Math.max(-BUSY_LOOK_SIDE, Math.min(BUSY_LOOK_SIDE, busyView.lookYaw));
       // (up and down: the view's own pitch stays within +/- BUSY_LOOK_UP_DOWN, so the player's look is held to what fits)
       busyView.lookPitch = Math.max(-BUSY_LOOK_UP_DOWN - busyView.pitch, Math.min(BUSY_LOOK_UP_DOWN - busyView.pitch, busyView.lookPitch));
@@ -748,6 +764,18 @@ async function start(): Promise<void> {
       rig.yaw = busyView.setYaw = busyView.yaw + busyView.lookYaw;
       rig.pitch = busyView.setPitch = busyView.pitch + busyView.lookPitch;
     } else busyView.on = false;
+    // THE OVER-THE-SHOULDER CAMERA IS LOCKED TO HER HEAD (Joshua, 2026-11-18): it sits behind her right shoulder and
+    // looks where her head looks, turning and tipping with it. Up and down: where the player aims (aimed by hand),
+    // where she is looking while she does something, or at the target she is aimed at.
+    heroine.eye(rig.head.at);
+    rig.head.yaw = turn.head;
+    if (aimedByHand() && !busyNow()) rig.head.pitch = rig.pitch;
+    else if (busyNow()) rig.head.pitch = actionPitch;
+    else if (rig.mode === 'third' && turn.aimed) {
+      const at = targets.position(aimTarget);
+      rig.head.pitch = Math.atan2(at.y - rig.head.at.y, Math.max(1, Math.hypot(at.x - rig.head.at.x, at.z - rig.head.at.z)));
+    } else rig.head.pitch += (SHOULDER_REST_PITCH - rig.head.pitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+    rig.head.valid = true;
     rig.update(dt, heroine);
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.

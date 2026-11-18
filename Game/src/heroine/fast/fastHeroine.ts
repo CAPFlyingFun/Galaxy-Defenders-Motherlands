@@ -81,6 +81,8 @@ const JUMP_METRES = 1.5;
  */
 const BACK_TURN_SHARES = [0.8, 0.1, 0.1];
 const HEAD_TURN_SHARES = [0.4, 0.6];
+/** The most her head tips up or down (radians, 45 degrees); she looks further with her eyes and her bend. */
+const HEAD_TIP_MOST = Math.PI / 4;
 /**
  * Guards (the game's rule keeps well within these): the most her hips, her upper legs and her feet are turned from
  * the way her root faces, and the most her shoulders are turned from her belly and her head from her shoulders.
@@ -546,6 +548,14 @@ if (uHideHead > 0.5) {
   const KEEP_GAP = 0.02;
   const upQuaternion = new THREE.Quaternion(), heldQuaternion = new THREE.Quaternion(), UP_AXIS = new THREE.Vector3(0, 1, 0);
   /** Turn a bone about the world's upright axis by `angle` (radians), whatever its parents are doing. */
+  /** Turn a bone about a world axis by `angle`, keeping its parent where it is (as turnUpright, about any axis). */
+  const turnAbout = (b: THREE.Bone, axis: THREE.Vector3, angle: number): void => {
+    if (!b.parent || Math.abs(angle) < 1e-5) return;
+    b.parent.getWorldQuaternion(heldQuaternion);
+    upQuaternion.setFromAxisAngle(axis, angle);
+    b.quaternion.premultiply(heldQuaternion).premultiply(upQuaternion).premultiply(heldQuaternion.invert());
+  };
+  const tipAxis = new THREE.Vector3();
   const turnUpright = (b: THREE.Bone, angle: number): void => {
     if (!b.parent || Math.abs(angle) < 1e-5) return;
     b.parent.getWorldQuaternion(heldQuaternion);
@@ -858,6 +868,15 @@ if (uHideHead > 0.5) {
       const headTurn = facing ? within(wrap(facing.head - (bellyYaw + backTurn)), HEAD_TURN_MOST) : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+      // HER HEAD TIPPED UP OR DOWN (where she looks while she does something), shared between her neck and skull as the
+      // turn is, about the line across her head (square to the way it faces), within HEAD_TIP_MOST
+      const tip = facing?.headPitch ?? 0;
+      if (Math.abs(tip) > 1e-4 && !firstPerson) {
+        const yaw = facing!.head;
+        tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
+        const angle = Math.max(-HEAD_TIP_MOST, Math.min(HEAD_TIP_MOST, tip));
+        for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, angle * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+      }
 
       // GETTING DOWN TO WHAT HER HANDS REACH FOR (lowerBody.ts): toward the middle of the hands that have a job.
       root.updateMatrixWorld(true);

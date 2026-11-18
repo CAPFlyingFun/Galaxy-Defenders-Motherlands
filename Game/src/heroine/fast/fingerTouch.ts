@@ -33,6 +33,17 @@ import type { BodyMotion } from './bodyMotion';
 export const TOUCH = Object.freeze({
   /** Half a finger's thickness: a finger's middle line stops this far from what it holds. */
   pad: 0.009,
+  /** ...and the thumb's half thickness, a little more (Joshua, 2026-11-18: the thumb cut into the pole). */
+  thumbPad: 0.012,
+  /**
+   * The thumb may first open past straight by this much (percent): with the palm on a bar the straight thumb is often
+   * already inside it, so it opens out, then closes until it rests on the bar's surface.
+   */
+  thumbOpen: 60,
+  /** ...tried at so many places across its range; it "rests" when within this of the surface (metres); relaxed is here. */
+  thumbSamples: 28,
+  thumbRests: 0.004,
+  thumbRelaxed: 30,
   /** The palm's flesh: the palm's middle line is laid this far from the bar's surface. */
   palmThick: 0.016,
   /**
@@ -141,8 +152,9 @@ export class FingerTouch {
         // HOW FAR EACH JOINT CLOSES BEFORE IT TOUCHES (while she holds the bar; letting go, it opens from there)
         const touched = this.touched[i], n = touched.length;
         if (shape) {
-          touched.fill(0);
-          for (let k = 0; k < n; k++) {
+          if (finger.thumb) this.restThumb(i, shape, touched);
+          else touched.fill(0);
+          for (let k = 0; k < (finger.thumb ? 0 : n); k++) {
             // joints k and out close together, from where they are, until the finger touches; then joint k stays
             const from = touched[k];
             const found = closeToTouch((closure) => {
@@ -167,6 +179,26 @@ export class FingerTouch {
   }
 
   /**
+   * THE THUMB RESTS ON THE OUTSIDE of what the hand holds (Joshua, 2026-11-18: it cut into the pole and the rail): of
+   * its whole range, from opened past straight to closed, the place where it lies on the surface (just touching, not
+   * in it), nearest a relaxed half-close; if nowhere touches, the nearest it comes without going in; if it is in it
+   * everywhere, the least far in.
+   */
+  private restThumb(i: number, shape: GripShape, out: Float32Array): void {
+    const n = out.length, samples = TOUCH.thumbSamples, least = -TOUCH.thumbOpen;
+    let best = 0, bestScore = Infinity;
+    for (let s = 0; s <= samples; s++) {
+      const percent = least + (100 - least) * s / samples;
+      for (let j = 0; j < n; j++) this.trying[j] = percent;
+      const clear = this.clearance(i, this.trying, shape, 0);
+      // (resting on it scores best, nearest the relaxed close; clear of it next, nearest; in it worst, least far in)
+      const score = clear < 0 ? 10 - clear * 100 : clear <= TOUCH.thumbRests ? Math.abs(percent - TOUCH.thumbRelaxed) / 1000 : 1 + clear * 100;
+      if (score < bestScore) { bestScore = score; best = percent; }
+    }
+    out.fill(best);
+  }
+
+  /**
    * A finger with its joints closed so far (percent each): how far its nearest part is from the shape's surface,
    * metres. Only the part from joint `from` out is measured (the part before it already touches and stays put).
    */
@@ -182,7 +214,7 @@ export class FingerTouch {
       (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
       nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)), this.distance(shape, b));
     }
-    return nearest - TOUCH.pad;
+    return nearest - (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
   }
 
   private distance(shape: GripShape, at: THREE.Vector3): number {

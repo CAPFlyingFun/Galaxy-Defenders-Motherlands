@@ -29,6 +29,8 @@ import { CLIP } from '../heroine/guns';
 
 /** GAME TUNING. */
 export const TABLE_USE = Object.freeze({
+  /** HER HEAD LEADS: she looks at the table this long before she starts walking, seconds. */
+  lead: 0.7,
   /** Close enough to her spot, metres. */
   arrived: 0.04,
   /** Turned to the table within this, radians (about 8 degrees). */
@@ -96,7 +98,9 @@ export class TableUse {
   action: Action = 'idle';
   /** Each gun's rounds left. */
   readonly rounds: Record<Hand, number> = { left: TABLE_USE.rounds, right: TABLE_USE.rounds };
-  private phase: 'walk' | 'face' | 'steps' = 'walk';
+  private phase: 'lead' | 'walk' | 'face' | 'steps' = 'lead';
+  /** Where she looks on her way: between the gun stands. */
+  private readonly lookPoint = new THREE.Vector3();
   private steps: Array<() => Step> = [];
   private current: Step | null = null;
   private timer = 0;
@@ -182,7 +186,7 @@ export class TableUse {
       this.action = down ? 'putDown' : 'pickUp';
       this.planGuns(hands, down);
     }
-    this.phase = 'walk';
+    this.phase = 'lead';
     this.current = null;
     this.timer = 0;
     // her body keeps off the table's edge while she is at it (whatever her belly's size)
@@ -190,9 +194,10 @@ export class TableUse {
   }
 
   /** One frame. `at` is where she stands; this writes where she should walk and which way she should look. */
-  update(dt: number, atX: number, atZ: number, out: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number }): void {
+  update(dt: number, atX: number, atZ: number, out: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null }): void {
     out.walkTo = null;
     out.look = null;
+    out.lookAt = null;
     this.table.update(dt);
     this.moveSettling(dt);
     if (this.action === 'idle') return;
@@ -200,10 +205,19 @@ export class TableUse {
     this.timer += dt;
     const face = this.table.faceYaw;
     out.look = face;
+    // HER HEAD LEADS (Joshua, 2026-11-18): first she looks at the gun stands, for TABLE_USE.lead seconds, standing; then
+    // she walks there looking at them (looking down more as she comes close); there, she turns to the table
+    this.table.slot('left', slotAt); this.lookPoint.setFromMatrixPosition(slotAt);
+    this.table.slot('right', slotAt); this.lookPoint.add(toward.setFromMatrixPosition(slotAt)).multiplyScalar(0.5);
+    out.lookAt = this.lookPoint;
+    if (this.phase === 'lead') {
+      out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
+      if (this.timer < TABLE_USE.lead) return;
+      this.phase = 'walk';
+    }
     if (this.phase === 'walk') {
       this.table.standSpot(spot, h.bellyAhead());
-      // (on her way she looks AT the table, not the way she will face once there: Joshua, 2026-11-18)
-      out.look = Math.atan2(this.table.root.position.x - atX, this.table.root.position.z - atZ);
+      out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
       if (Math.hypot(spot.x - atX, spot.z - atZ) > TABLE_USE.arrived) { out.walkTo = spot; return; }
       out.look = face;
       this.phase = 'face'; this.timer = 0;

@@ -55,6 +55,11 @@ export interface BodyVitals {
  */
 export interface BodyFacing {
   readonly head: number;
+  /**
+   * How far her head tips up (+) or down (-), radians (Joshua, 2026-11-18: she looks down at what she is about to do,
+   * up toward what she goes to next). Optional: 0, level.
+   */
+  readonly headPitch?: number;
   /** Her shoulders, arms and hands (and her guns). */
   readonly shoulders: number;
   /** Her belly and torso, her hips with them. */

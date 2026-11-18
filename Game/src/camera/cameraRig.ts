@@ -46,8 +46,10 @@ export const CAMERA_STYLES: readonly CameraStyle[] = ['follow', 'shoulder', 'orb
 /** GAME TUNING for the camera styles (metres, seconds, radians). */
 export const STYLE = Object.freeze({
   /** SHOULDER: how far behind (closest, furthest with the zoom), how far to her right, how high. */
-  shoulderNear: 1.1, shoulderFar: 3.2, shoulderSide: 0.45, shoulderUp: 1.55,
-  shoulderPitchMin: -0.7, shoulderPitchMax: 0.9,
+  shoulderNear: 0.75, shoulderFar: 2.6, shoulderSide: 0.38, shoulderUp: 1.55,
+  /** ...and how far below her eyes it sits (metres), and how far down and up it may look (radians). */
+  shoulderDown: -0.12,
+  shoulderPitchMin: -1.1, shoulderPitchMax: 0.9,
   /** ORBIT: how fast it circles her, radians a second (about one turn in 40 seconds). */
   orbitSpeed: 0.16,
   /** TOP: how far it looks down, and its distance from her (closest, furthest with the zoom). */
@@ -115,6 +117,11 @@ export class CameraRig {
   mode: ViewMode = 'third';
   /** The third-person camera's style (CAM button). */
   style: CameraStyle = 'follow';
+  /**
+   * HER HEAD, for the over-the-shoulder camera, which is locked to it (Joshua, 2026-11-18): where her eyes are, the
+   * way her head faces, and how far up or down she looks. Set by the game each frame; `valid` once it has been.
+   */
+  readonly head = { at: new THREE.Vector3(), yaw: 0, pitch: 0, valid: false };
   /** DRONE: the stick this frame (right, forward: -1..1), and how far from the plaza centre it may go (the dome). */
   readonly droneStick = { x: 0, y: 0 };
   droneLimit = 70;
@@ -276,13 +283,21 @@ export class CameraRig {
     const feet = heroine.root.position;
     const zoom = clamp(this.easedZoom, 0, 1);
     if (this.style === 'shoulder') {
-      // behind her, at her head's height, a little to her right as the camera sees it: she stands left of the crosshair
-      this.setLook(this.easedYaw, this.easedPitch);
+      // LOCKED TO HER HEAD: looking where it looks (the middle of the screen is where she looks and aims), from behind
+      // her right shoulder, a little below her eyes; it turns and tips with her head
+      const yaw = this.head.valid ? this.head.yaw : this.easedYaw;
+      const pitch = clamp(this.head.valid ? this.head.pitch : this.easedPitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
+      this.setLook(yaw, pitch);
       const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom;
-      const rightX = -Math.cos(this.easedYaw), rightZ = Math.sin(this.easedYaw);
-      this.pivot.set(feet.x + rightX * STYLE.shoulderSide, STYLE.shoulderUp, feet.z + rightZ * STYLE.shoulderSide);
+      const rightX = -Math.cos(yaw), rightZ = Math.sin(yaw);
+      if (this.head.valid) this.pivot.copy(this.head.at); else this.pivot.set(feet.x, STYLE.shoulderUp + 0.1, feet.z);
+      this.pivot.x += rightX * STYLE.shoulderSide;
+      this.pivot.z += rightZ * STYLE.shoulderSide;
+      this.pivot.y += STYLE.shoulderDown;
       this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
       this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
+      // (the player's own look starts from here when the view changes)
+      this.easedYaw = yaw;
       return;
     }
     if (this.style === 'top') {

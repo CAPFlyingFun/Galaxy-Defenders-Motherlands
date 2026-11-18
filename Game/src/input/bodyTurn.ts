@@ -117,6 +117,8 @@ export class BodyTurn {
   base = 0;
   /** Which way her head points. */
   head = 0;
+  /** How far her head tips up (+) or down (-), radians: set by the game (where she looks while she does something). */
+  headPitch = 0;
   /** Which way her shoulders, arms and hands point (and her guns). */
   shoulders = 0;
   /** Which way her belly and torso (her hips with them) face. */

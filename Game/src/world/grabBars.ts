@@ -46,6 +46,8 @@ export const BARS = Object.freeze({
   railHands: 0.2,
   /** How close she must be to a bar's spot for its button to show. */
   near: 1.6,
+  /** HER HEAD LEADS: she looks at the bar this long before she starts walking, seconds. */
+  lead: 0.7,
   /** Close enough to her spot; turned to the bar within this (radians); the longest she waits to turn (seconds). */
   arrived: 0.04,
   faced: 0.14,
@@ -113,6 +115,11 @@ export class GrabBars {
     return { kind: 'cylinder', a, b, radius: BARS.radius };
   }
 
+  /** Where her hand(s) will take hold of a bar (world): what she looks at on her way. */
+  gripPoint(bar: BarName, height: number, out: THREE.Vector3): THREE.Vector3 {
+    return (bar === 'pole' ? out.set(0, height * BARS.poleHold, 0) : out.set(0, BARS.railHigh, 0)).applyMatrix4(this[bar].matrixWorld);
+  }
+
   /** Where she stands to take hold (world). */
   standSpot(bar: BarName, out: THREE.Vector3, bellyAhead: number): THREE.Vector3 {
     if (bar === 'pole') out.set(BARS.poleSide, 0, -BARS.poleAhead); // (her right is the bar frame's -x: so the pole is at her right)
@@ -158,7 +165,9 @@ export class GrabBars {
 export class GrabUse {
   /** The bar she is at (walking to, holding, letting go of), or null. */
   bar: BarName | null = null;
-  private phase: 'idle' | 'walk' | 'face' | 'reach' | 'hold' | 'release' = 'idle';
+  private phase: 'idle' | 'lead' | 'walk' | 'face' | 'reach' | 'hold' | 'release' = 'idle';
+  /** Where she looks on her way: where her hand will take hold. */
+  private readonly lookPoint = new THREE.Vector3();
   private timer = 0;
   private readonly spot = new THREE.Vector3();
 
@@ -195,7 +204,7 @@ export class GrabUse {
     const h = this.heroine.hands;
     if (!h || this.busy) return;
     this.bar = bar;
-    this.phase = 'walk';
+    this.phase = 'lead';
     this.timer = 0;
     // her body keeps off the rail as off the table's edge (whatever her belly's size)
     h.keepOff(this.bars.nearFace(bar));
@@ -205,25 +214,33 @@ export class GrabUse {
   letGo(): void {
     const h = this.heroine.hands;
     if (!h || !this.bar) return;
-    if (this.phase === 'walk' || this.phase === 'face') { this.finish(); return; }
+    if (this.phase === 'lead' || this.phase === 'walk' || this.phase === 'face') { this.finish(); return; }
     for (const hand of this.bars.hands(this.bar)) { h.hold(hand, null); h.reach(hand, null); }
     this.phase = 'release';
   }
 
   /** One frame. `at` is where she stands; this writes where she should walk and which way she should look. */
-  update(dt: number, atX: number, atZ: number, out: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number }): void {
+  update(dt: number, atX: number, atZ: number, out: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null }): void {
     out.walkTo = null;
     out.look = null;
+    out.lookAt = null;
     if (this.phase === 'idle' || !this.bar) return;
     const h = this.heroine.hands!, bar = this.bar;
     this.timer += dt;
     const face = this.bars.faceYaw(bar);
     out.look = face;
+    // HER HEAD LEADS (Joshua, 2026-11-18): first she looks at where she will take hold, for BARS.lead seconds, standing;
+    // then she walks there keeping it in sight, looking down more as she comes close
+    this.bars.gripPoint(bar, this.heroine.height, this.lookPoint);
+    if (this.phase === 'lead' || this.phase === 'walk' || this.phase === 'face') out.lookAt = this.lookPoint;
+    if (this.phase === 'lead') {
+      out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
+      if (this.timer < BARS.lead) return;
+      this.phase = 'walk';
+    }
     if (this.phase === 'walk') {
       this.bars.standSpot(bar, this.spot, h.bellyAhead());
-      // (on her way she looks AT the bar, not the way she will face once there: Joshua, 2026-11-18)
-      const at = this.bars[bar].position;
-      out.look = Math.atan2(at.x - atX, at.z - atZ);
+      out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
       if (Math.hypot(this.spot.x - atX, this.spot.z - atZ) > BARS.arrived) { out.walkTo = this.spot; return; }
       out.look = face;
       this.phase = 'face'; this.timer = 0;

@@ -40,6 +40,7 @@ import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
+import { BurstFire } from './world/burstFire';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
 interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
@@ -124,7 +125,6 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
 }
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
-const FIRE_INTERVAL = 0.14; // seconds between shots while FIRE is held
 const TABLE_WALK = 1.1;
 /**
  * BLAZE'S PREGNANCY, from her Character Builder export (Joshua, 2026-11-17): her first visible belly (firstWeekBump)
@@ -311,8 +311,8 @@ async function start(): Promise<void> {
   const vitalsPanel = new VitalsPanel();
   /** What her body allows this frame (her stamina, her share of full speed), from last frame's vitals. */
   let limits: PaceLimits = NO_LIMITS;
-  let nextHand: Hand = 'right';
-  let fireCooldown = 0;
+  /** Her guns' bursts (src/world/burstFire.ts). */
+  const burst = new BurstFire();
 
   const toggleView = () => {
     rig.setMode(rig.mode === 'third' ? 'first' : 'third');
@@ -558,7 +558,7 @@ async function start(): Promise<void> {
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
     }
     // (its buttons show when she is near it and nothing is running)
-    hud.setUse(tableUse.canUse(motion.x, motion.z) ? tableUse.label() : null);
+    hud.setUse(tableUse.canUse(motion.x, motion.z) ? tableUse.label() : null, tableUse.needsReload);
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -612,23 +612,31 @@ async function start(): Promise<void> {
       heroine.aimAt(null);
     }
 
-    // 5. Fire (first person only): hands take turns, and each shot leaves a streak.
-    fireCooldown -= dt;
+    // 5. FIRE, IN BURSTS (src/world/burstFire.ts; Joshua, 2026-11-17: "1/2/3 - wait a second - 1/2/3"), each gun
+    // with its 20 rounds (src/world/tableUse.ts). First person: FIRE held, or a tap for one burst. Third person, with
+    // auto-fire on: whenever she is aimed at a target. Her guns take turns; each shot leaves a streak.
     const clicks = controls.takeClicks();
-    // (only a hand that holds its gun fires: with one gun down, the other fires every shot; with both down, none)
-    const armed = (hand: Hand): boolean => heroine.hands?.hasGun(hand) ?? true;
-    if (!armed(nextHand)) nextHand = nextHand === 'right' ? 'left' : 'right';
-    if (rig.mode === 'first' && !tableUse.busy && armed(nextHand) && fireCooldown <= 0 && (controls.fireHeld || clicks > 0)) {
-      fireCooldown = FIRE_INTERVAL;
-      heroine.fire(nextHand);
-      tracers.fire(heroine.muzzle(nextHand, muzzle), aim);
-      nextHand = nextHand === 'right' ? 'left' : 'right';
-    }
+    if (rig.mode === 'first' && clicks > 0) burst.pull();
+    const autoFiring = rig.mode === 'third' && graphics.autoFire === 'on' && turn.aimed;
+    const wantFire = !tableUse.busy && ((rig.mode === 'first' && controls.fireHeld) || autoFiring);
+    let firedNow = false;
+    burst.update(dt, wantFire && !tableUse.busy,
+      // (a hand fires only with its gun in it and rounds in the gun)
+      (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0,
+      (hand) => {
+        heroine.fire(hand);
+        tracers.fire(heroine.muzzle(hand, muzzle), aim);
+        tableUse.rounds[hand]--;
+        firedNow = true;
+      });
+    // (third person: with both guns empty she goes to the table and reloads on her own)
+    if (rig.mode === 'third' && graphics.autoFire === 'on' && !tableUse.busy && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
+    hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
     tracers.update(info);
 
     // 5b. Her vitals: what she just did (how fast she moved, whether she is shooting) moves her heart, her breath,
     // her stamina, her food and her water on; her body and the card along the top show them.
-    const shooting = rig.mode === 'first' && (controls.fireHeld || clicks > 0);
+    const shooting = firedNow;
     // (danger frightens her: for now the dome's state, the worst section: hurt up to 0.6, broken through 1. Step 1a's
     //  enemies coming close will add to it.)
     let threat = 0;

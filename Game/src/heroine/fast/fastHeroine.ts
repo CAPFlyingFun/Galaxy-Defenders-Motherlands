@@ -567,6 +567,8 @@ if (uHideHead > 0.5) {
     arms[hand].hand.add(guns[hand].object);
   }
   const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
+  /** Whether each hand holds its gun (its fingers may close on other things too: a clip). */
+  const gunIn: Record<Hand, boolean> = { left: true, right: true };
   const gunSeen = new THREE.Matrix4();
 
   // ---- 9. never drawn when she is out of the camera's view --------------------------------------------------------
@@ -686,10 +688,10 @@ if (uHideHead > 0.5) {
       (target ??= new THREE.Vector3()).copy(point);
     },
     // (a hand that has put its gun down has nothing to fire)
-    fire(hand: Hand): void { if (reach.holding[handIndex(hand)]) aim.fire(hand); },
+    fire(hand: Hand): void { if (gunIn[hand]) aim.fire(hand); },
 
     hands: {
-      hasGun: (hand) => reach.holding[handIndex(hand)],
+      hasGun: (hand) => gunIn[hand],
       handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
       reach: (hand, pose) => reach.setJob(handIndex(hand), pose),
       reached: (hand) => reach.weight(handIndex(hand)),
@@ -701,6 +703,7 @@ if (uHideHead > 0.5) {
         gun.matrix.copy(parent.matrixWorld).invert().multiply(gun.matrixWorld);
         parent.add(gun);
         reach.holding[handIndex(hand)] = false;
+        gunIn[hand] = false;
         return gun;
       },
       takeGun(hand) {
@@ -708,9 +711,16 @@ if (uHideHead > 0.5) {
         arms[hand].hand.add(gun);
         gun.matrix.copy(seat[hand]);
         reach.holding[handIndex(hand)] = true;
+        gunIn[hand] = true;
       },
       keepOff: (face) => { keepFace = face; },
       bellyAhead: () => { const e = armClear.eggs[0]; return e ? e.cz + e.rz : 0.15; },
+      gun: (hand) => guns[hand].object,
+      gunClip: (hand) => guns[hand].clip,
+      gunSeat: (hand, out) => out.copy(seat[hand]),
+      clipSeat: (out) => out.copy(guns.left.clipSeat),
+      handBone: (hand) => arms[hand].hand,
+      setHolding: (hand, holding) => { reach.holding[handIndex(hand)] = holding; },
       lowering: () => ({ weight: lower.weight, mode: lower.mode, drop: lower.drop, bend: lower.hinge * 180 / Math.PI }),
     },
 
@@ -852,8 +862,8 @@ if (uHideHead > 0.5) {
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       // (her shoulders face `shouldersYaw`: her arms point from there, as far to each side as arms go)
       // (each arm aims only with its gun in its hand, and not while it reaches for something)
-      aim.armWeight.left = reach.holding[0] ? 1 - reach.weight(0) : 0;
-      aim.armWeight.right = reach.holding[1] ? 1 - reach.weight(1) : 0;
+      aim.armWeight.left = gunIn.left ? 1 - reach.weight(0) : 0;
+      aim.armWeight.right = gunIn.right ? 1 - reach.weight(1) : 0;
       aim.advance(frame.dt, target !== null);
       root.updateMatrixWorld(true);
       if (aim.weight > 0) {

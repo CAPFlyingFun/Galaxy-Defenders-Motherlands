@@ -77,6 +77,16 @@ export interface HeroineHands {
   releaseGun(hand: Hand, parent: THREE.Object3D): THREE.Object3D;
   /** Take this hand's gun back (wherever it lies): it is held as before. */
   takeGun(hand: Hand): void;
+  /** A hand's gun (wherever it is: in her hand, on the table), its clip, and how a gun sits in that hand (hand space). */
+  gun(hand: Hand): THREE.Object3D;
+  gunClip(hand: Hand): THREE.Object3D;
+  gunSeat(hand: Hand, out: THREE.Matrix4): THREE.Matrix4;
+  /** Where a clip sits in its gun (the gun's own space). */
+  clipSeat(out: THREE.Matrix4): THREE.Matrix4;
+  /** The bone a hand's job places (things held in that hand are given to it). */
+  handBone(hand: Hand): THREE.Object3D;
+  /** Whether a hand's fingers are closed (holding something) or open: set while she handles clips. */
+  setHolding(hand: Hand, holding: boolean): void;
   /**
    * Something in front of her that her body must keep off (a table): a vertical face (a point on it, and its
    * outward direction, toward her), up to a height `top` (the table's top). Null: nothing.

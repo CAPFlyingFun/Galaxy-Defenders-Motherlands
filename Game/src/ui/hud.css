@@ -317,3 +317,20 @@
 /* While the controls are being arranged (Settings -> Edit controls), the table's buttons show wherever she is, so
    they can be placed too. */
 .gd-hud.is-editing .gd-use[hidden] { display: flex; }
+
+/* ---- EACH GUN'S ROUNDS (Joshua, 2026-11-17): top right, under the gear; red when a gun clicks empty ---------- */
+.gd-ammo {
+  position: absolute;
+  right: calc(var(--safe-right) + var(--edge));
+  top: calc(var(--safe-top) + var(--edge) + 52px);
+  padding: 3px 8px;
+  border: 1px solid rgba(94, 232, 200, 0.5);
+  border-radius: 8px;
+  background: rgba(4, 6, 13, 0.6);
+  color: #eaf2ff;
+  font: 700 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.gd-ammo.is-empty { border-color: #ff5fa2; color: #ffb3d1; }
+.gd-use-reload[hidden] { display: none; }

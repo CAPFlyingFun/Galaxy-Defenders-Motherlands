@@ -48,6 +48,8 @@ export interface HeroineSettings {
   zoomThird: number;
   /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
   tableHeight: number;
+  /** THIRD PERSON: she fires on her own at the target she is aimed at (Joshua, 2026-11-17). */
+  autoFire: ShadowChoice;
 }
 
 /** The heights the weapon table may be set to, metres, and its own (src/world/weaponTable.ts TABLE.height). */
@@ -71,6 +73,7 @@ export const SETTING_KEYS = Object.freeze({
   fovFirst: 'gdm.fovFirst',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
+  autoFire: 'gdm.autoFire',
 });
 
 function read(key: string): string | null {
@@ -130,5 +133,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
     zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.1, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
+    autoFire: read(SETTING_KEYS.autoFire) === 'off' ? 'off' : 'on',
   };
 }

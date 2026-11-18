@@ -15,6 +15,13 @@ import type { ArmBones } from './aimArms';
 export interface Gun {
   /** The gun. Its matrix is set by hand each frame (`matrixAutoUpdate` is off). */
   readonly object: THREE.Mesh;
+  /**
+   * ITS CLIP (Joshua, 2026-11-17: 20 rounds a gun, reloaded at the table): its own small object in the bottom of the
+   * grip, so it can be popped out and a new one clicked in. Its matrix is set by hand too.
+   */
+  readonly clip: THREE.Mesh;
+  /** Where the clip sits in the gun (the gun's own space): put back here when a clip is clicked in. */
+  readonly clipSeat: THREE.Matrix4;
   /** Where a shot leaves the barrel, in the gun's own space (metres). */
   readonly tip: THREE.Vector3;
   dispose(): void;
@@ -50,14 +57,42 @@ export function createGun(): Gun {
   // (her hands move it every frame and it is small: testing it against the camera's view costs more than drawing it)
   object.frustumCulled = false;
 
+  const clip = createClip(materials);
+  // (in the bottom of the grip, along the grip's slant, its base standing a little proud of it)
+  const clipSeat = new THREE.Matrix4().makeRotationX(-0.22).multiply(new THREE.Matrix4().makeTranslation(0, CLIP.seatY, -0.01));
+  clip.matrix.copy(clipSeat);
+  object.add(clip);
+
   return {
     object,
+    clip,
+    clipSeat,
     tip: new THREE.Vector3(0, 0.055, 0.23),
     dispose(): void {
       geometry.dispose();
+      clip.geometry.dispose();
       for (const m of materials) m.dispose();
     },
   };
+}
+
+/** A clip's size, metres, and where its middle sits in the grip (along the grip, from the gun's origin). */
+export const CLIP = Object.freeze({ width: 0.024, height: 0.06, depth: 0.036, seatY: -0.058 });
+
+/**
+ * One clip: a dark box with a magenta base plate (the part that shows under the grip). Its origin is its middle; its
+ * long side runs up and down the grip. Shares the gun's two materials (dark, magenta), so it costs one more draw.
+ */
+export function createClip(materials: THREE.Material[]): THREE.Mesh {
+  const body = box(CLIP.width, CLIP.height, CLIP.depth, 0, 0, 0);
+  const base = box(CLIP.width + 0.004, 0.008, CLIP.depth + 0.004, 0, -CLIP.height / 2, 0);
+  const geometry = mergeGeometries([body, base], true);
+  body.dispose(); base.dispose();
+  const clip = new THREE.Mesh(geometry, materials);
+  clip.name = 'clip';
+  clip.matrixAutoUpdate = false;
+  clip.frustumCulled = false;
+  return clip;
 }
 
 /**

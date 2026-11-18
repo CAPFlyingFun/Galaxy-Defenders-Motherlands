@@ -37,7 +37,7 @@ export interface HudOptions {
   onGraphicsChange<K extends keyof HeroineSettings>(key: K, value: HeroineSettings[K]): void;
   onToggleView(): void;
   /** The weapon table's buttons (src/world/tableUse.ts): the main one ('both') or one hand's. */
-  onUse?(which: 'both' | 'left' | 'right'): void;
+  onUse?(which: 'both' | 'left' | 'right' | 'reload'): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -126,7 +126,11 @@ export class Hud {
   /** The weapon table's buttons: shown only when she is near it (`setUse`). */
   private readonly useBar: HTMLElement;
   private readonly useMain: HTMLElement;
+  private readonly useReload: HTMLElement;
   private useLabel = '';
+  /** Each gun's rounds, shown near the top right (Joshua, 2026-11-17: 20 a gun). */
+  private readonly ammo: HTMLElement;
+  private ammoText = '';
   /** The big word on the view button ("1st" or "3rd"): the view it switches TO. */
   private readonly viewName: HTMLElement;
   private readonly fireButton: HTMLElement;
@@ -213,12 +217,18 @@ export class Hud {
     this.useBar.hidden = true;
     this.useMain = element('button', 'gd-button gd-use-main', this.useBar, 'PUT DOWN');
     tapButton(this.useMain, () => options.onUse?.('both'));
+    // (RELOAD shows when a gun is not full: she reloads both from the table's clips)
+    this.useReload = element('button', 'gd-button gd-use-main gd-use-reload', this.useBar, 'RELOAD');
+    tapButton(this.useReload, () => options.onUse?.('reload'));
     const oneHand = element('div', 'gd-use-hands', this.useBar);
     for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
       const button = element('button', 'gd-button gd-use-hand', oneHand, word);
       button.setAttribute('aria-label', `${hand} hand`);
       tapButton(button, () => options.onUse?.(hand));
     }
+
+    // ---- Top right, under the gear: each gun's rounds -----------------------------
+    this.ammo = element('div', 'gd-ammo', this.root);
 
     // ---- Centre: crosshair ---------------------------------------------------
     this.crosshair = element('div', 'gd-crosshair', this.root);
@@ -265,6 +275,8 @@ export class Hud {
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
     choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
+    element('h2', 'gd-settings-part', settings, 'COMBAT');
+    choiceRow('Auto-fire (3rd person)', 'autoFire', [['On', 'on'], ['Off', 'off']], 'On: in 3rd person she fires bursts on her own at the target she is aimed at. When both guns are empty she walks to the table and reloads.');
 
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
     for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
@@ -302,8 +314,16 @@ export class Hud {
     this.setView('third');
   }
 
-  /** The weapon table's buttons: shown with this word on the main one, or hidden (null). */
-  setUse(label: string | null): void {
+  /** Each gun's rounds (null: no gun in that hand), and whether a gun just clicked empty. */
+  setAmmo(left: number | null, right: number | null, empty: boolean): void {
+    const text = `L ${left ?? '–'} · R ${right ?? '–'}`;
+    if (text !== this.ammoText) { this.ammo.textContent = text; this.ammoText = text; }
+    this.ammo.classList.toggle('is-empty', empty || (left === 0 && right === 0));
+  }
+
+  /** The weapon table's buttons: shown with this word on the main one, or hidden (null); RELOAD when a gun is not full. */
+  setUse(label: string | null, reload = false): void {
+    this.useReload.hidden = !reload;
     this.useBar.hidden = label === null;
     // (the word is changed only when it changes: the button a finger is on is never rebuilt)
     if (label !== null && label !== this.useLabel) { this.useMain.textContent = label; this.useLabel = label; }

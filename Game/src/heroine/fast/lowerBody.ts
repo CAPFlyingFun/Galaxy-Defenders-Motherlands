@@ -86,16 +86,19 @@ export const LOWER = Object.freeze({
   kneelThighLean: 12,
   kneelBothLean: 18,
   /**
-   * BOTH KNEES: SITTING BACK ON HER HEELS (Joshua, 2026-11-17, with a picture: kneeling "like this pose... lowering
-   * the body closer to the ground, almost in a praying pose"): her hips this far above the floor (her hip joints; her
-   * seat on her heels), her knees forward of them on the floor, her shins flat behind, her feet under her seat.
+   * BOTH KNEES: SITTING BACK ON HER HEELS, the yoga THUNDERBOLT (vajrasana) Joshua pointed to (2026-11-17, with
+   * reference pictures; "almost in a praying pose"): her seat on her heels, her hip joints this far above the floor,
+   * her thighs nearly level forward to her knees on the floor, her shins flat back along the floor, her feet under
+   * her seat, their tops on the floor (soles up).
    */
-  sitBackHips: 0.3,
+  sitBackHips: 0.2,
   frontFootForward: 0.32,
-  /** KNEELING, each foot stands on its toes, toes tucked under: the ankle is this share of the foot's length up. */
-  tuckedAnkleUp: 0.8,
-  /** ...and the foot leans back this much (as a share of straight down) from the ankle to its toes. */
-  tuckedToesBack: 0.35,
+  /** KNEELING, each foot lies on its top (sole up, toes pointing back): its ankle this high off the floor, metres. */
+  footTopAnkleUp: 0.075,
+  /** ...and the foot points back, tipped down this much (as a share of straight back) to its toes on the floor. */
+  footTopDown: 0.35,
+  /** BOTH KNEES: her feet under her seat, their middles this share of her hips' own width apart (her knees open more). */
+  seatFeetApart: 0.9,
   /**
    * KNEELING, HER KNEES APART (Joshua, 2026-11-17: "not only bend them but also spread the legs apart which would
    * give more room regardless of belly size. Maybe try 10° added to each side for a 20° spread"): each thigh swung out
@@ -147,8 +150,10 @@ export class LowerBody {
   private readonly thigh: number;
   private readonly shin: number;
   private readonly arm: number;
-  /** Her foot's length from the ankle to its first joint, metres (kneeling, it stands up on its toes). */
+  /** Her foot's length from the ankle to its first joint, metres. */
   private readonly footLength: number;
+  /** Half the distance between her hip joints, metres (sitting back, her feet go under her seat). */
+  private readonly hipHalf: number;
   /** Her shoulder width, metres (her feet go at least this far apart when she is down). */
   private readonly shoulderWidth: number;
   /** How far down and how far forward she is going, at full weight (worked out when the target is given). */
@@ -197,6 +202,7 @@ export class LowerBody {
     this.arm = inFrame(shoulder).distanceTo(inFrame(hand)); // (to her hand bone: the bone a hand's job places)
     const toe = l.ankle.children.find((c) => (c as THREE.Bone).isBone);
     this.footLength = toe ? inFrame(l.ankle).distanceTo(inFrame(toe)) : 0.14;
+    this.hipHalf = Math.abs(inFrame(legs[0].hip).x - inFrame(legs[1].hip).x) / 2;
     this.shoulderWidth = shoulderR ? Math.abs(inFrame(shoulder).x - inFrame(shoulderR).x) * LOWER.shoulderWidthFromJoints : 0.37;
   }
 
@@ -383,10 +389,10 @@ export class LowerBody {
   }
 
   /**
-   * A LEG KNEELING (Joshua's drawing, 2026-11-17): the knee ON THE FLOOR (under her hip on one knee; forward of her
-   * hips, her thigh sloping down to it, when she sits back on both), the shin lying back along the floor from it, and
-   * the foot at its end on its toes, toes tucked under (the foot standing up from the floor). Each bone is pointed at
-   * its own place, so the knee and the foot are exactly where they belong; `k` blends from where they were.
+   * A LEG KNEELING (Joshua's drawing and yoga pictures, 2026-11-17): the knee ON THE FLOOR (under her hip on one
+   * knee; forward of her hips, her thigh nearly level, when she sits back on both), the shin lying back along the floor
+   * from it, the foot on its top (sole up, toes back), under her seat when she sits back. Each bone is pointed at its
+   * own place, so the knee and the foot are exactly where they belong; `k` blends from where they were.
    */
   private kneelLeg(leg: LowerLeg, hipAt: THREE.Vector3, kneeAt: THREE.Vector3, ankleWas: THREE.Vector3, ankleTurn: THREE.Quaternion,
                    side: number, spreadOut: number, forward: THREE.Vector3, k: number): void {
@@ -398,10 +404,17 @@ export class LowerBody {
     kneeWant.copy(hipAt).addScaledVector(forward, kneeAhead).addScaledVector(leftAxis, side * this.thigh * spreadOut);
     kneeWant.y = floor + LOWER.kneeAboveFloor;
     kneeWant.lerp(kneeAt, 1 - k);
-    // the ankle: a shin's length back from the knee, raised by the foot standing on its toes
-    const ankleUp = LOWER.kneeAboveFloor + this.footLength * LOWER.tuckedAnkleUp;
-    const along = Math.sqrt(Math.max(0, this.shin * this.shin - (ankleUp - LOWER.kneeAboveFloor) ** 2));
-    ankleWant.copy(kneeWant).addScaledVector(forward, -along);
+    // the ankle: a shin's length back from the knee along the floor (sitting back, under her seat: its side to side
+    // place brought in under her hip, the shin running in from her open knee)
+    const ankleUp = LOWER.footTopAnkleUp;
+    ankleWant.copy(kneeWant);
+    if (this.mode === 'kneelBoth') {
+      const mid = hipAt.x * leftAxis.x + hipAt.z * leftAxis.z, at = kneeWant.x * leftAxis.x + kneeWant.z * leftAxis.z;
+      ankleWant.addScaledVector(leftAxis, (mid - this.hipHalf * (1 - LOWER.seatFeetApart) * side) - at);
+    }
+    const sideways = ankleWant.distanceTo(kneeWant);
+    const along = Math.sqrt(Math.max(0, this.shin * this.shin - sideways * sideways - (ankleUp - LOWER.kneeAboveFloor) ** 2));
+    ankleWant.addScaledVector(forward, -along);
     ankleWant.y = floor + ankleUp;
     ankleWant.lerp(ankleWas, 1 - k);
     // thigh to the knee, shin to the ankle
@@ -419,8 +432,8 @@ export class LowerBody {
       leg.ankle.getWorldPosition(ankleNow);
       toe.getWorldPosition(toeAt);
       dirNow.copy(toeAt).sub(ankleNow).normalize();
-      // toes down onto the floor, a little behind the ankle (the sole facing back)
-      dirWant.set(0, -1, 0).addScaledVector(forward, -LOWER.tuckedToesBack).normalize();
+      // its top on the floor: pointing back, tipped down to its toes (the sole facing up)
+      dirWant.copy(forward).negate().addScaledVector(up, -LOWER.footTopDown).normalize();
       turnQ.setFromUnitVectors(dirNow, dirWant);
       if (k < 1) turnQ.slerp(NO_TURN, 1 - k);
       turnInWorld(leg.ankle, turnQ);

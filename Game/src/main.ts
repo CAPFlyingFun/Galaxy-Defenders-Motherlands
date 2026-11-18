@@ -42,6 +42,7 @@ import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
+import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
 interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
@@ -132,6 +133,8 @@ const TABLE_WALK = 1.1;
  * and full term (deliveryBump, week 41). How far along she is between them slows her paces and tires her sooner
  * (src/input/pace.ts PACES_FULL_TERM, src/vitals/heroineVitals.ts byPaceFullTerm). LATER: read from her look.
  */
+/** Where the third-person camera style is kept on this device. */
+const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
 // First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
 // it tips down toward her hands (radians, about 45 degrees).
 const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
@@ -331,12 +334,32 @@ async function start(): Promise<void> {
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
 
+  // THE CAMERA STYLE in third person (src/camera/cameraRig.ts; Joshua, 2026-11-18): the CAM button goes round them,
+  // and the choice is kept on this device.
+  let cameraStyle: CameraStyle = 'follow';
+  try {
+    const kept = localStorage.getItem(CAMERA_STYLE_KEY) as CameraStyle | null;
+    if (kept && CAMERA_STYLES.includes(kept)) cameraStyle = kept;
+  } catch { /* (no storage: follow) */ }
+  rig.droneLimit = DOME_RADIUS - 3;
+  /**
+   * AIMED BY HAND: always in first person; in third person when auto-fire is off (Joshua, 2026-11-18: "so you could
+   * also shoot in 3rd person... over the shoulder view and a simple cross hair"). Then the camera is over her
+   * shoulder, she looks where it looks, and FIRE shoots at the crosshair.
+   */
+  const aimedByHand = (): boolean => rig.mode === 'first' || graphics.autoFire === 'off';
+  /** Everything that follows from the view and the aiming: the camera's style, the buttons, what a click does. */
+  const applyView = (): void => {
+    rig.setStyle(rig.mode === 'third' && aimedByHand() ? 'shoulder' : cameraStyle);
+    heroine.setFirstPerson(rig.mode === 'first');
+    controls.clickMode = aimedByHand() ? 'click-fires' : 'look-only';
+    // (the HUD keeps hold of the MOVE stick through this, so she goes on at the pace she had: src/ui/hud.ts)
+    hud.setView(rig.mode, aimedByHand());
+    hud.setCameraStyle(cameraStyle);
+  };
   const toggleView = () => {
     rig.setMode(rig.mode === 'third' ? 'first' : 'third');
-    heroine.setFirstPerson(rig.mode === 'first');
-    controls.clickMode = rig.mode === 'first' ? 'click-fires' : 'look-only';
-    // (the HUD keeps hold of the MOVE stick through this, so she goes on at the pace she had: src/ui/hud.ts)
-    hud.setView(rig.mode);
+    applyView();
   };
 
   /**
@@ -408,9 +431,15 @@ async function start(): Promise<void> {
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
+      else if (key === 'autoFire') applyView();
       else restart();
     },
     onToggleView: toggleView,
+    onCameraStyle: () => {
+      cameraStyle = CAMERA_STYLES[(CAMERA_STYLES.indexOf(cameraStyle) + 1) % CAMERA_STYLES.length];
+      try { localStorage.setItem(CAMERA_STYLE_KEY, cameraStyle); } catch { /* (kept for this visit only) */ }
+      applyView();
+    },
     onDomeDebug: domeDebug,
     onUse: (which) => { if (!grabUse.busy) tableUse.start(which); },
     onGrab: () => {
@@ -425,6 +454,8 @@ async function start(): Promise<void> {
   });
 
   hud.topSlot().appendChild(vitalsPanel.element);
+  // (the camera style and the buttons for the view she starts in)
+  applyView();
 
   controls.onKey = (key) => {
     if (key === 'v') toggleView();
@@ -583,7 +614,14 @@ async function start(): Promise<void> {
         const toward = Math.atan2(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
         motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
+    } else if (rig.mode === 'third' && rig.style === 'drone') {
+      // THE DRONE CAMERA: the stick flies the camera (src/camera/cameraRig.ts) and she stands where she is
+      rig.droneStick.x = controls.moveX;
+      rig.droneStick.y = controls.moveY;
+      pace.step(dt, 0, limits);
+      motion.update(dt, 0, 0, turn.base, 0);
     } else {
+      rig.droneStick.x = 0; rig.droneStick.y = 0;
       pace.step(dt, push, limits);
       // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right
       // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
@@ -601,6 +639,8 @@ async function start(): Promise<void> {
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
     if (rig.mode === 'first') turnInput.look = rig.yaw;
+    // (third person aimed by hand: she looks where the camera over her shoulder looks)
+    else if (aimedByHand()) turnInput.look = rig.viewYaw;
     else {
       aimTarget = targets.pick(motion.x, motion.z, turn.shoulders);
       const at = targets.position(aimTarget);
@@ -640,7 +680,8 @@ async function start(): Promise<void> {
       // (busy at the table or a bar: no aiming)
       targets.setAimed(-1);
       heroine.aimAt(null);
-    } else if (rig.mode === 'first') {
+    } else if (aimedByHand()) {
+      // (aimed by hand, in first person or over her shoulder: at the crosshair, down the camera's line of sight)
       targets.setAimed(-1);
       heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
     } else if (turn.aimed) {
@@ -657,9 +698,9 @@ async function start(): Promise<void> {
     // with its 20 rounds (src/world/tableUse.ts). First person: FIRE held, or a tap for one burst. Third person, with
     // auto-fire on: whenever she is aimed at a target. Her guns take turns; each shot leaves a streak.
     const clicks = controls.takeClicks();
-    if (rig.mode === 'first' && clicks > 0) burst.pull();
-    const autoFiring = rig.mode === 'third' && graphics.autoFire === 'on' && turn.aimed;
-    const wantFire = !busyNow() && ((rig.mode === 'first' && controls.fireHeld) || autoFiring);
+    if (aimedByHand() && clicks > 0) burst.pull();
+    const autoFiring = !aimedByHand() && turn.aimed;
+    const wantFire = !busyNow() && ((aimedByHand() && controls.fireHeld) || autoFiring);
     let firedNow = false;
     burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
@@ -671,7 +712,7 @@ async function start(): Promise<void> {
         firedNow = true;
       });
     // (third person: with both guns empty she goes to the table and reloads on her own)
-    if (rig.mode === 'third' && graphics.autoFire === 'on' && !busyNow() && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
+    if (!aimedByHand() && !busyNow() && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
     hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
     tracers.update(info);
 

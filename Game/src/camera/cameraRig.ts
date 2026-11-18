@@ -16,6 +16,21 @@
 //               around; she can look straight down at her belly and almost
 //               straight up.
 //
+// THIRD PERSON HAS SIX STYLES (Joshua, 2026-11-18: "add all the cameras"),
+// chosen with the CAM button; she plays the same in all of them (auto-aim):
+//   follow     the one above
+//   shoulder   close behind her right shoulder at head height (the crosshair
+//              clear of her, as in over-the-shoulder shooters)
+//   orbit      the follow camera circling her slowly on its own (a showcase);
+//              dragging and pinching still work
+//   top        high above, looking down at her and the plaza at 60 degrees;
+//              dragging turns it, pinching raises and lowers it
+//   drone      a camera flown with the MOVE stick while she stands still;
+//              pinching sets its height; it keeps inside the dome and within
+//              DRONE.range of her
+//   cinematic  film angles of her (low in front, at her side, high and wide,
+//              close), each slowly drifting, cut to the next every few seconds
+//
 // Both use the same two angles:
 //   yaw    which compass direction the camera looks (0 = +Z, same as a heroine's yaw)
 //   pitch  how far up (+) or down (-) it looks
@@ -24,6 +39,36 @@ import * as THREE from 'three';
 import type { HeroineBody } from '../core/contracts';
 
 export type ViewMode = 'third' | 'first';
+/** How the third-person camera behaves (see the top of this file). */
+export type CameraStyle = 'follow' | 'shoulder' | 'orbit' | 'top' | 'drone' | 'cinematic';
+export const CAMERA_STYLES: readonly CameraStyle[] = ['follow', 'shoulder', 'orbit', 'top', 'drone', 'cinematic'];
+
+/** GAME TUNING for the camera styles (metres, seconds, radians). */
+export const STYLE = Object.freeze({
+  /** SHOULDER: how far behind (closest, furthest with the zoom), how far to her right, how high. */
+  shoulderNear: 1.1, shoulderFar: 3.2, shoulderSide: 0.45, shoulderUp: 1.55,
+  shoulderPitchMin: -0.7, shoulderPitchMax: 0.9,
+  /** ORBIT: how fast it circles her, radians a second (about one turn in 40 seconds). */
+  orbitSpeed: 0.16,
+  /** TOP: how far it looks down, and its distance from her (closest, furthest with the zoom). */
+  topPitch: -1.05, topNear: 6, topFar: 34,
+  /** DRONE: how fast it flies, its height (lowest, highest with the zoom), the most it may be from her. */
+  droneSpeed: 9, droneLow: 2.5, droneHigh: 30, droneRange: 60,
+  /** CINEMATIC: how long each shot lasts, and how far it drifts while it does. */
+  shotSeconds: 6, shotDrift: 0.9,
+});
+
+/**
+ * THE CINEMATIC SHOTS, in her own frame (x her left, y up, z her front): where the camera stands, what it looks at,
+ * and which way it drifts during the shot.
+ */
+const SHOTS: readonly { from: [number, number, number]; at: [number, number, number]; drift: [number, number, number] }[] = [
+  { from: [0.6, 0.45, 2.6], at: [0, 1.25, 0], drift: [-1, 0.1, 0] },    // low in front, looking up at her
+  { from: [-3.0, 1.4, 0.4], at: [0, 1.1, 0], drift: [0, 0, 1] },        // at her right side, tracking along
+  { from: [5, 8.5, -9], at: [0, 1.0, 2], drift: [-1, 0, 0] },           // high and wide over her shoulder
+  { from: [1.3, 1.05, 1.1], at: [0, 1.0, 0.1], drift: [0, 0.15, 0.3] }, // close, her belly and hands
+  { from: [-1.2, 0.6, -2.4], at: [0, 1.5, 3], drift: [0, 0.2, 1] },     // low behind, looking past her
+];
 
 /** Radians the view turns per pixel dragged. */
 const LOOK_SPEED = 0.0045;
@@ -68,6 +113,17 @@ function clamp(value: number, low: number, high: number): number {
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
   mode: ViewMode = 'third';
+  /** The third-person camera's style (CAM button). */
+  style: CameraStyle = 'follow';
+  /** DRONE: the stick this frame (right, forward: -1..1), and how far from the plaza centre it may go (the dome). */
+  readonly droneStick = { x: 0, y: 0 };
+  droneLimit = 70;
+  private readonly drone = new THREE.Vector3();
+  private dronePlaced = false;
+  /** CINEMATIC: which shot, and how long it has run. */
+  private shot = 0;
+  private shotTime = 0;
+  private readonly shotAt = new THREE.Vector3();
 
   /** Where the player WANTS to look; the third-person camera eases toward these. */
   yaw = 0;
@@ -122,6 +178,18 @@ export class CameraRig {
     if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 
+  /** Choose the third-person camera's style. */
+  setStyle(style: CameraStyle): void {
+    if (style === this.style) return;
+    this.style = style;
+    // (each starts where it makes sense: the drone where the camera is now, the cinematic at its first shot, top looking down)
+    this.dronePlaced = false;
+    this.shot = 0; this.shotTime = 0;
+    if (style === 'top') this.pitch = STYLE.topPitch;
+    else if (this.pitch < THIRD_PITCH_MIN) this.pitch = THIRD_PITCH_START;
+    if (style === 'shoulder') this.pitch = clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
+  }
+
   /** Switch between third and first person. The camera keeps looking the same compass direction. */
   setMode(mode: ViewMode): void {
     if (mode === this.mode) return;
@@ -138,9 +206,11 @@ export class CameraRig {
     this.yaw -= pixelsX * LOOK_SPEED;
     this.pitch -= pixelsY * LOOK_SPEED;
     this.pitch =
-      this.mode === 'third'
-        ? clamp(this.pitch, THIRD_PITCH_MIN, THIRD_PITCH_MAX)
-        : clamp(this.pitch, FIRST_PITCH_MIN, FIRST_PITCH_MAX);
+      this.mode === 'first' ? clamp(this.pitch, FIRST_PITCH_MIN, FIRST_PITCH_MAX)
+        : this.style === 'top' ? STYLE.topPitch // (top looks down at its own angle: a drag turns it only)
+        : this.style === 'shoulder' ? clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax)
+        : this.style === 'drone' ? clamp(this.pitch, -1.5, 0.6)
+        : clamp(this.pitch, THIRD_PITCH_MIN, THIRD_PITCH_MAX);
   }
 
   /** Zoom the third-person camera: + moves it away, - brings it closer (as close as ZOOM_MIN). */
@@ -159,6 +229,14 @@ export class CameraRig {
     // --- Third person ---------------------------------------------------------
     // Ease toward what the player asked for. (1 - e^(-rate*dt)) is smooth at any frame rate.
     const ease = 1 - Math.exp(-SMOOTHING * dt);
+    if (this.style === 'orbit') this.yaw += STYLE.orbitSpeed * dt; // (circling on its own; a drag adds to it)
+    if (this.style === 'shoulder' || this.style === 'top' || this.style === 'drone' || this.style === 'cinematic') {
+      this.easedYaw += (this.yaw - this.easedYaw) * ease;
+      this.easedPitch += (this.pitch - this.easedPitch) * ease;
+      this.easedZoom += (this.zoom - this.easedZoom) * ease;
+      this.placeStyle(dt, heroine, ease);
+      return;
+    }
     this.easedYaw += (this.yaw - this.easedYaw) * ease;
     this.easedPitch += (this.pitch - this.easedPitch) * ease;
     this.easedZoom += (this.zoom - this.easedZoom) * ease;
@@ -193,6 +271,63 @@ export class CameraRig {
     this.camera.position.copy(this.pivot).addScaledVector(this.look, -distance);
   }
 
+  /** The styles other than follow and orbit (shoulder, top, drone, cinematic). */
+  private placeStyle(dt: number, heroine: HeroineBody, ease: number): void {
+    const feet = heroine.root.position;
+    const zoom = clamp(this.easedZoom, 0, 1);
+    if (this.style === 'shoulder') {
+      // behind her, at her head's height, a little to her right as the camera sees it: she stands left of the crosshair
+      this.setLook(this.easedYaw, this.easedPitch);
+      const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom;
+      const rightX = -Math.cos(this.easedYaw), rightZ = Math.sin(this.easedYaw);
+      this.pivot.set(feet.x + rightX * STYLE.shoulderSide, STYLE.shoulderUp, feet.z + rightZ * STYLE.shoulderSide);
+      this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
+      this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
+      return;
+    }
+    if (this.style === 'top') {
+      // high up, looking down at her at its own angle; the zoom takes it further up and back
+      this.setLook(this.easedYaw, STYLE.topPitch);
+      const back = STYLE.topNear + (STYLE.topFar - STYLE.topNear) * zoom;
+      this.pivot.set(feet.x, 0.8, feet.z);
+      this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
+      return;
+    }
+    if (this.style === 'drone') {
+      // flown by the stick (forward is the way it looks), its height by the zoom; kept in the dome and near her
+      if (!this.dronePlaced) { this.drone.copy(this.camera.position); this.dronePlaced = true; }
+      const fx = Math.sin(this.easedYaw), fz = Math.cos(this.easedYaw);
+      const step = STYLE.droneSpeed * dt;
+      this.drone.x += (fx * this.droneStick.y - fz * this.droneStick.x) * step;
+      this.drone.z += (fz * this.droneStick.y + fx * this.droneStick.x) * step;
+      const height = STYLE.droneLow + (STYLE.droneHigh - STYLE.droneLow) * zoom;
+      this.drone.y += (height - this.drone.y) * ease;
+      // (near her: no further than its range)
+      let dx = this.drone.x - feet.x, dz = this.drone.z - feet.z, d = Math.hypot(dx, dz);
+      if (d > STYLE.droneRange) { this.drone.x = feet.x + dx / d * STYLE.droneRange; this.drone.z = feet.z + dz / d * STYLE.droneRange; }
+      // (inside the dome: no further from the plaza centre than its limit)
+      d = Math.hypot(this.drone.x, this.drone.z);
+      if (d > this.droneLimit) { this.drone.x *= this.droneLimit / d; this.drone.z *= this.droneLimit / d; }
+      this.camera.position.copy(this.drone);
+      this.setLook(this.easedYaw, this.easedPitch);
+      return;
+    }
+    // CINEMATIC: the shot's place in her own frame, drifting as it runs; cut to the next when its time is up
+    this.shotTime += dt;
+    if (this.shotTime > STYLE.shotSeconds) { this.shotTime = 0; this.shot = (this.shot + 1) % SHOTS.length; }
+    const shot = SHOTS[this.shot], yaw = heroine.root.rotation.y, along = this.shotTime / STYLE.shotSeconds;
+    const toWorld = (local: readonly number[], drift: number, out: THREE.Vector3): THREE.Vector3 => {
+      const x = local[0] + shot.drift[0] * drift, y = local[1] + shot.drift[1] * drift, z = local[2] + shot.drift[2] * drift;
+      // (her left is x, her front z: turned by her yaw)
+      return out.set(feet.x + x * Math.cos(yaw) + z * Math.sin(yaw), y, feet.z - x * Math.sin(yaw) + z * Math.cos(yaw));
+    };
+    toWorld(shot.from, (along - 0.5) * STYLE.shotDrift, this.camera.position);
+    this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
+    toWorld(shot.at, 0, this.shotAt);
+    this.camera.lookAt(this.shotAt);
+    this.look.copy(this.shotAt).sub(this.camera.position).normalize();
+  }
+
   /** A point `range` metres along the line the camera looks down: what first person aims at. */
   aimPoint(range: number, out: THREE.Vector3): THREE.Vector3 {
     return out.copy(this.camera.position).addScaledVector(this.look, range);
@@ -214,9 +349,12 @@ export class CameraRig {
     return out.copy(from).addScaledVector(this.look, reach);
   }
 
-  /** The compass direction the camera really looks right now (after easing). */
+  /** The compass direction the camera really looks right now (after easing): the stick moves her relative to it. */
   get viewYaw(): number {
-    return this.mode === 'first' ? this.yaw : this.easedYaw;
+    if (this.mode === 'first') return this.yaw;
+    // (the cinematic camera turns on its own: read the way it really looks)
+    if (this.style === 'cinematic') return Math.atan2(this.look.x, this.look.z);
+    return this.easedYaw;
   }
 
   /** Point the camera along (yaw, pitch) and remember that direction in `look`. */

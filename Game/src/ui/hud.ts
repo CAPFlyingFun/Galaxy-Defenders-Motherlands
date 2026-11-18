@@ -38,6 +38,8 @@ export interface HudOptions {
   onToggleView(): void;
   /** The weapon table's buttons (src/world/tableUse.ts): the main one ('both') or one hand's. */
   onUse?(which: 'both' | 'left' | 'right' | 'reload'): void;
+  /** The CAM button: the next third-person camera style (src/camera/cameraRig.ts). */
+  onCameraStyle?(): void;
   /** The grab button: take hold of the bar she is near, or let go (src/world/grabBars.ts). */
   onGrab?(): void;
   onDomeDebug(action: DomeDebugAction): void;
@@ -125,6 +127,8 @@ export class Hud {
   private readonly lookStick: HTMLElement;
   private readonly lookStickKnob: HTMLElement;
   private readonly viewButton: HTMLElement;
+  private readonly camButton: HTMLElement;
+  private camText = '';
   /** The weapon table's buttons: shown only when she is near it (`setUse`). */
   private readonly useBar: HTMLElement;
   private readonly useMain: HTMLElement;
@@ -204,6 +208,10 @@ export class Hud {
 
     // ---- Bottom right: view switch and fire ----------------------------------
     const actions = element('div', 'gd-actions', this.root);
+    // (the CAM button, third person only: follow, shoulder, orbit, top, drone, cinematic)
+    this.camButton = element('button', 'gd-button gd-cam', actions, 'CAM');
+    this.camButton.setAttribute('aria-label', 'Camera style');
+    tapButton(this.camButton, () => options.onCameraStyle?.());
     this.viewButton = element('button', 'gd-button gd-view', actions);
     this.viewButton.setAttribute('aria-label', 'Switch view');
     // (its two lines of text are made once; only the big word changes, so the button a finger is on is never rebuilt)
@@ -323,6 +331,12 @@ export class Hud {
     this.setView('third');
   }
 
+  /** The CAM button's word: the camera style now. */
+  setCameraStyle(name: string): void {
+    const text = `CAM · ${name.toUpperCase()}`;
+    if (text !== this.camText) { this.camButton.textContent = text; this.camText = text; }
+  }
+
   /** Each gun's rounds (null: no gun in that hand), and whether a gun just clicked empty. */
   setAmmo(left: number | null, right: number | null, empty: boolean): void {
     const text = `L ${left ?? '–'} · R ${right ?? '–'}`;
@@ -345,12 +359,18 @@ export class Hud {
   }
 
   /** Show the controls that belong to the current view. */
-  setView(mode: ViewMode): void {
+  /**
+   * @param manual  she is aimed and fired by hand: always in first person; in third person when auto-fire is off
+   *                (Joshua, 2026-11-18: then the camera is over her shoulder, with the crosshair)
+   */
+  setView(mode: ViewMode, manual = mode === 'first'): void {
     const first = mode === 'first';
-    // The MOVE stick is there in every view; the CAMERA stick, FIRE and the crosshair only in first person.
-    this.lookStick.hidden = !first;
-    this.fireButton.hidden = !first;
-    this.crosshair.hidden = !first;
+    // The MOVE stick is there in every view; the CAMERA stick, FIRE and the crosshair only when she is aimed by hand.
+    this.lookStick.hidden = !manual;
+    this.fireButton.hidden = !manual;
+    this.crosshair.hidden = !manual;
+    // (the camera styles are for third person aimed on her own; aimed by hand, the camera is over her shoulder)
+    this.camButton.hidden = first || manual;
     // The button names the view it switches TO.
     this.viewName.textContent = first ? '3rd' : '1st';
 

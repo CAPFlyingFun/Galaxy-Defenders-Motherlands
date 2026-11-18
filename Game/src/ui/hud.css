@@ -298,7 +298,8 @@
 .gd-use {
   position: absolute;
   right: calc(var(--safe-right) + var(--edge));
-  top: 34%;
+  /* (just under the rounds counter: half way down they met the view button whenever FIRE showed, 2026-11-18) */
+  top: calc(var(--safe-top) + var(--edge) + 86px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -339,7 +340,7 @@
 .gd-grab {
   position: absolute;
   right: calc(var(--safe-right) + var(--edge) + 112px);
-  top: 34%;
+  top: calc(var(--safe-top) + var(--edge) + 86px);
   min-width: 96px;
   height: 40px;
   padding: 0 10px;
@@ -348,3 +349,17 @@
 }
 .gd-grab[hidden] { display: none; }
 .gd-hud.is-editing .gd-grab[hidden] { display: block; }
+
+/* ---- THE CAM BUTTON (Joshua, 2026-11-18): third person's camera styles, beside the view button -------------- */
+.gd-cam {
+  /* (beside the view button, to its left, level with its middle: above it, it met the table's buttons) */
+  position: absolute;
+  right: 72px;
+  bottom: 15px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.gd-cam[hidden] { display: none; }

@@ -136,7 +136,18 @@ export interface StrideTable {
 export const STRIDE_SAMPLES = 240;
 
 /** One finger: its joints from the knuckle out, and the axis it curls about (in the skeleton's bind space). */
-interface Finger { readonly joints: readonly number[]; readonly axis: THREE.Vector3; readonly thumb: boolean }
+interface Finger { readonly joints: readonly number[]; readonly tip: number; readonly axis: THREE.Vector3; readonly thumb: boolean }
+
+/**
+ * ONE FINGER, AS THE GAME SEES IT (for closing it onto what the hand holds: fingerTouch.ts). Its bones from the
+ * knuckle out, its fingertip bone (nothing bends there), which hand (0 left, 1 right) and whether it is the thumb.
+ */
+export interface HandFinger {
+  readonly hand: number;
+  readonly thumb: boolean;
+  readonly bones: readonly THREE.Bone[];
+  readonly tip: THREE.Bone;
+}
 
 /**
  * Each hand's fingers, from the bind pose (ported from the builder's `findFingers`): under each wrist, the first
@@ -183,7 +194,7 @@ function findFingers(bind: readonly BindJoint[], measure: HumanMeasure): Finger[
       const dir = at(chain[chain.length - 1]).sub(at(chain[0])).normalize();
       const thumb = i === thumbIndex;
       const toward = thumb ? palm.clone().multiplyScalar(THUMB_TO_PALM).sub(across).normalize() : palm;
-      out.push({ joints, axis: new THREE.Vector3().crossVectors(dir, toward).normalize(), thumb });
+      out.push({ joints, tip: chain[chain.length - 1], axis: new THREE.Vector3().crossVectors(dir, toward).normalize(), thumb });
     }
   }
   return out;
@@ -239,6 +250,9 @@ export class BodyMotion {
   private readonly fingerTurns: MutableJointTurn[] = [];
   /** For each finger turn: which hand (0 left, 1 right), how far along its finger (0 the knuckle) and whether a thumb. */
   private readonly fingerOf: { hand: number; k: number; thumb: boolean }[] = [];
+  /** Each finger of both hands (fingerTouch.ts closes them one at a time), and each one's own joint turns. */
+  readonly fingers: HandFinger[] = [];
+  private readonly fingerOwnTurns: MutableJointTurn[][] = [];
   /**
    * HOW FAR EACH HAND'S FINGERS ARE CLOSED, percent (the builder's FINGERS slider), left and right: round a gun's
    * grip when she holds one, relaxed when her hand is empty, eased between as she takes hold or lets go (the hand
@@ -282,11 +296,34 @@ export class BodyMotion {
       return 1;
     };
     for (const finger of findFingers(this.rig.bind, this.measure)) {
+      const own: MutableJointTurn[] = [];
       finger.joints.forEach((joint, k) => {
-        this.fingerTurns.push({ joint, ax: finger.axis.x, ay: finger.axis.y, az: finger.axis.z, radians: fingerBend(gripCurl, k, finger.thumb) });
+        const turn = { joint, ax: finger.axis.x, ay: finger.axis.y, az: finger.axis.z, radians: fingerBend(gripCurl, k, finger.thumb) };
+        this.fingerTurns.push(turn);
+        own.push({ ...turn });
         this.fingerOf.push({ hand: handOf(joint), k, thumb: finger.thumb });
       });
+      this.fingers.push({ hand: handOf(finger.joints[0]), thumb: finger.thumb, bones: finger.joints.map((j) => this.bones[j]), tip: this.bones[finger.tip] });
+      this.fingerOwnTurns.push(own);
     }
+  }
+
+  /**
+   * CLOSE ONE FINGER to `percent` (0 straight, 100 a fist; the builder's FINGERS slider), its joints bending together
+   * as the builder bends them, over whatever pose she has now. Only that finger's bones are turned: the caller updates
+   * their world matrices if it needs to read them.
+   */
+  curlFinger(finger: number, percent: number): void {
+    const own = this.fingerOwnTurns[finger], thumb = this.fingers[finger].thumb;
+    for (let k = 0; k < own.length; k++) own[k].radians = fingerBend(percent, k, thumb);
+    this.rig.set(own as readonly JointTurn[]);
+  }
+
+  /** The same, each joint of the finger closed its own amount (percent, from the knuckle out). */
+  curlFingerJoints(finger: number, percents: ArrayLike<number>): void {
+    const own = this.fingerOwnTurns[finger], thumb = this.fingers[finger].thumb;
+    for (let k = 0; k < own.length; k++) own[k].radians = fingerBend(percents[k], k, thumb);
+    this.rig.set(own as readonly JointTurn[]);
   }
 
   /**

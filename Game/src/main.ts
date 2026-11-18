@@ -41,6 +41,7 @@ import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
 import { BurstFire } from './world/burstFire';
+import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
 interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
@@ -286,6 +287,18 @@ async function start(): Promise<void> {
   const tableUse = new TableUse(table, heroine);
   /** What the table's action asks for this frame (one object, rewritten). */
   const tableAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number } = { walkTo: null, look: null, yaw: 0 };
+  // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): an upright pole and a waist-high rail beside the table, the
+  // other side of the street (src/world/grabBars.ts; her fingers: src/heroine/fast/fingerTouch.ts).
+  const bars = new GrabBars();
+  bars.place('pole', -1.3, 10.1, 0);
+  bars.place('rail', -3.0, 10.3, 0);
+  scene.add(bars.pole, bars.rail);
+  const grabUse = new GrabUse(bars, heroine);
+  const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number } = { walkTo: null, look: null, yaw: 0 };
+  /** A bar to take hold of once her guns are on the table (a hand with a gun in it puts it down first). */
+  let grabAfterTable: BarName | null = null;
+  /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
+  const busyNow = (): boolean => tableUse.busy || grabUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
   const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null } = { view: 'third', look: null, move: null };
   /** The sky target her auto-aim picked this frame (third person). */
@@ -395,7 +408,16 @@ async function start(): Promise<void> {
     },
     onToggleView: toggleView,
     onDomeDebug: domeDebug,
-    onUse: (which) => tableUse.start(which),
+    onUse: (which) => { if (!grabUse.busy) tableUse.start(which); },
+    onGrab: () => {
+      if (grabUse.holding) { grabUse.letGo(); return; }
+      if (busyNow()) return;
+      const bar = grabUse.nearest(motion.x, motion.z).bar;
+      // (the hands that hold the bar must be empty: their guns go on the table first, then she goes to the bar)
+      const full = bars.hands(bar).filter((hand) => heroine.hands?.hasGun(hand));
+      if (full.length > 0) { tableUse.start(full.length === 2 ? 'both' : full[0]); grabAfterTable = bar; }
+      else grabUse.start(bar);
+    },
   });
 
   hud.topSlot().appendChild(vitalsPanel.element);
@@ -428,7 +450,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -543,12 +565,18 @@ async function start(): Promise<void> {
     pace.carrying = carrying;
     tableAsk.yaw = turn.base;
     tableUse.update(dt, motion.x, motion.z, tableAsk);
-    if (tableUse.busy) {
+    grabAsk.yaw = turn.base;
+    grabUse.update(dt, motion.x, motion.z, grabAsk);
+    // (her guns are down: on to the bar)
+    if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable); grabAfterTable = null; }
+    // (whichever is running walks her and turns her)
+    const ask = tableUse.busy ? tableAsk : grabAsk;
+    if (busyNow()) {
       pace.step(dt, 0, limits);
-      if (tableAsk.walkTo) {
+      if (ask.walkTo) {
         // (straight to her spot at a walk, the last step no further than the spot)
-        const away = Math.hypot(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
-        const toward = Math.atan2(tableAsk.walkTo.x - motion.x, tableAsk.walkTo.z - motion.z);
+        const away = Math.hypot(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
+        const toward = Math.atan2(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
         motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
     } else {
@@ -558,7 +586,8 @@ async function start(): Promise<void> {
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
     }
     // (its buttons show when she is near it and nothing is running)
-    hud.setUse(tableUse.canUse(motion.x, motion.z) ? tableUse.label() : null, tableUse.needsReload);
+    hud.setUse(tableUse.canUse(motion.x, motion.z) && !grabUse.busy ? tableUse.label() : null, tableUse.needsReload);
+    hud.setGrab(tableUse.busy || grabAfterTable ? null : grabUse.label(motion.x, motion.z));
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -574,7 +603,7 @@ async function start(): Promise<void> {
       turnInput.look = Math.atan2(at.x - motion.x, at.z - motion.z);
     }
     // (while the table's action runs, she looks at the table)
-    if (tableAsk.look !== null) turnInput.look = tableAsk.look;
+    if (ask.look !== null) turnInput.look = ask.look;
     turn.step(dt, turnInput);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     keyLight.position.set(motion.x - 4, 10, motion.z + 6);
@@ -595,8 +624,8 @@ async function start(): Promise<void> {
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.
     targets.update(info);
-    if (tableUse.busy) {
-      // (busy at the table: no aiming)
+    if (busyNow()) {
+      // (busy at the table or a bar: no aiming)
       targets.setAimed(-1);
       heroine.aimAt(null);
     } else if (rig.mode === 'first') {
@@ -618,9 +647,9 @@ async function start(): Promise<void> {
     const clicks = controls.takeClicks();
     if (rig.mode === 'first' && clicks > 0) burst.pull();
     const autoFiring = rig.mode === 'third' && graphics.autoFire === 'on' && turn.aimed;
-    const wantFire = !tableUse.busy && ((rig.mode === 'first' && controls.fireHeld) || autoFiring);
+    const wantFire = !busyNow() && ((rig.mode === 'first' && controls.fireHeld) || autoFiring);
     let firedNow = false;
-    burst.update(dt, wantFire && !tableUse.busy,
+    burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
       (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0,
       (hand) => {
@@ -630,7 +659,7 @@ async function start(): Promise<void> {
         firedNow = true;
       });
     // (third person: with both guns empty she goes to the table and reloads on her own)
-    if (rig.mode === 'third' && graphics.autoFire === 'on' && !tableUse.busy && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
+    if (rig.mode === 'third' && graphics.autoFire === 'on' && !busyNow() && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) tableUse.start('reload');
     hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
     tracers.update(info);
 

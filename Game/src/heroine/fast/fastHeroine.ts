@@ -50,6 +50,7 @@ import { FootGround, type LegTwist } from './footGround';
 import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
 import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
+import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
@@ -528,6 +529,8 @@ if (uHideHead > 0.5) {
   // HER HANDS REACH FOR THINGS, AND SHE GETS DOWN TO THEM (handReach.ts, lowerBody.ts; Joshua, 2026-11-17: the weapon
   // table). Made now, while she stands at rest.
   const reach = new HandReach(root, [arms.left, arms.right]);
+  // HER FINGERS CLOSED ONTO WHAT SHE HOLDS, each one until it touches (fingerTouch.ts: a pole, a rail)
+  const touch = new FingerTouch(motion, [arms.left.hand, arms.right.hand], root);
   const lower = new LowerBody(root, hipsBone, backBones,
     [{ hip: bones[joints.hipL], knee: bones[joints.kneeL], ankle: bones[joints.ankleL] },
      { hip: bones[joints.hipR], knee: bones[joints.kneeR], ankle: bones[joints.ankleR] }],
@@ -721,6 +724,14 @@ if (uHideHead > 0.5) {
       clipSeat: (out) => out.copy(guns.left.clipSeat),
       handBone: (hand) => arms[hand].hand,
       setHolding: (hand, holding) => { reach.holding[handIndex(hand)] = holding; },
+      gripPose: (hand, at, axis, palmTo, wrapToward, radius, out) => touch.gripPose(handIndex(hand), at, axis, palmTo, wrapToward, radius, out),
+      hold(hand, shape) {
+        const i = handIndex(hand);
+        touch.shapes[i] = shape;
+        // (on the way to a bar the fingers open; letting go, they go back to holding a gun or resting)
+        reach.holding[i] = shape ? false : gunIn[hand];
+      },
+      touching: (hand) => touch.amount[handIndex(hand)],
       lowering: () => ({ weight: lower.weight, mode: lower.mode, drop: lower.drop, bend: lower.hinge * 180 / Math.PI }),
     },
 
@@ -883,6 +894,8 @@ if (uHideHead > 0.5) {
       joints2.update();
       armClear.update(frame.dt);
       joints2.update();
+      // Her fingers closed onto a bar she holds, each until it touches (fingerTouch.ts): last, over her finished pose.
+      touch.apply(frame.dt, reach.grip, [reach.weight(0), reach.weight(1)]);
 
       // First person: where the base of her skull is now, in her skin's own space (her head is folded into it).
       if (firstPerson) {

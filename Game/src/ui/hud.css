@@ -334,3 +334,17 @@
 }
 .gd-ammo.is-empty { border-color: #ff5fa2; color: #ffb3d1; }
 .gd-use-reload[hidden] { display: none; }
+
+/* ---- THE GRAB BUTTON (a pole, a rail; Joshua, 2026-11-18): left of the table's buttons, half way up ----------- */
+.gd-grab {
+  position: absolute;
+  right: calc(var(--safe-right) + var(--edge) + 112px);
+  top: 34%;
+  min-width: 96px;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+.gd-grab[hidden] { display: none; }
+.gd-hud.is-editing .gd-grab[hidden] { display: block; }

@@ -38,6 +38,8 @@ export interface HudOptions {
   onToggleView(): void;
   /** The weapon table's buttons (src/world/tableUse.ts): the main one ('both') or one hand's. */
   onUse?(which: 'both' | 'left' | 'right' | 'reload'): void;
+  /** The grab button: take hold of the bar she is near, or let go (src/world/grabBars.ts). */
+  onGrab?(): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -127,6 +129,8 @@ export class Hud {
   private readonly useBar: HTMLElement;
   private readonly useMain: HTMLElement;
   private readonly useReload: HTMLElement;
+  private readonly grab: HTMLElement;
+  private grabLabel = '';
   private useLabel = '';
   /** Each gun's rounds, shown near the top right (Joshua, 2026-11-17: 20 a gun). */
   private readonly ammo: HTMLElement;
@@ -227,6 +231,11 @@ export class Hud {
       tapButton(button, () => options.onUse?.(hand));
     }
 
+    // The grab button (a pole, a rail): GRAB POLE, GRAB RAIL or LET GO; beside the table's buttons.
+    this.grab = element('button', 'gd-button gd-grab', this.root, 'GRAB');
+    this.grab.hidden = true;
+    tapButton(this.grab, () => options.onGrab?.());
+
     // ---- Top right, under the gear: each gun's rounds -----------------------------
     this.ammo = element('div', 'gd-ammo', this.root);
 
@@ -322,6 +331,12 @@ export class Hud {
   }
 
   /** The weapon table's buttons: shown with this word on the main one, or hidden (null); RELOAD when a gun is not full. */
+  /** The grab button: shown with this word, or hidden (null). */
+  setGrab(label: string | null): void {
+    this.grab.hidden = label === null;
+    if (label !== null && label !== this.grabLabel) { this.grab.textContent = label; this.grabLabel = label; }
+  }
+
   setUse(label: string | null, reload = false): void {
     this.useReload.hidden = !reload;
     this.useBar.hidden = label === null;

@@ -46,6 +46,7 @@ const CONTROLS = [
   { id: 'view', selector: '.gd-view', label: 'View switch' },
   // (the weapon table's buttons, Joshua 2026-11-17: shown in play only near the table; always shown while editing)
   { id: 'use', selector: '.gd-use', label: 'Table buttons' },
+  { id: 'grab', selector: '.gd-grab', label: 'Grab button' },
   // (The "Run left / right" arrow buttons of the old ring track were listed here; they are gone from the game.
   //  A place saved for them on a device is simply never read again.)
 ] as const;
@@ -219,7 +220,7 @@ function openEditor(): void {
     for (const control of CONTROLS) {
       const element = document.querySelector<HTMLElement>(control.selector);
       let handle = handles.get(control.id);
-      const showing = !!element && (!element.hidden || control.id === 'use') && element.offsetWidth > 0;
+      const showing = !!element && (!element.hidden || control.id === 'use' || control.id === 'grab') && element.offsetWidth > 0;
       if (!showing) {
         if (handle) handle.style.display = 'none';
         continue;

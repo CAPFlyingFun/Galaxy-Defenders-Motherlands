@@ -10,6 +10,7 @@
 // under the same dome) without the other noticing.
 // ============================================================================
 import type * as THREE from 'three';
+import type { GripShape } from '@charb/actor/handGrip';
 
 /** One step of the game loop. */
 /**
@@ -94,6 +95,15 @@ export interface HeroineHands {
   keepOff(face: { point: THREE.Vector3; outward: THREE.Vector3; top: number } | null): void;
   /** How far her belly stands out in front of her, metres from her middle (for where she stands at a table). */
   bellyAhead(): number;
+  /**
+   * GRABBING A BAR (fingerTouch.ts). The pose her hand bone must have to hold a bar: the palm's middle on its surface
+   * at `at` (a point on its axis), facing it along `palmTo`, the fingers going round toward `wrapToward`.
+   */
+  gripPose(hand: Hand, at: THREE.Vector3, axis: THREE.Vector3, palmTo: THREE.Vector3, wrapToward: THREE.Vector3, radius: number, out: THREE.Matrix4): THREE.Matrix4;
+  /** What this hand holds (its fingers close round it, each until it touches, once the hand is there), or null: let go. */
+  hold(hand: Hand, shape: GripShape | null): void;
+  /** How far a hand's fingers are closed onto what it holds, 0..1. */
+  touching(hand: Hand): number;
   /** How low she is (0 standing, 1 fully down) and how (reach, low, squat, kneelLeft, kneelRight, kneelBoth). */
   lowering(): { weight: number; mode: string; drop?: number; bend?: number };
 }

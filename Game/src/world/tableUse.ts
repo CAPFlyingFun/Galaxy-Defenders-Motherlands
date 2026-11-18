@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import type { Hand, HeroineBody, HeroineHands } from '../core/contracts';
 import { TABLE, type WeaponTable } from './weaponTable';
 import { CLIP } from '../heroine/guns';
+import { clipGrip } from './clipGrip';
 
 /** GAME TUNING. */
 export const TABLE_USE = Object.freeze({
@@ -93,11 +94,6 @@ const clipUp = new THREE.Vector3(), clipAcross = new THREE.Vector3(), palmWay = 
 const gunWas = new THREE.Matrix4(), setA = new THREE.Vector3(), setB = new THREE.Vector3(), setSa = new THREE.Vector3(), setSb = new THREE.Vector3();
 const setQa = new THREE.Quaternion(), setQb = new THREE.Quaternion();
 const basisX = new THREE.Vector3(), basisY = new THREE.Vector3(), basisZ = new THREE.Vector3(), q = new THREE.Quaternion();
-const handshake = new THREE.Vector3(), clipDeep = new THREE.Vector3(), handNow = new THREE.Quaternion(), shoulderTo = new THREE.Vector3(), roundA = new THREE.Vector3(), roundB = new THREE.Vector3();
-const gripAt = new THREE.Vector3(), gripTurn = new THREE.Quaternion(), gripSize = new THREE.Vector3();
-/** How many grips round a clip are tried (every 15 degrees), and how near the handshake they stay (cosine: 35 degrees). */
-const GRIP_TRIES = 24;
-const GRIP_FROM_HANDSHAKE = 0.82;
 
 export class TableUse {
   action: Action = 'idle';
@@ -113,7 +109,8 @@ export class TableUse {
   /** The guns lying on the table, by hand (to move them with their stands when the table's height changes). */
   private readonly lying = new Map<Hand, THREE.Object3D>();
   /** The clip in each gun now (a reload gives a gun a new one), and a clip a hand is holding. */
-  private readonly clipIn: Record<Hand, THREE.Object3D | null>;
+  /** (read and changed by her reload from her belt too: beltReload.ts) */
+  readonly clipIn: Record<Hand, THREE.Object3D | null>;
   private readonly clipHeld: Record<Hand, THREE.Object3D | null> = { left: null, right: null };
   /**
    * The clip each hand is closing its fingers onto (Joshua, 2026-11-18: "apply the same technique" as the pole): on its
@@ -161,8 +158,15 @@ export class TableUse {
   /** Whether this hand's gun lies on the table. */
   lies(hand: Hand): boolean { return this.lying.has(hand); }
 
-  /** Whether a reload would do anything (a gun is not full). */
-  get needsReload(): boolean { return this.rounds.left < TABLE_USE.rounds || this.rounds.right < TABLE_USE.rounds; }
+  /**
+   * Whether her belt's pouches are short of full clips (main.ts sets it): the table's reload then refills them too
+   * (Joshua, 2026-11-18: "the table swaps empties for full ones").
+   */
+  pouchesLow: () => boolean = () => false;
+  /** Whether the guns are full (a reload at the table would only refill her pouches). */
+  get gunsFull(): boolean { return this.rounds.left >= TABLE_USE.rounds && this.rounds.right >= TABLE_USE.rounds; }
+  /** Whether a reload would do anything (a gun is not full, or her pouches are not). */
+  get needsReload(): boolean { return !this.gunsFull || this.pouchesLow(); }
 
   /** Change the table's height (Settings); the guns lying on it go up or down with their stands. */
   setHeight(height: number): void {
@@ -452,7 +456,7 @@ export class TableUse {
   // ---- Poses -------------------------------------------------------------------------------------------------------
 
   /** Gun `a` held up in front of her chest: barrel forward and tipped up, rolled so its grip faces her other hand. */
-  private chestGun(a: Hand, out: THREE.Matrix4): THREE.Matrix4 {
+  chestGun(a: Hand, out: THREE.Matrix4): THREE.Matrix4 {
     const root = this.heroine.root;
     root.updateWorldMatrix(true, false);
     const side = a === 'left' ? 1 : -1; // (her left is her root's +x)
@@ -473,7 +477,7 @@ export class TableUse {
   }
 
   /** Where the clip of a gun at `gunAt` is, pulled `pull` metres out of the grip along its own length. */
-  private clipPose(gunAt: THREE.Matrix4, pull: number, out: THREE.Matrix4): THREE.Matrix4 {
+  clipPose(gunAt: THREE.Matrix4, pull: number, out: THREE.Matrix4): THREE.Matrix4 {
     this.heroine.hands!.clipSeat(out);
     return out.premultiply(gunAt).multiply(scratch2.makeTranslation(0, -pull, 0));
   }
@@ -535,67 +539,12 @@ export class TableUse {
   }
 
   /**
-   * HER EMPTY HAND TAKING A CLIP that stands at `clipAt` (Joshua, 2026-11-18: no twisted wrists, no reaching across),
-   * placed as she takes the pole (fingerTouch.ts `gripPose`):
+   * HER EMPTY HAND TAKING A CLIP that stands at `clipAt` (clipGrip.ts: in her palm, as she takes the pole):
    *   below  out of a gun: by its base, just below the grip
    *   side   out of the rack: a little below its middle
-   * (Before, her hand copied a gun's grip under the clip: a right hand doing that under the left gun was twisted.)
    */
   private handToClip(b: Hand, clipAt: THREE.Matrix4, how: 'below' | 'side'): THREE.Matrix4 {
-    const h = this.heroine.hands!, root = this.heroine.root;
-    root.updateWorldMatrix(true, false);
-    clipAt.decompose(clipPlace, clipTurn, clipSize);
-    clipUp.set(0, 1, 0).applyQuaternion(clipTurn);     // along the clip, from its base up into the grip
-    clipAcross.set(1, 0, 0).applyQuaternion(clipTurn); // across its narrow width
-    wrapWay.set(0, 0, 1).transformDirection(root.matrixWorld); // (her front: the fingers go round the far side)
-    // A HANDSHAKE ON THE CLIP, as she takes the pole (Joshua, 2026-11-18: palm-up under the clip, a hand coming across her
-    // body was rolled right round at the forearm and looked turned backwards): thumb up, the palm facing the clip from
-    // her hand's own side (from her shoulder toward the clip), the fingers round its front. Out of a gun she takes it
-    // by its base, just below the grip (clear of the hand holding the gun); out of the rack, a little below its middle.
-    // (exactly the pole's handshake: the palm faces SIDEWAYS, toward her middle, so the fingers can wrap round the
-    //  front and the thumb is up. Facing the line from her shoulder to the clip, mostly forward, it came out thumb-down,
-    //  141 degrees from her relaxed hand: Joshua, 2026-11-18)
-    clipPlace.addScaledVector(clipUp, how === 'below' ? -TABLE_USE.clipHoldBase : -TABLE_USE.clipHoldLow);
-    // THE GRIP HER HAND TURNS LEAST TO TAKE (Joshua, 2026-11-18: always palm-sideways, a hand coming at the clip from
-    // another side was rolled over and her fingers looked "bent backwards"). An upright clip can be held from any side
-    // round it with her thumb up (along the clip, into the grip); of those that put her palm on HER side of the clip
-    // (facing away from her shoulder, so she never reaches round it), the one nearest how her hand is turned now.
-    const hand = h.handBone(b);
-    hand.updateWorldMatrix(true, false);
-    hand.getWorldQuaternion(handNow);
-    shoulderTo.set(b === 'left' ? TABLE_USE.shoulderOut : -TABLE_USE.shoulderOut, 1.35, 0).applyMatrix4(root.matrixWorld); // (her left is her root's +x)
-    shoulderTo.subVectors(clipPlace, shoulderTo);
-    shoulderTo.addScaledVector(clipUp, -shoulderTo.dot(clipUp)).normalize();
-    // (two directions square to the clip, to go round it with)
-    roundA.set(1, 0, 0).transformDirection(root.matrixWorld);
-    roundA.addScaledVector(clipUp, -roundA.dot(clipUp));
-    if (roundA.lengthSq() < 1e-6) roundA.set(0, 0, 1).addScaledVector(clipUp, -clipUp.z);
-    roundA.normalize();
-    roundB.crossVectors(clipUp, roundA);
-    // (the handshake: her palm toward her middle, the pole's grip; the grips tried stay within GRIP_FROM_HANDSHAKE of it)
-    handshake.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
-    handshake.addScaledVector(clipUp, -handshake.dot(clipUp)).normalize();
-    let best: THREE.Matrix4 | null = null, bestTurn = Infinity;
-    const tryPose = new THREE.Matrix4();
-    for (let k = 0; k < GRIP_TRIES; k++) {
-      const angle = (k / GRIP_TRIES) * Math.PI * 2;
-      palmWay.copy(roundA).multiplyScalar(Math.cos(angle)).addScaledVector(roundB, Math.sin(angle));
-      if (palmWay.dot(shoulderTo) < 0.1) continue; // (her palm would face back at her: her hand round the far side)
-      if (palmWay.dot(handshake) < GRIP_FROM_HANDSHAKE) continue; // (kept near the handshake: palm toward her middle)
-      wrapWay.crossVectors(clipUp, palmWay); // (this way round, her thumb points up the clip)
-      // (how far the clip's side is from its middle the way her palm faces: it is a box, 2.4 cm one way, 3.6 the other;
-      //  taken as a 2.4 cm bar her palm sank into its wide side and her fingers bent backwards to get out of it)
-      const reach = Math.abs(palmWay.dot(clipAcross)) * CLIP.width / 2 + Math.abs(palmWay.dot(clipDeep.set(0, 0, 1).applyQuaternion(clipTurn))) * CLIP.depth / 2;
-      h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay, reach, tryPose);
-      tryPose.decompose(gripAt, gripTurn, gripSize);
-      const turn = gripTurn.angleTo(handNow);
-      if (turn < bestTurn) { bestTurn = turn; best = (best ?? new THREE.Matrix4()).copy(tryPose); }
-    }
-    if (best) return best;
-    // (none on her side: the handshake as before, palm toward her middle)
-    palmWay.set(b === 'left' ? -1 : 1, 0, 0).transformDirection(root.matrixWorld);
-    palmWay.addScaledVector(clipUp, -palmWay.dot(clipUp)).normalize();
-    return h.gripPose(b, clipPlace, clipUp, palmWay, wrapWay.set(0, 0, 1).transformDirection(root.matrixWorld), CLIP.width / 2, new THREE.Matrix4());
+    return clipGrip(this.heroine.hands!, this.heroine.root, b, clipAt, 1, how === 'below' ? -TABLE_USE.clipHoldBase : -TABLE_USE.clipHoldLow, new THREE.Matrix4());
   }
 
   /** HER HAND CARRYING THE CLIP IT HOLDS so that the clip ends at `clipAt`: held just as she took it (nothing slides). */

@@ -139,6 +139,24 @@ export interface BeltGear {
   /** Whether a pouch holds a clip; and a clip's place in the world in pouch `i` now. */
   pouchFull(i: number): boolean;
   pouchClip(i: number, out: THREE.Matrix4): THREE.Matrix4;
+  /**
+   * EACH POUCH: 'full' (a full clip, its magenta base glowing on top), 'empty' (an empty clip tucked back in after a
+   * reload on the go, its base dark) or 'none' (its clip taken out). Joshua, 2026-11-18: the empty goes back into the
+   * pouch the fresh one came from; the table swaps empties for full ones.
+   */
+  pouchState(i: number): 'full' | 'empty' | 'none';
+  /** The bone the pouches ride, and where a clip stands in pouch `i` in that bone's own space. */
+  pouchBone(): THREE.Bone;
+  pouchSeat(i: number, out: THREE.Matrix4): THREE.Matrix4;
+  /** Take the full clip out of pouch `i`: a clip of its own (on the pouches' bone, where it stood), the pouch left 'none'. */
+  takeFull(i: number): THREE.Mesh | null;
+  /**
+   * An empty clip goes into pouch `i` (it must be 'none'): given to the pouches' bone where it is now (the caller
+   * settles it into `pouchSeat`), its base made dark. The pouch is 'empty'.
+   */
+  stowEmpty(i: number, clip: THREE.Object3D): void;
+  /** The pouches on one side of her (0-2 her left, 3-5 her right), front first. */
+  side(hand: Hand): number[];
   /** Her belly changed shape: the belt and straps are laid again on her skin as it is now. */
   reshape(points: Float32Array, belly: number): void;
   /** For the tests: the belt's line (top edge height at the front, side and back), and how many skin points it was found on. */
@@ -803,6 +821,9 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   clipMesh.frustumCulled = false;
   carrier.add(clipMesh);
   const full: boolean[] = new Array(pouchCount).fill(false);
+  /** The empty clips tucked back in (a pouch's own clip object), by pouch; and the dark base they are given. */
+  const stowed: (THREE.Object3D | null)[] = new Array(pouchCount).fill(null);
+  const emptyBase = new THREE.MeshStandardMaterial({ color: 0x3a3d45, roughness: 0.6, metalness: 0.3 });
   const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
   const showClips = (): void => {
     for (let i = 0; i < pouchCount; i++) clipMesh.setMatrixAt(i, full[i] ? clipSeat[i] : hidden);
@@ -812,6 +833,8 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   const fillOrder: number[] = [];
   for (let i = 0; i < BELT.pouchAngles.length; i++) fillOrder.push(i, BELT.pouchAngles.length + i);
   const setClips = (n: number): void => {
+    // (the empties go: the table swaps them for full clips)
+    for (let i = 0; i < pouchCount; i++) { const c = stowed[i]; if (c) { c.removeFromParent(); (c as THREE.Mesh).geometry?.dispose(); stowed[i] = null; } }
     full.fill(false);
     for (let i = 0; i < Math.min(pouchCount, Math.max(0, Math.round(n))); i++) full[fillOrder[i]] = true;
     showClips();
@@ -828,6 +851,35 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     get clips() { return full.filter(Boolean).length; },
     setClips,
     pouchFull: (i) => full[i] ?? false,
+    pouchState: (i) => (full[i] ? 'full' : stowed[i] ? 'empty' : 'none'),
+    pouchBone: () => carrier,
+    pouchSeat: (i, out) => out.copy(clipSeat[i]),
+    takeFull(i) {
+      if (!full[i]) return null;
+      full[i] = false;
+      showClips();
+      // (a clip of its own, standing exactly where the pouch's clip stood: the guns' clip shape and colours)
+      const clip = new THREE.Mesh(clipShape.geometry.clone(), clipMaterials);
+      clip.name = 'clip';
+      clip.matrixAutoUpdate = false;
+      clip.frustumCulled = false;
+      clip.matrix.copy(clipSeat[i]);
+      carrier.add(clip);
+      clip.updateMatrixWorld(true);
+      return clip;
+    },
+    stowEmpty(i, clip) {
+      clip.updateWorldMatrix(true, false);
+      carrier.updateWorldMatrix(true, false);
+      clip.matrixAutoUpdate = false;
+      clip.matrix.copy(carrier.matrixWorld).invert().multiply(clip.matrixWorld);
+      carrier.add(clip);
+      // (its base dark: it is empty)
+      const mesh = clip as THREE.Mesh;
+      if (Array.isArray(mesh.material)) mesh.material = [mesh.material[0], emptyBase];
+      stowed[i] = clip;
+    },
+    side: (hand) => (hand === 'left' ? [0, 1, 2] : [3, 4, 5]).filter((i) => i < pouchCount),
     pouchClip(i, out) {
       const bone = clipBone[i];
       bone.updateWorldMatrix(true, false);
@@ -846,7 +898,8 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       belt.removeFromParent(); geometry.dispose(); beltMaterial.dispose();
       for (const mesh of holsterMeshes) { mesh.removeFromParent(); mesh.geometry.dispose(); }
       pouchMesh.removeFromParent(); pouchGeometry.dispose(); holsterMaterial.dispose();
-      clipMesh.removeFromParent(); clipMesh.dispose(); clipShape.geometry.dispose();
+      clipMesh.removeFromParent(); clipMesh.dispose(); clipShape.geometry.dispose(); emptyBase.dispose();
+      for (const c of stowed) if (c) { c.removeFromParent(); (c as THREE.Mesh).geometry?.dispose(); }
       for (const m of clipMaterials) m.dispose();
     },
   };

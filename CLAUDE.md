@@ -50,7 +50,10 @@ use the game's single copy of three.js.
   the thigh bone, gun barrel down, grip back) and six clip pouches, three behind each hip. The belt rises over a small
   belly (fully at 25%, on the trim from 60%). HOLSTER / DRAW (L, R) on the go (`Game/src/world/holsterUse.ts`): her head
   leads 0.7 s, she keeps walking; grabbing a bar holsters her guns instead of the table; the table draws holstered guns
-  it needs. Next: reloading one gun at a time from the belt (the other waits holstered).
+  it needs. RELOAD from the belt on the go (`Game/src/world/beltReload.ts`): one gun at a time, the other holstered; the
+  clip hand takes a fresh clip from a pouch on ITS side, holds the empty beside it, clicks the fresh one in, and tucks the
+  empty (upright, dark top) into the pouch the fresh one came from; the table's RELOAD swaps empties for full clips.
+  Clip grips (table and belt) come from `Game/src/world/clipGrip.ts`.
 - Heroine: the builder's full body with its real painted clothing and cloth simulation (one heroine on screen).
   Aiming is procedural. Six heroines: Blaze, Coral, Vela, Nova, Tessa, Aurora. Their outfits are built in `Game/`.
 - Outfits are ARMOR FIRST (Joshua, 2026-11-16): real 3D armor built in code (`Game/src/armor/`). Rigid pieces

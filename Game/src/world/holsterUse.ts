@@ -47,6 +47,8 @@ export class HolsterUse {
   private action: 'holster' | 'draw' = 'holster';
   private hands: Hand[] = [];
   private phase: Phase = 'idle';
+  /** How long her head leads this time (a reload that holsters a gun on the way has led already). */
+  private leadFor: number = HOLSTER_USE.lead;
   private timer = 0;
   /** Each hand's target pose (one matrix each, rewritten every frame as the holster moves). */
   private readonly pose: Record<Hand, THREE.Matrix4> = { left: new THREE.Matrix4(), right: new THREE.Matrix4() };
@@ -79,9 +81,10 @@ export class HolsterUse {
 
   /**
    * Begin: 'both' (the main button) puts away whichever guns she holds, or if she holds none draws whichever are
-   * holstered; one hand (L or R) puts that gun away if she holds it, or draws it if it is holstered.
+   * holstered; one hand (L or R) puts that gun away if she holds it, or draws it if it is holstered. `lead`: how long her
+   * head leads first, seconds.
    */
-  start(which: 'both' | Hand): void {
+  start(which: 'both' | Hand, lead: number = HOLSTER_USE.lead): void {
     const h = this.heroine.hands;
     if (!h || this.busy || !this.hasHolsters) return;
     let hands: Hand[];
@@ -98,6 +101,7 @@ export class HolsterUse {
     this.action = away ? 'holster' : 'draw';
     this.hands = hands;
     this.phase = 'lead';
+    this.leadFor = lead;
     this.timer = 0;
   }
 
@@ -137,7 +141,7 @@ export class HolsterUse {
 
     switch (this.phase) {
       case 'lead':
-        if (this.timer < HOLSTER_USE.lead) return;
+        if (this.timer < this.leadFor) return;
         // (her fingers open on the way to a holstered gun; a hand carrying its gun keeps it gripped)
         for (const hand of this.hands) h.reach(hand, this.pose[hand], undefined, true);
         this.phase = 'reach';

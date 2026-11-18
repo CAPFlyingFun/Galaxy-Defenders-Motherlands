@@ -41,6 +41,8 @@ import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
+import { BeltReload } from './world/beltReload';
+import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
@@ -328,6 +330,14 @@ async function start(): Promise<void> {
   const holsterUse = new HolsterUse(heroine);
   /** Where she glances while she holsters or draws (one object, rewritten). */
   const holsterAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
+  // RELOADING FROM HER BELT, ON THE GO (Joshua, 2026-11-18; src/world/beltReload.ts): one gun at a time, the other
+  // holstered; the empty goes back into the pouch the fresh clip came from. The table's RELOAD refills her pouches.
+  const gear = (heroine as unknown as { gear?: BeltGear }).gear ?? null;
+  const beltReload = new BeltReload(heroine, gear, tableUse, holsterUse);
+  const beltAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
+  tableUse.pouchesLow = () => !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
+  /** Whether the table's reload is running (when it ends, her pouches are full again). */
+  let tableReloading = false;
   /** A table action waiting for her holstered guns to be drawn first; a bar waiting for her guns to be put away. */
   let tableAfterDraw: 'both' | 'left' | 'right' | 'reload' | null = null;
   let grabAfterHolster: BarName | null = null;
@@ -337,7 +347,7 @@ async function start(): Promise<void> {
    */
   const useTable = (which: 'both' | 'left' | 'right' | 'reload'): void => {
     const h = heroine.hands;
-    if (!h || grabUse.busy || holsterUse.busy || tableUse.busy) return;
+    if (!h || grabUse.busy || holsterUse.busy || tableUse.busy || beltReload.busy) return;
     const holding = h.hasGun('left') || h.hasGun('right');
     const draw = which === 'reload' ? holsterUse.holstered.left || holsterUse.holstered.right
       : which === 'both' ? !holding && !tableUse.lies('left') && !tableUse.lies('right') && (holsterUse.holstered.left || holsterUse.holstered.right)
@@ -495,10 +505,13 @@ async function start(): Promise<void> {
     },
     onDomeDebug: domeDebug,
     onUse: (which) => useTable(which),
-    onHolster: (which) => { if (!busyNow() && !tableAfterDraw && !grabAfterHolster) holsterUse.start(which); },
+    onHolster: (which) => {
+      if (busyNow() || tableAfterDraw || grabAfterHolster || beltReload.busy || holsterUse.busy) return;
+      if (which === 'reload') beltReload.start(); else holsterUse.start(which);
+    },
     onGrab: () => {
       if (grabUse.holding) { grabUse.letGo(); return; }
-      if (busyNow() || holsterUse.busy) return;
+      if (busyNow() || holsterUse.busy || beltReload.busy) return;
       const bar = grabUse.nearest(motion.x, motion.z).bar;
       // (the hands that hold the bar must be empty: their guns go into her holsters, on the way, then she goes to the
       //  bar; Joshua, 2026-11-18: hands free "without having to go all the way to the table". With no holsters, onto
@@ -542,7 +555,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -660,6 +673,10 @@ async function start(): Promise<void> {
     grabAsk.yaw = turn.base;
     grabUse.update(dt, motion.x, motion.z, grabAsk);
     holsterUse.update(dt, holsterAsk);
+    beltReload.update(dt, beltAsk);
+    // (the table's reload has ended: her pouches are full again, the empties swapped for full clips)
+    if (tableReloading && tableUse.action !== 'reload') gear?.setClips(gear.pouches);
+    tableReloading = tableUse.action === 'reload';
     // (her guns are drawn: on to the table; her guns are away: on to the bar)
     if (tableAfterDraw && !holsterUse.busy) { const which = tableAfterDraw; tableAfterDraw = null; tableUse.start(which); }
     if (grabAfterHolster && !holsterUse.busy) { grabUse.start(grabAfterHolster); grabAfterHolster = null; }
@@ -689,11 +706,11 @@ async function start(): Promise<void> {
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
     }
     // (its buttons show when she is near it and nothing is running)
-    const holstering = holsterUse.busy || tableAfterDraw !== null || grabAfterHolster !== null;
+    const holstering = holsterUse.busy || beltReload.busy || tableAfterDraw !== null || grabAfterHolster !== null;
     hud.setUse(tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering ? tableUse.label() : null, tableUse.needsReload);
     hud.setGrab(tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z));
     // (her holsters' buttons: whenever a gun is in her hand or a holster and nothing else is running)
-    hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
+    hud.setHolster(busyNow() || holstering ? null : holsterUse.label(), !busyNow() && !holstering && beltReload.canStart);
 
     // 2b. WHICH WAY EACH PART OF HER FACES (src/input/bodyTurn.ts, Joshua's five bands of 2026-11-17: her head turns
     // up to 90 degrees from body North, her shoulders 80 % of that, her belly 60 %, her upper legs 40 %, her lower
@@ -721,10 +738,11 @@ async function start(): Promise<void> {
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
     // hands. Her head tips that way in third person, and in first person the view does.
     actionPitchWant = 0;
-    // (holstering or drawing on the go: a glance down at the holster, then back)
-    if (!busyNow() && holsterAsk.lookAt) {
+    // (holstering, drawing or reloading on the go: a glance down at the holster or the gun, then back)
+    const gearLook = beltAsk.lookAt ?? holsterAsk.lookAt;
+    if (!busyNow() && gearLook) {
       heroine.eye(eyeAt);
-      actionPitchWant = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(holsterAsk.lookAt.y - eyeAt.y, Math.max(0.05, Math.hypot(holsterAsk.lookAt.x - eyeAt.x, holsterAsk.lookAt.z - eyeAt.z))));
+      actionPitchWant = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(gearLook.y - eyeAt.y, Math.max(0.05, Math.hypot(gearLook.x - eyeAt.x, gearLook.z - eyeAt.z))));
     }
     if (busyNow()) {
       heroine.eye(eyeAt);
@@ -825,7 +843,7 @@ async function start(): Promise<void> {
     // the player's own aim is never moved).
     {
       const base = busyView.on ? rig.pitch : rig.pitch - fpGlance;
-      const glanceTo = rig.mode === 'first' && !busyNow() && holsterAsk.lookAt ? Math.min(0, actionPitchWant - base) : 0;
+      const glanceTo = rig.mode === 'first' && !busyNow() && (beltAsk.lookAt || holsterAsk.lookAt) ? Math.min(0, actionPitchWant - base) : 0;
       fpGlance += (glanceTo - fpGlance) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
       if (Math.abs(fpGlance) < 1e-4 && glanceTo === 0) fpGlance = 0;
       rig.pitch = base + fpGlance;
@@ -876,7 +894,7 @@ async function start(): Promise<void> {
     let firedNow = false;
     burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
-      (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0 && !holsterUse.handBusy(hand),
+      (hand) => (heroine.hands?.hasGun(hand) ?? true) && tableUse.rounds[hand] > 0 && !holsterUse.handBusy(hand) && !beltReload.handBusy(hand),
       (hand) => {
         heroine.fire(hand);
         tracers.fire(heroine.muzzle(hand, muzzle), aim);
@@ -884,7 +902,10 @@ async function start(): Promise<void> {
         firedNow = true;
       });
     // (third person: with both guns empty she goes to the table and reloads on her own)
-    if (!aimedByHand() && !busyNow() && !holsterUse.busy && !tableAfterDraw && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) useTable('reload');
+    // (from her belt if she has clips there, on the go; else at the table)
+    if (!aimedByHand() && !busyNow() && !holsterUse.busy && !beltReload.busy && !tableAfterDraw && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) {
+      if (beltReload.canStart) beltReload.start(); else useTable('reload');
+    }
     hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
     tracers.update(info);
 

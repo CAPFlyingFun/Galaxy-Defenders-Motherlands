@@ -376,4 +376,5 @@
   gap: 8px;
 }
 .gd-holster[hidden] { display: none; }
+.gd-holster .gd-use-main[hidden] { display: none; }
 .gd-hud.is-editing .gd-holster[hidden] { display: flex; }

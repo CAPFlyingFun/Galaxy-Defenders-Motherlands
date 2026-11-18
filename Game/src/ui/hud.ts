@@ -43,7 +43,7 @@ export interface HudOptions {
   /** The grab button: take hold of the bar she is near, or let go (src/world/grabBars.ts). */
   onGrab?(): void;
   /** Her thigh holsters: put away or draw both ('both'), or one hand's gun (src/world/holsterUse.ts). */
-  onHolster?(which: 'both' | 'left' | 'right'): void;
+  onHolster?(which: 'both' | 'left' | 'right' | 'reload'): void;
   onDomeDebug(action: DomeDebugAction): void;
 }
 
@@ -140,6 +140,7 @@ export class Hud {
   /** Her holsters' buttons (HOLSTER / DRAW, L, R): shown while she has a gun in a hand or a holster (`setHolster`). */
   private readonly holsterBar: HTMLElement;
   private readonly holsterMain: HTMLElement;
+  private readonly holsterReload: HTMLElement;
   private holsterLabel = '';
   private useLabel = '';
   /** Each gun's rounds, shown near the top right (Joshua, 2026-11-17: 20 a gun). */
@@ -256,6 +257,10 @@ export class Hud {
     this.holsterBar.hidden = true;
     this.holsterMain = element('button', 'gd-button gd-use-main', this.holsterBar, 'HOLSTER');
     tapButton(this.holsterMain, () => options.onHolster?.('both'));
+    // (RELOAD from the clips on her belt, on the go: shown when a gun is not full and a pouch holds a clip)
+    this.holsterReload = element('button', 'gd-button gd-use-main gd-use-reload', this.holsterBar, 'RELOAD');
+    this.holsterReload.hidden = true;
+    tapButton(this.holsterReload, () => options.onHolster?.('reload'));
     const holsterHands = element('div', 'gd-use-hands', this.holsterBar);
     for (const [word, hand] of [['L', 'left'], ['R', 'right']] as const) {
       const button = element('button', 'gd-button gd-use-hand', holsterHands, word);
@@ -370,9 +375,11 @@ export class Hud {
     if (label !== null && label !== this.grabLabel) { this.grab.textContent = label; this.grabLabel = label; }
   }
 
-  /** Her holsters' buttons: shown with this word on the main one (HOLSTER, DRAW), or hidden (null). */
-  setHolster(label: string | null): void {
-    this.holsterBar.hidden = label === null;
+  /** Her holsters' buttons: shown with this word on the main one (HOLSTER, DRAW), or hidden (null); RELOAD from her belt. */
+  setHolster(label: string | null, reload = false): void {
+    this.holsterReload.hidden = !reload;
+    this.holsterBar.hidden = label === null && !reload;
+    this.holsterMain.hidden = label === null;
     if (label !== null && label !== this.holsterLabel) { this.holsterMain.textContent = label; this.holsterLabel = label; }
   }
 

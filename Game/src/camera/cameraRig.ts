@@ -98,6 +98,10 @@ export class CameraRig {
   resize(width: number, height: number): void {
     this.camera.aspect = width / Math.max(1, height);
     this.fitFov();
+    // (always: the picture's new shape must reach the lens even when the field of view stays the same. Leaving this
+    //  to fitFov, which only redrew the lens when the FOV changed, drew the picture squashed until a slider was moved:
+    //  Joshua, 2026-11-17)
+    this.camera.updateProjectionMatrix();
   }
 
   /** Set each view's field of view (degrees), taking hold at once. */

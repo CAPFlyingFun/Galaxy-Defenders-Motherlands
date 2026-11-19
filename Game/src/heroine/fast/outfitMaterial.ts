@@ -52,7 +52,16 @@ const TRIM_FROM = 0.85;
  * How shiny a look's cloth is: `cloth` the roughness its knits take, `trim` the roughness its smooth (Flat) cloth takes.
  * Either left out: that cloth keeps its own.
  */
-export interface ClothShine { readonly cloth?: number; readonly trim?: number }
+export interface ClothShine {
+  readonly cloth?: number;
+  readonly trim?: number;
+  /**
+   * Darken the knit's GRAYS by this much (0.5 halves their light): the knit keeps its stitches, only darker (Joshua,
+   * 2026-11-19: "manually darkening the image about 50%"). Coloured knit -- a red stripe -- and the smooth trim are
+   * left as they are. Left out: no darkening.
+   */
+  readonly darken?: number;
+}
 
 export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine): SkinMaterials {
   const from = fileMaterial as THREE.MeshStandardMaterial;
@@ -76,17 +85,27 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (shine && (shine.cloth !== undefined || shine.trim !== undefined)) {
+    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined)) {
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
       const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
       if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
       if (shine.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
+      // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
+      // trim) and the colour is a gray (its channels nearly equal: a red stripe is not), the colour is darkened
+      const darken = shine.darken === undefined ? '' : [
+        'float knitRoughness = texture2D(roughnessMap, vRoughnessMapUv).g;',
+        `float knitHere = smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, knitRoughness) * (1.0 - smoothstep(${(TRIM_FROM - 0.04).toFixed(3)}, ${TRIM_FROM.toFixed(3)}, knitRoughness));`,
+        'float knitColourful = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)) - min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));',
+        'float knitGray = 1.0 - smoothstep(0.02, 0.06, knitColourful);',
+        `diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitHere * knitGray);`,
+      ].join('\n');
       material.onBeforeCompile = (shader) => {
-        shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>',
-          '#include <roughnessmap_fragment>\n' + lines.join('\n'));
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <map_fragment>', '#include <map_fragment>\n' + darken)
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}`;
     }
     return material;
   };

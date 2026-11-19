@@ -43,7 +43,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     beltLine: [-0.06, 0.035, 0.1],
     // (the knit: between the full gloss, 0.42, and half of it, 0.57 -- Joshua, 2026-11-19: "I prefer the more glossy
     //  look as it looks more like a sci-fi spacesuit... between the two... a good compromise"; the smooth trim: glossier)
-    clothShine: { cloth: 0.49, trim: 0.22 },
+    // (darken: the knit's Dark gray about half way to its Black -- Joshua: "darkening the image about 50%")
+    clothShine: { cloth: 0.49, trim: 0.22, darken: 0.48 },
     // (blackened metal and the suit's red, as the guns in Look 1's picture)
     gun: { metal: 0x141518, glow: 0xff0000 },
     pieces: {

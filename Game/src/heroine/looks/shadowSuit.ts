@@ -289,10 +289,13 @@ const paintTrim: MaskPainter = (surface: PaintSurface): Float32Array => {
 /** How the suit shows what is under it: Joshua's own setting from his export. */
 const DETAIL = EXPORT_SUIT_LAYER.detail;
 /**
- * THE CATSUIT'S FABRIC: Joshua's athletic knit, but its DARK GRAY and at a bigger stitch (Joshua, 2026-11-19, of
+ * THE CATSUIT'S FABRIC: Joshua's athletic knit, but its Dark gray, darkened, and at a bigger stitch (Joshua, 2026-11-19, of
  * Look 1's picture: "almost looks like it has little holes for the type of fabric and ours is more plain... scale it
  * bigger to match... slightly more dark grey than actually black"). At his 0.5 the knit was too fine to show on her.
  */
+// (Then, 2026-11-19: "that gray is slightly too light, and the black is too dark... match between the two". The knit
+//  stays its Dark gray, whose stitches show; the GAME darkens it about half way to its Black: looks/gear.ts
+//  `clothShine.darken`. Dyed that dark instead, by the builder's colour picker, the stitches were lost.)
 const SUIT_FABRIC = Object.freeze({ colour: 3, stitch: 2 });
 const SUIT_LAYER = {
   ...EXPORT_SUIT_LAYER,
@@ -311,7 +314,7 @@ export const SHADOW_SUIT_LOOK: HeroineLook = {
     shoes: 'none',
     detail: { nipple: null, navel: null },
     layers: [
-      // PAINT LAYER 1: the catsuit: Joshua's athletic knit in its dark gray at a bigger stitch, his detail settings, its
+      // PAINT LAYER 1: the catsuit: Joshua's athletic knit in its Dark gray (darkened by the game) at a bigger stitch, his detail settings, its
       // shape painted by `paintSuit`
       SUIT_LAYER,
       // PAINT LAYER 2: the glossy black trim (the stripes' borders, the gloves, the collar), painted by `paintTrim`

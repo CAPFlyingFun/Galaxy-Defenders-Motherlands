@@ -41,6 +41,7 @@ import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
+import { Door, DoorUse, DOOR, bodyRadius as doorBodyRadius } from './world/door';
 import { BeltReload } from './world/beltReload';
 import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
@@ -322,8 +323,19 @@ async function start(): Promise<void> {
   bars.place('pole', -1.3, 10.1, 0);
   bars.place('rail', -3.0, 10.3, 0);
   scene.add(bars.pole, bars.rail);
+  // THE DOOR (Joshua, 2026-11-18; src/world/door.ts): beside the rail, its pull side (the lever) toward the plaza
+  const door = new Door();
+  door.place(-5.2, 10.2, Math.PI);
+  scene.add(door.root);
   const grabUse = new GrabUse(bars, heroine);
   const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
+  // (the door: opening it, holding its handle while she walks it open or shut, letting go)
+  const doorUse = new DoorUse(door, heroine);
+  const doorAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null; pull: THREE.Vector3 } = { walkTo: null, look: null, yaw: 0, lookAt: null, pull: new THREE.Vector3() };
+  /** Where the door puts her back (one object, rewritten). */
+  const doorOut = { x: 0, z: 0 };
+  /** A door waiting for this hand's gun to go into its holster first. */
+  let doorAfterHolster: Hand | null = null;
   /** A bar to take hold of once her guns are on the table (a hand with a gun in it puts it down first). */
   let grabAfterTable: BarName | null = null;
   // HER THIGH HOLSTERS (Joshua, 2026-11-18: her guns away "on the go"; src/world/holsterUse.ts). She keeps walking.
@@ -357,9 +369,9 @@ async function start(): Promise<void> {
     tableAfterDraw = which;
   };
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
-  const busyNow = (): boolean => tableUse.busy || grabUse.busy;
+  const busyNow = (): boolean => tableUse.busy || grabUse.busy || doorUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
-  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null } = { view: 'third', look: null, move: null };
+  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null } = { view: 'third', look: null, move: null, hold: null };
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
@@ -509,6 +521,7 @@ async function start(): Promise<void> {
     onPrompt: (which) => {
       if (promptIs === 'table') useTable(which);
       else if (promptIs === 'grab') grabBar(which);
+      else if (promptIs === 'door') useDoor(which);
     },
     // RELOAD: at the table, the table's reload (it refills her pouches too); anywhere else, from her belt
     onReload: () => {
@@ -544,8 +557,17 @@ async function start(): Promise<void> {
   }
   /** The hands picked for the bar she is about to take hold of (kept while her guns go away first). */
   let grabWhich: 'both' | Hand = 'both';
-  /** What THE PROMPT is for this frame: the table, a bar, or nothing. */
-  let promptIs: 'table' | 'grab' | null = null;
+  /** What THE PROMPT is for this frame: the table, a bar, the door, or nothing. */
+  let promptIs: 'table' | 'grab' | 'door' | null = null;
+  /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
+  function useDoor(which: 'both' | Hand): void {
+    if (doorUse.holding) { doorUse.letGo(); return; }
+    if (busyNow() || holsterUse.busy || beltReload.busy || doorUse.active) return;
+    const hand = doorUse.handTo(motion.x, motion.z, which);
+    // (that hand must be empty: its gun goes into its holster first, then she goes to the door)
+    if (heroine.hands?.hasGun(hand) && holsterUse.hasHolsters) { holsterUse.start(hand); doorAfterHolster = hand; }
+    else if (!heroine.hands?.hasGun(hand)) doorUse.start(motion.x, motion.z, hand);
+  }
 
   hud.topSlot().appendChild(vitalsPanel.element);
   // (the camera style and the buttons for the view she starts in)
@@ -579,7 +601,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -681,7 +703,8 @@ async function start(): Promise<void> {
     // 2. Move the heroine.
     // She walks freely in every view (Joshua, 2026-11-17: "Remove the fixed moving ring, and let it be free
     // movement"). How far the stick is pushed sets her pace; where it points steers her.
-    const push = Math.min(1, Math.hypot(controls.moveX, controls.moveY));
+    // (holding the door's handle she goes at a walk at most: src/world/door.ts)
+    const push = Math.min(doorUse.holding ? DOOR.walkPush : 1, Math.hypot(controls.moveX, controls.moveY));
     // (turning right round, the stick pointing more than about 120 degrees from where it pointed: she loses a pace)
     if (push > PACE_TUNING.ringsFrom[0]) {
       const x = controls.moveX / push, y = controls.moveY / push;
@@ -696,6 +719,9 @@ async function start(): Promise<void> {
     tableUse.update(dt, motion.x, motion.z, tableAsk);
     grabAsk.yaw = turn.base;
     grabUse.update(dt, motion.x, motion.z, grabAsk);
+    doorAsk.yaw = turn.base;
+    doorUse.update(dt, motion.x, motion.z, doorAsk);
+    if (doorAfterHolster && !holsterUse.busy) { doorUse.start(motion.x, motion.z, doorAfterHolster); doorAfterHolster = null; }
     holsterUse.update(dt, holsterAsk);
     beltReload.update(dt, beltAsk);
     // (the table's reload has ended: her pouches are full again, the empties swapped for full clips)
@@ -707,7 +733,7 @@ async function start(): Promise<void> {
     // (her guns are down: on to the bar)
     if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable, grabWhich); grabAfterTable = null; }
     // (whichever is running walks her and turns her)
-    const ask = tableUse.busy ? tableAsk : grabAsk;
+    const ask = tableUse.busy ? tableAsk : grabUse.busy ? grabAsk : doorAsk;
     if (busyNow()) {
       pace.step(dt, 0, limits);
       if (ask.walkTo) {
@@ -733,14 +759,19 @@ async function start(): Promise<void> {
       // and her body turned again: the camera spun (Joshua, 2026-11-18: 670 degrees in 9 s backwards, 2454 sideways).
       motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, pace.speed);
     }
+    // THE DOOR: its handle draws her where the door cannot go (holding it), and it is solid (src/world/door.ts)
+    if (doorUse.holding) { motion.x += doorAsk.pull.x; motion.z += doorAsk.pull.z; }
+    if (door.keepOut(motion.x, motion.z, doorBodyRadius(heroine.hands?.bellyAhead() ?? 0, doorUse.holding), doorOut)) { motion.x = doorOut.x; motion.z = doorOut.z; }
     // THE BUTTONS THAT SHOW ONLY WHEN NEEDED (Joshua, 2026-11-18): the prompt near the table or a bar (holding a bar,
     // LET GO; else the table if she is near it; else the bar), HOLSTER / DRAW with a gun in a hand or a holster,
     // RELOAD at the table or with a clip on her belt for a gun that is not full. Hidden while something else runs.
-    const holstering = holsterUse.busy || beltReload.busy || tableAfterDraw !== null || grabAfterHolster !== null;
+    const holstering = holsterUse.busy || beltReload.busy || tableAfterDraw !== null || grabAfterHolster !== null || doorAfterHolster !== null || doorUse.active;
     const atTable = tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering;
     const grabWord = tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z);
-    promptIs = grabUse.holding && grabWord ? 'grab' : atTable ? 'table' : grabWord ? 'grab' : null;
-    hud.setPrompt(promptIs === 'table' ? tableUse.label() : promptIs === 'grab' ? grabWord : null);
+    // (the door: LET GO while she holds it; OPEN DOOR near a handle, when nothing else is running)
+    const doorWord = doorUse.holding ? 'LET GO' : busyNow() || holstering || grabUse.busy ? null : doorUse.label(motion.x, motion.z);
+    promptIs = doorUse.holding ? 'door' : grabUse.holding && grabWord ? 'grab' : atTable ? 'table' : grabWord ? 'grab' : doorWord ? 'door' : null;
+    hud.setPrompt(promptIs === 'table' ? tableUse.label() : promptIs === 'grab' ? grabWord : promptIs === 'door' ? doorWord : null);
     hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
     hud.setReload((atTable && tableUse.needsReload) || (!busyNow() && !holstering && beltReload.canStart));
 
@@ -765,6 +796,8 @@ async function start(): Promise<void> {
     }
     // (while the table's action runs, she looks at the table)
     if (ask.look !== null) turnInput.look = ask.look;
+    // (holding the door's handle she keeps facing the door, whichever way she steps: bodyTurn.ts `hold`)
+    turnInput.hold = doorUse.faceYaw();
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her

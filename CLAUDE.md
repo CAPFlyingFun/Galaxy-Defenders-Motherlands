@@ -54,6 +54,11 @@ use the game's single copy of three.js.
   clip hand takes a fresh clip from a pouch on ITS side, holds the empty beside it, clicks the fresh one in, and tucks the
   empty (upright, dark top) into the pouch the fresh one came from; the table's RELOAD swaps empties for full clips.
   Clip grips (table and belt) come from `Game/src/world/clipGrip.ts`.
+- Doors (Joshua, 2026-11-18; `Game/src/world/door.ts`): a lever on the pull side, a knob on the push side. OPEN DOOR
+  walks her to the handle; she takes it with the hand OPPOSITE the handle's side (handle on her right: left hand), a
+  little side-on so her belly is beside her reach, and twists it. Then walking back pulls it, forward pushes it (her
+  elbow's spring: a few cm of play round where her hand closed on it), and LET GO is manual. Opened from the push side
+  and let go it swings shut (waiting while she is in the doorway); from the pull side it stays. The door is solid.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

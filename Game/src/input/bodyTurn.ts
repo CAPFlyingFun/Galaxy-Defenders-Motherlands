@@ -97,6 +97,11 @@ export interface TurnInput {
   readonly look: number | null;
   /** The way she is moving over the ground, as a compass angle; null while she stands. */
   readonly move: number | null;
+  /**
+   * KEEP FACING THIS WAY (a compass angle), whichever way she moves: body North stays turned to it, so she steps
+   * backward or sideways facing it (holding a door's handle: Joshua, 2026-11-18). Null or left out: as usual.
+   */
+  readonly hold?: number | null;
 }
 
 /** An angle brought into -180°..180°. */
@@ -163,7 +168,14 @@ export class BodyTurn {
 
     // ---- where her head wants to point, and where body North wants to be ----
     let headWant: number;
-    if (input.move !== null) {
+    if (input.hold !== undefined && input.hold !== null) {
+      // HELD FACING ONE WAY: body North turns to it at her moving speed whether she moves or stands; her head looks
+      // where she looks (within its reach of it, below)
+      this.backing = false;
+      this.base = wrapAngle(this.base + wrapAngle(input.hold - this.base) * (1 - Math.exp(-TURN.moveTurn * dt)));
+      headWant = input.look ?? input.hold;
+      this.aimed = false;
+    } else if (input.move !== null) {
       // MOVING
       if (first && input.look !== null) {
         // First person: body North turns to the way she moves, or away from it when she backs up, no further than
@@ -194,7 +206,7 @@ export class BodyTurn {
     // ---- body North pulled round by her head: never more than her head's reach behind where it is to point ----
     // (not while she runs in third person: there body North goes the way she runs, and her head is held within reach)
     const behind = wrapAngle(headWant - this.base);
-    if (Math.abs(behind) > reach && (first || input.move === null)) {
+    if (Math.abs(behind) > reach && (first || input.move === null) && (input.hold === undefined || input.hold === null)) {
       const want = headWant - Math.sign(behind) * reach;
       // (first person the camera cannot wait, so body North keeps up exactly; third person it turns at its own speed)
       this.base = first ? wrapAngle(want) : turnToward(this.base, want, TURN.dragSpeed * dt);

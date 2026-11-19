@@ -72,6 +72,11 @@ export interface HeroineSettings {
   pregnant: ShadowChoice | null;
   belly: number | null;
   bellyUnlocked: boolean;
+  /**
+   * HER FACE, BUST AND BELLY KEPT SHARP at every detail level (Joshua, 2026-11-19; fast/detailLevels.ts sharpParts):
+   * the rest of her is lightened, these never are. Changing it reloads the game.
+   */
+  sharpParts: ShadowChoice;
 }
 
 
@@ -116,6 +121,7 @@ export const SETTING_KEYS = Object.freeze({
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
+  sharpParts: 'gdm.sharpParts',
 });
 
 function read(key: string): string | null {
@@ -183,5 +189,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',
+    sharpParts: (address.get('sharp_parts') ?? read(SETTING_KEYS.sharpParts)) === 'off' ? 'off' : 'on',
   };
 }

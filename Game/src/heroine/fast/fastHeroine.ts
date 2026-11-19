@@ -52,7 +52,7 @@ import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
-import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
+import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
 import { buildSuitGear, type SuitGear } from './suitGear';
@@ -151,6 +151,8 @@ export interface FastHeroineOptions {
   readonly detail?: DetailChoice;
   /** The frame rate AUTO detail holds. Default 30. */
   readonly targetFps?: TargetFps;
+  /** Her face, bust and belly kept as fine as at 100% at every level (detailLevels.ts `sharpParts`). Default true. */
+  readonly sharpParts?: boolean;
   /** Told what is loading, for a loading screen. */
   readonly onProgress?: (stage: string) => void;
 }
@@ -302,7 +304,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (the lightening is told her points, her texture layout and how important each point is: detailLevels.ts)
   const box = new THREE.Box3().setFromArray(look.shape.position);
   const maker = new DetailMaker();
-  maker.setMesh(0, look.shape.position, fullIndex, box, layout, skinImportance(look.shape.position, box, shapeMoves));
+  maker.setMesh(0, look.shape.position, fullIndex, box, layout, skinImportance(look.shape.position, box, shapeMoves),
+    options.sharpParts === false ? null : sharpParts(look.shape.position, box, shapeMoves));
   const levels = new DetailLevels(maker, 0, fullIndex);
 
   // Her skin starts at full detail: the file's own geometry (all 43 shapes) is swapped for her baked one.

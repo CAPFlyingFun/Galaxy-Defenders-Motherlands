@@ -25,6 +25,8 @@ export interface DetailSetup {
   readonly extraWeights: readonly number[];
   /** Her full triangle list. */
   readonly index: Uint32Array;
+  /** Points never taken away (1) whatever the level: her face, bust and belly (detailLevels.ts `sharpParts`). */
+  readonly lock: Uint8Array | null;
 }
 /** "Make this level": answered with a `DetailResult`. */
 export interface DetailRequest {
@@ -44,7 +46,7 @@ export interface DetailResult {
   readonly ms: number;
 }
 
-interface Kept { points: Float32Array; extras: Float32Array | null; extrasPerPoint: number; extraWeights: number[]; index: Uint32Array }
+interface Kept { points: Float32Array; extras: Float32Array | null; extrasPerPoint: number; extraWeights: number[]; index: Uint32Array; lock: Uint8Array | null }
 const kept = new Map<number, Kept>();
 
 /** The lightening itself. Shared with the main thread, which uses it directly where a worker cannot be started. */
@@ -53,8 +55,10 @@ export async function lighten(body: Kept, detail: number): Promise<Uint32Array> 
   // (a whole number of triangles: three numbers each)
   const target = Math.max(3, Math.floor((body.index.length * detail) / 100 / 3) * 3);
   // The last number is how far the surface may move, as a share of her size: 1 lets the triangle count decide.
+  // (LOCKED points are never taken away: her face, bust and belly stay as fine as at 100%, and the rest of her is
+  //  lightened as far as it can go toward the count; so a light level has more triangles than its percent says)
   const [lighter] = body.extras
-    ? MeshoptSimplifier.simplifyWithAttributes(body.index, body.points, 3, body.extras, body.extrasPerPoint, body.extraWeights, null, target, 1)
+    ? MeshoptSimplifier.simplifyWithAttributes(body.index, body.points, 3, body.extras, body.extrasPerPoint, body.extraWeights, body.lock, target, 1)
     : MeshoptSimplifier.simplify(body.index, body.points, 3, target, 1);
   return lighter;
 }
@@ -65,7 +69,7 @@ if (typeof scope.document === 'undefined') {
   scope.onmessage = (event: MessageEvent): void => {
     const message = event.data as DetailSetup | DetailRequest;
     if (message.kind === 'setup') {
-      kept.set(message.mesh, { points: message.points, extras: message.extras, extrasPerPoint: message.extrasPerPoint, extraWeights: [...message.extraWeights], index: message.index });
+      kept.set(message.mesh, { points: message.points, extras: message.extras, extrasPerPoint: message.extrasPerPoint, extraWeights: [...message.extraWeights], index: message.index, lock: message.lock });
       return;
     }
     const began = performance.now();

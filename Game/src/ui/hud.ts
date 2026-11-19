@@ -343,13 +343,14 @@ export class Hud {
     const detailRow = choiceRow('Detail', 'detail', [['Auto live', 'autoLive'], ['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
     const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: from 30% down to 1% by the frame rate, all her body shapes live. Auto: up to 100%, lighter only if the frame rate needs it.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
+    const sharpRow = choiceRow('Sharp face, bust & belly', 'sharpParts', [['On', 'on'], ['Off', 'off']], 'On: her face, bust and belly stay as fine as at 100% at every detail level; the rest of her is lightened. Changing it reloads the game.');
     choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
     element('h2', 'gd-settings-part', settings, 'COMBAT');
     choiceRow('Auto aim, fire & reload', 'autoFire', [['Auto', 'on'], ['Manual', 'off']], 'Auto: in either view she aims at targets, fires bursts and, when both guns are empty, walks to the table and reloads on her own (first person: the view follows her; drag to look away). Manual: you aim with the crosshair, hold FIRE, and press RELOAD at the table (3rd person: over her shoulder).');
 
     const skinRow = choiceRow('Skin', 'skin', [['Light', 'light'], ['Full', 'full']], 'Skin is for the Visual body (reloads the game).');
-    for (const [line, on] of [[detailRow, fast], [targetRow, fast], [skinRow, !fast]] as const) {
+    for (const [line, on] of [[detailRow, fast], [targetRow, fast], [sharpRow, fast], [skinRow, !fast]] as const) {
       line.classList.toggle('is-off', !on);
       const list = line.querySelector('select');
       if (list) list.disabled = !on;

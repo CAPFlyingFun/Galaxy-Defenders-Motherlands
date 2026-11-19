@@ -81,6 +81,29 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
   return weight;
 }
 
+/**
+ * HER FACE, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
+ * details even when at 1%... at 1% her face and belly looks bad... a compromise of speed and quality"): the points of
+ * her head above her neck, and those her belly, bust and navel shapes move by at least `share` of the most they move
+ * any point. The lightening never takes these away (detailWorker.ts), at any level; the rest of her is lightened.
+ * Settings -> HEROINE -> Sharp face, bust & belly turns it off.
+ */
+export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMoves, share = 0.12): Uint8Array {
+  const n = points.length / 3;
+  const H = box.max.y - box.min.y;
+  const lock = new Uint8Array(n);
+  for (let v = 0; v < n; v++) if ((points[v * 3 + 1] - box.min.y) / H > 0.875) lock[v] = 1; // her head, above her neck
+  for (const name of ['belly', 'breastGrow', 'navelIn', 'navelOut', 'navelFlat']) {
+    const moves = shape(name);
+    if (!moves) continue;
+    let most = 0;
+    for (let v = 0; v < n; v++) most = Math.max(most, Math.hypot(moves.getX(v), moves.getY(v), moves.getZ(v)));
+    if (!(most > 0)) continue;
+    for (let v = 0; v < n; v++) if (Math.hypot(moves.getX(v), moves.getY(v), moves.getZ(v)) >= share * most) lock[v] = 1;
+  }
+  return lock;
+}
+
 /** One mesh's lighter triangle lists: made when first asked for, kept, and never made twice. */
 export class DetailLevels {
   private readonly ready = new Map<number, Uint32Array>();
@@ -128,7 +151,7 @@ export class DetailMaker {
   private nextTicket = 1;
   private readonly asked = new Map<number, { done: (index: Uint32Array) => void; fail: (error: Error) => void }>();
   /** What was sent to the worker, kept so the main thread can do the work itself if the worker dies. */
-  private readonly bodies = new Map<number, { points: Float32Array; extras: Float32Array | null; extrasPerPoint: number; extraWeights: number[]; index: Uint32Array }>();
+  private readonly bodies = new Map<number, { points: Float32Array; extras: Float32Array | null; extrasPerPoint: number; extraWeights: number[]; index: Uint32Array; lock: Uint8Array | null }>();
   /** True while levels are being made in a worker (false: on the main thread). */
   get inWorker(): boolean { return this.worker !== null; }
 
@@ -161,7 +184,7 @@ export class DetailMaker {
    * Give the maker one mesh. `uv` (her texture layout) and `importance` are optional: her skin has both, her hair neither.
    * `box` is the mesh's bounding box in the points' own units.
    */
-  setMesh(mesh: number, points: Float32Array, index: Uint32Array, box: THREE.Box3, uv: Float32Array | null, importance: Float32Array | null): void {
+  setMesh(mesh: number, points: Float32Array, index: Uint32Array, box: THREE.Box3, uv: Float32Array | null, importance: Float32Array | null, lock: Uint8Array | null = null): void {
     const n = points.length / 3;
     let extras: Float32Array | null = null;
     let extraWeights: number[] = [];
@@ -181,10 +204,10 @@ export class DetailMaker {
       }
       extraWeights = [H * 1.5, H * 1.5, 1, 1, 1];
     }
-    const body = { points, extras, extrasPerPoint: 5, extraWeights, index };
+    const body = { points, extras, extrasPerPoint: 5, extraWeights, index, lock };
     this.bodies.set(mesh, body);
     // (the worker gets its own copies; the main thread keeps these for the fallback)
-    this.worker?.postMessage({ kind: 'setup', mesh, points, extras, extrasPerPoint: 5, extraWeights, index } satisfies DetailSetup);
+    this.worker?.postMessage({ kind: 'setup', mesh, points, extras, extrasPerPoint: 5, extraWeights, index, lock } satisfies DetailSetup);
   }
 
   /** Work out one level's triangle list. */

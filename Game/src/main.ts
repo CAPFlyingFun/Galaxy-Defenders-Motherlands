@@ -125,6 +125,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         painted: asked.get('suit') === 'tee' ? BLAZE_PAINTED : undefined,
         detail: settings.detail,
         targetFps: settings.targetFps,
+        sharpParts: settings.sharpParts !== 'off',
         onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
       });
     } catch (error) {

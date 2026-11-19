@@ -186,6 +186,11 @@ use the game's single copy of three.js.
   her triangles (`shapedBody.ts` `renormal`), or the outie stayed lit like the baked innie and read as a dark hole.
   What stays as baked: the painted pictures (her suit's colour and fine detail), which only stretch with her.
   Without the live body she keeps the few size shapes only.
+- HER FACE, BUST AND BELLY STAY SHARP at every detail level (Joshua, 2026-11-19: at 1% "her face and belly looks bad";
+  `sharpParts` in `Game/src/heroine/fast/detailLevels.ts`): their points (her head above her neck, and where her belly,
+  bust and navel shapes move her) are LOCKED, so the lightening never takes them away; the rest of her is lightened.
+  At 1% she is then about 58,000 triangles (8,000 without, 233,000 at 100%). Settings -> HEROINE -> Sharp face, bust &
+  belly (`gdm.sharpParts`, `?sharp_parts=off`) turns it off; changing it reloads.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

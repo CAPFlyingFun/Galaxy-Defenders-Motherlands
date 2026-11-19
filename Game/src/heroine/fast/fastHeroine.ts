@@ -46,7 +46,7 @@ import { loadBakedLook, type BakedLook } from './bakedLook';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { loadBodyFile } from './bodyFile';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
-import { FootGround, type LegTwist } from './footGround';
+import { FootGround, type LegTwist, type CrabMove } from './footGround';
 import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
 import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
@@ -179,7 +179,7 @@ export interface FastHeroine extends HeroineBody {
    */
   treadmill(speed: number): void;
   /** Her feet on the floor this frame, for a readout and the tests: how far she is lowered, which feet are planted, how far each was raised by bending its knee (metres). */
-  feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number };
+  feetInfo(): { drop: number; planted: readonly [boolean, boolean]; raised: readonly [number, number]; held: readonly [number, number]; stepFoot: number; phase: number; walk: number; run: number; speed: number; sway: number; widths: readonly [number, number] };
   /** Her belly's and her breasts' measured shapes, and how far each arm was moved to keep it clear of them this frame (armClear.ts), for the tests. */
   armInfo(): { eggs: readonly Egg[]; moved: readonly [number, number]; kneeMoved: readonly [number, number] };
   /** For the tests: each hand's wrist this frame (degrees from her own pose: as asked, its limit, as laid). */
@@ -439,6 +439,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (which side is her left along X is measured from her joints, not assumed)
   const leftSign = Math.sign(bone(joints.shoulderL).getWorldPosition(new THREE.Vector3()).x - bone(joints.shoulderR).getWorldPosition(new THREE.Vector3()).x) || 1;
   const arms = { left: arm(leftSign, joints.shoulderL, joints.elbowL, joints.wristL), right: arm(-leftSign, joints.shoulderR, joints.elbowR, joints.wristR) };
+  // HER SHOULDER WIDTH (shoulder joint to shoulder joint, as she stands now): her feet stand this far apart, and a crab
+  // step goes this far (footGround.ts)
+  ground.shoulderWidth = new THREE.Vector3().setFromMatrixPosition(arms.left.upper.matrixWorld)
+    .distanceTo(new THREE.Vector3().setFromMatrixPosition(arms.right.upper.matrixWorld));
   const aim = new ArmAim({ spine: bone(joints.spine), chest: bone(joints.chest), ...arms });
   // Her head: the builder's `head` joint is the very top of her head (a tip that carries nothing); the bone that
   // carries her skull, face and hair is its parent.
@@ -501,6 +505,8 @@ if (uHideHead > 0.5) {
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
   /** How her hips and legs are turned this frame (one object, rewritten each frame: footGround.ts reads it). */
   const legTwist: LegTwist = { hipsBone, hips: 0, upperLegs: 0, feet: 0 };
+  /** Going sideways this frame (the crab step), refilled each frame. */
+  const crabMove: CrabMove = { x: 0, z: 0, speed: 0, lead: 0 };
 
   // HER ARMS KEEP CLEAR OF HER BELLY AND HER BREASTS (armClear.ts; Joshua, 2026-11-17: "a simple collision to prevent
   // the arms from crossing into the belly", "don't forget about the breasts"). Her belly and each breast are measured
@@ -829,7 +835,7 @@ if (uHideHead > 0.5) {
     keepArmsClear(on: boolean): void { armClear.on = on; },
     jointInfo(): JointExcess { joints2.measure(); return { ...joints2.excess }; },
     keepJointsReal(on: boolean): void { joints2.on = on; },
-    feetInfo() { return { drop: ground.drop, planted: ground.planted, raised: ground.raised, held: ground.held, stepFoot: ground.stepFoot, phase: motion.phase, walk: motion.walkBlend, run: motion.runBlend, speed: motion.speed, sway: motion.sway }; },
+    feetInfo() { return { drop: ground.drop, planted: ground.planted, raised: ground.raised, held: ground.held, stepFoot: ground.stepFoot, phase: motion.phase, walk: motion.walkBlend, run: motion.runBlend, speed: motion.speed, sway: motion.sway, widths: [ground.shoulderWidth, ground.poseWidth] as const }; },
     breathInfo(): { chestMm: number; bellyMm: number; fullMm: number; trunk: number[] } {
       const m = breath.moveMillimetres, mid = breath.uniforms.breathSlices.value[12];
       return { chestMm: m.chest, bellyMm: m.belly, fullMm: breath.fullMillimetres, trunk: [mid.x, mid.y, mid.z, mid.w] };
@@ -865,15 +871,23 @@ if (uHideHead > 0.5) {
       // HOW FAR SHE REALLY MOVED since the last frame, along the way her legs face (backward is negative), and how
       // far her legs turned. (The first frame, and a move too far to be a step, count as being put there: no step.)
       const yawNow = root.rotation.y;
-      let along = 0, moving = false;
+      let along = 0, moving = false, crab: CrabMove | null = null;
       {
         const movedX = root.position.x - lastX, movedZ = root.position.z - lastZ;
         if (placed && movedX * movedX + movedZ * movedZ < JUMP_METRES * JUMP_METRES) {
           along = movedX * Math.sin(yawNow) + movedZ * Math.cos(yawNow);
-          // (a SIDE STEP, facing one way and going across it: she steps as far as she goes, forward steps unless she is
-          //  mostly backing up, so her feet keep up with her instead of sliding. Her own side-step walk can come later.)
+          // GOING SIDEWAYS (more across the way she faces than along it): the CRAB STEP (footGround.ts), not the
+          // builder's walk: her lead foot steps out a shoulder width, her trailing foot follows in under its shoulder
+          // (Joshua, 2026-11-18). Her left is across her forward: x = cos(yaw), z = -sin(yaw).
+          const across = movedX * Math.cos(yawNow) - movedZ * Math.sin(yawNow);
           const went = Math.hypot(movedX, movedZ);
-          if (Math.abs(along) < went * 0.7) along = along < -went * 0.3 ? -went : went;
+          if (frame.dt > 0 && went > 1e-6 && Math.abs(across) > Math.abs(along)) {
+            crab = crabMove;
+            crabMove.x = movedX / went; crabMove.z = movedZ / went;
+            crabMove.speed = went / frame.dt;
+            crabMove.lead = across > 0 ? 0 : 1;
+            along = 0;
+          }
           moving = movedX * movedX + movedZ * movedZ > 1e-10 || Math.abs(Math.sin(yawNow - lastYaw)) > 1e-5;
         } else ground.letGo();                                     // (put somewhere else: the spots her feet stood on are not here)
       }
@@ -901,7 +915,7 @@ if (uHideHead > 0.5) {
         legTwist.upperLegs = within(wrap(facing.upperLegs - yawNow), UPPER_LEGS_TURN_MOST);
         legTwist.feet = within(wrap(facing.feet - yawNow), FEET_TURN_MOST);
       }
-      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing ? legTwist : null);
+      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing ? legTwist : null, crab);
 
       // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than
       // her shoulders (her neck and skull). Each is a turn about the upright axis, laid over her pose.

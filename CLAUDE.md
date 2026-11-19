@@ -34,7 +34,9 @@ use the game's single copy of three.js.
   comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
   target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), EXCEPT in third
   person MANUAL (Joshua, 2026-11-18): there she keeps facing the way the camera looks; forward/back go straight,
-  left/right are side steps (her feet step as far as she goes; her own side-step walk is still to come).
+  left/right are side steps: the CRAB STEP (Joshua, 2026-11-18; `footGround.ts` 8): her lead foot steps out one
+  shoulder width, her body catches up, her trailing foot steps in under its shoulder; at most 1 m/s. She stands with
+  her feet her shoulder width apart (measured from her own bones).
 - Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real
   loading bar, percentage and time left (`Game/index.html`, `Game/src/ui/splash.ts`; the numbers come from
   `Game/src/core/loadMeter.ts`, which counts real bytes and steps and remembers the device's last load), and the

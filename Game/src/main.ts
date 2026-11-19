@@ -46,6 +46,9 @@ import { BeltReload } from './world/beltReload';
 import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
+
+/** How fast she may side-step (crab steps, third person MANUAL), metres a second: about a brisk walk. GAME TUNING. */
+const SIDE_STEP_MOST = 1.0;
 import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
@@ -757,7 +760,10 @@ async function start(): Promise<void> {
       // shoulder the camera is locked to her head, so taking "up" from the camera made a loop: walking back or
       // sideways her body turned to the way she went, her head was pulled round, the camera with it, "back" changed
       // and her body turned again: the camera spun (Joshua, 2026-11-18: 670 degrees in 9 s backwards, 2454 sideways).
-      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, pace.speed);
+      // (SIDE STEPS, third person MANUAL: more across than along, she crab-steps, which goes no faster than
+      //  SIDE_STEP_MOST: past that her feet could not keep up a step at a time)
+      const sideStepping = rig.mode === 'third' && aimedByHand() && Math.abs(controls.moveX) > Math.abs(controls.moveY);
+      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, sideStepping ? Math.min(pace.speed, SIDE_STEP_MOST) : pace.speed);
     }
     // THE DOOR: its handle draws her where the door cannot go (holding it), and it is solid (src/world/door.ts)
     if (doorUse.holding) { motion.x += doorAsk.pull.x; motion.z += doorAsk.pull.z; }

@@ -63,6 +63,15 @@ export interface HeroineSettings {
    * a test map until its place on the island is chosen. The address's ?map= still wins. Changing it reloads the game.
    */
   map: MapChoice;
+  /**
+   * HER PREGNANCY, to test (Joshua, 2026-11-19: "a toggle pregnancy on/off as well as a full range belly slider from
+   * 0-200%, but only 10-150% is the default range with unlock available... like the CCBS"; heroine/pregnancyPlan.ts).
+   * `pregnant`: on or off (null: as her look says). `belly`: her belly, percent (null: her look's own). `bellyUnlocked`:
+   * the slider shows its whole 0-200% range instead of 10-150%. All three take hold at once.
+   */
+  pregnant: ShadowChoice | null;
+  belly: number | null;
+  bellyUnlocked: boolean;
 }
 
 
@@ -104,6 +113,9 @@ export const SETTING_KEYS = Object.freeze({
   autoFire: 'gdm.autoFire2',
   outfit: 'gdm.outfit',
   map: 'gdm.map',
+  pregnant: 'gdm.pregnant',
+  belly: 'gdm.belly',
+  bellyUnlocked: 'gdm.bellyUnlocked',
 });
 
 function read(key: string): string | null {
@@ -168,5 +180,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
     // (the island unless the town was chosen)
     map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
+    pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
+    belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
+    bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',
   };
 }

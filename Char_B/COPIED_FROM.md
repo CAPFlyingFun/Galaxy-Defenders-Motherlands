@@ -1,8 +1,8 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `e1c226a`
-(2026-11-19, v0.9.45: "UPLOAD IMAGE on the piece selected, kept with a saved character; EXPORT one, several or all
-(a zip with pictures)"). Before that: `764f7c7` (2026-11-16, v0.9.40).
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `1344d7a`
+(2026-11-19, v0.9.49: "EXACT belly %, typed or picked from a list"; since v0.9.45 also the hybrid pregnancy curve and
+baby kicks). Before that: `e1c226a` (2026-11-19, v0.9.45), `764f7c7` (2026-11-16, v0.9.40).
 
 Since v0.9.40 the builder needs one more library, `fflate` (its export zip): the game installs it and points the
 builder's `import 'fflate'` at its own copy, as it does three.js (`Game/vite.config.ts`, `Game/tsconfig.json`).

@@ -26,6 +26,7 @@ import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import { FOV_RANGE, OUTFIT_CHOICES, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
@@ -55,6 +56,12 @@ export interface HudOptions {
   /** Her thigh holsters: put away or draw both ('both'), or the gun of the hand picked (src/world/holsterUse.ts). */
   onHolster?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
+  /**
+   * HER PREGNANCY, to test (heroine/pregnancyPlan.ts): what her belly percent is as a week ("week 24", or "not
+   * pregnant"), and the time lapse (week 12 to her delivery week, a day a second) started or stopped.
+   */
+  bellyText?(percent: number): string;
+  onTimeLapse?(): void;
 }
 
 /** How far the stick's knob can travel from its middle, in pixels. */
@@ -167,6 +174,13 @@ export class Hud {
   private readonly domeLabel: HTMLElement | null = null;
   /** The box the readout and the dome test buttons are in (null when they are not shown). */
   private readonly debugPanel: HTMLElement | null = null;
+  /** THE PREGNANCY rows in Settings: the belly slider and its value, and the time lapse's button; and the chip on screen. */
+  private bellySlider: HTMLInputElement | null = null;
+  private pregnantSelect: HTMLSelectElement | null = null;
+  private bellyValue: HTMLElement | null = null;
+  private lapseButton: HTMLElement | null = null;
+  private readonly lapseChip: HTMLElement;
+  private bellyTextOf: (percent: number) => string = (p) => `${p}%`;
 
   constructor(host: HTMLElement, private readonly controls: Controls, options: HudOptions) {
     this.root = element('div', 'gd-hud', host);
@@ -184,6 +198,11 @@ export class Hud {
       this.domeLabel = element('pre', '', debug);
       // (the dome's test buttons are in Settings now, TEST TOOLS: Joshua, 2026-11-18, the corner was cluttered)
     }
+
+    // ---- Top middle: the time lapse's week (only while it runs; a tap stops it) -------------------------------------
+    this.lapseChip = element('button', 'gd-lapse-chip', this.root);
+    this.lapseChip.hidden = true;
+    tapButton(this.lapseChip, () => options.onTimeLapse?.());
 
     // ---- Bottom left: moving ------------------------------------------------
     const move = element('div', 'gd-move', this.root);
@@ -352,6 +371,60 @@ export class Hud {
         options.onGraphicsChange(key, v as HeroineSettings[K]);
       });
     };
+    // ---- Settings: her pregnancy, to test (Joshua, 2026-11-19; heroine/pregnancyPlan.ts) --------------------------
+    // On or off; her belly on a slider (10-150%, or all of 0-200% once unlocked, as in the Character Builder), with the
+    // week it stands for beside it; and the time lapse from week 12 to her delivery week, a day a second.
+    element('h2', 'gd-settings-part', settings, 'PREGNANCY');
+    this.pregnantSelect = choiceRow('Pregnancy', 'pregnant', [['On', 'on'], ['Off', 'off']], 'On: her belly stands for a week of her pregnancy (her chart in the Character Builder: 10% is week 12, 150% week 42), her baby kicks, and she tires sooner as it grows.').querySelector('select');
+    if (options.bellyText) this.bellyTextOf = options.bellyText;
+    {
+      const line = element('label', 'gd-choice gd-slider gd-belly', settings);
+      element('span', '', line, 'Belly');
+      const lock = element('button', 'gd-button gd-lock', line, options.graphics.bellyUnlocked ? '🔓' : '🔒');
+      lock.title = 'Unlock the full 0-200% range';
+      const value = element('b', '', line);
+      const slider = element('input', '', line);
+      slider.type = 'range';
+      slider.step = '1';
+      const setRange = (open: boolean): void => {
+        slider.min = String(open ? BELLY_RANGE.unlockedLeast : BELLY_RANGE.least);
+        slider.max = String(open ? BELLY_RANGE.unlockedMost : BELLY_RANGE.most);
+        lock.textContent = open ? '🔓' : '🔒';
+      };
+      setRange(options.graphics.bellyUnlocked);
+      const start = options.graphics.belly ?? BELLY_RANGE.least;
+      slider.value = String(start);
+      value.textContent = this.bellyTextOf(start);
+      slider.addEventListener('input', () => {
+        const v = Number(slider.value);
+        value.textContent = this.bellyTextOf(v);
+        options.onGraphicsChange('belly', v);
+      });
+      tapButton(lock, () => {
+        const open = !options.graphics.bellyUnlocked;
+        setRange(open);
+        options.onGraphicsChange('bellyUnlocked', open);
+        // (locked again with her belly outside 10-150%: it is brought inside)
+        const v = Number(slider.value);
+        if (!open && (v < BELLY_RANGE.least || v > BELLY_RANGE.most)) {
+          const kept = Math.max(BELLY_RANGE.least, Math.min(BELLY_RANGE.most, v));
+          slider.value = String(kept);
+          value.textContent = this.bellyTextOf(kept);
+          options.onGraphicsChange('belly', kept);
+        }
+      });
+      // (the lock is a button inside the row's label: a tap on it must not also move the slider)
+      lock.addEventListener('click', (event) => event.preventDefault());
+      this.bellySlider = slider;
+      this.bellyValue = value;
+    }
+    if (options.onTimeLapse) {
+      const row = element('div', 'gd-debug-row', settings);
+      this.lapseButton = element('button', 'gd-button', row, 'Time lapse ▶ week 12 → 42');
+      tapButton(this.lapseButton, () => options.onTimeLapse?.());
+      element('small', 'gd-note', settings, 'Plays her pregnancy from week 12 to week 42 at a day a second (a week every 7 s; 3 min 44 s), and stops at 42. Close Settings to watch; tap the week at the top of the screen to stop.');
+    }
+
     element('h2', 'gd-settings-part', settings, 'CAMERA');
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
@@ -465,6 +538,20 @@ export class Hud {
   }
 
   /** Which dome section the test buttons act on, and its health (debug only). */
+  /**
+   * HER BELLY changed by the game (the time lapse): the slider and its value follow, and the chip at the top shows the
+   * week (`lapse` true) or goes away. The time lapse's button says Play or Stop.
+   */
+  showBelly(percent: number, lapse: string | null, pregnant?: boolean): void {
+    const p = Math.round(percent);
+    if (this.pregnantSelect && pregnant !== undefined) this.pregnantSelect.value = pregnant ? '0' : '1'; // (the list's On, Off)
+    if (this.bellySlider && this.bellySlider.value !== String(p)) this.bellySlider.value = String(p);
+    if (this.bellyValue) this.bellyValue.textContent = this.bellyTextOf(p);
+    this.lapseChip.hidden = lapse === null;
+    if (lapse !== null) this.lapseChip.textContent = `⏱ ${lapse} · ${p}%  ■`;
+    if (this.lapseButton) this.lapseButton.textContent = lapse === null ? 'Time lapse ▶ week 12 → 42' : 'Stop the time lapse ■';
+  }
+
   setDomeLabel(text: string): void {
     if (this.domeLabel && this.domeLabel.textContent !== text) this.domeLabel.textContent = text;
   }

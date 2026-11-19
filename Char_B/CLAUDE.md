@@ -141,6 +141,28 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   .zip (the .json and the picture); imported into a fresh browser and loaded in it. No error on the page.
 - After anything changes it: `tests/characterExport.test.ts`, `tests/characterSaves.test.ts`, `tests/sarahLabFabric.test.ts`.
 
+## Six paint layers, and their order
+
+- **SIX LAYERS** (Joshua, 2026-11-19: "we have a 3 layers, and can we actually raise that amount up to 6 layers? Will be
+  better in games to have more layer to make more complex outfits"; `bodyPaint.PAINT_LAYER_COUNT`). Her skin's vertex
+  shader has every attribute a phone gives it (16 of 16, MEASURED in the room), so the six weights ride the one vec3
+  `fabricPaint` the three had, TWO TO A NUMBER in 255ths (`packPaint`; layer c and c + 3), unpacked at each vertex
+  before they are spread over her triangles (`fabricMaterial.ts`). The weights themselves are kept six a vertex on her
+  geometry (`BodyPaint.weights`, `userData.paintWeights`). WHATEVER ELSE READS THE ATTRIBUTE READS IT THROUGH
+  `paintAt` (her opening's area, `vulvaMesh.ts` `samplePaintInto`; the story bake's `paintSplit`; a probe). Her
+  skin's program's texture units, its fragment stage: 10 of a phone's 16 with three layers, 13 with six (MEASURED: its
+  samplers listed at link); a layer not worn is skipped on its uniform. Saves held up to 8 layers already.
+- **THEIR ORDER IS HIS TO SET** (Joshua, 2026-11-19: "make each layer adjustable so you can like place above or below
+  another layer and maybe set layer 1 as way top and 6 as bottom, and then you can drag or press an arrow to move
+  them"). On screen LAYER 1 is the top -- drawn over all the others -- and 6 the bottom (layer index 5 is L1); the
+  pieces are listed top first (`TOP · L3 …`), and a paint piece selected shows `LAYER n of 6 · 1 is on top` with ▲ UP and
+  ▼ DOWN (`fabricPanel` `moveLayer`; `BodyPaint.swapLayers` swaps the two layers' weights and UNDO's steps for them;
+  its template, fabric and detail go with it, and a drawn bottom's band is worked out again). A piece moves into an
+  empty layer as well. Arrows, not dragging: a drag in that row scrolls it on a phone.
+- MEASURED in the room 2026-11-19 (light skin): the pencil skirt's outfit with knee socks, a sports bra and a tank added
+  as layers 4 to 6, each drawn; the tank moved under the crop tee and back by the arrows, drawn so each time.
+- `tests/paintLayers.test.ts`.
+
 ## A painted top, drawn
 
 - **A shirt's cut is DRAWN, not painted per vertex** (Joshua, 2026-11-14: "fix the painted clothes and add smooth edges,
@@ -359,6 +381,75 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
 
 ## The skirts (paint and cloth together): the pilot
 
+- **NO PAINT UNDER A SKIRT BUT HER UNDERWEAR -- THE SHEET IS THE SKIRT, A SHELL ROUND HER** (Joshua, 2026-11-17: "I would do
+  0% fit for the pencil skirt. Did you remove all the paint under the skirts? That would allow more flexibility for
+  undergarments or none for birth, etc…"; "basically create a shell around the body as the skirt"; 2026-11-19: "maybe for
+  all skirts add the Athletic Bikini 👙 Bottom… so she has underwear but can be removed if wanted later"). WHAT IS
+  WRITTEN BELOW OF A SKIRT'S PAINTED PART ("a short painted on her", "ITS PAINTED PART IS THE UNDER-BELLY LEGGINGS CUT
+  SHORT", "ITS PAINTED PART'S LEGS", `paintedLegs`, `SKIRT_PAINT`, `setDial`, `laySkirtPaint`, `skirtPaint`,
+  `SKIRT_UNDER_LEGS`) IS v0.9.44's AND TAKEN OUT; the pencil's FIT is answered: 0.
+  - THE SEVEN OUTFITS (`sarahLabTool.ts` `SKIRTS`, `TEE_SKIRTS`) wear HER ATHLETIC BIKINI BOTTOM under the skirt
+    (`skirtUnderwear`: its edging and its fill, two paint layers a piece in the Outfit tab takes off) IN THE SKIRT'S OWN
+    COLOUR (his, the same day: "match by default the color of the panties to the skirt, but like with top and bottom or the
+    edgings, you can change if you want"): the skirt's tint of the ATHLETIC knit, each piece's fabric his to change -- the four skirts with the grey crop tee over it, the three with the cloth tee nothing else painted -- and
+    say the skirt's colour themselves (`BuiltInOutfit.skirtTint`, a tint of the ATHLETIC knit; `syncSkirt`). THE PENCIL IS
+    `fit: 0`. `SKIRT_UNDER_BAND` stays as the STYLE whose waistband line a low ring is laid on (`fabricPanel.hoopOn`), worn
+    or not. A look saved in a skirt before keeps the short it was saved with.
+  - HER BIKINI BOTTOM'S BACK SQUATTING (his: "the ABB shape changes and has rough edges when sitting or like squatting…
+    Mainly it's the back end that changes and gets jagged edges… front is sides seem to be okay"). A designed bottom is
+    looked up through her slip; in SQUAT and RECLINE her birth poses' smoothing of her skin (`BIRTH_NORMALS_FIELD`) slides
+    her skin's points along her as well, and behind her a garment rode that slide into teeth. Now a garment rides that
+    smoothing IN FRONT of her and takes its slide off BEHIND her (`SarahLabScene.ts` `GROIN_RIDE`: from 3 cm behind the
+    middle of her opening, all of it by 8 cm; the panel's `poseRide` hook) -- taken off everywhere, black spikes stood
+    beside its front panel. MEASURED in the room: SQUAT from her front, back and three-quarter and RECLINE from her front and
+    side, one smooth line round each leg.
+  - IN SQUAT AND RECLINE A SKIRT RIDES UP (his: "recline and squat would naturally make them sit about mid pelvis to just
+    below the belly line because it would ride up the thighs in real life"): it is cut at LENGTH 0, where her legs part
+    (`SKIRT_RIDES_UP`), and cut again as she goes into those poses and out of them (a change of pose that does not cross
+    that line lays it afresh as before). Its settings are not moved: STAND gives back its length. MEASURED in the room
+    (light skin, 1x, 0%): the pencil, the A-line and the maxi a band round her hips in both (hem 80.6 cm from the floor
+    standing up out of it), their lengths again standing. Points under her skin, SQUAT: the pencil 77 (11.2 mm at the
+    most), the A-line 70 (26.4), the maxi 37 (26) -- where her thighs fold up against her belly; RECLINE 0, 1 and 10.
+    Pictured: no patch of her skin through it from her front, back or side.
+  - ON HER (FIT 0) HER SKIN IS THE SHEET'S FLOOR AS WELL (`clothSkirt.ts` `outOfHer`, for `only` too: her places' own slots,
+    walked again in the same frame). With no paint and no floor, MEASURED in the room in a stride: 157 to 163 of the pencil's
+    2,160 points under her skin, 8.8 to 9.3 mm, her thigh through the skirt.
+  - AND IT IS TAUT ACROSS HER CREASES (`tautColumns`, `SHEET_TAUT`: its comment has the why). Without it, a crescent of her
+    skin 6 to 8 cm long under the seat of her rear leg, from her back, in two strides of four: the sheet went into the fold,
+    behind the lip of skin over it -- no point of it under her skin. `skirtParts(capsules, skin, floor, taut)` switches each.
+  - MEASURED in the room (light skin, 1x, her belly at 0%, the pencil at FIT 0, no paint; walking with the clock held at a
+    thirtieth, six moments 0.2 s apart): points under her skin standing none; striding none, one (a point of a span between
+    her thighs, row 12 column 70, 35.9 mm), none, none, none, none; seated one, 1.1 mm. NO PATCH OF HER SKIN ENCLOSED BY THE
+    SKIRT in any of eighteen pictures (standing from three sides, the six moments from her back and her front, seated from
+    three: `scripts/room/holes.py`). Her skin 3.4 to 7.6 ms a frame, the "cloth" 0.6 to 1.6 (none is stepped). The pencil at
+    FIT 0 standing at six LENGTHs from 0 to 1, its hem 80.6 to 6.0 cm from the floor: clean. 2026-11-19, with her bikini
+    bottom under them: the four skirts standing, the three with the cloth tee from her three-quarter and her back, the
+    pencil and the A-line at 100 and 200% from her side and her back: clean.
+  - TWO WRONG READINGS OF MINE, EACH CAUGHT BEFORE A CURE WAS BUILT (the lesson a third and fourth time: READ THE POINTS):
+    (1) "a band of her skin over the stool, seated, from her back" is the sheet's OWN underside, lit warm by the room's
+    `under` light, seen through the gap between the back of her seat and the stool -- drawn flat with the stool hidden (the
+    `sheet` probe hides it: from her back, from 10 degrees above and from below) there is no skin, and a z-buffer of the
+    sheet's points and her skin's has none either (`scripts/room/seen.py`, `seen2.py`); (2) the "crescent still there" under
+    her seat in one stride is the sheet's fold, a dark grey (30, 30, 30), not skin.
+  - FOUND, NOT FIXED: (a) ONE POINT THROWN OUT OF THE SHEET in one moment of six: row 25 column 36, between her calves at her
+    back, put 51.8 mm out by `sheetOutOfSkin` (a point of a span: her skin's walk had lost its place -- the far side of a
+    calf), a dent by its hem from her back; and in strides the points at the backs of her knees (row 25, columns 31, 32 and
+    40) stand 12 to 22 mm off their four neighbours' mean, where standing none is over 8.4 (`scripts/room/rough.py`).
+    PLANNED, NOT WRITTEN: at the end of `outOfHer`, a point further than 12 mm from its neighbours' mean brought back (to
+    12 squared over its distance; the hem by its two side neighbours). (b) THE RING'S TOP EDGE WAVERS SEATED, 1 to 8 mm, at
+    the small of her back (its heights there 78.4, 77.9, 78.6, 77.8 cm; standing it is smooth; on her full skin as well, and
+    with each of her pose's fields switched off in turn). PLANNED: the drawn ring evened along itself, shrink-free (two
+    rounds of 0.5 and -0.53). (c) `SHEET_TAUT.most` (3 cm) is reached in two strides of six and seated. (d) A PAINTED TOP TO
+    HER HIPS worn over a skirt: its hem band stands through the skirt in chips at her hips (a painted top's hem is its
+    drape's band, which no skirt is told of). (e) Her shoes through the maxi's hem (below). (f) The points under her skin
+    squatting (above).
+  - NOT LOOKED AT YET WITHOUT PAINT: the pencil half-way (FIT 0.5) walking; the A-line, the mini and the maxi walking.
+  - THE LEAD'S ROOM DRIVER AND ITS READERS ARE KEPT IN `scripts/room/` (they were a session's scratch files, and their paths
+    are that session's: set `S` and the repo's path): `room.mjs` opens the built room once and runs posted scripts against
+    that one page ("One preview, one page"), `pre.js` its helpers, `n3.js` a batch as an example; `inside*.py` a sheet's
+    points against her skin, `seen.py` / `seen2.py` what is seen from a side (flat, or by a camera with the stool),
+    `holes.py` not-skirt patches inside a skirt in a picture, `rough.py` where a sheet is rough, `grid.py` / `sheet.py`
+    pictures side by side.
 - **A skirt is a short painted on her and one sheet of cloth hung from just under its waistband** (Joshua, 2026-11-16:
   "a combination of paint and cloth for like skirts, etc… that are loose and flowing"; "have the top of the skirt above
   or below the belly, with adjustable length all the way down to the ground and you can select how tight/close it is
@@ -1422,7 +1513,51 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   rule reaches a week at a bigger belly. With no count her 60% is week 28.8, and clear. Her baby is never bigger for
   her belly by the rule than on the chart (the chart's % is at most her own: tested), and at full term it is drawn the
   same either way -- 51.0 cm, 3.46 kg, 1% smaller to fit -- on the chart at her 100% and by the rule at her 120%.
-- After anything changes the rule, her chart or the panel: `tests/pregnancyRule.test.ts`, `tests/pregnantToggle.test.ts`.
+- **HER BELLY GROWS ON A CURVE, NOT A STRAIGHT LINE** (Joshua, 2026-11-19, of a character typed START 10%, BIGGEST 150%
+  at week 42, whose belly went from 80% to 150% in her last two weeks: "70% size difference over 2 weeks is quite large…
+  does pregnancy belly size kind of look like a power curve starting small at first, but accelerating in the 3rd
+  trimester?"; of an even line and the curve, "Maybe a hybrid"; "Yes, so hybrid"). `baby.ts` `BELLY_CURVE` (0.5),
+  `bellyGrown`: from week 12 to her delivery week the share of her growth is half an even line and half a square of the
+  share of those weeks gone. HER OWN CHART IS HOW FAR ALONG SHE IS (`HerChart.anchors`: her belly %, 0 at her START, 1 at
+  her BIGGEST), her week read through the curve from 12 to HER delivery week -- so a delivery week past 40 is no longer
+  squeezed into the chart's oversized top. The chart itself (`BUMP_WEEKS`, nothing typed) is on the curve from 0% at
+  week 12 to its delivery belly (one baby 100% at 40, twins 175% at 37, triplets 180% at 34; twins were 100% at week 32
+  and triplets at 29, straight), then on straight to 200% (42, 38, 35). PAST HER BIGGEST it is as before, a % of the
+  chart for each % of her belly: her baby is never bigger for her belly than on the chart (`tests/pregnancyRule.test.ts`).
+  His character: 10% week 12, 49% week 24, 77% week 30, 111% week 36, 136% week 40, 150% week 42 -- 2.6% a week at first,
+  7.2 at the end. The room opens her on a first baby by the rule (120% at 40): 60% is week 29.3 (26 on the straight line),
+  100% week 36.8. WHAT IS WRITTEN BELOW OF WEEKS AT A BELLY % WAS MEASURED ON THE STRAIGHT LINE. `tests/kickWeeks.test.ts`.
+- **AT HER START SHE IS WEEKS 1 TO 12** (Joshua, 2026-11-19: "I want one character to have a 10% starting belly, be at
+  150% at 42 weeks, and end up with a belly size of 30%… But it kept saying she was 12 weeks at 10%"). Her belly does not
+  show before week 12 (`EARLY_WEEK`), so her START belly is every week to 12: the panel says `1–12` there, not 12
+  (`atHerStart`). A week to 12 typed at that belly is kept as her week (`herWeek`), and with no START typed that belly IS
+  her START; one typed over a START typed under it is not used, and says so. Her chart past it is as it was.
+  `tests/earlyWeek.test.ts`.
+- **EXACT: HER BELLY TYPED, OR PICKED FROM A LIST THAT NARROWS AS IT IS TYPED** (Joshua, 2026-11-19: "the option to type a
+  specific amount like max belly and stuff… like exactly 30%, or 76%… a scrollable list with a smart look up so if you
+  start typing 5… it will only show things starting at 5 like 50-59"). `valueLookup.ts`: `valuesStartingWith` (pure)
+  and `attachLookup`, a list fixed to the screen under its box, rows 32 px. Under the belly slider (`bumpExact`; Enter
+  or a row tapped) and on each of HER PREGNANCY's boxes, each in its own range. MEASURED in the built room as a phone
+  (430 x 932 at 2x, real touches): 5 typed listed 5% and 50-59%, 56% tapped set her belly to 56; 76 and Enter, 76; in
+  BIGGEST, 1 listed 1, 10-19 and 100-199 (111), 150 tapped set 150. `tests/valueLookup.test.ts`.
+- After anything changes the rule, her chart or the panel: `tests/pregnancyRule.test.ts`, `tests/pregnantToggle.test.ts`, `tests/earlyWeek.test.ts`.
+
+## Her baby's kicks by her week
+
+- **They follow her week, as a real pregnancy's do** (Joshua, 2026-11-19: "Baby kicks should follow her pregnancy week…
+  Right now the baby moves and kicks show on her belly at any week"). `baby.ts` `kickStage(week, deliveryWeek)`,
+  `KICK_WEEKS`; the room works it out each step from her chart (`herWeek`, `herChart().deliveryWeek`: a typed week, her
+  START, BIGGEST and delivery week) and scales how often her babies move (`often`, times BABY KICKS) and how big a kick
+  shows on her belly (`seen`): none before week 16; felt, rare, and nothing on her belly to week 22, `firstFelt` (19, HIS
+  TUNING NUMBER: a first pregnancy's average) the week they reach `felt` of their most; from 22 they show, a quarter size
+  at first, both growing to their most by 28; their most to 36, or to 4 weeks before her delivery week (twins 37,
+  triplets 34) if sooner, then down to 0.8 at it. Twins and triplets the same weeks. BABY KICKS still scales how often,
+  0 none. The KICK button still starts a kick at any week; her belly shows it as her week does.
+- Its sources are in `KICK_WEEKS`' comment: MKUH NHS "Fetal movements in pregnancy" (18 to 20 weeks most; 16 for a woman
+  who has been pregnant before; after 20 for a first; rising to 32 weeks, then level -- NOT less toward the end, so his
+  "a little less" is kept to 0.8), Cleveland Clinic "Quickening", the American Pregnancy Association. Week 22 for a kick
+  seen from outside is his (GAME TUNING): none of them says.
+- `tests/kickWeeks.test.ts`.
 
 ## Her baby's birth
 

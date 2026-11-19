@@ -39,7 +39,7 @@ import { FACE_REST_OFFSET, FACE_REST_SCALE, patchFaceRig, restFromWorld, setFace
 import { DRAW_LIFT, REST_SCALE, RoomGarment } from './garment/roomGarment';
 import { ClothSkirt } from './clothSkirt';
 import { CLOTH_LAYERS, ClothUnder, besideCloth, cinchUnder, coveredBy, holdInside, underTop } from './clothLayers';
-import { SKIRT_RECORD_VERSION, anchorsOf, clampSkirt, fitOf, paintedLegs, sameSkirt, type SkirtRecord, type SkirtSettings } from './skirt/skirtDraft';
+import { SKIRT_RECORD_VERSION, anchorsOf, clampSkirt, fitOf, sameSkirt, type SkirtRecord, type SkirtSettings } from './skirt/skirtDraft';
 import { SkirtPanel } from './skirtPanel';
 import { bodyInputOf } from './garment/bodyInput';
 import type { BodyInput } from './garment/types';
@@ -61,8 +61,9 @@ import { FACE_FIELD_PREFIX, faceFieldOn, faceFieldWeights, faceSlidersMoved, hea
 import { HeadPanel } from './headPanel';
 import { STYLE_FRAME, picturedStyles, stylePictureLayers, styleThumbPath } from './stylePictures';
 import type { PieceKind } from './paintTemplates';
-import { PAINT_LAYER_COUNT } from './bodyPaint';
+import { PAINT_LAYER_COUNT, paintAt } from './bodyPaint';
 import { lookOpenedOn } from './sarahLook';
+import { attachLookup } from './valueLookup';
 import { BIRTH_KINDS, PREGNANCY_OPENING, PREGNANCY_RANGE, PREGNANCY_RULE, bellySize, numbersLine, pregnancyOf, pregnantLine, typeBirths, typedNumber, typeWeek, weekIsFor, weekText, nothingTyped, type Pregnancy } from './pregnancy';
 import { collectStoryBake, type StoryBake } from './storyBake';
 import { BUILD_INFO } from '../ui/buildInfo';
@@ -142,7 +143,7 @@ import { StepWatch, TileSteps } from './footsteps';
 import { dropIdleMorphs } from '../view/morphPrune';
 import { BIRTH_CLEFT_FIELD, BIRTH_LIPS_FIELD, birthAreaCentre, birthAreaFields, LIPS_COVERED, patchBirthShade } from './birthArea';
 import { BIRTH_POSES, FLOOR_SIT, blendBirthSpec, poseBirth, type BirthSpec } from '../actor/humanBirth';
-import { AUTO_LIES, BABIES_NAME, BABY_MODEL, BABY_MODEL_LENGTH, babiesInHer, babiesPast, babySize, growSac, packBabies, type BabyFit, babyLine, babySolid, carriedShare, weekForBump, chartBump, herChart, herWeek, Cord, cordLength, cordTube, layCordTube, layPlacenta, placentaGeometry, placentaOpen, placentaSpots, curlFrame, floatDrift, floatRoom, floatTune, kickOnSkin, KICK_FELT_M, KICK_MOST_M, KICK_WIDE_M, liningPast, kicksShare, moveEnvelope, moveLength, nextMove, poseMove, poseOnHer, poseDescent, poseAlong, poseCradle, BABY_BONES, BABY_NAVEL, BABY_STRAIGHT_MODEL, CORD_CUT, ROLL_RAD, solidDeep, type MoveKind, type CordBody, type PlacentaSpot, LIE_NAME, pushAt, sacAround, sacRadius, WOMB_WALL_M, wombFromSkin, type BabySolid, type BellyPush, type CurlFrame, type Lie, type WombShape, footOffDeg } from './baby';
+import { AUTO_LIES, BABIES_NAME, BABY_MODEL, BABY_MODEL_LENGTH, babiesInHer, babiesPast, babySize, growSac, packBabies, type BabyFit, babyLine, babySolid, carriedShare, weekForBump, chartBump, herChart, herWeek, atHerStart, EARLY_WEEK, Cord, cordLength, cordTube, layCordTube, layPlacenta, placentaGeometry, placentaOpen, placentaSpots, curlFrame, floatDrift, floatRoom, floatTune, kickOnSkin, kickStage, KICK_FELT_M, KICK_MOST_M, KICK_WIDE_M, liningPast, kicksShare, moveEnvelope, moveLength, nextMove, poseMove, poseOnHer, poseDescent, poseAlong, poseCradle, BABY_BONES, BABY_NAVEL, BABY_STRAIGHT_MODEL, CORD_CUT, ROLL_RAD, solidDeep, type MoveKind, type CordBody, type PlacentaSpot, LIE_NAME, pushAt, sacAround, sacRadius, WOMB_WALL_M, wombFromSkin, type BabySolid, type BellyPush, type CurlFrame, type Lie, type WombShape, footOffDeg } from './baby';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { JIGGLE_ATTRIBUTE, PUBIC_PRESS, PUSH_ATTRIBUTE, pubicPressWant, setPush, jiggleAt, jiggleOf as jiggleOfMesh, legWeight, navelAfterBirth, navelPressure, restingSoftBelly, softAt, softBellyWant, stepSoftBelly, type Jiggle, type SoftBellyWant } from './softBody';
 import { createVulvaPatch, VULVA_OPEN, VULVA_TRY, type VulvaPatch } from './vulvaMesh';
@@ -364,7 +365,7 @@ import { LIGHT_BODY_TRIANGLES,
   labTitle, CLOTH_SEATED_LINE, bellyMotionWeights, bellyWeights, breastWeightsForShape, bodyShapeFieldWeights, SIZE_TILT_PRESETS_DEG, effectiveTiltDeg, stepSeated, bustVolume, BREAST_GROW_TARGET, settledSitFor, bellyUpperWeight, BELLY_UPPER_TARGET, navelWeights, NAVEL_FLAT_TARGET, NAVEL_INNIE_EXTRA, NAVEL_OUTIE_EXTRA, tPoseTurns, ARM_SIDES, armsLine, ARM_RAISE_TARGETS, armRaiseWeight, SEAT_V2_TARGET, seatCorrectiveV2Weight, fingerBend, THUMB_TO_PALM, bumpLine, fingersLine, restingBellySpring, statusLine, walkBounceAccel, walkSwayAccel,
   offeredOutfits, outfitThumbPath,
   type Garment, type SarahLabPose, isBirthPose, recoveredPartsFor, recoveredPartPath, isShirtPart, shirtOfPart, type RecoveredPart, SARAH_DEFAULT_OUTFIT, SIM_TEE_OUTFIT, RECOVERED_GARMENTS, outfitWorn, outfitNamed, modelName, modelsOnMenu,
-  BIKINI_BOTTOM_FROM_SKIN, BIKINI_BOTTOM_SOURCE, SKIRT_UNDER_BAND, SKIRT_UNDER_LEGS,
+  BIKINI_BOTTOM_FROM_SKIN, BIKINI_BOTTOM_SOURCE, SKIRT_UNDER_BAND,
 } from './sarahLabTool';
 import { blendJointTurns, sitEase, stepSit } from './poseBlend';
 import { createSkinShell, type SkinShell } from './skinShellMesh';
@@ -379,7 +380,20 @@ import { UNITS_PER_METRE as GEOMETRY_PER_METRE } from './softBody';
  * her thighs, her hips' and knees' turns and smoothing, her seat. What a designed garment rides as it rides her bones
  * (`fabricPanel.ts`'s `poseFields`); every other field is her own shape, whose slides along her skin are her slip.
  */
+/** The poses a skirt has ridden up her thighs in (`syncSkirt`). */
+const SKIRT_RIDES_UP: ReadonlySet<string> = new Set(['squat', 'recline']);
 const POSE_SHAPE_FIELDS: readonly string[] = Object.freeze([BIRTH_THIGHS_FIELD, BIRTH_GAP_FIELD, BIRTH_SEAT_FIELD, BIRTH_ROOM_FIELD, BIRTH_NORMALS_FIELD, BIRTH_KNEES_FIELD, KNEE_TURN_FIELD, HIP_TURN_FIELD, BIRTH_CONTACT_FIELD]);
+/**
+ * WHAT OF HER GROIN'S SMOOTHING A DRAWN GARMENT RIDES (`birthNormals.ts`): in front of her it rides it, as all of her
+ * pose; BEHIND HER it does not -- there the smoothing irons her posed skin by sliding its points along it, each its own
+ * way, and a garment riding those slides drew its edge in teeth (Joshua, 2026-11-19, of her athletic bikini bottom
+ * squatting: "Mainly it's the back end that changes and gets jagged edges… front is sides seem to be okay"). MEASURED in
+ * the room the same morning, SQUAT: from her back its edge ragged as ridden, one smooth line with the slides taken off;
+ * taken off in front as well, black spikes beside its front panel in SQUAT and in RECLINE. So a point rides all of it
+ * `GROIN_RIDE.from` behind the middle of her opening and nearer, none of it `to` behind and further (metres of her rest
+ * shape; GAME TUNING), and the rest of its slide is taken off the garment's look-up as her own shapes' is (`skinSlip.ts`).
+ */
+const GROIN_RIDE = Object.freeze({ from: 0.03, to: 0.08 });
 
 /**
  * Whether a part of a modelled garment is a CORD: a closed tube, every edge of it shared by two of its triangles, where
@@ -1124,6 +1138,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
    */
   interface BabyMove { kind: MoveKind; side: 'left' | 'right'; t: number; next: number; pending: MoveKind; rnd: () => number; bones: Map<string, THREE.Bone>; rest: Map<string, THREE.Quaternion>; posed: boolean }
   let babyMoves: BabyMove[] = [], babyCurlRest: Map<string, THREE.Quaternion> | null = null;
+  /** How often they move and how big a kick shows on her belly, at her week (baby.ts `kickStage`, `KICK_WEEKS`): worked out each step. */
+  let kickNow = { often: 1, seen: 1 };
   /**
    * THE CORD AND THE PLACENTA (baby.ts): its navel (the trunk bone it rides, where on it, and where it is in the curl,
    * model units), each baby's placenta and cord, and what draws them (SEE BABY only: nothing of it shows from outside).
@@ -1373,6 +1389,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
   const lockButtons = new Map<string, HTMLButtonElement>();
   const rangeRows: { spec: RandomSpec; row: HTMLElement; lo: HTMLInputElement; hi: HTMLInputElement }[] = [];
   let bumpInput: HTMLInputElement | null = null;
+  /** BELLY's exact box (valueLookup.ts): a % typed, or picked from the list that narrows as it is typed. */
+  let bumpExact: HTMLInputElement | null = null;
   /** the BIRTH OPENING slider (percent, 0 closed .. 100 the full 10 cm) */
   let birthOpenInput: HTMLInputElement | null = null, birthOpenPct = 0, birthBulgeInput: HTMLInputElement | null = null, birthBulgePct = 0;
   let foldBackInput: HTMLInputElement | null = null, foldBackPct = 0;
@@ -2142,7 +2160,9 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       i.placeholder = inForce; i.disabled = !on; i.style.opacity = on ? '1' : '.4';
     };
     if (weekLabel) weekLabel.textContent = `WEEK AT ${Math.round(size)}%`;
-    put(SARAH_LAB_FIELD.pregnancyWeek, mine ? pregnancy.week : null, pregnant() ? weekText(here) : '–', pregnant());
+    // (at her START her belly does not tell weeks 1 to 12 apart: the box says so, and takes one typed)
+    const early = atHerStart(size, babyCount, pregnancy) && !(mine && chart.unused.length === 0), hereText = early ? `1–${EARLY_WEEK}` : weekText(here);
+    put(SARAH_LAB_FIELD.pregnancyWeek, mine ? pregnancy.week : null, pregnant() ? hereText : '–', pregnant());
     for (const [k, on] of [['week', pregnant() && pregnancy.week !== null], ['first', pregnancy.firstWeekBump !== null], ['delivery', pregnancy.deliveryBump !== null], ['deliveryWeek', pregnancy.deliveryWeek !== null], ['after', pregnancy.afterBump !== null], ['births', pregnancy.births !== null]] as const) {
       const b = buttons[`${SARAH_LAB_ACTION.pregnancyClear}${k}`];
       if (b) { b.disabled = !on; b.style.opacity = on ? '1' : '.4'; }
@@ -2161,8 +2181,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     const forBabies = BABIES_NAME[babyCount] === 'ONE' ? 'one baby' : BABIES_NAME[babyCount].toLowerCase();
     const from = mine ? 'as typed' : nothingTyped(pregnancy) ? (chart.ruled ? `by her baby counter, for ${forBabies}` : `the chart's for ${forBabies}`) : 'off her chart';
     const pinned = pregnancy.week !== null && !mine && pregnancy.weekAtBump !== null ? ` · ${weekText(pregnancy.week)} wk typed for ${Math.round(pregnancy.weekAtBump)}%` : '';
-    const unused = chart.unused.map((u) => u === 'week' ? ' · the typed week is not used: it must be past week 12 and its belly % between her START and her BIGGEST' : ' · her BIGGEST is not used: it must be above her START').join('');
-    line.textContent = `her week now ${weekText(here)} (${from})${pinned}${unused}`;
+    const unused = chart.unused.map((u) => u === 'week' ? ` · the typed week is not used: a week to ${EARLY_WEEK} is for her START belly, a later one's belly % between her START and her BIGGEST` : ' · her BIGGEST is not used: it must be above her START').join('');
+    line.textContent = early ? `her week now 1–${EARLY_WEEK}: at her START her belly does not show yet (type her week to say which)${pinned}${unused}` : `her week now ${weekText(here)} (${from})${pinned}${unused}`;
   }
   /** The Library's line of what is kept on this device, and the notice over the stage (there only when it says something). */
   function refreshDevice(): void {
@@ -2216,6 +2236,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       if (f3) f3.textContent = birthBulgeLine(birthBulgePct, VULVA_OPEN.bulge * 100);
       if (birthBulgeInput && Number(birthBulgeInput.value) !== birthBulgePct) birthBulgeInput.value = String(birthBulgePct); }
     if (bumpInput && Number(bumpInput.value) !== bump) bumpInput.value = String(bump);
+    if (bumpExact && document.activeElement !== bumpExact) bumpExact.placeholder = `${bump}%`;
     refreshWeeks();
     for (const spec of BODY_RANDOM_SPECS) {
       const b = lockButtons.get(spec.key);
@@ -2894,7 +2915,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // ...and her skirt's numbers the same
     adoptSkirt(pendingClothes?.skirt ?? null);
     // saved clothes put on with this outfit go on over its defaults
-    if (pendingClothes && fabric?.putOnClothes(pendingClothes)) { builder?.load(pendingClothes.built ?? null); pendingClothes = null; laySkirtPaint(); }
+    if (pendingClothes && fabric?.putOnClothes(pendingClothes)) { builder?.load(pendingClothes.built ?? null); pendingClothes = null; }
     // what she has on now is what the editor's SAVE compares against
     if (fabric && !pendingClothes) { outfits?.editing(nextSource ?? { kind: 'builtin', name: OUTFITS[outfit].name }); nextSource = null; }
   }
@@ -2974,7 +2995,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     else {
       adoptGarment(rest.garment ?? null);
       adoptSkirt(rest.skirt ?? null);
-      if (fabric?.putOnClothes(rest)) { builder?.load(rest.built ?? null); pendingClothes = null; laySkirtPaint(); outfits?.editing(source); nextSource = null; }
+      if (fabric?.putOnClothes(rest)) { builder?.load(rest.built ?? null); pendingClothes = null; outfits?.editing(source); nextSource = null; }
       applyLook(); refresh();
     }
   }
@@ -3053,14 +3074,20 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     if (!want) wantCloth();
   }
   /**
-   * THE OUTFIT'S SKIRT: drafted from her design at 0% belly and hung on her when an outfit that has one is put on (or a
-   * probe asks for one), taken off with it. In its paint's own colour (the short under it is its fitted part).
+   * THE OUTFIT'S SKIRT: drafted from her shape as it stands and put on her when an outfit that has one is put on (or a
+   * probe asks for one), taken off with it. A garment of its own, with no paint under it (`sarahLabTool.ts` `SKIRTS`).
    */
   function syncSkirt(): void {
-    const own = OUTFITS[outfit], want = skirtProbe ?? (recovered && own?.skirt ? skirtWorn ?? clampSkirt(own.skirt) : null);
+    const own = OUTFITS[outfit], asWorn = skirtProbe ?? (recovered && own?.skirt ? skirtWorn ?? clampSkirt(own.skirt) : null);
+    // IN SQUAT AND RECLINE IT HAS RIDDEN UP HER THIGHS (Joshua, 2026-11-19: "recline and squat would naturally make them
+    // sit about mid pelvis to just below the belly line because it would ride up the thighs in real life"): drawn at its
+    // shortest, its hem where her legs part, its top where it always is; its own LENGTH is kept and is back when she
+    // stands (`SKIRT_RIDES_UP`)
+    const want = asWorn && SKIRT_RIDES_UP.has(pose) ? { ...asWorn, length: 0 } : asWorn;
     const body = clothBody();
     if (!want || !loaded || !body || !model) { if (skirtRoom) { skirtRoom.dispose(); skirtRoom = null; skirtKey = ''; skirtNavel = null; if (garmentRoom) { garmentRoom.cloth.over = null; garmentRoom.cloth.belt = null; garmentRoom.cloth.hidden = null; } } return; }
-    const first = own?.paint?.[0]?.fabric, colour = first ? pickHex({ family: first.family, colour: first.colour, ...(first.tint ? { tint: first.tint } : {}) } as Parameters<typeof pickHex>[0]) : '#6a6f7c';
+    // its colour: the outfit's own skirt's (`BuiltInOutfit.skirtTint`); a probe's skirt over some other outfit takes that outfit's first paint layer's
+    const first = own?.skirt && own.skirtTint ? { family: 'athletic', colour: 0, tint: own.skirtTint } as const : own?.paint?.[0]?.fabric, colour = first ? pickHex({ family: first.family, colour: first.colour, ...(first.tint ? { tint: first.tint } : {}) } as Parameters<typeof pickHex>[0]) : '#6a6f7c';
     const anchors = anchorsOf(want), key = `${want.top}|${want.length.toFixed(3)}|${want.flare.toFixed(3)}|${fitOf(want).toFixed(3)}|${want.tucked ? 't' : 'u'}|${anchors.front ? 'f' : ''}${anchors.back ? 'b' : ''}${anchors.left ? 'l' : ''}${anchors.right ? 'r' : ''}`;
     if (skirtRoom && key === skirtKey) { if (colour !== skirtColour) { (skirtRoom.mesh.material as THREE.MeshStandardMaterial).color.set(colour); skirtColour = colour; } return; }
     skirtRoom?.dispose(); skirtRoom = null; skirtNavel = null;
@@ -3088,16 +3115,6 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     skirtKey = key; skirtColour = colour; skirtPoseKey = pose; skirtShapeKey = shapeKeyNow(); skirtRecut = false;
     skirtCutMs = performance.now() - t0;
     three.add(skirtRoom.mesh);
-    laySkirtPaint();
-  }
-  /**
-   * ITS PAINTED PART'S LEGS GO TO ITS HEM UNDER A SKIRT THAT LIES CLOSE TO HER, and never to the hem itself
-   * (`skirtDraft.paintedLegs`): the outfit's own skirt's short alone (a probe's skirt on some other outfit moves no
-   * one's leggings). After each cut, and after saved clothes are put on over the outfit's.
-   */
-  function laySkirtPaint(): void {
-    if (!skirtRoom || !skirtJoints || !OUTFITS[outfit]?.skirt || skirtRoom.settings.top !== 'under') return;
-    fabric?.setDial(SKIRT_UNDER_BAND, 'legEnd', +paintedLegs(skirtJoints, skirtRoom.draft, SKIRT_UNDER_LEGS).toFixed(3));
   }
   /** The procedural tee off her, and the light tee's cloth copy drawn again if it is on. */
   function takeOffGarment(): void {
@@ -3368,6 +3385,23 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     };
     bumpInput = slider(SARAH_LAB_FIELD.bump, bump, (v) => { bump = v; }, BUMP_MAX_PERCENT);
     {
+      // EXACT: her belly typed to the %, or picked from a list that keeps only what begins with what is typed (Joshua,
+      // 2026-11-19: "the option to type a specific amount… like exactly 30%, or 76%… a scrollable list with a smart look up")
+      const row = document.createElement('div'); row.dataset.tab = 'body';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:-2px 0 2px;font-size:11px;letter-spacing:.05em;opacity:.9';
+      const i = document.createElement('input');
+      i.type = 'text'; i.inputMode = 'numeric'; i.autocomplete = 'off'; i.dataset.field = SARAH_LAB_FIELD.bumpExact; i.placeholder = `${bump}%`;
+      i.style.cssText = 'width:72px;height:30px;border-radius:6px;border:1px solid #ffffff30;background:#0d1117;color:#e8e2d8;font:600 13px system-ui;padding:0 8px';
+      const take = (v: number) => { bump = Math.max(0, Math.min(BUMP_MAX_PERCENT, Math.round(v))); if (bumpInput) bumpInput.value = String(bump); i.value = ''; applyLook(); applyMotion(); refresh(); };
+      // (Enter, or the box left, takes a whole number typed: 76, or 76%)
+      i.addEventListener('change', () => { const v = Number(i.value.trim().replace(/%$/, '')); if (i.value.trim() && Number.isFinite(v)) take(v); else i.value = ''; });
+      i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') i.blur(); });
+      attachLookup(i, { min: 0, max: BUMP_MAX_PERCENT, unit: '%', now: () => bump, pick: take });
+      bumpExact = i;
+      row.append('EXACT', i);
+      right.appendChild(row);
+    }
+    {
       // QUICK SIZES (from the Character Studio preview): the five sizes the belly is keyed at, one tap each
       const sizes = document.createElement('div'); sizes.dataset.tab = 'body';
       sizes.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:-2px';
@@ -3411,6 +3445,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
         // (applied when the box is left or Enter pressed, not at each key: typing 32 is never a 3 first)
         i.addEventListener('change', () => { const v = typedNumber(i.value, range); if (v === undefined) refresh(); else set(v); });
         i.addEventListener('keydown', (e) => e.stopPropagation());
+        // (and the same look-up list as BELLY's: what begins with what is typed, a value tapped is typed)
+        attachLookup(i, { min: Math.ceil(range[0]), max: Math.floor(range[1]), now: () => { const v = Number(i.value || i.placeholder); return Number.isFinite(v) ? v : null; }, pick: () => i.dispatchEvent(new Event('change')) });
         weekBoxes.set(field, i);
         return i;
       };
@@ -3828,6 +3864,18 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     fields[SARAH_LAB_FIELD.bodyNote] = note;
     right.appendChild(note);
     const scaleOf = new THREE.Vector3();
+    let groinRideOf: { rest: unknown; share: Float32Array } | null = null;
+    const groinRide = (): Float32Array | null => {
+      const b = bodyOf(); const rest = b?.mesh.geometry.getAttribute('fabricRest') as THREE.BufferAttribute | undefined;
+      if (!rest) return null;
+      if (groinRideOf?.rest === rest.array) return groinRideOf.share;
+      const c = birthAreaCentre(rest.array as ArrayLike<number>);
+      if (!c) return null;
+      const n = rest.count, share = new Float32Array(n), a = rest.array as ArrayLike<number>;
+      for (let v = 0; v < n; v++) { const behind = c.z - a[v * 3 + 2], t = Math.min(1, Math.max(0, (behind - GROIN_RIDE.from) / (GROIN_RIDE.to - GROIN_RIDE.from))); share[v] = 1 - t * t * (3 - 2 * t); }
+      groinRideOf = { rest: rest.array, share };
+      return share;
+    };
     fabric = fabricPanel({
       meshes: () => skinned,
       body: () => skinned.find(m => !!m.geometry.getAttribute('_cloth_cover')) ?? null,
@@ -3862,6 +3910,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       clothOver: () => (clothWorn() ? { name: 'shirtSpandexLite', label: 'cloth tee' } : fittedTee() ? { name: 'shirtSpandexLite', label: 'spandex tee' } : null),
       // what of her shape is her pose's: a designed garment rides it (fabricPanel.ts)
       poseFields: () => POSE_SHAPE_FIELDS,
+      // (her groin's smoothing ridden in front of her and not behind: `GROIN_RIDE`)
+      poseRide: (name) => (name === BIRTH_NORMALS_FIELD ? groinRide() : null),
       // all of her skin's triangles, each once: her opening's area is drawn by its own patch, its triangles hers all the
       // same (her own list has them again when the patch is not shown)
       skinTriangles: (mesh) => skinTrianglesOf(mesh),
@@ -6508,15 +6558,18 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       const vRel = (A.vx - B.vx) * moveAxis.x + (A.vy - B.vy) * moveAxis.y + (A.vz - B.vz) * moveAxis.z;
       if (vRel > 0) { const h = vRel / 2; A.vx -= moveAxis.x * h; A.vy -= moveAxis.y * h; A.vz -= moveAxis.z * h; B.vx += moveAxis.x * h; B.vy += moveAxis.y * h; B.vz += moveAxis.z * h; }
     }
-    // their moves: each baby's under way runs on; its next comes when it is due (BABY KICKS: how often)
+    // their moves: each baby's under way runs on; its next comes when it is due (BABY KICKS: how often -- of how often
+    // they move at her week, none before it: `kickStage`)
+    kickNow = carrying() ? kickStage(herWeek(sized(), babyCount, pregnancy), herChart(babyCount, pregnancy).deliveryWeek) : { often: 1, seen: 1 };
+    const kicks = body.babyKicks * kickNow.often;
     roots.forEach((r, i) => {
       const m = babyMoveOf(i, r);
       if (m.t >= 0) {
         m.t += dt;
-        if (m.t > moveLength(m.kind)) { m.t = -1; const n = nextMove(m.rnd, body.babyKicks, m.kind); m.next = n.inS; m.pending = n.kind; }
-      } else if (!(kicksShare(body.babyKicks) > 0)) m.next = Infinity;
+        if (m.t > moveLength(m.kind)) { m.t = -1; const n = nextMove(m.rnd, kicks, m.kind); m.next = n.inS; m.pending = n.kind; }
+      } else if (!(kicksShare(kicks) > 0)) m.next = Infinity;
       else {
-        if (!Number.isFinite(m.next)) { const n = nextMove(m.rnd, body.babyKicks); m.next = n.inS; m.pending = n.kind; }
+        if (!Number.isFinite(m.next)) { const n = nextMove(m.rnd, kicks); m.next = n.inS; m.pending = n.kind; }
         m.next -= dt;
         if (m.next <= 0) startMove(m, m.pending);
       }
@@ -7025,7 +7078,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       if (!tip || !babyWomb) return;
       // where the tip is in her rest frame, her womb's own place (the belly's swing taken off)
       restOf(tip, moveTip);
-      const amp = kickOnSkin(babyWomb, moveTip, 0.012 * (r.scale.x / 0.33), moveAt, moveOut);
+      // (how big it shows on her belly at her week: none before `KICK_WEEKS.seen`)
+      const amp = kickNow.seen * kickOnSkin(babyWomb, moveTip, 0.012 * (r.scale.x / 0.33), moveAt, moveOut);
       if (amp > 0 && i < K.length) { K[i].set(moveAt.x, moveAt.y, moveAt.z, amp); D[i].set(moveOut.x, moveOut.y, moveOut.z, KICK_WIDE_M * Math.min(1.2, Math.max(0.6, r.scale.x / 0.33))); }
       // into another baby: it is nudged away, and the fluid takes it up
       if (babySolidOf) roots.forEach((o, j) => {
@@ -9025,7 +9079,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           // settling kept and nothing laid afresh: 63.6 and 74.4.) NOT FIXED: a skirt too narrow for her stride begins
           // a walk badly either way. What would mend it is her legs' jump itself, taken over several of the cloth's
           // own steps (or her pose eased into the walk): not tried.
-          if (pose !== skirtPoseKey) { skirtPoseKey = pose; if (!sitMoving) skirtRoom.restart(); }
+          // (into SQUAT or RECLINE, or out of them: cut again on the next frame, ridden up or let down -- `SKIRT_RIDES_UP`)
+          if (pose !== skirtPoseKey) { const rode = SKIRT_RIDES_UP.has(skirtPoseKey); skirtPoseKey = pose; if (rode !== SKIRT_RIDES_UP.has(pose)) { skirtRecut = true; skirtRecutAge = SKIRT_RECUT_AFTER; } else if (!sitMoving) skirtRoom.restart(); }
           // WORN WITH THE CLOTH TEE (`clothLayers.ts`): tucked, the skirt's floors are raised over the tee; untucked, the
           // tee's over the skirt. Each reads the other as it stood a frame ago at the most.
           const tee = garmentRoom?.cloth ?? null, skirt = skirtRoom;
@@ -10653,8 +10708,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           const A = b.geometry.getAttribute('fabricPaint') as THREE.BufferAttribute | undefined, f = bikiniBottomField(b.geometry.getAttribute('position').count);
           if (!A || !f) return { attr: !!A, field: !!f };
           const bins: Record<string, [number, number]> = {};
-          for (let v = 0; v < f.length; v++) { const k = f[v] <= -0.0299 ? 'unstored' : (Math.floor(f[v] * 200) / 2).toFixed(1); const e = bins[k] ?? (bins[k] = [0, 0]); e[0]++; e[1] += A.getX(v); }
-          let painted = 0, paintedOut = 0; for (let v = 0; v < f.length; v++) if (A.getX(v) >= 0.5) { painted++; if (f[v] < 0) paintedOut++; }
+          for (let v = 0; v < f.length; v++) { const k = f[v] <= -0.0299 ? 'unstored' : (Math.floor(f[v] * 200) / 2).toFixed(1); const e = bins[k] ?? (bins[k] = [0, 0]); e[0]++; e[1] += paintAt(A.array, v, 0); }
+          let painted = 0, paintedOut = 0; for (let v = 0; v < f.length; v++) if (paintAt(A.array, v, 0) >= 0.5) { painted++; if (f[v] < 0) paintedOut++; }
           bins['painted>=0.5'] = [1, painted]; bins['ofThemOutside'] = [1, paintedOut]; bins['itemSize'] = [1, A.itemSize];
           return Object.fromEntries(Object.entries(bins).map(([k, [n, s]]) => [k, +(s / n).toFixed(3)]));
         },
@@ -10894,7 +10949,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
         skirtPoints: (of: 'shown' | 'cloth' | 'places' = 'shown') => { const all = skirtRoom?.positions, n = skirtRoom?.draft.count ?? 0, x = of === 'shown' ? skirtRoom?.shown : !all ? null : of === 'cloth' ? (all.length >= n * 6 ? all.subarray(0, n * 3) : skirtRoom!.draft.hug && skirtRoom!.draft.fit <= 0 ? null : all.subarray(0, n * 3)) : all.length >= n * 6 ? all.subarray(n * 3, n * 6) : skirtRoom!.draft.hug ? all.subarray(0, n * 3) : null; if (!skirtRoom || !x) return null; const out = new Float32Array(n * 3); for (let i = 0; i < n * 3; i++) out[i] = x[i] / M; const bytes = new Uint8Array(out.buffer); let t = ''; for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return { columns: skirtRoom.draft.columns, rows: skirtRoom.draft.rows, data: btoa(t) }; },
         // her skirt's own numbers, as its panel moves them (`skirtChanged`): what she wears, and what a save would keep
         skirtSettings: (patch?: Partial<SkirtSettings> | null, final = true) => { if (patch && skirtShown) skirtChanged(clampSkirt({ ...skirtShown, ...patch }), final); else if (patch === null) adoptSkirt(null); return { shown: skirtShown, worn: skirtWorn, saved: currentClothes().skirt ?? null }; },
-        skirtParts: (capsules?: boolean | null, skin?: boolean | null, floor?: boolean | null) => { if (!skirtRoom) return null; if (typeof capsules === 'boolean') skirtRoom.probe.capsules = capsules; if (typeof skin === 'boolean') skirtRoom.probe.skin = skin; if (typeof floor === 'boolean') skirtRoom.probe.floor = floor; return { ...skirtRoom.probe }; },
+        skirtParts: (capsules?: boolean | null, skin?: boolean | null, floor?: boolean | null, taut?: boolean | null) => { if (!skirtRoom) return null; if (typeof capsules === 'boolean') skirtRoom.probe.capsules = capsules; if (typeof skin === 'boolean') skirtRoom.probe.skin = skin; if (typeof floor === 'boolean') skirtRoom.probe.floor = floor; if (typeof taut === 'boolean') skirtRoom.probe.taut = taut; return { ...skirtRoom.probe }; },
         skirtWire: (on: boolean) => { if (!skirtRoom) return false; (skirtRoom.mesh.material as THREE.MeshStandardMaterial).wireframe = on; return true; },
         garmentWire: (on: boolean) => { if (!garmentRoom) return false; (garmentRoom.cloth.mesh.material as THREE.MeshStandardMaterial).wireframe = on; return true; },
         // her particles now (world), and which piece each is of, for a probe drawing its own pictures

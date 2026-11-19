@@ -249,7 +249,7 @@ export class HeroineVitals {
   private extraBeats = 0;
   private extraBreaths = 0;
   /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): it makes her tire sooner. */
-  private readonly pregnancy: number;
+  private pregnancy: number;
   private gut: GutState = restingGut();
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
@@ -259,12 +259,22 @@ export class HeroineVitals {
    * `body`: her age in years and how many weeks pregnant she is (the builder's vitals add pregnancy's faster
    * heart, deeper breaths and lower staying power from these). Left out, the builder's own defaults are used.
    */
-  constructor(private readonly body: VitalsBody = {}) {
+  constructor(private body: VitalsBody = {}) {
     this.pregnancy = pregnancyShare(body.weeks);
     this.now = stepVitals(this.vitals, 0, 0, this.body);
     const [foodMl, waterMl] = VITALS_TUNING.startMeal;
     this.gut = gutEat(this.gut, foodMl, waterMl);
     this.needs = gutNeeds(this.gut);
+  }
+
+  /**
+   * HOW MANY WEEKS PREGNANT she is now (0: not pregnant): Settings and the time lapse change it while she plays
+   * (heroine/pregnancyPlan.ts). Her heart, breathing and staying power follow from the next step.
+   */
+  setWeeks(weeks: number): void {
+    if (weeks === (this.body.weeks ?? 0)) return;
+    this.body = { ...this.body, weeks };
+    this.pregnancy = pregnancyShare(weeks);
   }
 
   /** Move her vitals on by `dt` seconds of play. */

@@ -41,6 +41,7 @@ import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import type { IslandWorld } from './world/island/islandWorld';
+import { PregnancyPlan, weekText } from './heroine/pregnancyPlan';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
 import { Door, DoorUse, DOOR, bodyRadius as doorBodyRadius } from './world/door';
@@ -461,6 +462,24 @@ async function start(): Promise<void> {
   // the card along the top of the screen.
   const pace = new Pace();
   const vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
+
+  // HER PREGNANCY, to test (Joshua, 2026-11-19; heroine/pregnancyPlan.ts): on or off and her belly, from Settings (as
+  // her look has them until changed), the week off her own chart, and the time lapse from week 12 to her delivery week.
+  const { LOOKS: ALL_LOOKS } = await import('./heroine/looks');
+  const plan = new PregnancyPlan((ALL_LOOKS[tableLook]?.body as { pregnancy?: unknown } | undefined)?.pregnancy);
+  if (graphics.pregnant === null) graphics.pregnant = plan.lookPregnant ? 'on' : 'off';
+  if (graphics.belly === null) graphics.belly = Math.round(heroine.bellyNow?.() ?? plan.start);
+  const pregnantNow = (): boolean => graphics.pregnant === 'on';
+  /** Her belly and pregnancy as Settings (or the time lapse) have them, on her body, her live body and her vitals. */
+  const applyPregnancy = (): void => {
+    const belly = graphics.belly ?? plan.start;
+    heroine.setPregnant?.(pregnantNow());
+    heroine.setBelly(belly);
+    vitals.setWeeks(pregnantNow() ? plan.weekFor(belly) : 0);
+  };
+  applyPregnancy();
+  /** Her belly as Settings shows it: the percent and the week it stands for (or "not pregnant"). */
+  const bellyText = (percent: number): string => pregnantNow() ? `${percent}% · ${weekText(plan.weekFor(percent))}` : `${percent}% · not pregnant`;
   const vitalsPanel = new VitalsPanel();
   /** What her body allows this frame (her stamina, her share of full speed), from last frame's vitals. */
   let limits: PaceLimits = NO_LIMITS;
@@ -586,9 +605,24 @@ async function start(): Promise<void> {
       restart();
     },
     graphics,
+    bellyText,
+    // THE TIME LAPSE: pregnant, from week 12 at a day a second (a tap again stops it where it is)
+    onTimeLapse() {
+      if (plan.lapseWeek !== null) { plan.lapseWeek = null; saveSetting('belly', graphics.belly); hud.showBelly(graphics.belly ?? plan.start, null); return; }
+      graphics.pregnant = 'on';
+      saveSetting('pregnant', 'on');
+      plan.startLapse();
+    },
     onGraphicsChange(key, value) {
       graphics[key] = value;
       saveSetting(key, value);
+      // (her pregnancy and belly take hold at once; moving the belly by hand stops the time lapse)
+      if (key === 'pregnant' || key === 'belly' || key === 'bellyUnlocked') {
+        if (key === 'belly') plan.lapseWeek = null;
+        applyPregnancy();
+        hud.showBelly(graphics.belly ?? plan.start, null);
+        return;
+      }
       // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
       // heroine, so the game starts again with it.
       if (key === 'detail') heroine.setDetail?.(graphics.detail);
@@ -694,7 +728,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -805,7 +839,8 @@ async function start(): Promise<void> {
       lastMoveX = x; lastMoveY = y;
     }
     // HOW FAR ALONG SHE IS, by her belly now: 0 at her first visible belly, 1 at full term (PREGNANCY_ARC).
-    const carrying = Math.max(0, Math.min(1, ((heroine.bellyNow?.() ?? 100) - PREGNANCY_ARC.firstBump) / (PREGNANCY_ARC.fullTermBump - PREGNANCY_ARC.firstBump)));
+    // (not pregnant: her belly is only her shape, and does not slow her)
+    const carrying = pregnantNow() ? Math.max(0, Math.min(1, ((heroine.bellyNow?.() ?? 100) - PREGNANCY_ARC.firstBump) / (PREGNANCY_ARC.fullTermBump - PREGNANCY_ARC.firstBump))) : 0;
     // THE WEAPON TABLE'S ACTION, while one runs: it walks her to the table and turns her to it, and the stick waits.
     pace.carrying = carrying;
     tableAsk.yaw = turn.base;
@@ -1127,6 +1162,15 @@ async function start(): Promise<void> {
     heroine.setVitals?.(reading);
     vitalsPanel.show(reading);
     hud.setPace(pace.name, pace.ring);
+    // THE TIME LAPSE (Settings -> PREGNANCY): a day a second of play, her belly off her chart, to her delivery week
+    if (plan.lapseWeek !== null) {
+      const belly = plan.stepLapse(dt);
+      graphics.belly = Math.round(belly);
+      applyPregnancy();
+      const week = plan.lapseWeek;
+      hud.showBelly(belly, week === null ? null : weekText(week), true);
+      if (week === null) saveSetting('belly', graphics.belly); // (it has stopped at her delivery week: kept)
+    }
 
     // 6. Draw.
     dome.update(info);

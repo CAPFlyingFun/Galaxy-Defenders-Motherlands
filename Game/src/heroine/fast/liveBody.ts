@@ -46,6 +46,11 @@ import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
 import { openBuilderRoom, type BuilderRoom } from '../builderRoom';
 import { findPaintedSkin } from '../paintMask';
 import type { HeroineLook } from '../heroineLook';
+import { SARAH_LAB_ACTION, SARAH_LAB_FIELD } from '@charb/sarahlab/sarahLabTool';
+import { readPregnancy } from '@charb/sarahlab/pregnancy';
+
+/** The hidden body's belly follows hers at most this often (seconds): each change has the room refit her womb and baby. */
+const LIVE_BELLY_EVERY = 1;
 
 export interface LiveBody {
   /**
@@ -59,6 +64,13 @@ export interface LiveBody {
   readonly kickDir: readonly THREE.Vector4[];
   /** How many kicks are showing this frame. */
   kicking(): number;
+  /**
+   * HER BELLY AND HER PREGNANCY changed in the game (Settings, the time lapse; heroine/pregnancyPlan.ts): the hidden
+   * body follows, by the room's own BELLY slider and PREGNANT button, so the baby's kicks come from a womb her size, and
+   * none come while she is not pregnant. Her belly is passed on at most once a second.
+   */
+  setBelly(percent: number): void;
+  setPregnant(on: boolean): void;
   /** How long the hidden body took to open, seconds. */
   readonly openedIn: number;
   dispose(): void;
@@ -113,12 +125,27 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
   const kickAt = Array.from({ length: KICKS }, () => new THREE.Vector4());
   const kickDir = Array.from({ length: KICKS }, () => new THREE.Vector4(0, 0, 1, 0.03));
   let disposed = false;
+  // (her belly and pregnancy as the room has them, and the belly the game last asked for)
+  let roomBelly = look.body.bump, wantBelly = roomBelly, bellyWait = 0;
+  let pregnant = readPregnancy((look.body as { pregnancy?: unknown }).pregnancy).pregnant;
   return {
     kickAt, kickDir,
     openedIn: (performance.now() - began) / 1000,
+    setBelly(percent: number): void { wantBelly = Math.max(0, Math.min(200, Math.round(percent))); },
+    setPregnant(on: boolean): void {
+      if (disposed || on === pregnant) return;
+      pregnant = on;
+      room.press(SARAH_LAB_ACTION.pregnant); // (the room's own button: on or off, nothing else)
+    },
     step(dt: number): number {
       if (disposed) return 0;
       const before = performance.now();
+      bellyWait -= dt;
+      if (wantBelly !== roomBelly && bellyWait <= 0) {
+        bellyWait = LIVE_BELLY_EVERY;
+        roomBelly = wantBelly;
+        room.setSlider(SARAH_LAB_FIELD.bump, roomBelly);
+      }
       room.step(dt);
       for (let k = 0; k < KICKS; k++) { if (at[k]) kickAt[k].copy(at[k]); if (dir[k]) kickDir[k].copy(dir[k]); }
       return performance.now() - before;

@@ -186,6 +186,8 @@ export interface HeroineBody {
   setKnitStitch?(stitch: number): void;
   /** Belly size, 0-200 (%), as in the Character Builder. */
   setBelly(percent: number): void;
+  /** Pregnant or not (Settings; heroine/pregnancyPlan.ts). Optional: only a body with a live body inside has anything to change. */
+  setPregnant?(on: boolean): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */
   bellyNow?(): number;
 

@@ -865,7 +865,9 @@ if (uHideHead > 0.5) {
       showHair();
     },
 
-    setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); },
+    // (her hidden live body follows her belly and her pregnancy, so the kicks come from a womb her size: liveBody.ts)
+    setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); live?.setBelly(bellyWanted); },
+    setPregnant(on: boolean): void { live?.setPregnant(on); },
     bellyNow: () => body.belly,
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },

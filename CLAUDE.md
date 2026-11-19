@@ -131,7 +131,8 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.45 (copied 2026-11-19; Joshua says when to copy a newer one): it can now UPLOAD AN IMAGE as a
+- THE BUILDER, v0.9.49 (copied 2026-11-19 from its approved `main` 1344d7a: the hybrid pregnancy curve, kicks, exact
+  belly %; Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.
@@ -159,6 +160,15 @@ use the game's single copy of three.js.
   (`standAt`: a stand-in until swimming); the sea still stops her past her knees. `waterLevelAt` takes the NEAREST
   river sample (not the highest) and ignores reaches levelled below the sea.
   Not yet: trees and plants (`veg/`), swimming.
+- HER PREGNANCY (Joshua, 2026-11-19; `Game/src/heroine/pregnancyPlan.ts`): Settings -> PREGNANCY has Pregnancy on/off
+  (`gdm.pregnant`), a Belly slider 10-150% with a lock that opens all of 0-200% (`gdm.belly`, `gdm.bellyUnlocked`), the
+  week shown beside it off HER OWN builder chart (Blaze: START 10% = week 12, BIGGEST 150% at week 42, END 30%; the
+  builder's hybrid curve), and a TIME LAPSE from week 12 to her delivery week at a day a second (7 s a week, 224 s),
+  stopping there exactly, with the week in a chip at the top (a tap stops it). Off: her belly is only her shape (no
+  weeks for her vitals, no slowing, the hidden live body's PREGNANT pressed off so no kicks); the live body's belly
+  follows hers at most once a second. The story's plan: 10% not pregnant for a while; pregnancy on at 10% (= week 12);
+  growing with the weeks over quests to 150% at 42; off at the birth; over 3-4 game months settling to 30%. The birth and
+  the settling are for later.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

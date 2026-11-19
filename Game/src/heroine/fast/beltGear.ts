@@ -59,6 +59,19 @@ export const BELT = Object.freeze({
    * of the belt above her hip joints, at her front, her sides and her back. (Measured on Blaze's leggings.)
    */
   fallbackAboveHips: [-0.025, 0.07, 0.13] as readonly number[],
+  /**
+   * THE BELT KEPT CLOSE UNDER A BIG BELLY (`hugBody`): at her front (where the way round her has at least this much of
+   * straight ahead in it), the belt stands no further out than her pelvis does plus `hugSpare`. Her pelvis is measured
+   * 9 cm UNDER her hip joints (in a slab this thick): MEASURED 2026-11-19 on Blaze, her belly at 150 % hangs down to 4 cm
+   * under them, while 9 cm under them she is the same at every belly (4-5 cm out at her front). The spare is enough that
+   * her belt at a small belly (13 cm out at her front at 10 %) is left where it is.
+   */
+  hugFrom: 0.2,
+  hugHipsAbove: -0.09,
+  hugSlab: 0.012,
+  hugSpare: 0.09,
+  /** How many of the belt's slices each way its dropped line is smoothed over. */
+  hugSmooth: 4,
   /** The straps' width, inner face off her skin, and thickness. */
   strapWidth: 0.024,
   strapStandOff: 0.002,
@@ -491,8 +504,108 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       const top = spotAt(target, middle, undefined, out), bottom = spotAt(target.addScaledVector(UP, -BELT.width), middle, undefined, out);
       beltTop[k].v = top.v; beltTop[k].w = top.w; beltBottom[k].v = bottom.v; beltBottom[k].w = bottom.w;
     }
+    hugBody();
     for (const b of blended) { const m = blendSpot(b.a, b.b, b.t); b.spot.v = m.v; b.spot.w = m.w; }
   };
+  /**
+   * THE BELT KEPT CLOSE TO HER BODY UNDER A BIG BELLY (Joshua, 2026-11-19: "the belt under the belly seems to stretch,
+   * can we keep it closer to the body?"). The waistband her belt follows is a line on her SKIN, and as her belly grows
+   * the skin of her lower belly is carried forward and up with the bump: the belt's front climbed the underside of her
+   * belly and stretched wide. So at her front, wherever the belt would stand out further than her pelvis does (plus
+   * `hugSpare`), it is dropped down her skin to the highest place under her bump that is that close in.
+   */
+  function hugBody(): void {
+    const at = new THREE.Vector3();
+    // her skin round her middle, by angle (the belt's own slices), as she is shaped now
+    const bins: number[][] = Array.from({ length: N }, () => []);
+    for (const v of middle) {
+      const dx = rest[v * 3] - cx, dz = rest[v * 3 + 2] - cz;
+      bins[(Math.round((((Math.atan2(dx, dz) / (Math.PI * 2)) * N) % N) + N) % N)].push(v);
+    }
+    const radiusOf = (v: number): number => Math.hypot(rest[v * 3] - cx, rest[v * 3 + 2] - cz);
+    // how far out her pelvis is at each angle (low enough that no belly reaches it). Straight ahead at that height is
+    // the gap between her legs, with no skin: those angles take the nearest measured ones on either side.
+    const pelvis = new Float32Array(N);
+    for (let k = 0; k < N; k++) for (const v of bins[k]) if (Math.abs(rest[v * 3 + 1] - (hipY + BELT.hugHipsAbove)) < BELT.hugSlab) pelvis[k] = Math.max(pelvis[k], radiusOf(v));
+    const pelvisAt = (k: number): number => {
+      if (pelvis[k] > 0) return pelvis[k];
+      for (let d = 1; d < N / 4; d++) {
+        const l = pelvis[(k - d + N) % N], r = pelvis[(k + d) % N];
+        if (l > 0 && r > 0) return (l + r) / 2;
+        if (l > 0 || r > 0) return Math.max(l, r);
+      }
+      return 0;
+    };
+    // her skin's furthest reach at a height, at one angle (so the belt sits on her outside, not inside under a fold)
+    const outerAt = (k: number, y: number): number => {
+      let r = 0;
+      for (const v of bins[k]) if (Math.abs(rest[v * 3 + 1] - y) < BELT.hugSlab) r = Math.max(r, radiusOf(v));
+      return r;
+    };
+    // 1. at each angle of her front: how high the belt's top may be (unchanged where it is close enough in already)
+    const nowY = new Float32Array(N), wantY = new Float32Array(N), front = new Uint8Array(N);
+    for (let k = 0; k < N; k++) {
+      spotPlace(beltTop[k], at);
+      nowY[k] = wantY[k] = at.y;
+      if (Math.cos((k / N) * Math.PI * 2) < BELT.hugFrom) continue;   // (only her front: her sides and back do not move with her belly)
+      front[k] = 1;
+      const hips = pelvisAt(k);
+      if (hips <= 0) continue;
+      const most = hips + BELT.hugSpare;
+      if (Math.hypot(at.x - cx, at.z - cz) <= most) continue;
+      // the highest place under the belt's top, down her skin, whose outside is that close in
+      let bestY = -Infinity;
+      for (const v of bins[k]) {
+        const y = rest[v * 3 + 1];
+        if (y >= at.y || y <= bestY || y < hipY - 0.15 || radiusOf(v) > most) continue;
+        if (outerAt(k, y) <= most) bestY = y;
+      }
+      if (Number.isFinite(bestY)) wantY[k] = bestY;
+    }
+    // 2. one smooth line: each angle no higher than its neighbours want (a few slices each way), then eased, so the
+    //    belt runs in one even curve under her bump instead of dipping in a V at her middle
+    const lowest = new Float32Array(N);
+    for (let k = 0; k < N; k++) {
+      let m = wantY[k];
+      for (let d = -BELT.hugSmooth; d <= BELT.hugSmooth; d++) { const j = (k + d + N) % N; if (front[j]) m = Math.min(m, wantY[j]); }
+      lowest[k] = m;
+    }
+    for (let k = 0; k < N; k++) {
+      if (!front[k]) continue;
+      let sum = 0, n = 0;
+      for (let d = -BELT.hugSmooth; d <= BELT.hugSmooth; d++) { const j = (k + d + N) % N; sum += front[j] ? lowest[j] : nowY[j]; n++; }
+      const y = Math.min(nowY[k], sum / n);
+      if (y > nowY[k] - 0.002) continue;   // (it stays where it is)
+      // 3. the belt's top and bottom edges there, on her outside at that height
+      const out = beltOut[k], r = outerAt(k, y) || Math.hypot(at.x - cx, at.z - cz);
+      const target = new THREE.Vector3(cx + out.x * r, y, cz + out.z * r);
+      const top = spotAt(target, middle, undefined, out), bottom = spotAt(target.clone().addScaledVector(UP, -BELT.width), middle, undefined, out);
+      beltTop[k].v = top.v; beltTop[k].w = top.w; beltBottom[k].v = bottom.v; beltBottom[k].w = bottom.w;
+    }
+    // 4. ACROSS THE GAP BETWEEN HER LEGS the belt runs straight from one side to the other (a belt bridges it; pinned
+    //    to her skin it dipped in there and folded its buckle): where her pelvis had no skin to measure, the belt's
+    //    edges are blended from the nearest measured angles on either side
+    for (let k = 0; k < N; k++) {
+      if (!front[k] || pelvis[k] > 0 || nowY[k] - wantY[k] < 0.002) continue;
+      let l = -1, r = -1;
+      for (let d = 1; d < N / 4 && (l < 0 || r < 0); d++) {
+        if (l < 0 && pelvis[(k - d + N) % N] > 0) l = d;
+        if (r < 0 && pelvis[(k + d) % N] > 0) r = d;
+      }
+      if (l < 0 || r < 0) continue;
+      const left = (k - l + N) % N, right = (k + r) % N, t = l / (l + r);
+      const top = blendSpot(beltTop[left], beltTop[right], t), bottom = blendSpot(beltBottom[left], beltBottom[right], t);
+      gapTop[k] = top; gapBottom[k] = bottom;
+    }
+    for (let k = 0; k < N; k++) {
+      const top = gapTop[k], bottom = gapBottom[k];
+      if (!top || !bottom) continue;
+      beltTop[k].v = top.v; beltTop[k].w = top.w; beltBottom[k].v = bottom.v; beltBottom[k].w = bottom.w;
+      gapTop[k] = gapBottom[k] = null;
+    }
+  }
+  /** (step 4's blends, kept until every angle's is worked out: each is made from its neighbours' unblended spots) */
+  const gapTop: (Spot | null)[] = new Array(N).fill(null), gapBottom: (Spot | null)[] = new Array(N).fill(null);
   placeBelt(src.belly);
   const beltTopAt = beltTop.map((t) => spotPlace(t, new THREE.Vector3())), beltBottomAt = beltBottom.map((t) => spotPlace(t, new THREE.Vector3()));
   band(beltTop, beltBottom, beltOut, BELT.standOff, BELT.thick, true, C.belt, C.edge);

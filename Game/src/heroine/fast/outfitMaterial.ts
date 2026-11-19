@@ -70,11 +70,21 @@ export interface ClothShine {
    * picture and its size can change while she moves (`SkinMaterials.setKnitStitch`). Its stitch is the builder's:
    * 1 is the knit at its own size, a 5 cm repeat. Left out: none (the knit is only what the bake painted).
    */
-  readonly knit?: { readonly stitch: number; readonly strength: number };
+  readonly knit?: KnitTile & { readonly stitch: number; readonly strength: number };
 }
 
-/** The live knit's swatch, its middle brightness (0 to 1, measured from the file) and its repeat at stitch 1 (metres). */
-const KNIT = Object.freeze({ file: 'fabrics/athletic-darkgray-tile.jpg', middle: 46.2 / 255, tileMetres: 0.05 });
+/** A live knit's picture: its file (in public/), its middle brightness (0-255, as measured from the file). */
+export interface KnitTile { readonly file: string; readonly middle: number }
+/** The athletic knit's Dark gray swatch, from Joshua's fabric pack. */
+export const ATHLETIC_KNIT: KnitTile = Object.freeze({ file: 'fabrics/athletic-darkgray-tile.jpg', middle: 46.2 });
+/**
+ * THE PERFORATED MESH of Look 1's picture (Joshua, 2026-11-19: "a multi-layer breathable mesh, but where no skin
+ * shows through the holes"), drawn by scripts/make_mesh_tile.py (which prints its middle brightness).
+ */
+export const PERFORATED_MESH: KnitTile = Object.freeze({ file: 'fabrics/perforated-mesh-tile.png', middle: 122.3 });
+
+/** A live knit's repeat at stitch 1, metres (the builder's athletic knit: 5 cm). */
+const KNIT = Object.freeze({ tileMetres: 0.05 });
 
 /**
  * @param unitsPerMetre  how many of her skin model's own units make a metre (the live knit's size is in metres)
@@ -82,10 +92,10 @@ const KNIT = Object.freeze({ file: 'fabrics/athletic-darkgray-tile.jpg', middle:
 export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine, unitsPerMetre = 1): SkinMaterials {
   // THE LIVE KNIT's swatch and its numbers, shared by both materials (so the slider moves them together)
   const knitUniforms = shine?.knit ? {
-    knitMap: { value: new THREE.TextureLoader().load(import.meta.env.BASE_URL + KNIT.file, (t) => { t.needsUpdate = true; }) },
+    knitMap: { value: new THREE.TextureLoader().load(import.meta.env.BASE_URL + shine.knit.file, (t) => { t.needsUpdate = true; }) },
     knitTile: { value: KNIT.tileMetres * shine.knit.stitch * unitsPerMetre },
     knitStrength: { value: shine.knit.strength },
-    knitMiddle: { value: KNIT.middle },
+    knitMiddle: { value: shine.knit.middle / 255 },
   } : null;
   if (knitUniforms) {
     const t = knitUniforms.knitMap.value;

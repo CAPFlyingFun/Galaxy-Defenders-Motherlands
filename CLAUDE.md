@@ -153,7 +153,12 @@ use the game's single copy of three.js.
   is kept as a test map (Settings -> WORLD -> Map, `gdm.map`, `?map=town`) until Joshua picks its place on the island.
   Her FEET stand on the ground under each of them (`footGround.ts` 9, `setGround`): she comes down to her lower
   planted foot's ground, the higher knee bends, each foot is tipped along its slope (up to about 28 degrees).
-  Not yet: rivers/lakes (`hydro.json`), trees and plants (`veg/`), swimming.
+  RIVERS AND LAKES (Joshua, 2026-11-19; `carve.ts`, `carveCore.ts`, `hydro.ts`, from BE): the real waterways are cut
+  into each tile's heights as it arrives and filled with water levelled on the FINE grid (`fineHeightAtIsland`), built
+  per tile once its 4 neighbours are in. In a river or lake deeper than 1.25 m she is held up to her shoulders
+  (`standAt`: a stand-in until swimming); the sea still stops her past her knees. `waterLevelAt` takes the NEAREST
+  river sample (not the highest) and ignores reaches levelled below the sea.
+  Not yet: trees and plants (`veg/`), swimming.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

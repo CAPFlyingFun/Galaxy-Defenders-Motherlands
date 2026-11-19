@@ -267,11 +267,14 @@ async function start(): Promise<void> {
     });
     await breathe();
   }
-  /** The ground's height under her, metres (0 on the flat town; the last good height if a tile is not in yet). */
+  /**
+   * Where her feet go, metres: 0 on the flat town; on the island the ground, or in a deep river or lake, held up in the
+   * water to her shoulders (islandWorld.ts standAt). The last good height if a tile is not in yet.
+   */
   let groundY = 0;
   const groundUnder = (x: number, z: number): number => {
     if (!island) return 0;
-    const g = island.groundAt(x, z);
+    const g = island.standAt(x, z);
     if (Number.isFinite(g)) groundY = g;
     return groundY;
   };
@@ -489,7 +492,7 @@ async function start(): Promise<void> {
     rig.camera.far = 20000;
     rig.camera.updateProjectionMatrix();
     rig.groundAt = island.groundAt;
-    heroine.setGround?.(island.groundAt); // (her feet on the ground under each of them, along its slope)
+    heroine.setGround?.(island.standAt); // (her feet on the ground under each of them, along its slope; in deep water, held up)
     rig.droneLimit = Infinity;
     rig.faceAtOnce(island.arrivalFacing);
   }

@@ -21,12 +21,13 @@
 //   * No fading in and out: the far island is under every tile, so a tile can
 //     simply appear (and the far island leave that square out) on one frame.
 //   * One ground material for all tiles, and they take her shadow.
-//   * No rivers carved in yet (Beyond Extinction cuts them into the heights;
-//     they come back with the water, later).
+//   * The rivers and lakes are cut into each tile's heights as it arrives
+//     (carve.ts), as in Beyond Extinction.
 // ============================================================================
 import * as THREE from 'three';
 import { FAR_TILE_SEG, SEG, renderedSurfaceHeight } from './terrainSampling';
 import { makeGroundMaterial, type GroundPictures } from './groundPaint';
+import type { CarveData } from './carve';
 
 /** The island's list of tiles (public/island/kauai/manifest.json; only what is used here). */
 export interface IslandManifest {
@@ -84,8 +85,9 @@ export class TileStreamer {
   /**
    * @param base    where the island's files are (the game's address + "island/")
    * @param origin  the arrival point in the island's own metres: the game's (0, 0)
+   * @param carve   the rivers and lakes, cut into each tile's heights as it arrives (null: none)
    */
-  constructor(private readonly manifest: IslandManifest, pictures: GroundPictures, private readonly base: string, private readonly origin: THREE.Vector2) {
+  constructor(private readonly manifest: IslandManifest, pictures: GroundPictures, private readonly base: string, private readonly origin: THREE.Vector2, private readonly carve: CarveData | null = null) {
     this.S = manifest.tileSizeM;
     this.P = manifest.tilePixels;
     for (const t of manifest.tiles) this.byId.set(t.id, t);
@@ -114,6 +116,20 @@ export class TileStreamer {
     const t = this.tiles.get(TileStreamer.key(this.colOf(gameX), this.rowOf(gameZ)));
     if (!t?.heights) return NaN;
     return renderedSurfaceHeight(t.heights, this.P, this.S, gameX + this.origin.x - t.cx, gameZ + this.origin.y - t.cz, t.seg);
+  }
+
+  /**
+   * FOR THE WATER (hydro.ts), in the ISLAND'S own metres: the ground's height on the FINE grid, whatever grid the tile
+   * is drawn with for now (so the rivers are levelled once, to the ground she will walk on), and whether a tile is in.
+   */
+  fineHeightAtIsland(ix: number, iz: number): number {
+    const col = Math.round(ix / this.S + 3.5), row = Math.round(iz / this.S + 3.5);
+    const t = this.tiles.get(TileStreamer.key(col, row));
+    if (!t?.heights) return 0;
+    return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, SEG);
+  }
+  tileReadyAtIsland(ix: number, iz: number): boolean {
+    return !!this.tiles.get(TileStreamer.key(Math.round(ix / this.S + 3.5), Math.round(iz / this.S + 3.5)))?.heights;
   }
 
   /** How many of the tiles that should be round (gameX, gameZ) are loaded, of how many (for the loading bar). */
@@ -200,6 +216,11 @@ export class TileStreamer {
       if (this.tiles.get(key) === tile) this.tiles.delete(key);
       this.curCol = -99; // (so the next frame redoes the ring and asks for it again)
       return;
+    }
+    // the rivers' channels and the lakes' beds cut in before anything reads the heights (carve.ts)
+    if (this.carve) {
+      await this.carve.prefetch();
+      this.carve.applyToTile(heights, this.P, this.S, col, row);
     }
     if (this.tiles.get(key) !== tile) return;
     if (!tile.wanted) { this.tiles.delete(key); return; }

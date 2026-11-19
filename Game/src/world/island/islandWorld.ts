@@ -23,6 +23,8 @@ import { loadGroundPictures } from './groundPaint';
 import { TileStreamer, type IslandManifest } from './tileStreamer';
 import { createFarIsland } from './farIsland';
 import { createOcean, WATER_Y, type Ocean } from './ocean';
+import { CarveData } from './carve';
+import { KauaiHydro } from './hydro';
 
 /** The arrival point in the island's own metres (Beyond Extinction's spawn, from its manifest). */
 const ARRIVAL = { x: 21290, z: 1288 };
@@ -39,6 +41,12 @@ const WADE_DEPTH = 0.6;
 const STEEPEST_UP = 1.2;
 /** A step is checked in pieces no longer than this, metres, so she cannot skip over a cliff edge. */
 const PIECE = 0.5;
+/**
+ * IN A RIVER OR LAKE deeper than this (metres), she does not walk along the bottom: she stands this far down in the
+ * water, her head and shoulders out, as if treading water (no swimming yet: Joshua, 2026-11-19, the waterways first).
+ * The sea is different: past her knees it stops her (WADE_DEPTH), so she cannot set off from the island.
+ */
+const STAND_IN_WATER = 1.25;
 
 /** The haze: none up to here, the far coast fades into it by there (metres from the camera). */
 const FOG_NEAR = 3000;
@@ -55,6 +63,13 @@ export interface IslandWorld {
   readonly arrivalFacing: number;
   /** The height of the ground at a place, metres (NaN if that tile is not loaded). */
   groundAt(x: number, z: number): number;
+  /**
+   * Where her feet are at a place: the ground, or in a river or lake deeper than STAND_IN_WATER, that far under its
+   * surface (she is in the water to her shoulders). NaN if that tile is not loaded.
+   */
+  standAt(x: number, z: number): number;
+  /** The surface of a river or lake at a place, metres (null where there is none). */
+  waterAt(x: number, z: number): number | null;
   /** Wait until the tiles round (x, z) are all loaded, telling `say` how far along it is. */
   ready(x: number, z: number, say: (done: number, of: number) => void): Promise<void>;
   /** Every frame: tiles follow her, the sea follows the camera. */
@@ -64,14 +79,19 @@ export interface IslandWorld {
 
 /** The ground she cannot walk onto: the sea past her knees, and steep slopes going up. */
 class IslandWalls implements Walls {
-  constructor(private readonly groundAt: (x: number, z: number) => number) {}
+  /**
+   * @param groundAt  the ground itself (for the sea's depth)
+   * @param standAt   where her feet go (the ground, or held up in a deep river or lake): for slopes
+   */
+  constructor(private readonly groundAt: (x: number, z: number) => number, private readonly standAt: (x: number, z: number) => number) {}
 
   /** Can she step from (ax, az) to (bx, bz)? */
   private allowed(ax: number, az: number, bx: number, bz: number): boolean {
-    const to = this.groundAt(bx, bz);
-    if (Number.isNaN(to)) return false;            // (no ground loaded there yet)
-    if (to < WATER_Y - WADE_DEPTH) return false;   // too deep
-    const from = this.groundAt(ax, az);
+    const ground = this.groundAt(bx, bz);
+    if (Number.isNaN(ground)) return false;         // (no ground loaded there yet)
+    if (ground < WATER_Y - WADE_DEPTH) return false; // the sea, too deep
+    const to = this.standAt(bx, bz);
+    const from = this.standAt(ax, az);
     const across = Math.hypot(bx - ax, bz - az);
     return Number.isNaN(from) || across < 1e-6 || (to - from) / across <= STEEPEST_UP;
   }
@@ -105,12 +125,24 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
   ]);
   const group = new THREE.Group();
   group.name = 'island';
-  const tiles = new TileStreamer(manifest, pictures, base, origin);
+  // the rivers and lakes: fetched at once (the tiles wait for them, to cut their channels in: carve.ts)
+  const carve = new CarveData(base);
+  void carve.prefetch();
+  const tiles = new TileStreamer(manifest, pictures, base, origin, carve);
   group.add(tiles.group);
   const far = await createFarIsland(base, manifest.tileSizeM * 8, pictures, tiles.shown, origin);
   group.add(far);
   const ocean: Ocean = createOcean(base, manifest.tileSizeM * 8, origin);
   group.add(ocean.mesh);
+  // THE WATERWAYS (hydro.ts): made in the island's own metres, so their group is shifted by the arrival point
+  const waterGroup = new THREE.Group();
+  waterGroup.position.set(-origin.x, 0, -origin.y);
+  group.add(waterGroup);
+  const hydro = new KauaiHydro(waterGroup, base, carve);
+  const hydroGround = {
+    surfaceHeightAt: (ix: number, iz: number) => tiles.fineHeightAtIsland(ix, iz),
+    tileReadyAt: (ix: number, iz: number) => tiles.tileReadyAtIsland(ix, iz),
+  };
 
   // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze
   scene.background = new THREE.Color(HAZE);
@@ -124,9 +156,17 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
   }).catch(() => { /* the plain haze colour stays */ });
 
   const groundAt = (x: number, z: number): number => tiles.heightAt(x, z);
+  const waterAt = (x: number, z: number): number | null => hydro.waterLevelAt(x + origin.x, z + origin.y);
+  const standAt = (x: number, z: number): number => {
+    const ground = groundAt(x, z);
+    const level = waterAt(x, z);
+    return level !== null && level - ground > STAND_IN_WATER ? level - STAND_IN_WATER : ground;
+  };
   return {
     group,
-    walls: new IslandWalls(groundAt),
+    walls: new IslandWalls(groundAt, standAt),
+    standAt,
+    waterAt,
     arrivalFacing: ARRIVAL_FACING,
     groundAt,
     async ready(x, z, say) {
@@ -141,10 +181,12 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
     },
     update(seconds, herX, herZ, camera) {
       tiles.update(herX, herZ);
+      hydro.update(seconds, hydroGround);
       ocean.update(seconds, camera);
     },
     dispose() {
       tiles.dispose();
+      hydro.dispose();
       far.geometry.dispose();
       (far.material as THREE.Material).dispose();
       ocean.dispose();

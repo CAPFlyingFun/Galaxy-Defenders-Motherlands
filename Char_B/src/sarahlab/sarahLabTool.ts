@@ -15,7 +15,6 @@ import type { RandomSpec } from '../actor/bodyRandom';
 import type { DevTool } from '../devtools/DevTool';
 import type { FabricFamilyId } from './fabricLibrary';
 import type { GarmentSettings } from './garment/settings';
-import type { SkirtSettings } from './skirt/skirtDraft';
 
 export const SARAH_LAB_SCENE_ID = 'lab:sarah';
 export const SARAH_LAB_TOOL_ID = 'lab.sarah';
@@ -693,60 +692,6 @@ export const CLOTH_TOPS: readonly (readonly [name: string, tint: string | null, 
 /** A modelled garment's fabric in a built-in outfit, as the editor's FABRIC would set it. */
 export type OutfitFabric = PaintedLayer['fabric'];
 /**
- * THE SKIRTS' PILOT (Joshua, 2026-11-16: "a combination of paint and cloth for like skirts, etc… that are loose and
- * flowing"; "have the top of the skirt above or below the belly, with adjustable length all the way down to the ground
- * and you can select how tight/close it is to the body"). Each is a short painted in its colour -- its fitted part, and
- * its waistband: the high rise's over her belly, the under-belly leggings' own under it (`SKIRT_UNDER_BAND`) -- and one
- * sheet of cloth hung from just under that band (`skirt/skirtDraft.ts`): [its name, its colour, its top, length and
- * flare]. GAME TUNING, to be his.
- */
-/** GAME TUNING: an over-belly skirt's painted waistband's top, on her trunk: in the crease at the base of her breasts
- *  (his, 2026-11-17; MEASURED 0.61 to 0.64 on her body file), and the tee over it ends a little under that, under the band (ended AT it, a sliver of her skin showed between
- *  the two -- MEASURED in the room). Behind, the dial's most (0.6). */
-export const SKIRT_OVER_BAND = 0.63;
-/**
- * AN UNDER-BELLY SKIRT'S PAINTED PART IS THE UNDER-BELLY LEGGINGS, CUT SHORT (Joshua, 2026-11-17, of the skirts moved
- * under her belly on a short of their own, its waistband at three heights on her trunk: "how the skirt should sit is
- * like how we did the lower rider leggings, just above her pelvis, below her belly following that same curved
- * lines…"). That style's waistband -- his line, a hoop that swings down under her belly as it grows (`bottomCut.ts`
- * `planeAt`), its band 1.5 cm -- with its legs ended where a short's are; and the cloth's ring is laid on that same
- * line (`skirt/skirtDraft.ts` `SKIRT_LINE`, `fabricPanel.hoopOn`). `SKIRT_UNDER_LEGS`: LEG LENGTH, the short
- * shorts' own. Until then it was the short shorts with WAISTBAND 0.125 and HIPS & BACK RISE 0.19: a waistband ON her
- * belly, which rides her skin as it stretches -- up the front of her bump.
- */
-export const SKIRT_UNDER_BAND = 'leggingsUnder', SKIRT_UNDER_LEGS = 0.12;
-/** A skirt's painted part: its short in its colour, by its top. */
-export function skirtPaint(skirt: Pick<SkirtSettings, 'top'>, tint: string): PaintedLayer {
-  const fabric = { family: 'athletic', colour: 0, tint } as const;
-  return skirt.top === 'under' ? { template: SKIRT_UNDER_BAND, fabric, dials: { legEnd: SKIRT_UNDER_LEGS } } : { template: 'shortsAthletic', fabric, dials: { rise: SKIRT_OVER_BAND, riseBack: SKIRT_OVER_BAND - 0.03 } };
-}
-export const SKIRTS: readonly (readonly [string, string, SkirtSettings])[] = Object.freeze([
-  // (ALL FOUR SIT LOW since 2026-11-17 -- Joshua: "Leave it sit low, most don't actually ride high… For now, only do
-  //  under the belly since that's how most skirts sit, lol, we can come back to the look over later": the A-line and
-  //  the maxi were over her belly, in the crease under her bust. An over-belly skirt is still the probe's to put on)
-  // LENGTH IS ON HIS DRAWING'S SCALE since the same day (`skirtDraft.SKIRT_CUT.shortest`: 0 where her legs part, a half
-  // a hand under her knee, 1 the floor). The A-line, the pencil and the maxi end where they did (0.17, 0.4 and 1 on the
-  // scale there was: within 3 mm); THE MINI IS A MINI NOW, at her mid-thigh, 17 cm over her knee -- on the old scale it
-  // could be no shorter than 8 cm over it. GAME TUNING, his to set: the sliders are to come.
-  ['cloth A-line skirt (under belly)', '#3d5a80', { top: 'under', length: 0.36, flare: 0.55, tucked: false }],
-  ['cloth mini skirt (under belly)', '#8a2f45', { top: 'under', length: 0.15, flare: 0.75, tucked: false }],
-  ['cloth maxi skirt (under belly)', '#2f5d50', { top: 'under', length: 1, flare: 0.4, tucked: false }],
-  ['cloth pencil skirt (under belly)', '#3a3a40', { top: 'under', length: 0.54, flare: 0, tucked: false }],
-] as const);
-/**
- * A CLOTH TEE WITH A CLOTH SKIRT (Joshua, 2026-11-16: "have you tried both cloth shirt over a cloth skirt yet?"; "an
- * option for a high waisted skirt to be above or under the shirt, while under the belly is always under the shirt";
- * 3 mm between the two cloths: `clothLayers.ts`): [its name, the skirt's colour, the skirt, the tee's own cut]. TUCKED,
- * the tee is the cropped one, so there is a hand of it under the skirt and not a hip-length shirt. GAME TUNING.
- */
-export const TEE_SKIRTS: readonly (readonly [string, string, SkirtSettings, Partial<GarmentSettings>])[] = Object.freeze([
-  // (low as well since 2026-11-17, and under her belly the tee is always over the skirt: these two were the tee tucked
-  //  into a high A-line, and over a high one)
-  ['cloth tee over A-line skirt (under belly)', '#3d5a80', { top: 'under', length: 0.36, flare: 0.55, tucked: false }, { neckDepth: 0.04 }],
-  ['cloth tee over maxi skirt (under belly)', '#2f5d50', { top: 'under', length: 1, flare: 0.4, tucked: false }, { neckDepth: 0.04 }],
-  ['cloth tee over mini skirt (under belly)', '#8a2f45', { top: 'under', length: 0.15, flare: 0.75, tucked: false }, { neckDepth: 0.04 }],
-] as const);
-/**
  * A built-in outfit. `procedural`: its tee is the PROCEDURAL GARMENT (`garment/roomGarment.ts`) in that construction,
  * simulated as cloth and wearing the light tee's own material (so `garments` names the light tee, whose file carries
  * the material and its FABRIC, and `fabrics` dyes it), in place of the light tee and its cloth copy. `trims`: a
@@ -755,9 +700,7 @@ export const TEE_SKIRTS: readonly (readonly [string, string, SkirtSettings, Part
  */
 export interface BuiltInOutfit { readonly name: string; readonly garments: readonly Garment[]; readonly paint?: readonly PaintedLayer[]; readonly fabrics?: Partial<Record<Garment, OutfitFabric>>; readonly trims?: Partial<Record<Garment, OutfitFabric>>; readonly procedural?: 'raglan' | 'setIn';
   /** A procedural tee's own settings where they are not the approved tee's (`garment/settings.ts`): its neckline, its sleeves, its length. */
-  readonly cut?: Partial<GarmentSettings>;
-  /** A SKIRT AS CLOTH over its paint (`skirt/skirtDraft.ts`): its top, its length, its flare. Its colour is its first paint layer's. */
-  readonly skirt?: SkirtSettings }
+  readonly cut?: Partial<GarmentSettings> }
 export const OUTFITS: readonly BuiltInOutfit[] = [
   { name: 'tee + leggings', garments: ['shirtAthletic', 'leggings'] },
   { name: 'top + low leggings', garments: ['shirtAthletic', 'leggingsLow'] },
@@ -834,20 +777,6 @@ export const OUTFITS: readonly BuiltInOutfit[] = [
     name, garments: ['shirtSpandexLite'], paint: [{ template: 'leggingsFull', fabric: { family: 'athletic', colour: 1 } }],
     fabrics: { shirtSpandexLite: { family: 'jersey', colour: 0, ...(tint ? { tint } : {}) } }, procedural: construction ?? 'raglan', cut,
   })),
-  // THE SKIRTS' PILOT (`SKIRTS`): paint and cloth together. Put after everything there was: no outfit has moved.
-  ...SKIRTS.map(([name, tint, skirt]): BuiltInOutfit => ({
-    name, garments: [], skirt,
-    paint: [
-      skirtPaint(skirt, tint),
-      { template: 'cropTee', fabric: { family: 'jersey', colour: 0, tint: SHEET_BOTTOMS.tee }, dials: { hem: skirt.top === 'under' ? SHEET_BOTTOMS_TEE_HEM : SKIRT_OVER_BAND - 0.03 } },
-    ],
-  })),
-  // ...AND WITH THE CLOTH TEE (`TEE_SKIRTS`): the new tee over or under the skirt, the skirt's painted short under both.
-  ...TEE_SKIRTS.map(([name, tint, skirt, cut]): BuiltInOutfit => ({
-    name, garments: ['shirtSpandexLite'], skirt, procedural: 'raglan', cut,
-    paint: [skirtPaint(skirt, tint)],
-    fabrics: { shirtSpandexLite: { family: 'jersey', colour: 0 } },
-  })),
 ];
 /**
  * NAMES THE BUILT-IN OUTFITS HAD (Joshua, 2026-11-13: "let's remove the word Sarah and keep everything generic"): the
@@ -858,11 +787,6 @@ export const OUTFIT_FORMER_NAMES: Readonly<Record<string, string>> = Object.free
   'Sarah · red raglan tee + charcoal leggings': 'red raglan tee + charcoal leggings',
   'Sarah · red spandex tee + charcoal leggings': 'red spandex tee + charcoal leggings',
   'Sarah · red tee + charcoal leggings': 'red tee + charcoal leggings',
-  // (the skirts that sat over her belly until 2026-11-17, v0.9.41 and v0.9.42)
-  'cloth A-line skirt (over belly)': 'cloth A-line skirt (under belly)',
-  'cloth maxi skirt (over belly)': 'cloth maxi skirt (under belly)',
-  'cloth tee tucked into A-line skirt': 'cloth tee over A-line skirt (under belly)',
-  'cloth tee over high A-line skirt': 'cloth tee over maxi skirt (under belly)',
 });
 /** The built-in outfit of this name, or of a name it used to have; -1 for none. */
 export function outfitNamed(name: string | null | undefined): number {

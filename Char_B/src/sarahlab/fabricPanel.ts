@@ -35,11 +35,11 @@ import * as THREE from 'three';
 import type { ShapeFields } from '../view/bodyShapeView';
 import {
   DEFAULT_CHOICE, FABRIC_FAMILIES, OPACITY_RANGE, STITCH_RANGE, SWATCH_HEX, base64ToBytes, bytesToBase64, colourName, edgingOf,
-  fabricFamily, matchSet as matchedSet, opacityOf, setMatches, swatchRect, tileUnits, trimPick, IMAGE_TILE_CM, type FabricChoice, type FabricFamilyId, type FabricLayout,
+  fabricFamily, matchSet as matchedSet, opacityOf, setMatches, swatchRect, tileUnits, trimPick, type FabricChoice, type FabricFamilyId, type FabricLayout,
   type FabricPick, type FabricSet, type OutfitConfig, type PaintTool,
 } from './fabricLibrary';
 import { LOW_SLIP_ATTRIBUTE, ensureRest, fabricCutWorn, fabricFieldWorn, fabricLowWorn, fabricSlip, fieldCells, setArmSkin, setDetailKeep, setFabricCut, setFabricCutArms, setFabricLayer, setFabricLow, setFabricLowFold, setFabricLowFoldStretch, setFabricLowInner, setFabricLowLegs, setFabricLowMoon, setFabricLowSwing, setHang, setRegionOverlay, setUnder, type FabricCut, type FabricLayer, type FabricLow } from './fabricMaterial';
-import { FOLD_LINE, LOW_CUT, bandInner, bandStations, foldEase, foldLift, foldNear, foldOf, foldStretch, frontMoon, innerMoon, stationEdges, hoopInside, isDrawnBottom, legBlend, legPlanes, limbSkin, lowFrame, lowSpec, planeFront, planeShare, roomAt, swingOf, type BandPoint, type BandStations, type FrontMoon, type LowFrame, type LowLeg, type LowSpec } from './bottomCut';
+import { FOLD_LINE, LOW_CUT, bandInner, bandStations, foldEase, foldLift, foldNear, foldOf, foldStretch, frontMoon, innerMoon, stationEdges, isDrawnBottom, legBlend, legPlanes, limbSkin, lowFrame, lowSpec, planeFront, planeShare, roomAt, swingOf, type BandPoint, type BandStations, type FrontMoon, type LowFrame, type LowLeg, type LowSpec } from './bottomCut';
 import { makePulledSlip, pulledSlipDriver, type PulledDriver } from './pulledSlip';
 import { MOTION_SHAPES } from './levelLine';
 import { ARMSCYE, TOP_CUT, cutPicture, isCutTop, isOnePiece, sleevePlane, topFrame, type TopCut, type TopFrame } from './topCut';
@@ -54,7 +54,6 @@ import { LEVEL_LINE_OFFERED, lineModeLine, lineModeNote, nextLineMode, type Line
 import { BODY_REGIONS, REGION_GROUPS, groupOf, groupRegions, type BodyMap, type RegionSide } from './bodyRegions';
 import { CleavageBridge } from './cleavageBridge';
 import { TINT_BASE_COLOUR, readTint, tintLabel, tintPixels } from './fabricTint';
-import { keepUpload, pictureImage, pictureName } from './pictureStore';
 import { HEM_LIFT_FLAT, HEM_LIFT_RIBBED, TunicDrape } from './tunicDrape';
 import { AUTO_DETAIL, type DetailOverride, type SavedClothes } from './characterSaves';
 import {
@@ -131,8 +130,6 @@ export const FABRIC_ACTION = Object.freeze({
   /** The CUSTOM colour: any colour, dyed into the family's White (fabricTint.ts). */
   custom: 'sarahlab:fabric:colour:custom',
   trimCustom: 'sarahlab:fabric:trim-colour:custom',
-  /** UPLOAD IMAGE: a picture of his own for the piece selected (`pictureStore.ts`). */
-  image: 'sarahlab:fabric:image',
   trimFamily: (id: FabricFamilyId) => `sarahlab:fabric:trim-family:${id}`,
   trimColour: (i: number) => `sarahlab:fabric:trim-colour:${i}`,
   match: 'sarahlab:fabric:match',
@@ -153,7 +150,6 @@ export const FABRIC_ACTION = Object.freeze({
   detailAuto: (which: 'nipple' | 'navel' | 'vulva') => `sarahlab:fabric:detail-auto:${which}`,
 });
 export const FABRIC_FIELD = Object.freeze({
-  imageFile: 'fabric-image-file', imageNote: 'fabric-image-note',
   nippleKeep: 'fabric-nipple-keep', navelKeep: 'fabric-navel-keep', vulvaKeep: 'fabric-vulva-keep', detailInfo: 'fabric-detail-info',
   style: 'fabric-style', styles: 'fabric-styles', stitch: 'fabric-stitch', opacity: 'fabric-opacity', brush: 'fabric-brush', status: 'fabric-status', pieces: 'fabric-pieces',
 });
@@ -296,19 +292,6 @@ export interface FabricPanel {
    */
   /** A fabric's pictures or a designed garment's field are still being fetched for what she wears: she is not dressed yet. */
   busy(): boolean;
-  /**
-   * How far inside a style's hoop of a waistband each point of her skin is, as she is shaped (`bottomCut.hoopInside`:
-   * metres, + inside the garment, one a point) -- for a cloth skirt's ring, which is laid on that line. `shaped`: her
-   * points before her bones pose her, xyz each, her mesh's own units. Null for a style whose waistband is no hoop,
-   * and before her body is measured.
-   */
-  hoopOn(template: string, shaped: ArrayLike<number>): Float32Array | null;
-  /**
-   * (the room's) One slider of every paint layer that wears `template`, set as the editor's own slider sets it: a cloth
-   * skirt's painted part's LEG LENGTH, which follows the skirt's numbers (`skirtDraft.paintedLegs`). Not a change by
-   * hand: what moved it is the skirt, which is kept as its own. False where no layer wears it, or it is there already.
-   */
-  setDial(template: string, dial: CoverageDial['id'], value: number): boolean;
   lowState(): {
     readonly frame: { readonly unitsPerMetre: number; readonly mid: number; readonly hipY: number; readonly trunk: number; readonly facing: number; readonly legs: readonly { readonly name: string; readonly thigh: number; readonly shin: number }[] };
     readonly worn: boolean;
@@ -582,29 +565,6 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
   custom.addEventListener('click', (e) => e.stopPropagation());
   custom.appendChild(customInput);
   colours.append(custom);
-  // A PICTURE OF HIS OWN for the piece selected (Joshua, 2026-11-19: "it should be for that top/bottom, etc… and what's
-  // selected"): it replaces the swatch or colour of this piece alone; a family, a swatch or a colour picked after puts
-  // it back to that. SCALE sizes it (`IMAGE_TILE_CM` at 1).
-  const imageRow = row(), imageNote = el('div', 'font-size:11px;opacity:.75;line-height:1.4;overflow-wrap:anywhere');
-  imageNote.dataset.field = FABRIC_FIELD.imageNote;
-  const imageInput = el('input', 'display:none');
-  imageInput.type = 'file'; imageInput.accept = 'image/*'; imageInput.dataset.field = FABRIC_FIELD.imageFile;
-  const imageButton = button('UPLOAD IMAGE…', FABRIC_ACTION.image, () => imageInput.click());
-  let imageBusy = false;
-  imageInput.addEventListener('change', () => {
-    const f = imageInput.files?.[0]; imageInput.value = '';
-    if (!f) return;
-    const forTarget = target;
-    imageBusy = true; imageNote.textContent = `Loading ${f.name}…`;
-    void keepUpload(f).then(({ id }) => {
-      imageBusy = false;
-      if (disposed) return;
-      if (target !== forTarget) { draw(); return; }
-      const was = current().fabric;
-      set({ fabric: { family: 'flat', colour: was?.tint ? TINT_BASE_COLOUR : was?.colour ?? 0, ...(was?.tint ? { tint: was.tint } : {}), image: id } });
-    }, (e: unknown) => { imageBusy = false; imageNote.textContent = e instanceof Error ? e.message : 'Could not read that picture.'; });
-  });
-  imageRow.append(imageButton, imageInput);
   const trimBox = el('div', 'display:flex;flex-direction:column;gap:8px');
   const trimOwn = el('div', 'display:flex;flex-direction:column;gap:8px');
   const match = button('MATCH', FABRIC_ACTION.match, () => { const c = current(); set({ match: !c.match, trim: c.trim ?? c.fabric }); });
@@ -650,7 +610,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
   // a set's two halves in one fabric (the header says how): shown on either half of a set she has on
   const setMatchButton = button('TOP + BOTTOM MATCH', FABRIC_ACTION.setMatch, () => { setMatch = !setMatch; if (setMatch) matchSet(target); draw(); void apply(); touched(); });
   const setMatchRow = row(); setMatchRow.append(setMatchButton);
-  designBox.append(styleBox, fabricHeading, setMatchRow, families, colours, imageRow, imageNote, trimBox, opacity.wrap, stitch.wrap, removeRow);
+  designBox.append(styleBox, fabricHeading, setMatchRow, families, colours, trimBox, opacity.wrap, stitch.wrap, removeRow);
 
   // ---- PAINT
   const paintBox = el('div', 'display:flex;flex-direction:column;gap:8px');
@@ -1039,7 +999,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     return paint && paint.has(i) ? 'paint' : null;
   }
   function titleOf(i: number): string { const k = kindOf(i); return k ? KIND_TITLE[k] : `LAYER ${i + 1}`; }
-  function fabricName(c: FabricChoice): string { if (c.fabric?.image) return `image ${pictureName(c.fabric.image) || ''}`.trim(); return c.fabric ? `${fabricFamily(c.fabric.family).name} ${c.fabric.tint ? tintLabel(c.fabric.tint) : colourName(c.fabric.family, c.fabric.colour).toLowerCase()}` : ''; }
+  function fabricName(c: FabricChoice): string { return c.fabric ? `${fabricFamily(c.fabric.family).name} ${c.fabric.tint ? tintLabel(c.fabric.tint) : colourName(c.fabric.family, c.fabric.colour).toLowerCase()}` : ''; }
   function pieces(): Piece[] {
     const out: Piece[] = [];
     for (let i = 0; i < PAINT_LAYER_COUNT; i++) {
@@ -1145,15 +1105,8 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       b.setAttribute('aria-label', colourName(family ?? 'jersey', k));
       b.setAttribute('aria-pressed', String(chosen));
     });
-    const image = c.fabric?.image ?? null;
-    if (image) for (const b of familyButtons.values()) press(b, false);
-    show(image ? null : c.fabric, fam, colourButtons);
-    imageRow.style.display = fabricShown ? 'flex' : 'none';
-    imageNote.style.display = fabricShown && (image || imageBusy || imageNote.textContent) ? '' : 'none';
-    press(imageButton, !!image);
-    imageButton.textContent = image ? 'CHANGE IMAGE…' : 'UPLOAD IMAGE…';
-    if (!imageBusy) imageNote.textContent = image ? `Image: ${pictureName(image) || 'your picture'} · STITCH sizes it · pick a fabric or colour to go back` : '';
-    const tint = image ? null : c.fabric?.tint ?? null;
+    show(c.fabric, fam, colourButtons);
+    const tint = c.fabric?.tint ?? null;
     custom.style.background = tint ?? 'conic-gradient(#e53935,#fdd835,#43a047,#1e88e5,#8e24aa,#e53935)';
     custom.style.borderColor = tint && fam ? GOLD : 'transparent';
     custom.style.opacity = fam ? '1' : '.45';
@@ -1210,21 +1163,9 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
   }
 
   // ------------------------------------------------------------ swatches
-  const swatchKey = (pick: FabricPick, which: 'plain' | 'trim') => pick.image ? `image:${pick.image}` : `${which === 'plain' ? fabricFamily(pick.family).plain : fabricFamily(pick.family).trim}#${pick.colour}${pick.tint ? `~${pick.tint}` : ''}`;
+  const swatchKey = (pick: FabricPick, which: 'plain' | 'trim') => `${which === 'plain' ? fabricFamily(pick.family).plain : fabricFamily(pick.family).trim}#${pick.colour}${pick.tint ? `~${pick.tint}` : ''}`;
   /** A swatch as a tiling texture, cut from its atlas once, at the atlas's own resolution and proportions. */
   async function swatchTexture(pick: FabricPick, which: 'plain' | 'trim'): Promise<THREE.Texture | null> {
-    // a picture of his own: the picture itself, repeated as it is (not mirrored: a print or a logo reads one way)
-    if (pick.image) {
-      const key = swatchKey(pick, which), have = swatches.get(key);
-      if (have) return have;
-      const img = await pictureImage(pick.image);
-      if (!img || disposed) return null;
-      const texture = new THREE.Texture(img as TexImageSource);
-      texture.colorSpace = THREE.SRGBColorSpace; texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 8;
-      texture.flipY = !(typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap); texture.needsUpdate = true;
-      swatches.set(key, texture);
-      return texture;
-    }
     const fam = fabricFamily(pick.family), path = which === 'plain' ? fam.plain : fam.trim;
     const layout: FabricLayout = which === 'plain' ? 'grid' : 'strips';
     const key = swatchKey(pick, which), have = swatches.get(key);
@@ -1696,7 +1637,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     const texture = cached(pick, which);
     if (!pick || !texture) return null;
     const fam = fabricFamily(pick.family);
-    return { texture, tile: pick.image ? IMAGE_TILE_CM * c.stitch * hooks.unitsPerCm(mesh) : tileUnits(fam, c.stitch, hooks.unitsPerCm(mesh)), opacity: opacityOf(c), roughness: fam.roughness };
+    return { texture, tile: tileUnits(fam, c.stitch, hooks.unitsPerCm(mesh)), opacity: opacityOf(c), roughness: fam.roughness };
   }
 
   function sync(): void {
@@ -1792,20 +1733,6 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     drape.wear(shirtHem(map, templates[top]!.params.length!), family?.id === 'sweater' ? HEM_LIFT_RIBBED : HEM_LIFT_FLAT, (v) => p.coverAt(v, [top]), PAINTED_SHIRT_DRAPE === 'band', family?.stretch ?? 0);
     setFabricLayer(drape.mesh, drape.mesh.material as THREE.Material, 0, layerFor(body, c, c.fabric, 'plain'), { layers: 1, masked: false, rest: null });
     drape.feathered();
-  }
-  function setDial(template: string, dial: CoverageDial['id'], value: number): boolean {
-    const p = bodyPaint(), map = regionMap();
-    if (!p || !map || !Number.isFinite(value)) return false;
-    let moved = false;
-    for (let i = 0; i < PAINT_LAYER_COUNT; i++) {
-      const t = templates[i];
-      if (!t || t.id !== template || Math.abs(dialValue(t.params, dial) - value) < 5e-4) continue;
-      templates[i] = { id: t.id, params: withDial(t.params, dial, value) };
-      p.setLayer(i, coverage(map, templates[i]!.params, cutOf(templates[i]!.params)?.cut ?? null));
-      moved = true;
-    }
-    if (moved) { sync(); draw(); }
-    return moved;
   }
   function setShirtLength(length: number): void {
     shirtLength = paintedShirtLength(length);
@@ -2023,11 +1950,6 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     },
     slipNow() { return slip && slip.mesh === hooks.body() ? slip.plain : null; },
     busy: () => loadsOut > 0,
-    setDial,
-    hoopOn(template, shaped) {
-      const body = hooks.body(), frame = lowFrameNow(), map = regionMap(), t = COVERAGE_TEMPLATES.find((x) => x.id === template);
-      return body && frame && map && t && isDrawnBottom(t.params) ? hoopInside(frame, lowSpec(t.params, frame), limbSkin(map), shaped) : null;
-    },
     lowState() {
       const body = hooks.body(), frame = body && lowOf?.mesh === body ? lowOf.frame : null;
       if (!body || !frame) return null;

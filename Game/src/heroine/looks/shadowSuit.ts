@@ -172,8 +172,11 @@ const path = (points: readonly (readonly [number, number])[], along: number): nu
 // (as in graySuit.ts: `along` up her trunk or down her leg or arm, `turn` degrees round her: 0 her front, +90 her
 //  outer side, 180 her back; both sides mirrored; widths in leg lengths, 0.01 is about 8 mm)
 
-/** Down her front: from the top of her shoulder, past the outside of her breast, down her side to the front of her hip. */
-const FRONT_STRIPE = through([[1.0, 80], [0.85, 55], [0.68, 46], [0.45, 52], [0.15, 58], [-0.2, 62]]);
+/** Down her side: from the top of her shoulder, beside her breast (not over it), down her side to the front of her hip. */
+// (Joshua, 2026-11-19, from his Look 1 picture: "the stripes are mainly to the side, but yours crosses over the
+//  breasts some". It ran in to 46 degrees at her chest; now it keeps out at her sides past her bust and waist, then
+//  eases toward the front of her hip to meet her leg's stripe)
+const FRONT_STRIPE = through([[1.0, 82], [0.85, 78], [0.68, 76], [0.45, 74], [0.15, 70], [-0.2, 62]]);
 /** Down her leg: from her hip, down the front of her thigh, over her knee, down the front of her shin. */
 const LEG_STRIPE = through([[-0.2, 62], [0.2, 40], [0.47, 22], [0.7, 14], [0.95, 10]]);
 /** Down her back: from her shoulder blade down the side of her back to her waist. */

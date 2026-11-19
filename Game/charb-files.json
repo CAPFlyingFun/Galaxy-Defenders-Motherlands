@@ -1,5 +1,5 @@
 {
-  "about": "The Character Builder files the heroine loads, relative to ../Char_B/public. `npm run build` copies ONLY these into dist/charb/. The dev server warns in its terminal when the builder asks for a file that is not listed here (and /__charb-requested lists everything asked for so far): add the path and build again. The FAST heroine (src/heroine/fast/) needs only the body file and her hair's two files (ponytail.glb, ponytail-light.glb); the rest are for the Visual body (the builder's hosted room) and the bake page.",
+  "about": "The Character Builder files the heroine loads, relative to ../Char_B/public. `npm run build` copies ONLY these into dist/charb/. The dev server warns in its terminal when the builder asks for a file that is not listed here (and /__charb-requested lists everything asked for so far): add the path and build again. The FAST heroine (src/heroine/fast/) needs only the body file and her hair's two files (ponytail.glb and ponytail-light.glb; braid.glb and braid-light.glb for the catsuit's Blaze, 2026-11-19: left off this list, she was bald on the phone); the rest are for the Visual body (the builder's hosted room) and the bake page.",
   "files": [
     "models/sarah-v2-body-slim.glb",
     "models/sarah-v2-body-light.bin",
@@ -16,6 +16,9 @@
     "fabrics/jersey-plain.jpg",
     "fabrics/jersey-trim.jpg",
     "fabrics/flat-plain.png",
-    "fabrics/flat-trim.png"
+    "fabrics/flat-trim.png",
+    "models/hair/braid.glb",
+    "models/hair/braid-light.glb",
+    "models/sarah-skeleton.glb"
   ]
 }

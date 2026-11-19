@@ -53,6 +53,12 @@ export interface HeroineLook {
    * painted on her skin up to her neck (graySuit.ts), where the paint itself runs into her cleavage.
    */
   readonly noCleavageBridge?: boolean;
+  /**
+   * Leave out every piece the room lays that has NO NAME (the bake keeps only named ones). For the catsuit
+   * (shadowSuit.ts): the room laid an unnamed sheet in her skin's colour over her crotch, which showed as a brown patch
+   * above her buckle at a small belly (Joshua, 2026-11-19). Her suit, painted by code, covers that skin already.
+   */
+  readonly onlyNamedPieces?: boolean;
 }
 
 /** The belly the game's heroine starts with, percent (the builder's slider runs 0-200). */

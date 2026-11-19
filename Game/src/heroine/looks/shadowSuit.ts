@@ -329,5 +329,7 @@ export const SHADOW_SUIT_LOOK: HeroineLook = {
     ],
   },
   maskPainters: [paintSuit, paintTrim, paintStripes],
+  // (the room's unnamed sheet over her crotch, in her skin's colour, is left out: heroineLook.ts)
+  onlyNamedPieces: true,
 };
 

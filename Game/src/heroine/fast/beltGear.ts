@@ -84,6 +84,8 @@ export const BELT = Object.freeze({
   strapWidth: 0.024,
   strapStandOff: 0.002,
   strapThick: 0.004,
+  /** How many times each thigh strap's edges are evened out round her thigh (each pass blends a spot with its neighbours). */
+  strapSmoothPasses: 2,
   /** The thigh straps, as distances down the holster from the gun's grip (the holster's top is about 2 cm down). */
   thighStrapsDown: [0.07, 0.175] as readonly number[],
   /** The holster: the space between her thigh and its back plate; how far forward of her thigh's middle its gun's slide sits. */
@@ -805,6 +807,20 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
         tops.push(spotAt(at.clone().addScaledVector(UP, BELT.strapWidth / 2), legAll, undefined, out));
         bottoms.push(spotAt(at.clone().addScaledVector(UP, -BELT.strapWidth / 2), legAll, undefined, out));
         outs.push(out);
+      }
+      // STRAIGHT EDGES (Joshua, 2026-11-19: the straps' edges were jagged): each spot is her skin's few nearest points,
+      // and round a thigh those points sit at uneven heights, so the edge zig-zagged. Each edge is evened out round the
+      // ring: every spot blended with its neighbours, a few passes (the strap's height then follows her thigh smoothly)
+      for (const edge of [tops, bottoms]) {
+        for (let pass = 0; pass < BELT.strapSmoothPasses; pass++) {
+          const before = edge.map((e) => ({ v: e.v, w: e.w }));
+          for (let k = 0; k < ring; k++) {
+            const prev = before[(k + ring - 1) % ring], next = before[(k + 1) % ring];
+            const sides = blendSpot(prev, next, 0.5);
+            const m = blendSpot(before[k], sides, 0.5);
+            edge[k].v = m.v; edge[k].w = m.w;
+          }
+        }
       }
       band(tops, bottoms, outs, BELT.strapStandOff, BELT.strapThick, true, C.strap, C.edge);
     }

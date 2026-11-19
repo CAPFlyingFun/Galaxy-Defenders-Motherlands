@@ -508,7 +508,7 @@ async function start(): Promise<void> {
     // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
     onPrompt: (which) => {
       if (promptIs === 'table') useTable(which);
-      else if (promptIs === 'grab') grabBar();
+      else if (promptIs === 'grab') grabBar(which);
     },
     // RELOAD: at the table, the table's reload (it refills her pouches too); anywhere else, from her belt
     onReload: () => {
@@ -526,8 +526,8 @@ async function start(): Promise<void> {
       holsterUse.start(which);
     },
   });
-  /** Take hold of the bar she is near, or let go of the one she holds. */
-  function grabBar(): void {
+  /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
+  function grabBar(which: 'both' | Hand = 'both'): void {
     {
       if (grabUse.holding) { grabUse.letGo(); return; }
       if (busyNow() || holsterUse.busy || beltReload.busy) return;
@@ -535,12 +535,15 @@ async function start(): Promise<void> {
       // (the hands that hold the bar must be empty: their guns go into her holsters, on the way, then she goes to the
       //  bar; Joshua, 2026-11-18: hands free "without having to go all the way to the table". With no holsters, onto
       //  the table first as before.)
-      const full = bars.hands(bar).filter((hand) => heroine.hands?.hasGun(hand));
+      grabWhich = which;
+      const full = bars.hands(bar, which).filter((hand) => heroine.hands?.hasGun(hand));
       if (full.length > 0 && holsterUse.hasHolsters) { holsterUse.start(full.length === 2 ? 'both' : full[0]); grabAfterHolster = bar; }
       else if (full.length > 0) { tableUse.start(full.length === 2 ? 'both' : full[0]); grabAfterTable = bar; }
-      else grabUse.start(bar);
+      else grabUse.start(bar, which);
     }
   }
+  /** The hands picked for the bar she is about to take hold of (kept while her guns go away first). */
+  let grabWhich: 'both' | Hand = 'both';
   /** What THE PROMPT is for this frame: the table, a bar, or nothing. */
   let promptIs: 'table' | 'grab' | null = null;
 
@@ -700,9 +703,9 @@ async function start(): Promise<void> {
     tableReloading = tableUse.action === 'reload';
     // (her guns are drawn: on to the table; her guns are away: on to the bar)
     if (tableAfterDraw && !holsterUse.busy) { const which = tableAfterDraw; tableAfterDraw = null; tableUse.start(which); }
-    if (grabAfterHolster && !holsterUse.busy) { grabUse.start(grabAfterHolster); grabAfterHolster = null; }
+    if (grabAfterHolster && !holsterUse.busy) { grabUse.start(grabAfterHolster, grabWhich); grabAfterHolster = null; }
     // (her guns are down: on to the bar)
-    if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable); grabAfterTable = null; }
+    if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable, grabWhich); grabAfterTable = null; }
     // (whichever is running walks her and turns her)
     const ask = tableUse.busy ? tableAsk : grabAsk;
     if (busyNow()) {

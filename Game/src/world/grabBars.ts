@@ -3,9 +3,12 @@
 // "gripping a pole, both vertical and horizontal"), and what she does there.
 //
 // Two test pieces beside the weapon table:
-//   POLE  an upright pole, floor to above her head. She stands with it at her
-//         right hand and takes it like a handshake: palm toward her middle,
-//         thumb up, fingers round the front.
+//   POLE  an upright pole, floor to above her head, taken like a handshake:
+//         palm toward her middle, thumb up, fingers round the front. With
+//         BOTH hands (Joshua, 2026-11-18: "can both hands as well be an option
+//         on it instead of just one?") she stands with it in front of her,
+//         her right hand on it and her left just above; with one hand (L or R
+//         picked first) it is at that hand's side.
 //   RAIL  a waist-high rail between two posts, across in front of her. She
 //         takes it with both hands, overhand, shoulder width apart.
 //
@@ -33,8 +36,12 @@ export const BARS = Object.freeze({
   /** Where she stands for the pole: the pole this far to her right and this far ahead of her middle. */
   poleSide: 0.22,
   poleAhead: 0.32,
-  /** Her hand's height on the pole, as a share of her height. */
+  /** Her hand's height on the pole, as a share of her height; with both hands, the left this far above the right. */
   poleHold: 0.65,
+  poleUpper: 0.11,
+  /** Holding it with both hands she stands with it in front of her: this far ahead (or her belly plus `poleBellyGap`). */
+  poleBothAhead: 0.38,
+  poleBellyGap: 0.12,
   /** The rail's height, its length, and its posts' radius. */
   railHigh: 1.0,
   railLong: 1.2,
@@ -120,27 +127,33 @@ export class GrabBars {
     return (bar === 'pole' ? out.set(0, height * BARS.poleHold, 0) : out.set(0, BARS.railHigh, 0)).applyMatrix4(this[bar].matrixWorld);
   }
 
-  /** Where she stands to take hold (world). */
-  standSpot(bar: BarName, out: THREE.Vector3, bellyAhead: number): THREE.Vector3 {
-    if (bar === 'pole') out.set(BARS.poleSide, 0, -BARS.poleAhead); // (her right is the bar frame's -x: so the pole is at her right)
-    else out.set(0, 0, -Math.max(BARS.railBack, bellyAhead + BARS.railBellyGap));
+  /** Where she stands to take hold with these hands (world). */
+  standSpot(bar: BarName, out: THREE.Vector3, bellyAhead: number, hands: readonly Hand[] = ['left', 'right']): THREE.Vector3 {
+    if (bar === 'pole') {
+      // (her right is the bar frame's -x: one hand, the pole at that hand's side; both, the pole in front of her)
+      if (hands.length === 2) out.set(0, 0, -Math.max(BARS.poleBothAhead, bellyAhead + BARS.poleBellyGap));
+      else out.set(hands[0] === 'right' ? BARS.poleSide : -BARS.poleSide, 0, -BARS.poleAhead);
+    } else out.set(0, 0, -Math.max(BARS.railBack, bellyAhead + BARS.railBellyGap));
     return out.applyMatrix4(this[bar].matrixWorld);
   }
 
   /** The way she faces at it. */
   faceYaw(bar: BarName): number { return this[bar].rotation.y; }
 
-  /** The hands a bar is held with. */
-  hands(bar: BarName): Hand[] { return bar === 'pole' ? ['right'] : ['left', 'right']; }
+  /** The hands a bar is held with: both, or the one picked with L or R (src/ui/hud.ts). */
+  hands(_bar: BarName, which: 'both' | Hand = 'both'): Hand[] { return which === 'both' ? ['left', 'right'] : [which]; }
 
   /** Where one hand must be to hold this bar (a pose for her hand bone, world). */
-  handPose(bar: BarName, hand: Hand, heroine: HeroineBody, out: THREE.Matrix4): THREE.Matrix4 {
+  handPose(bar: BarName, hand: Hand, heroine: HeroineBody, out: THREE.Matrix4, hands: readonly Hand[] = [hand]): THREE.Matrix4 {
     const w = this[bar].matrixWorld;
     if (bar === 'pole') {
-      // a handshake: the palm toward her middle (her left, the frame's +x), the fingers round the front (+z)
-      at.set(0, heroine.height * BARS.poleHold, 0).applyMatrix4(w);
+      // a handshake: the palm toward her middle, the fingers round the front (+z). Her right hand comes from her
+      // right, its palm to her left (the frame's +x); her left hand from her left, its palm to her right. With both
+      // hands on it, the left just above the right.
+      const high = heroine.height * BARS.poleHold + (hands.length === 2 && hand === 'left' ? BARS.poleUpper : 0);
+      at.set(0, high, 0).applyMatrix4(w);
       axis.set(0, 1, 0).transformDirection(w);
-      palmTo.set(1, 0, 0).transformDirection(w);
+      palmTo.set(hand === 'right' ? 1 : -1, 0, 0).transformDirection(w);
     } else {
       // overhand: the palm down onto the rail (and a little toward it), the fingers over its top and round the front
       at.set(hand === 'left' ? BARS.railHands : -BARS.railHands, BARS.railHigh, 0).applyMatrix4(w);
@@ -165,6 +178,8 @@ export class GrabBars {
 export class GrabUse {
   /** The bar she is at (walking to, holding, letting go of), or null. */
   bar: BarName | null = null;
+  /** The hands she takes hold with (both, or the one picked). */
+  private using: Hand[] = ['left', 'right'];
   private phase: 'idle' | 'lead' | 'walk' | 'face' | 'reach' | 'hold' | 'release' = 'idle';
   /** Where she looks on her way: where her hand will take hold. */
   private readonly lookPoint = new THREE.Vector3();
@@ -200,10 +215,11 @@ export class GrabUse {
   }
 
   /** Begin taking hold of a bar (its hands must be empty: the game puts their guns down first). */
-  start(bar: BarName): void {
+  start(bar: BarName, which: 'both' | Hand = 'both'): void {
     const h = this.heroine.hands;
     if (!h || this.busy) return;
     this.bar = bar;
+    this.using = this.bars.hands(bar, which);
     this.phase = 'lead';
     this.timer = 0;
     // her body keeps off the rail as off the table's edge (whatever her belly's size)
@@ -215,7 +231,7 @@ export class GrabUse {
     const h = this.heroine.hands;
     if (!h || !this.bar) return;
     if (this.phase === 'lead' || this.phase === 'walk' || this.phase === 'face') { this.finish(); return; }
-    for (const hand of this.bars.hands(this.bar)) { h.hold(hand, null); h.reach(hand, null); }
+    for (const hand of this.using) { h.hold(hand, null); h.reach(hand, null); }
     this.phase = 'release';
   }
 
@@ -239,7 +255,7 @@ export class GrabUse {
       this.phase = 'walk';
     }
     if (this.phase === 'walk') {
-      this.bars.standSpot(bar, this.spot, h.bellyAhead());
+      this.bars.standSpot(bar, this.spot, h.bellyAhead(), this.using);
       out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
       if (Math.hypot(this.spot.x - atX, this.spot.z - atZ) > BARS.arrived) { out.walkTo = this.spot; return; }
       out.look = face;
@@ -250,19 +266,19 @@ export class GrabUse {
       if (off > BARS.faced && this.timer < BARS.faceWaitMost) return;
       // REACH: each hand to its place on the bar, its fingers to close round it once there
       const shape = this.bars.shape(bar);
-      for (const hand of this.bars.hands(bar)) {
-        h.reach(hand, this.bars.handPose(bar, hand, this.heroine, m.clone()));
+      for (const hand of this.using) {
+        h.reach(hand, this.bars.handPose(bar, hand, this.heroine, m.clone(), this.using));
         h.hold(hand, shape);
       }
       this.phase = 'reach';
       return;
     }
     if (this.phase === 'reach') {
-      if (this.bars.hands(bar).every((hand) => h.reached(hand) >= 0.999)) this.phase = 'hold';
+      if (this.using.every((hand) => h.reached(hand) >= 0.999)) this.phase = 'hold';
       return;
     }
     if (this.phase === 'release') {
-      if (this.bars.hands(bar).every((hand) => h.reached(hand) <= 0)) this.finish();
+      if (this.using.every((hand) => h.reached(hand) <= 0)) this.finish();
     }
   }
 

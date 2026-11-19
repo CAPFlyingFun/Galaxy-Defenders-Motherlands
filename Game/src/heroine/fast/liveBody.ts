@@ -43,7 +43,8 @@
 import * as THREE from 'three';
 import { KICKS } from '@charb/sarahlab/softBody';
 import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
-import { openBuilderRoom, type BuilderRoom } from '../builderRoom';
+import { ROOM_UNITS, openBuilderRoom, type BuilderRoom } from '../builderRoom';
+import { captureVertices } from '@charb/sarahlab/storyBake';
 import { findPaintedSkin } from '../paintMask';
 import type { HeroineLook } from '../heroineLook';
 import { SARAH_LAB_ACTION, SARAH_LAB_FIELD } from '@charb/sarahlab/sarahLabTool';
@@ -51,6 +52,22 @@ import { readPregnancy } from '@charb/sarahlab/pregnancy';
 
 /** The hidden body's belly follows hers at most this often (seconds): each change has the room refit her womb and baby. */
 const LIVE_BELLY_EVERY = 1;
+/**
+ * HER SHAPE, READ FROM THE BUILDER (Joshua, 2026-11-19: the time lapse made "a pointy belly... it needs to basically
+ * rebake the look every second at the new size"). This long after the hidden body's belly (or pregnancy) changed, its
+ * skin is read back, every point as the builder finally shapes it (its belly round the baby and all), the way the bake
+ * reads it (`captureVertices`), so the drawn body can take that shape (shapedBody.ts `setBuilderShape`). Seconds.
+ */
+const SHAPE_SETTLE = 0.5;
+
+/** The hidden body's skin as the builder shapes it, read back: every point and its direction, in her rest frame. */
+export interface LiveShape {
+  /** Her belly when it was read, percent, and whether she was pregnant. */
+  readonly belly: number;
+  readonly pregnant: boolean;
+  readonly position: Float32Array;
+  readonly normal: Float32Array;
+}
 
 export interface LiveBody {
   /**
@@ -71,6 +88,13 @@ export interface LiveBody {
    */
   setBelly(percent: number): void;
   setPregnant(on: boolean): void;
+  /** Her skin as the builder shaped it when it opened (her look's own belly), read back. Null if it could not be read. */
+  readonly openShape: LiveShape | null;
+  /**
+   * Her skin read back again after her belly or pregnancy last changed, once it has settled; each new reading once
+   * (null until there is a new one). See SHAPE_SETTLE.
+   */
+  takeShape(): LiveShape | null;
   /** How long the hidden body took to open, seconds. */
   readonly openedIn: number;
   dispose(): void;
@@ -128,14 +152,46 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
   // (her belly and pregnancy as the room has them, and the belly the game last asked for)
   let roomBelly = look.body.bump, wantBelly = roomBelly, bellyWait = 0;
   let pregnant = readPregnancy((look.body as { pregnancy?: unknown }).pregnancy).pregnant;
+  // READING HER SHAPE BACK (SHAPE_SETTLE): the room's view (as the bake's camera stands), and how long until the next read
+  const camera = new THREE.PerspectiveCamera(40, 1, 1, 2000);
+  camera.position.set(0, 1.0 * ROOM_UNITS, 3.2 * ROOM_UNITS);
+  camera.lookAt(0, 1.0 * ROOM_UNITS, 0);
+  camera.updateMatrixWorld(true);
+  const bones = skin.skeleton.bones;
+  const kickW = new Float32Array(KICKS);
+  const keep = bones.map(() => ({ p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3() }));
+  const readShape = (): LiveShape | null => {
+    try {
+      // (in her bind pose, as the bake reads her: the hidden body's stand and breath moving her bones would otherwise
+      //  be read as part of her shape. Her bones are put back as they were straight after.)
+      bones.forEach((b, i) => { keep[i].p.copy(b.position); keep[i].q.copy(b.quaternion); keep[i].s.copy(b.scale); });
+      // (and with no kick on her skin: a kick read back would stay in her shape as a lump)
+      for (let k = 0; k < KICKS; k++) if (at[k]) { kickW[k] = at[k].w; at[k].w = 0; }
+      skin.skeleton.pose();
+      skin.updateMatrixWorld(true);
+      const got = captureVertices(renderer, skin, camera);
+      return { belly: roomBelly, pregnant, position: got.position, normal: got.normal };
+    } catch (error) {
+      console.warn('The hidden body\'s shape could not be read back; her belly keeps the simple shapes.', error);
+      return null;
+    } finally {
+      bones.forEach((b, i) => { b.position.copy(keep[i].p); b.quaternion.copy(keep[i].q); b.scale.copy(keep[i].s); });
+      skin.updateMatrixWorld(true);
+      for (let k = 0; k < KICKS; k++) if (at[k]) at[k].w = kickW[k];
+    }
+  };
+  const openShape = readShape();
+  let readIn = Infinity, fresh: LiveShape | null = null;
   return {
-    kickAt, kickDir,
+    kickAt, kickDir, openShape,
+    takeShape(): LiveShape | null { const s = fresh; fresh = null; return s; },
     openedIn: (performance.now() - began) / 1000,
     setBelly(percent: number): void { wantBelly = Math.max(0, Math.min(200, Math.round(percent))); },
     setPregnant(on: boolean): void {
       if (disposed || on === pregnant) return;
       pregnant = on;
       room.press(SARAH_LAB_ACTION.pregnant); // (the room's own button: on or off, nothing else)
+      readIn = SHAPE_SETTLE;
     },
     step(dt: number): number {
       if (disposed) return 0;
@@ -145,8 +201,12 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
         bellyWait = LIVE_BELLY_EVERY;
         roomBelly = wantBelly;
         room.setSlider(SARAH_LAB_FIELD.bump, roomBelly);
+        readIn = SHAPE_SETTLE;
       }
       room.step(dt);
+      // (her shape read back once it has settled after a change)
+      readIn -= dt;
+      if (readIn <= 0) { readIn = Infinity; fresh = readShape() ?? fresh; }
       for (let k = 0; k < KICKS; k++) { if (at[k]) kickAt[k].copy(at[k]); if (dir[k]) kickDir[k].copy(dir[k]); }
       return performance.now() - before;
     },

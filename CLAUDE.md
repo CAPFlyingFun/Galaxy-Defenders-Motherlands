@@ -169,6 +169,11 @@ use the game's single copy of three.js.
   follows hers at most once a second. The story's plan: 10% not pregnant for a while; pregnancy on at 10% (= week 12);
   growing with the weeks over quests to 150% at 42; off at the birth; over 3-4 game months settling to 30%. The birth and
   the settling are for later.
+  HER BELLY'S SHAPE comes from the builder itself (Joshua, 2026-11-19: the time lapse gave "a pointy belly... rebake the
+  look every second"): the size shapes alone miss the builder's rounding over her womb and baby, so 0.5 s after the hidden
+  live body's belly or pregnancy changes, its skin is read back in its bind pose with no kicks (`captureVertices`, as the
+  bake does; `liveBody.ts` `takeShape`), and the difference from its shape at her baked belly goes onto her
+  (`shapedBody.ts` `setBuilderShape`; moves under 2 mm left out). Without the live body she keeps the size shapes only.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

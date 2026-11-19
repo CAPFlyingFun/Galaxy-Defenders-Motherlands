@@ -102,6 +102,8 @@ const HEAD_TIP_MOST = Math.PI / 4;
  */
 const DEG = Math.PI / 180;
 const HIPS_TURN_MOST = 60 * DEG, UPPER_LEGS_TURN_MOST = 42 * DEG, FEET_TURN_MOST = 24 * DEG, BACK_TURN_MOST = 30 * DEG, HEAD_TURN_MOST = 30 * DEG;
+/** A point of her skin read back from the builder that moved less than this (metres) is left as it was (shapedBody.ts setBuilderShape). */
+const BUILDER_SHAPE_LEAST = 0.002;
 /** Her belly is reshaped at most this often (seconds): each change rewrites her points on the CPU. */
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
@@ -904,6 +906,17 @@ if (uHideHead > 0.5) {
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
+      // HER BELLY AS THE BUILDER SHAPES IT (Joshua, 2026-11-19: "a pointy belly... it needs to basically rebake the look
+      // every second at the new size"): when the hidden live body has read its skin back after a change (liveBody.ts),
+      // the difference from its shape at her baked belly goes onto her (shapedBody.ts setBuilderShape), and what is
+      // measured off her shape is measured again
+      const read = live?.takeShape() ?? null;
+      if (read && live?.openShape) {
+        const open = live.openShape, moved = new Float32Array(read.position.length), turned = new Float32Array(read.normal.length);
+        for (let k = 0; k < moved.length; k++) { moved[k] = read.position[k] - open.position[k]; turned[k] = read.normal[k] - open.normal[k]; }
+        body.setBuilderShape(read.belly, moved, turned, BUILDER_SHAPE_LEAST * unitsPerMetre);
+        setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly);
+      }
 
       // Her breath: her skin's move from her vitals (or a quiet breath at rest), and her bones' at the same pace.
       // (the builder's stand breathes fifteen times a minute by its clock: the clock is run faster or slower)

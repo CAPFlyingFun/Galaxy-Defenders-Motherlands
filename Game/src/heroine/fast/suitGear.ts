@@ -38,6 +38,7 @@ export interface SuitGearStyle {
   readonly trim: string;
   readonly accent: string;
   readonly sole: string;
+  /** The glowing strips' colour; empty: no glowing strips. */
   readonly glow: string;
   /** Which pieces: tall boots, wrist cuffs, shoulder plates. */
   readonly boots: boolean;
@@ -145,11 +146,12 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
 
   // ---- the materials: one for the plates (each point its own colour), one for the glowing strips ---------------------
   const plateMaterial = new THREE.MeshStandardMaterial({ name: 'suit-gear', vertexColors: true, roughness: 0.42, metalness: 0.25 });
-  const glowColour = new THREE.Color(style.glow);
+  const glowColour = new THREE.Color(style.glow || '#000000');
   const glowMaterial = new THREE.MeshStandardMaterial({ name: 'suit-gear-glow', color: glowColour, emissive: glowColour, emissiveIntensity: 1.6, roughness: 0.4 });
   const C = { plate: new THREE.Color(style.plate), trim: new THREE.Color(style.trim), accent: new THREE.Color(style.accent), sole: new THREE.Color(style.sole) };
   const meshes: THREE.Object3D[] = [];
   const add = (bone: THREE.Bone, geometry: THREE.BufferGeometry, material: THREE.Material, name: string): void => {
+    if (material === glowMaterial && !style.glow) { geometry.dispose(); return; }   // (an outfit with no glowing strips)
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = name;
     mesh.frustumCulled = false;   // (it rides a bone that moves: its own box would be wrong)

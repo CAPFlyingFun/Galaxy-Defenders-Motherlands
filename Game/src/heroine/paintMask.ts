@@ -67,11 +67,18 @@ export interface PaintSurface {
   trunkPlace(v: number, out: LegPlace): boolean;
   /**
    * Fill `out` with point `v`'s place on its ARM: `along` 0 at her shoulder joint, 1 at her wrist (her elbow about
-   * half way); `turn` degrees round her arm (0 its front, +90 its OUTER side, away from her body, 180 its back);
-   * `radius` how far from the arm's bone (leg lengths). False for anything that is not an arm (her hands too: past her
-   * wrist).
+   * half way), on past 1 over her hand to her fingertips (about 1.4); `turn` degrees round her arm (0 its front, +90
+   * its OUTER side, away from her body, 180 its back); `radius` how far from the arm's bone (leg lengths). False for
+   * anything that is not an arm or a hand.
    */
   armPlace(v: number, out: LegPlace): boolean;
+  /**
+   * Fill `out` with point `v`'s place on her NECK and head (Joshua, 2026-11-19: the catsuit's collar "going up to her
+   * neck"): `along` 0 at the base of her neck, 1 at the very top of her head (her collar's top is about a quarter of
+   * the way); `turn` degrees round the line from the one to the other (0 her front, +90 her side, 180 her back);
+   * `radius` how far from that line (leg lengths). False below the base of her neck and for her arms.
+   */
+  neckPlace(v: number, out: LegPlace): boolean;
 }
 
 /**
@@ -88,6 +95,9 @@ const RAMP = 0.06;
 
 /** No leg or hip skin is further than this from its leg's bone (leg lengths; her thigh's is about 0.14 at its thickest). */
 const MAX_LEG_RADIUS = 0.24;
+
+/** How far past her wrist an arm's place still counts (shares of shoulder-to-wrist): her whole hand, to her fingertips. */
+const HAND_MOST = 1.6;
 
 /** Low on her trunk, a point nearer than this to the line up her middle (leg lengths) is between her legs: not painted. */
 const TRUNK_NEAR_AXIS = 0.09;
@@ -231,6 +241,8 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
 
   // ---- her trunk and her arms (Joshua, 2026-11-18: the gray and red suit's panels run over all of her) -----------
   const neckBase = at(joints.neck), neckHeight = neckBase[1];
+  // her neck's own line: from its base up to the top of her head (it leans forward a little)
+  const crown = at(joints.head), neckLine = sub(crown, neckBase), neckLineSquared = Math.max(1e-9, dot(neckLine, neckLine));
   const trunkAxisZ = hipZ;
   const arms = [
     { shoulder: at(joints.shoulderL), elbow: at(joints.elbowL), wrist: at(joints.wristL) },
@@ -286,6 +298,21 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
       if (out.along < 0.05 && out.radius < TRUNK_NEAR_AXIS) return false;
       return true;
     },
+    neckPlace(v: number, out: LegPlace): boolean {
+      const p: V3 = [points.getX(v), points.getY(v), points.getZ(v)];
+      // a little under the base of her neck too, so a collar's lower edge meets the suit's painted top
+      if (p[1] < neckHeight - 0.03 * legLength) return false;
+      if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
+      if (arm[v] === 1) return false;
+      const off = sub(p, neckBase), along = dot(off, neckLine) / neckLineSquared;
+      // from her neck's line out to the point: which way round (her front is +z, her sides either x, mirrored)
+      const axis = mix(neckBase, crown, along);
+      const dx = Math.abs(p[0] - axis[0]), dz = (p[2] - axis[2]) * facing;
+      out.along = along;
+      out.turn = Math.atan2(dx, dz) / RADIANS;
+      out.radius = Math.hypot(dx, dz) / legLength;
+      return true;
+    },
     armPlace(v: number, out: LegPlace): boolean {
       if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
       if (arm[v] !== 1) return false;
@@ -294,11 +321,13 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
       const a = (p[0] - armMiddleX) * (arms[0].shoulder[0] - armMiddleX) >= 0 ? arms[0] : arms[1];
       const outward = Math.sign(a.shoulder[0] - armMiddleX) || 1;
       const along = dot(sub(p, a.shoulder), a.line) / a.lineSquared;
-      if (along > 1.02) return false;   // (her hand)
+      // (past her wrist, 1, is her HAND: `along` goes on up to her fingertips, about 1.4; round it measured as her
+      //  forearm's way round, so a glove can be painted on her hand: the fingerless gloves of graySuit's sister looks)
+      if (along > HAND_MOST) return false;
       // the bone beside the point: her upper arm's above her elbow, her forearm's below
       const axis: V3 = along <= a.elbowAt
         ? mix(a.shoulder, a.elbow, Math.max(0, along) / a.elbowAt)
-        : mix(a.elbow, a.wrist, (along - a.elbowAt) / (1 - a.elbowAt));
+        : mix(a.elbow, a.wrist, Math.min(1, (along - a.elbowAt) / (1 - a.elbowAt)));
       // round the arm: its front is her front (z), its outer side away from her middle (x), whichever way it hangs
       const dir = sub(a.elbow, a.shoulder), dirLength = Math.sqrt(dot(dir, dir)) || 1;
       const unit: V3 = [dir[0] / dirLength, dir[1] / dirLength, dir[2] / dirLength];

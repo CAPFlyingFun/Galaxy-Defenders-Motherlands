@@ -11,3 +11,6 @@ heroines' outfits. They show the look to aim for, not finished art: colours and 
   forearm guards, thigh-high heeled boots.
 - `04-four-looks-board.png`: four looks (shadow catsuit, anime space heroine, fantasy star knight, superhero
   vanguard), a catsuit at 0, 80, 140 and 200 % belly, and rear views.
+
+- `look1-shadow-operative-closeup.jpg`: Look 1 up close (Joshua, 2026-11-19): the collar up her neck, the stripes, the belt.
+- `ccbs-fabric-colours.jpg`: the Character Builder fabric pack's sixteen colours (the suit uses its athletic knit).

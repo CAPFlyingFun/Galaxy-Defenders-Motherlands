@@ -7,6 +7,7 @@ import { BLAZE_LOOK } from './blaze';
 import { BLAZE_SUIT_LOOK } from './blazeSuit';
 import { GRAY_SUIT_LOOK } from './graySuit';
 import { BLAZE_PINK_LOOK } from './blazePink';
+import { SHADOW_SUIT_LOOK } from './shadowSuit';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
@@ -17,6 +18,8 @@ export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   graySuit: GRAY_SUIT_LOOK,
   /** Blaze exactly as Joshua saved her on 2026-11-19: all pink, athletic fabric, short leggings (blazePink.ts). To try. */
   blazePink: BLAZE_PINK_LOOK,
+  /** Blaze in the Shadow Operative catsuit: look 1 of Joshua's outfit board (shadowSuit.ts). */
+  shadowSuit: SHADOW_SUIT_LOOK,
 };
 
 /** The look the game's heroine wears when the address does not name one. */

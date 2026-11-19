@@ -326,7 +326,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // ---- 4. her outfit: the baked pictures on one plain material -----------------------------------------------------
   // (or, the DEV Room's way, the file's own skin material with a tee and leggings coloured over it in the shader)
   const fileMaterial = Array.isArray(skin.material) ? skin.material[0] : skin.material;
-  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer);
+  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, LOOK_GEAR[look.manifest.look]?.clothShine);
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;
@@ -621,6 +621,7 @@ if (uHideHead > 0.5) {
     },
     // (the outfit's own colours for it: looks/gear.ts)
     colours: LOOK_GEAR[look.manifest.look]?.belt,
+    line: LOOK_GEAR[look.manifest.look]?.beltLine,
   });
   // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist
   // cuffs and shoulder plates, each a shell shaped round her own skin on one bone. Made now, while she stands.

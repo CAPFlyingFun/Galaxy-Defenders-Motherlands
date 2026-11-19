@@ -50,6 +50,12 @@ export interface HeroineSettings {
   tableHeight: number;
   /** THIRD PERSON: she fires on her own at the target she is aimed at (Joshua, 2026-11-17). */
   autoFire: ShadowChoice;
+  /**
+   * HER OUTFIT, for testing (Joshua, 2026-11-19: "save the outfits as we make them accessible from settings to switch
+   * for now for testing, and later in the game will be specific"): the name of one of the saved looks (heroine/looks).
+   * The address's ?look= still wins. Changing it reloads the game.
+   */
+  outfit: string;
 }
 
 /** The heights the weapon table may be set to, metres, and its own (src/world/weaponTable.ts TABLE.height). */
@@ -61,6 +67,18 @@ export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first:
 export const ZOOM_START_DEFAULT = 0.17;
 
 /** The keys the choices are remembered under on this device. */
+/**
+ * THE OUTFITS in Settings (what is shown, and the look's name in heroine/looks). Joshua, 2026-11-19: later the game
+ * picks one for the place and the story (the field two-piece for hot weather and action outdoors, the formal suits for
+ * the command centre); for now any can be chosen to test. The first is the game's own.
+ */
+export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.freeze([
+  ['Pink & black two-piece', 'blazeSuit'],
+  ['Shadow Operative catsuit', 'shadowSuit'],
+  ['Gray & red suit', 'graySuit'],
+  ['All pink (Joshua\'s export)', 'blazePink'],
+] as const);
+
 export const SETTING_KEYS = Object.freeze({
   body: 'gdm.body',
   detail: 'gdm.detail',
@@ -75,6 +93,7 @@ export const SETTING_KEYS = Object.freeze({
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
   autoFire: 'gdm.autoFire2',
+  outfit: 'gdm.outfit',
 });
 
 function read(key: string): string | null {
@@ -136,5 +155,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',
+    outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
   };
 }

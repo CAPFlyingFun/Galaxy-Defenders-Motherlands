@@ -133,6 +133,13 @@ export interface BeltGearSource {
   readonly leftSign: number;
   /** Each gun's place in the world as it hangs in her relaxed hand now (where the holster's height comes from). */
   readonly gunHanging: Record<Hand, THREE.Matrix4>;
+  /**
+   * The outfit's own LINE for the belt (looks/gear.ts): its top's height over her hip joints at her front, her sides
+   * and her back, metres. Given, the belt never follows a waistband and never rises over a small belly: it is SLUNG
+   * on her hips (Joshua, 2026-11-19: "lower the belt around the belly to sit on her hips but maybe sag down a bit in
+   * the front, which will work for the belly later").
+   */
+  readonly line?: readonly [number, number, number];
   /** The outfit's own colours for the belt, straps, holsters and pouches (looks/gear.ts); left out: BELT_COLOURS. */
   readonly colours?: Partial<Record<keyof typeof BELT_COLOURS, number>>;
 }
@@ -418,6 +425,8 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     let middleCount = 0;
     for (const v of middle) if (rest[v * 3 + 1] >= hipY - 0.12) middleCount++;
     if (greys.length > middleCount * BELT.trimMostShare) greys.length = 0;
+    // (an outfit with its own line: no trim followed)
+    if (src.line) greys.length = 0;
     if (greys.length >= N) {
       trimPoints = greys.length;
       for (const v of greys) { cx += rest[v * 3]; cz += rest[v * 3 + 2]; }
@@ -430,11 +439,12 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
         if (rest[v * 3 + 1] > lineY[k]) { lineY[k] = rest[v * 3 + 1]; lineR[k] = Math.hypot(x, z); }
       }
     } else {
-      // No trim to follow: her hips' height and a smooth slant from front to back (BELT.fallbackAboveHips).
+      // No trim to follow: her hips' height and a smooth slant from front to back (the outfit's own line, or
+      // BELT.fallbackAboveHips).
       cx = 0; cz = 0;
       for (const v of middle) cz += rest[v * 3 + 2];
       cz /= Math.max(1, middle.length);
-      const [f, s, b] = BELT.fallbackAboveHips, mean = (f + b) / 2;
+      const [f, s, b] = src.line ?? BELT.fallbackAboveHips, mean = (f + b) / 2;
       const a0 = (mean + s) / 2, a1 = (f - b) / 2, a2 = (mean - s) / 2;
       for (let k = 0; k < N; k++) {
         const a = (k / N) * Math.PI * 2;
@@ -497,6 +507,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   const blended: { spot: Spot; a: Spot; b: Spot; t: number }[] = [];
   /** How far the belt rises over the trim at a belly size: 1 = all the way (her flattest), 0 = on the trim. */
   const riseFor = (belly: number): number => {
+    if (src.line) return 0;   // (slung on her hips: it never rises)
     const [from, to] = BELT.riseUntilBelly, t = Math.max(0, Math.min(1, (belly - from) / (to - from)));
     return 1 - t * t * (3 - 2 * t);
   };

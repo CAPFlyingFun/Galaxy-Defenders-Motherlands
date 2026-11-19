@@ -39,7 +39,10 @@ export const FINE_FROM_DETAIL = 25;
  * Make her skin's two materials from the body file's own skin material (its settings are kept: which side is
  * drawn, how the detail picture is read) and a baked look. The file's own pictures are freed: nothing reads them.
  */
-export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer): SkinMaterials {
+/** Roughness at and above this in her surface picture is cloth (the builder's knits are 0.72 to 0.97; her skin is under 0.6). */
+const CLOTH_FROM = 0.62;
+
+export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, clothShine?: number): SkinMaterials {
   const from = fileMaterial as THREE.MeshStandardMaterial;
   // A sharper picture at a slant (the side of her leg seen along its length), at little cost.
   const sharpness = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -58,6 +61,18 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // (the bake divided her lit direction by the builder's own setting, so reading it back with that setting gives the
     // direction the builder lit her with)
     if (withDetail) material.normalScale.set(look.manifest.normalScale[0], look.manifest.normalScale[1]);
+    // A GLOSSY SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
+    // takes the look's roughness instead, blended in over a short range so the suit's edge on her skin stays soft.
+    // One line in the shader; her skin, face and hair keep their own.
+    if (clothShine !== undefined) {
+      material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>',
+          '#include <roughnessmap_fragment>\n' +
+          `roughnessFactor = mix(roughnessFactor, ${clothShine.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, roughnessFactor));`);
+      };
+      // (three.js keeps one compiled shader per key: this one is its own)
+      material.customProgramCacheKey = () => `cloth-shine-${clothShine}`;
+    }
     return material;
   };
   const fine = make(true), plain = make(false);

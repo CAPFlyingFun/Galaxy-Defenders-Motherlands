@@ -106,7 +106,8 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin') return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
-  const look = lookKey(asked.get('look'));
+  // (her outfit: the address's ?look=, else the one chosen in Settings: heroineSettings.ts OUTFIT_CHOICES)
+  const look = lookKey(asked.get('look') ?? (settings.outfit || null));
   say('Loading Blaze…');
   if (settings.body === 'performance') {
     try {
@@ -302,7 +303,7 @@ async function start(): Promise<void> {
       await breathe();
       meter.step('live body', 'Blaze\'s live body: fetching its code…');
       const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
-      const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look'))], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
+      const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null))], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
       heroine.attachLive(live);
       liveOpened = true;
     } catch (error) {

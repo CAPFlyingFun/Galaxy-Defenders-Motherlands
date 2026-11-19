@@ -1,18 +1,18 @@
 {
   "version": 1,
   "look": "graySuit",
-  "bakedAt": "2026-11-19T06:14:41.023Z",
+  "bakedAt": "2026-11-19T07:54:38.728Z",
   "builderVersion": "0.9.40",
-  "belly": 100,
+  "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7116937580253977,
+  "barefootHeightMetres": 1.7137117630674805,
   "navel": 20,
   "motion": {
     "walkBob": 200,
     "walkSway": 200,
     "breastBounce": 200
   },
-  "weeks": 37.2,
+  "weeks": 12,
   "normalScale": [
     1,
     -1
@@ -39,13 +39,13 @@
       "sarahHair | sarahHair | 28020 triangles | skinned, 17012 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
-    "lowestPointOverTheFloorMetres": -0.011563260759742462,
-    "solesOverTheFloorMetres": -0.011563260759742462,
-    "crownOverTheFloorMetres": 1.7001304972656552,
-    "pointsTheBuilderMoved": 71251,
-    "movedMostGeometryUnits": 0.03923455916604795,
+    "lowestPointOverTheFloorMetres": -0.013362774164863424,
+    "solesOverTheFloorMetres": -0.013362774164863424,
+    "crownOverTheFloorMetres": 1.700348988902617,
+    "pointsTheBuilderMoved": 64260,
+    "movedMostGeometryUnits": 0.15052148362831444,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16339184491224937,
+    "restSkinSpread": 0.1635134025568394,
     "captureMissing": {
       "position": 0,
       "normal": 0

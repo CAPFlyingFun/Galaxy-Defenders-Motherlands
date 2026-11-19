@@ -75,6 +75,15 @@ use the game's single copy of three.js.
   Its 3D pieces (`Game/src/heroine/fast/suitGear.ts`, chosen per look in `looks/gear.ts`): tall FLAT combat boots
   (Joshua: no heels), wrist cuffs and shoulder plates, each a shell measured round her own skin on one bone; the belt
   gear takes the look's colours. Still to come: glowing lines along the red bands, a smoother boot.
+- OUTFITS SWITCH IN SETTINGS (Joshua, 2026-11-19): Settings -> HEROINE -> Outfit lists every saved look
+  (`OUTFIT_CHOICES` in `Game/src/heroine/heroineSettings.ts`, saved as `gdm.outfit`; changing it reloads the game;
+  `?look=` still wins). For testing now; later each outfit has its place (Look 1 outdoors/action, the formal ones in the
+  command center). Default stays the pink and black two-piece.
+- LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
+  `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): the builder's full bodysuit in a near-black athletic
+  knit with red stripes painted by code, fingerless gloves, a mock collar up her neck (`paintMask.ts` `neckPlace`), a
+  glossy leather shine (`clothShine` in `looks/gear.ts`: the game swaps the cloth's roughness, her skin keeps its own)
+  and a leather belt slung on her hips that sags in front (`beltLine`).
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

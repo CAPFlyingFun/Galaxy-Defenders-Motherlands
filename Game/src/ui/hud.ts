@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { FOV_RANGE, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, OUTFIT_CHOICES, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
@@ -313,6 +313,8 @@ export class Hud {
       return line;
     };
     element('h2', 'gd-settings-part', settings, 'HEROINE');
+    // (her outfit, to test each as it is made: Joshua, 2026-11-19)
+    choiceRow('Outfit', 'outfit', OUTFIT_CHOICES, 'Her outfit, to try each as it is made. Changing it reloads the game.');
     choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body, on the DEV Room\'s settings. Visual: the Character Builder\'s own room. Changing it reloads the game.');
     const fast = options.graphics.body === 'performance';
     // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)

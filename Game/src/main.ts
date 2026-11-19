@@ -325,7 +325,10 @@ async function start(): Promise<void> {
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
   // where she starts, so she can walk up to it, put her guns down on it and take them up again
   // (src/world/weaponTable.ts, src/world/tableUse.ts; her hands: src/heroine/fast/handReach.ts, lowerBody.ts).
-  const table = new WeaponTable(graphics.tableHeight);
+  // (its clips in her outfit's gun colours, so a clip from the table matches her guns: looks/gear.ts)
+  const [{ lookKey: tableLookKey }, { LOOK_GEAR }] = await Promise.all([import('./heroine/looks'), import('./heroine/looks/gear')]);
+  const tableLook = tableLookKey(new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null));
+  const table = new WeaponTable(graphics.tableHeight, LOOK_GEAR[tableLook]?.gun);
   table.place(1.6, 9.85, 0);
   scene.add(table.root);
   const tableUse = new TableUse(table, heroine);

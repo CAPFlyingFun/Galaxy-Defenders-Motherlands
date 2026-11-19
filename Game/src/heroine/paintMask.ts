@@ -60,7 +60,7 @@ export interface PaintSurface {
   /**
    * Fill `out` with point `v`'s place on her TRUNK (her hips, belly, chest, back and shoulders up to the base of her
    * neck). Here `along` is how far UP her trunk: 0 at her hip joints, 1 at the base of her neck; `turn` is degrees
-   * round a line straight up through the middle of her hips (0 her front, +90 her side, 180 her back; the same on both
+   * round her trunk's middle at that height (measured from her skin: her back plus half her usual depth) (0 her front, +90 her side, 180 her back; the same on both
    * sides, mirrored, as on her legs); `radius` how far the point is from that line (leg lengths: her belly's front is
    * far out). False for her arms, her head and neck, and her legs below her hip joints.
    */
@@ -75,8 +75,8 @@ export interface PaintSurface {
   /**
    * Fill `out` with point `v`'s place on her NECK and head (Joshua, 2026-11-19: the catsuit's collar "going up to her
    * neck"): `along` 0 at the base of her neck, 1 at the very top of her head (her collar's top is about a quarter of
-   * the way); `turn` degrees round the line from the one to the other (0 her front, +90 her side, 180 her back);
-   * `radius` how far from that line (leg lengths). False below the base of her neck and for her arms.
+   * the way; below the base of her neck it goes under 0); `turn` degrees round the line from the one to the other (0 her front, +90 her side, 180 her back);
+   * `radius` how far from that line (leg lengths). False well below the base of her neck.
    */
   neckPlace(v: number, out: LegPlace): boolean;
 }
@@ -253,6 +253,43 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
   });
   const armMiddleX = (arms[0].shoulder[0] + arms[1].shoulder[0]) / 2;
 
+  // ---- THE MIDDLE OF HER TRUNK at each height, measured from her own skin (Joshua, 2026-11-19: "fix the jagged edges").
+  // `turn` round her trunk has to be measured round a line INSIDE her. Straight up from her hips, the line ran out behind
+  // her upper back (her shoulders sit forward of her hips); run up to her neck joint, it ended on the skin of her back
+  // (her spine is near it). Either way her upper back measured as her side, or as no side at all, and stripes spilled
+  // across it in ragged bands. So: in bands of height, where her back's skin is, and from there forward by half her
+  // trunk's usual depth (the middle band of depths, so neither her breasts nor a big belly drag the middle forward).
+  const BANDS = 48;
+  const bandLow = hipHeight - 0.12 * legLength, bandHigh = neckHeight;
+  const bandOf = (y: number): number => Math.min(BANDS - 1, Math.max(0, Math.floor(((y - bandLow) / (bandHigh - bandLow)) * BANDS)));
+  const backMost = new Float32Array(BANDS).fill(Infinity), frontMost = new Float32Array(BANDS).fill(-Infinity);
+  for (let v = 0; v < count; v++) {
+    const y = points.getY(v);
+    if (y < bandLow || y > bandHigh) continue;
+    // (only her trunk near her middle: not her arms, and not the outsides of her hips or shoulders)
+    if (Math.abs(points.getX(v) - middleX) > 0.06 * legLength) continue;
+    if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
+    if (arm[v] === 1) continue;
+    const forward = (points.getZ(v) - hipZ) * facing, b = bandOf(y);
+    if (forward < backMost[b]) backMost[b] = forward;
+    if (forward > frontMost[b]) frontMost[b] = forward;
+  }
+  const depths: number[] = [];
+  for (let b = 0; b < BANDS; b++) if (Number.isFinite(backMost[b]) && Number.isFinite(frontMost[b])) depths.push(frontMost[b] - backMost[b]);
+  depths.sort((x, y) => x - y);
+  const usualDepth = depths.length ? depths[Math.floor(depths.length / 2)] : 0.25 * legLength;
+  // each band's middle (forward of her hips' line, as `forward` above); a band with no skin measured takes its neighbour's
+  const bandMiddle = new Float32Array(BANDS);
+  let last = 0;
+  for (let b = 0; b < BANDS; b++) { if (Number.isFinite(backMost[b])) last = backMost[b] + usualDepth / 2; bandMiddle[b] = last; }
+  for (let b = BANDS - 2; b >= 0; b--) if (!Number.isFinite(backMost[b])) bandMiddle[b] = bandMiddle[b + 1];
+  /** Her trunk's middle at height y, forward of her hips' line (smoothed between bands). */
+  const middleForward = (y: number): number => {
+    const f = Math.min(BANDS - 1, Math.max(0, ((y - bandLow) / (bandHigh - bandLow)) * BANDS - 0.5));
+    const b = Math.floor(f), t = f - b;
+    return bandMiddle[b] + (bandMiddle[Math.min(BANDS - 1, b + 1)] - bandMiddle[b]) * t;
+  };
+
   return {
     count,
     knee: (legs[0].kneeAt + legs[1].kneeAt) / 2,
@@ -289,9 +326,10 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
       if (p[1] < hipHeight - 0.12 * legLength || p[1] > neckHeight) return false;
       if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
       if (arm[v] === 1) return false;
-      // round a line straight up through the middle of her hips; each side measured outward from her front
-      const dx = Math.abs(p[0] - middleX), dz = (p[2] - trunkAxisZ) * facing;
       out.along = (p[1] - hipHeight) / Math.max(1e-6, neckHeight - hipHeight);
+      // (round her trunk's own middle at this height: see "the middle of her trunk" above)
+      // each side measured outward from her front, from her trunk's middle at this height (measured above)
+      const dx = Math.abs(p[0] - middleX), dz = (p[2] - trunkAxisZ) * facing - middleForward(p[1]);
       out.turn = Math.atan2(dx, dz) / RADIANS;
       out.radius = Math.hypot(dx, dz) / legLength;
       // (between her legs, right by the line her turn is measured round, which way round a point is means nothing)
@@ -300,10 +338,12 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
     },
     neckPlace(v: number, out: LegPlace): boolean {
       const p: V3 = [points.getX(v), points.getY(v), points.getZ(v)];
-      // a little under the base of her neck too, so a collar's lower edge meets the suit's painted top
-      if (p[1] < neckHeight - 0.03 * legLength) return false;
-      if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
-      if (arm[v] === 1) return false;
+      // a hand's width under the base of her neck too, so a collar can draw its lower edge as a smooth line (a point
+      // just outside a painted shape must say how far outside it is, or the edge steps from point to point: jagged)
+      if (p[1] < neckHeight - 0.28 * legLength) return false;
+      // (NOT left out for being an arm's: on her upper back and shoulder tops many points are pulled hardest by her
+      //  shoulder bones, and skipping them left a painted edge there toothed, one tooth per point. Her arms hang far
+      //  below her neck's height, so nothing of them is in reach here)
       const off = sub(p, neckBase), along = dot(off, neckLine) / neckLineSquared;
       // from her neck's line out to the point: which way round (her front is +z, her sides either x, mirrored)
       const axis = mix(neckBase, crown, along);

@@ -35,7 +35,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { Hand } from '../../core/contracts';
-import { CLIP, createClip } from '../guns';
+import { CLIP, createClip, gunMaterials, type GunColours } from '../guns';
 import type { Egg } from './armClear';
 
 /** GAME TUNING (metres, degrees). */
@@ -142,6 +142,8 @@ export interface BeltGearSource {
   readonly line?: readonly [number, number, number];
   /** The outfit's own colours for the belt, straps, holsters and pouches (looks/gear.ts); left out: BELT_COLOURS. */
   readonly colours?: Partial<Record<keyof typeof BELT_COLOURS, number>>;
+  /** The outfit's gun colours, for the clips in her pouches (looks/gear.ts `gun`); left out: the first guns'. */
+  readonly gunColours?: GunColours;
 }
 
 export interface BeltGear {
@@ -944,10 +946,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   carrier.add(pouchMesh);
 
   // The clips: one instanced mesh (the guns' own clip shape and colours), a place for each pouch.
-  const clipMaterials = [
-    new THREE.MeshStandardMaterial({ color: 0x1b1d24, roughness: 0.45, metalness: 0.6 }),
-    new THREE.MeshStandardMaterial({ color: 0xff2fb0, emissive: 0xff2fb0, emissiveIntensity: 0.8, roughness: 0.4 }),
-  ];
+  const clipMaterials = gunMaterials(src.gunColours);
   const clipShape = createClip(clipMaterials);
   const clipMesh = new THREE.InstancedMesh(clipShape.geometry, clipMaterials, pouchCount);
   clipMesh.name = 'pouch-clips';

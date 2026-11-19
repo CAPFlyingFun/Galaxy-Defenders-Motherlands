@@ -80,10 +80,14 @@ use the game's single copy of three.js.
   `?look=` still wins). For testing now; later each outfit has its place (Look 1 outdoors/action, the formal ones in the
   command center). Default stays the pink and black two-piece.
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
-  `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): the builder's full bodysuit in a near-black athletic
-  knit with red stripes painted by code, fingerless gloves, a mock collar up her neck (`paintMask.ts` `neckPlace`), a
-  glossy leather shine (`clothShine` in `looks/gear.ts`: the game swaps the cloth's roughness, her skin keeps its own)
-  and a leather belt slung on her hips that sags in front (`beltLine`).
+  `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
+  CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted
+  by code, fingerless gloves and a mock collar up her neck (`paintMask.ts` `neckPlace`) in his exact black, a glossy
+  leather shine (`clothShine` in `looks/gear.ts`: the game swaps the cloth's roughness, her skin keeps its own), a
+  leather belt slung on her hips that sags in front (`beltLine`), and black guns with red (`gun`, per look; the clips
+  in her pouches and on the table match). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
+  `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
+  line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

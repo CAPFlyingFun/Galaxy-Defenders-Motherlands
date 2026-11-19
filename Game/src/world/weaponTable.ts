@@ -19,7 +19,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { Hand } from '../core/contracts';
-import { CLIP, createClip } from '../heroine/guns';
+import { CLIP, createClip, gunMaterials, type GunColours } from '../heroine/guns';
 
 const inverse = new THREE.Matrix4();
 
@@ -70,7 +70,8 @@ export class WeaponTable {
   private readonly empties: THREE.Object3D[] = [];
   private readonly clipMaterials: THREE.Material[];
 
-  constructor(height: number = TABLE.height) {
+  /** @param gunColours  the outfit's gun colours, for the clips on the table (left out: the first guns') */
+  constructor(height: number = TABLE.height, gunColours?: GunColours) {
     this.root.name = 'weapon table';
     const dark = new THREE.MeshStandardMaterial({ color: 0x20262f, metalness: 0.6, roughness: 0.45 });
     const glow = new THREE.MeshBasicMaterial({ color: 0x5ee8c8 });
@@ -89,10 +90,7 @@ export class WeaponTable {
     this.rackBase = box(0.14, 0.015, 0.05, dark);
     this.tray = box(0.16, 0.02, 0.09, new THREE.MeshStandardMaterial({ color: 0x2c3442, metalness: 0.4, roughness: 0.6 }));
     // (the clips look like the guns' own: the same two colours)
-    this.clipMaterials = [
-      new THREE.MeshStandardMaterial({ color: 0x1b1d24, roughness: 0.45, metalness: 0.6 }),
-      new THREE.MeshStandardMaterial({ color: 0xff2fb0, emissive: 0xff2fb0, emissiveIntensity: 0.8, roughness: 0.4 }),
-    ];
+    this.clipMaterials = gunMaterials(gunColours);
     this.setHeight(height);
     for (let i = 0; i < TABLE.rackSlots.length; i++) { this.rack.push(null); this.refillIn.push(0); this.fillSlot(i); }
   }

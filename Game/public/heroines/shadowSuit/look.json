@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "shadowSuit",
-  "bakedAt": "2026-11-19T08:06:55.630Z",
+  "bakedAt": "2026-11-19T13:05:48.354Z",
   "builderVersion": "0.9.40",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.713636303401573,
+  "barefootHeightMetres": 1.7136624552171795,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -18,8 +18,8 @@
     -1
   ],
   "hair": {
-    "style": "ponytail",
-    "colour": "#1c120e",
+    "style": "braid",
+    "colour": "#1c1b1d",
     "length": 1
   },
   "files": {
@@ -36,16 +36,16 @@
       "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0_1, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
-      "sarahHair | sarahHair | 28020 triangles | skinned, 17012 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
+      "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7002735292367095,
-    "pointsTheBuilderMoved": 64272,
-    "movedMostGeometryUnits": 0.15036442403572253,
+    "crownOverTheFloorMetres": 1.700299681052316,
+    "pointsTheBuilderMoved": 73382,
+    "movedMostGeometryUnits": 0.15041494982917936,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16350318607708852,
+    "restSkinSpread": 0.16351130655826226,
     "captureMissing": {
       "position": 0,
       "normal": 0

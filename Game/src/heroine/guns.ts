@@ -32,7 +32,25 @@ function box(w: number, h: number, d: number, x: number, y: number, z: number): 
   return new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 }
 
-export function createGun(): Gun {
+/**
+ * A gun's two colours (Joshua, 2026-11-19: "adjust her gun and holster color" to go with each outfit): its METAL (the
+ * slide, grip and barrel) and its GLOW (the stripe, the muzzle ring and a clip's base). Each look picks its own in
+ * `looks/gear.ts`; the clips in her belt pouches and on the table wear the same two, so a clip never changes colour
+ * as it goes from table to gun.
+ */
+export interface GunColours { readonly metal: number; readonly glow: number }
+/** The first guns' colours: dark metal and the magenta of her pink and black two-piece. */
+export const DEFAULT_GUN_COLOURS: GunColours = Object.freeze({ metal: 0x1b1d24, glow: 0xff2fb0 });
+
+/** The two materials a gun or a clip is drawn with: [metal, glow]. */
+export function gunMaterials(colours: GunColours = DEFAULT_GUN_COLOURS): THREE.MeshStandardMaterial[] {
+  return [
+    new THREE.MeshStandardMaterial({ color: colours.metal, roughness: 0.45, metalness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: colours.glow, emissive: colours.glow, emissiveIntensity: 0.8, roughness: 0.4 }),
+  ];
+}
+
+export function createGun(colours: GunColours = DEFAULT_GUN_COLOURS): Gun {
   // The dark parts: the slide (the long top block), the grip (angled back a little) and the barrel.
   const slide = box(0.034, 0.042, 0.2, 0, 0.05, 0.06);
   const grip = box(0.03, 0.11, 0.045, 0, -0.02, -0.01).rotateX(-0.22);
@@ -47,10 +65,7 @@ export function createGun(): Gun {
   const geometry = mergeGeometries([dark, glow], true);
   for (const part of [slide, grip, guard, barrel, stripe, ring, dark, glow]) part.dispose();
 
-  const materials = [
-    new THREE.MeshStandardMaterial({ color: 0x1b1d24, roughness: 0.45, metalness: 0.6 }),
-    new THREE.MeshStandardMaterial({ color: 0xff2fb0, emissive: 0xff2fb0, emissiveIntensity: 0.8, roughness: 0.4 }),
-  ];
+  const materials = gunMaterials(colours);
   const object = new THREE.Mesh(geometry, materials);
   object.name = 'placeholder-gun';
   object.matrixAutoUpdate = false;

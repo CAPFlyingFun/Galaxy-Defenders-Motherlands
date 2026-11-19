@@ -597,7 +597,9 @@ if (uHideHead > 0.5) {
   }
 
   // ---- 8. her guns: each one a child of its hand's bone, so it costs nothing to move ---------------------------------
-  const guns: Record<Hand, Gun> = { left: createGun(), right: createGun() };
+  // (her guns in her outfit's colours: looks/gear.ts)
+  const gunColours = LOOK_GEAR[look.manifest.look]?.gun;
+  const guns: Record<Hand, Gun> = { left: createGun(gunColours), right: createGun(gunColours) };
   /** Where each gun sits in its hand (in the hand bone's frame): kept, so a gun put down can be taken up again exactly. */
   const seat: Record<Hand, THREE.Matrix4> = { left: new THREE.Matrix4(), right: new THREE.Matrix4() };
   for (const hand of ['left', 'right'] as const) {
@@ -621,6 +623,7 @@ if (uHideHead > 0.5) {
     },
     // (the outfit's own colours for it: looks/gear.ts)
     colours: LOOK_GEAR[look.manifest.look]?.belt,
+    gunColours,
     line: LOOK_GEAR[look.manifest.look]?.beltLine,
   });
   // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist

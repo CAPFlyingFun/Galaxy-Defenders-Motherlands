@@ -4,18 +4,19 @@
 // "ChatGPT actually recommended starting with one as it's basically a whole
 // body paint (catsuit) and could even paint the collar").
 //
-// Her body and head are the game's Blaze (blazeSuit.ts: Joshua's export, her
-// dark ponytail). Her clothes are all the Character Builder's own paint:
+// HER BODY, HEAD AND CATSUIT ARE JOSHUA'S OWN (his Character Builder export of
+// 2026-11-19, 12:59: "I have her in a black catsuit already from CCBS... all you
+// need to do is do the collar and paint stripes on it"): copied here exactly as
+// saved -- her braid, eye and lip colours and face, and her body.
 //
-//   Paint layer 1, THE CATSUIT: the builder's "Full bodysuit" template from her
-//     ankles to her neck and wrists, in the builder's ATHLETIC fabric (a knit
-//     with its own sheen) dyed a deep charcoal, nearly black. Not flat black: the
-//     game's city is dark, and a flat black suit would lose her shape in it. Its
-//     neckline is right up at the base of her neck (the collar), and its edging
-//     -- the bands round her neck, wrists and ankles -- is the suit's red.
+//   Paint layer 1, THE CATSUIT: his layer exactly: the builder's "Full bodysuit"
+//     in the builder's ATHLETIC knit, its Black, its neckline a little under the
+//     base of her neck.
 //
-//   Paint layer 2, THE FINGERLESS GLOVES (painted by code: paintMask.ts): her
-//     hands from her wrist to the roots of her fingers, in the suit's charcoal;
+//   Paint layer 2, THE FINGERLESS GLOVES AND THE COLLAR (painted by code:
+//     paintMask.ts), in the suit's own black: her hands from her wrist to the
+//     roots of her fingers; a mock collar up her neck, reaching down over the
+//     suit's neckline so no seam shows;
 //     the same layer covers her cleavage, where the builder takes the suit's own
 //     paint off for a strip of fabric we leave out (it showed as a line). (In a
 //     near-black, the cleavage showed as a darker patch: so the suit's colour.)
@@ -31,15 +32,117 @@
 // work for the belly later"), thigh holsters, tall flat combat boots, cuffs.
 // ============================================================================
 import type { HeroineLook } from '../heroineLook';
-import { COVERAGE_TEMPLATES } from '@charb/sarahlab/paintTemplates';
 import { plate, stripe, type LegPlace, type MaskPainter, type PaintSurface } from '../paintMask';
 import { BLAZE_LOOK } from './blaze';
-import { BLAZE_SUIT_LOOK } from './blazeSuit';
+
+/** Joshua's export of Blaze in her black catsuit (2026-11-19), exactly as saved. */
+export const EXPORT_BODY = {
+    "model": "v2-body",
+    "bump": 10,
+    "shape": "{\"version\":1,\"shape\":{\"bellyLower\":5,\"navel\":20,\"babyFloat\":200,\"breastSize\":5,\"milk\":50,\"breastBounce\":200,\"walkBob\":200,\"walkSway\":200,\"legGap\":1.5}}",
+    "refine": false,
+    "random": {
+      "rules": {},
+      "groups": []
+    },
+    "pregnancy": {
+      "pregnant": true,
+      "week": null,
+      "weekAtBump": null,
+      "firstWeekBump": 10,
+      "deliveryBump": 150,
+      "deliveryWeek": 42,
+      "afterBump": 30,
+      "births": null
+    },
+    "head": {
+      "hair": {
+        "style": "braid",
+        "length": 1,
+        "colour": "#1c1b1d"
+      },
+      "eyes": {
+        "colour": "#7fa2c6"
+      },
+      "brows": {
+        "colour": null,
+        "amount": 1
+      },
+      "lips": {
+        "colour": "#b81c28",
+        "amount": 0.55
+      },
+      "lashes": 1,
+      "face": {
+        "cheekFullness": 0.7,
+        "jawCorner": -0.6,
+        "chinForward": -0.3,
+        "noseBridge": 0.1,
+        "noseTip": -0.28,
+        "eyeSize": -0.54,
+        "browHeight": 0.1,
+        "cheekbones": -0.3,
+        "eyeTilt": -0.6,
+        "earSize": 0.02,
+        "lipFullness": -1,
+        "mouthWidth": -0.52,
+        "noseWidth": -0.15,
+        "noseLength": -0.43
+      }
+    }
+  } as const;
+export const EXPORT_SUIT_LAYER = {
+        "choice": {
+          "fabric": {
+            "family": "athletic",
+            "colour": 4
+          },
+          "match": true,
+          "trim": null,
+          "stitch": 0.5,
+          "opacity": null
+        },
+        "detail": {
+          "mode": "auto",
+          "material": null,
+          "override": {
+            "nipple": 0.45,
+            "navel": 0.8
+          }
+        },
+        "template": {
+          "id": "bodysuitFull",
+          "params": {
+            "riseFront": 1,
+            "riseSide": 1,
+            "riseBack": 1,
+            "riseFrontWidth": 1,
+            "legStart": 0,
+            "legEnd": 1,
+            "feet": false,
+            "hemFront": -1,
+            "hemBack": -1,
+            "neckFront": 0.94,
+            "neckBack": 0.97,
+            "sleeve": 1,
+            "topFront": null,
+            "topBack": null,
+            "topSide": null,
+            "strap": 0,
+            "strapIn": 0,
+            "armhole": null,
+            "neckStyle": "crew",
+            "legCut": null,
+            "length": null
+          }
+        },
+        "mask": ""
+      } as const;
 
 /** THE SUIT'S COLOURS (GAME TUNING). */
 export const SHADOW_SUIT_COLOURS = Object.freeze({
-  /** the catsuit: a deep charcoal, nearly black (in the builder's athletic knit) */
-  suit: '#232429',
+  /** the catsuit: Joshua's (the builder's athletic knit, its Black: colour 4), as a hex for the 3D gear */
+  suit: '#101016',
   /** the stripes: look 1's red */
   red: '#b3122a',
 });
@@ -50,7 +153,14 @@ const dyed = (family: 'flat' | 'athletic', tint: string) => ({ family, colour: 0
 /** A smooth step from 0 (at `a`) to 1 (at `b`). */
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 /** A path through (along, turn) points, eased between them: for a stripe that curves round her as it goes. */
-const through = (points: readonly (readonly [number, number])[]) => (along: number): number => {
+const through = (given: readonly (readonly [number, number])[]) => {
+  // (the points in order up the `along` measure, whichever way they were written: the trunk's stripes are written from
+  //  the top of her shoulder down, and taken as written the path never curved and jumped at its top end, where it then
+  //  smeared sideways into a ragged band. Joshua, 2026-11-19: "fix the jagged edges")
+  const points = [...given].sort((a, b) => a[0] - b[0]);
+  return (along: number): number => path(points, along);
+};
+const path = (points: readonly (readonly [number, number])[], along: number): number => {
   if (along <= points[0][0]) return points[0][1];
   for (let k = 1; k < points.length; k++) {
     const [a0, t0] = points[k - 1], [a1, t1] = points[k];
@@ -72,6 +182,12 @@ const BACK_STRIPE = through([[0.95, 125], [0.6, 115], [0.25, 104], [-0.2, 96]]);
 /** Down her arm: the outside of her upper arm and forearm. */
 const ARM_STRIPE = through([[0, 75], [0.5, 85], [1, 80]]);
 
+/**
+ * Where the trunk's stripes end, up near the tops of her shoulders, with rounded ends: short of the base of her neck,
+ * where her trunk's measure stops (run into it, they ended in a ragged edge along her shoulders' tops).
+ */
+const STRIPE_TOP = Object.freeze({ front: 0.92, back: 0.88 });
+
 const paintStripes: MaskPainter = (surface: PaintSurface): Float32Array => {
   const inside = new Float32Array(surface.count).fill(-1);
   const place: LegPlace = { along: 0, turn: 0, radius: 0 };
@@ -79,8 +195,8 @@ const paintStripes: MaskPainter = (surface: PaintSurface): Float32Array => {
     let best = -1;
     if (surface.trunkPlace(v, place)) {
       best = Math.max(best,
-        stripe(place, { from: -0.2, to: 1.0, half: 0.018, path: FRONT_STRIPE }),
-        stripe(place, { from: -0.2, to: 0.95, half: 0.016, path: BACK_STRIPE }));
+        stripe(place, { from: -0.2, to: STRIPE_TOP.front, half: 0.018, path: FRONT_STRIPE }),
+        stripe(place, { from: -0.2, to: STRIPE_TOP.back, half: 0.016, path: BACK_STRIPE }));
     }
     if (surface.legPlace(v, place)) best = Math.max(best, stripe(place, { from: -0.2, to: 0.95, half: 0.016, path: LEG_STRIPE }));
     if (surface.armPlace(v, place) && place.along <= 0.95) best = Math.max(best, stripe(place, { from: 0.02, to: 0.92, half: 0.013, path: ARM_STRIPE }));
@@ -96,10 +212,11 @@ const GLOVE = Object.freeze({ from: 0.97, to: 1.2 });
 
 /**
  * THE COLLAR (Joshua, 2026-11-19, with a close-up of Look 1: "make sure you have the collar going up to her neck"): a
- * mock neck in the suit's own colour, standing up her neck to about a quarter of the way from its base to the top of
+ * mock neck in the suit's own colour (reaching down over the suit's neckline, a few cm under the base of her neck, so
+ * no seam shows), standing up her neck to about a quarter of the way from its base to the top of
  * her head behind, dipping a little lower in front under her chin. Heights in her neck's own measure (`neckPlace`).
  */
-const COLLAR = Object.freeze({ back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14 });
+const COLLAR = Object.freeze({ bottom: -0.3, bottomBack: -0.42, back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14, sharpBottom: 3 });
 
 const paintGloves: MaskPainter = (surface: PaintSurface): Float32Array => {
   const inside = new Float32Array(surface.count).fill(-1);
@@ -120,7 +237,16 @@ const paintGloves: MaskPainter = (surface: PaintSurface): Float32Array => {
       const top = COLLAR.front + (COLLAR.back - COLLAR.front) * (Math.abs(place.turn) / 180);
       // (a point far out from her neck's line up at her jaw's height is her jaw or chin, not her neck: left bare. Lower
       //  down, far out is the top of her shoulders, which rise above the base of her neck: covered)
-      const collar = place.radius > COLLAR.chin && place.along > COLLAR.chinFrom ? -1 : (top - place.along) * 0.35;
+      // (its BOTTOM edge at the base of her neck, a smooth line, so the suit's red neckline band below it shows whole
+      //  instead of being cut raggedly point by point: Joshua, 2026-11-19, "fix the jagged edges")
+      //  Behind, it reaches lower, to below her shoulders' tops, so the red band's top edge there is this smooth line too:
+      //  the builder's own edge there followed her skin's points and came out ragged)
+      const backward = smooth(90, 150, Math.abs(place.turn));
+      const bottom = COLLAR.bottom + (COLLAR.bottomBack - COLLAR.bottom) * backward;
+      // (its bottom edge blended over a third of the usual width: blended wide, the knit frayed it into teeth over the
+      //  red below)
+      const inBand = Math.min((top - place.along) * 0.35, (place.along - bottom) * 0.35 * COLLAR.sharpBottom);
+      const collar = place.radius > COLLAR.chin && place.along > COLLAR.chinFrom ? -1 : inBand;
       inside[v] = Math.max(inside[v], collar);
     }
   }
@@ -129,32 +255,27 @@ const paintGloves: MaskPainter = (surface: PaintSurface): Float32Array => {
 
 // ------------------------------------------------------------------ the look
 
-const bodysuit = COVERAGE_TEMPLATES.find((t) => t.id === 'bodysuitFull');
-if (!bodysuit) throw new Error("[shadowSuit] the builder has no 'bodysuitFull' template any more: shadowSuit.ts must be looked at again");
 
-/** How the suit shows what is under it: her nipples hardly at all, her navel wholly (graySuit.ts says why). */
-const DETAIL = { mode: 'auto', material: null, override: { nipple: 0.15, navel: 1 } } as const;
+/** How the suit shows what is under it: Joshua's own setting from his export. */
+const DETAIL = EXPORT_SUIT_LAYER.detail;
+/** The suit's own fabric pick (his): the gloves and collar are painted in exactly it, so no edge shows. */
+const SUIT_PICK = EXPORT_SUIT_LAYER.choice;
 const C = SHADOW_SUIT_COLOURS;
 
 export const SHADOW_SUIT_LOOK: HeroineLook = {
   name: 'Blaze',
-  body: BLAZE_SUIT_LOOK.body,
+  body: EXPORT_BODY,
   clothes: {
     ...(BLAZE_LOOK.clothes as object),
     // (the outfit's NAME stays Blaze's own: one the builder does not know makes it put its default tee on her)
     shoes: 'none',
-    detail: { nipple: 0.15, navel: 1 },
+    detail: { nipple: null, navel: null },
     layers: [
-      // PAINT LAYER 1: the catsuit, red at its edges, its neckline up at the base of her neck (the collar)
-      {
-        choice: { fabric: dyed('athletic', C.suit), match: false, trim: dyed('athletic', C.red), stitch: 0.5, opacity: 1 },
-        detail: DETAIL,
-        template: { id: bodysuit.id, params: { ...bodysuit.params, neckFront: 1.0, neckBack: 1.0 } },
-        mask: '',
-      },
-      // PAINT LAYER 2: the fingerless gloves, painted by `paintGloves` once she is loaded
-      // (in the suit's own charcoal knit: near-black, the cleavage showed as a darker patch with an edge across her chest)
-      { choice: { fabric: dyed('athletic', C.suit), match: true, trim: dyed('athletic', C.suit), stitch: 0.5, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
+      // PAINT LAYER 1: Joshua's black catsuit, exactly as he saved it
+      EXPORT_SUIT_LAYER,
+      // PAINT LAYER 2: the fingerless gloves and the collar, painted by `paintGloves` once she is loaded, in his suit's
+      // own fabric and colour
+      { choice: SUIT_PICK, detail: DETAIL, template: null, mask: '' },
       // PAINT LAYER 3: the red stripes, painted by `paintStripes`
       { choice: { fabric: dyed('athletic', C.red), match: true, trim: dyed('athletic', C.red), stitch: 0.5, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
     ],

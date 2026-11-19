@@ -62,6 +62,9 @@ const flatTint = (tint: string) => ({ family: 'flat', colour: 0, tint }) as cons
 /** A smooth step from 0 (at `a`) to 1 (at `b`). */
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 /** A path through (along, turn) points, eased between them: for a band that curves round her as it goes. */
+// (KEPT AS IT WAS for this suit: its band paths were drawn and looked at with this, which takes a path written from
+//  the top down as one fixed angle. shadowSuit.ts's own copy reads paths either way; drawn for that, these bands
+//  would curve in ways nobody chose. To be redrawn when this suit has its quality pass.)
 const through = (points: readonly (readonly [number, number])[]) => (along: number): number => {
   if (along <= points[0][0]) return points[0][1];
   for (let k = 1; k < points.length; k++) {

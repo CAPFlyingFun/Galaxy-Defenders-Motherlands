@@ -9,6 +9,7 @@
 // ============================================================================
 import type { SuitGearStyle } from '../fast/suitGear';
 import type { BELT_COLOURS } from '../fast/beltGear';
+import type { GunColours } from '../guns';
 
 export interface LookGear {
   /** The belt, straps, holsters and pouches (any left out keep beltGear.ts's own). */
@@ -21,6 +22,8 @@ export interface LookGear {
    * Unset: the fabric's own. (Joshua, 2026-11-19, of the catsuit: "add a glossy almost leather shine to it".)
    */
   readonly clothShine?: number;
+  /** Her guns' colours (and every clip's: in her pouches and on the table). Left out: dark metal and magenta. */
+  readonly gun?: GunColours;
   /** The fitted pieces, if any. */
   readonly pieces?: SuitGearStyle;
 }
@@ -37,10 +40,19 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     belt: { belt: 0x6e5443, edge: 0x947866, buckle: 0xb4b8c0, accent: 0xb3122a, strap: 0x5a4436, holster: 0x121214, plate: 0x1c1c20 },
     beltLine: [-0.06, 0.035, 0.1],
     clothShine: 0.42,
+    // (blackened metal and the suit's red, as the guns in Look 1's picture)
+    gun: { metal: 0x141518, glow: 0xc4142e },
     pieces: {
       plate: '#1b1c20', trim: '#2c2d33', accent: '#b3122a', sole: '#0e0e10', glow: '',
       boots: true, cuffs: true, shoulders: false,
     },
+  },  // (Joshua's plain catsuit: the catsuit's belt and guns, no boots or cuffs, and its fabric's own sheen)
+  blazeCatsuit: {
+    // (a leather brown light enough to read on the near-black suit, as look 1's belt does)
+    belt: { belt: 0x6e5443, edge: 0x947866, buckle: 0xb4b8c0, accent: 0xb3122a, strap: 0x5a4436, holster: 0x121214, plate: 0x1c1c20 },
+    beltLine: [-0.06, 0.035, 0.1],
+    // (blackened metal and the suit's red, as the guns in Look 1's picture)
+    gun: { metal: 0x141518, glow: 0xc4142e },
   },
   /**
    * THE GRAY AND RED SUIT (graySuit.ts; Joshua's outfit design 2): a gray belt with silver edges and a glowing pale
@@ -48,6 +60,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
    * plates in the suit's light gray, darker gray and red, with glowing pale blue strips.
    */
   graySuit: {
+    // (gunmetal gray and the suit's red)
+    gun: { metal: 0x3c4049, glow: 0xc4142e },
     belt: { belt: 0x5a5e68, edge: 0xa9aeb8, buckle: 0xd0d4dc, accent: 0x9fe6ff, strap: 0x5a5e68, holster: 0x2a2d34, plate: 0x3c4049 },
     pieces: {
       plate: '#c9ccd3', trim: '#7d818b', accent: '#8e1f36', sole: '#25272d', glow: '#a8ecff',

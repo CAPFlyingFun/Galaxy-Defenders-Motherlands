@@ -97,6 +97,9 @@ export const DOOR = Object.freeze({
   lead: 0.7,
   /** Close enough to her spot; turned to the door within this; the longest she waits to turn. */
   arrived: 0.04,
+  /** On her way: coming this much nearer counts as headway; with none for this long (seconds) she gives up. */
+  walkHeadway: 0.02,
+  walkGiveUp: 2,
   faced: 0.14,
   faceWaitMost: 1.5,
   /** The most of her arm's length (shoulder to wrist) the handle is kept within: short of straight, so her elbow keeps
@@ -207,10 +210,15 @@ export class Door {
     this.root.updateMatrixWorld(true);
   }
 
-  /** Which side of the door a point is on, and how far from its face (world point). */
+  /**
+   * Which side of the door a point is on, and how far from its face (world point). Measured from the PANEL where it
+   * has swung to (Joshua, 2026-11-19: taking a half-open door a second time locked her up): standing in the doorway of
+   * an open door, the side that counts is which face of the panel she is in front of.
+   */
   sideOf(x: number, z: number): { side: DoorSide; across: number; out: number } {
+    this.root.updateMatrixWorld(true);
     v1.set(x, 0, z);
-    this.root.worldToLocal(v1);
+    this.hinge.worldToLocal(v1);
     return { side: v1.z >= 0 ? 'pull' : 'push', across: v1.x, out: Math.abs(v1.z) };
   }
 
@@ -252,9 +260,13 @@ export class Door {
     return true;
   }
 
-  /** The way she faces the door from a side (toward the door), a compass angle. */
-  faceYaw(side: DoorSide, hand?: Hand): number {
-    const square = this.root.rotation.y + (side === 'pull' ? Math.PI : 0);
+  /**
+   * The way she faces the door from a side (toward the door), a compass angle: square to the panel when it stood
+   * `angle` open (radians; 0 shut).
+   */
+  faceYaw(side: DoorSide, hand?: Hand, angle = 0): number {
+    // (the panel is turned by -angle on its hinge: see pose)
+    const square = this.root.rotation.y - angle + (side === 'pull' ? Math.PI : 0);
     // (turned a little SIDE-ON, her handle hand's shoulder toward the door, as anyone reaching down to a handle stands:
     //  her belly then sits beside her reach, not in front of it; turning up the yaw brings her right shoulder forward)
     return hand ? square + (hand === 'right' ? 1 : -1) * DOOR.sideOn : square;
@@ -269,7 +281,11 @@ export class Door {
     return side === 'pull' ? 'left' : 'right';
   }
 
-  /** Where she stands to take the handle from a side, with that hand (world, the door shut). */
+  /**
+   * Where she stands to take the handle from a side, with that hand (world). In front of the PANEL where it is now,
+   * not where it is when shut (Joshua, 2026-11-19): with the door left half open, the shut door's spot was behind the
+   * swung panel, which is solid, so she walked into it for ever and the game seemed locked.
+   */
   standSpot(side: DoorSide, hand: Hand, bellyAhead: number, out: THREE.Vector3): THREE.Vector3 {
     // (turned side-on, her belly reaches toward the door by less: its front is turned away)
     const back = Math.max(DOOR.standBack, bellyAhead * Math.cos(DOOR.sideOn) + DOOR.bellyGap);
@@ -278,9 +294,10 @@ export class Door {
     const rightIsPlusX = side === 'pull';
     const towardHand = (hand === 'right') === rightIsPlusX ? 1 : -1;
     // (across the doorway: where her hand will hold, which on the lever is out along its bar, not at its rosette)
-    const across = this.root.worldToLocal(this.handlePoint(side, out)).x;
+    // (all in the panel's own frame: x out from the hinge along the panel, z straight out of its face)
+    const across = this.hinge.worldToLocal(this.handlePoint(side, out)).x;
     out.set(across - towardHand * DOOR.standSide * Math.cos(DOOR.sideOn), 0, z);
-    return out.applyMatrix4(this.root.matrixWorld);
+    return out.applyMatrix4(this.hinge.matrixWorld);
   }
 
   /** The handle's grip point on a side, in the world, as the door and handle are now. */
@@ -412,6 +429,11 @@ export class DoorUse {
   /** Which side the door was last opened from (opened from the push side and let go, it swings shut). */
   private openedFrom: DoorSide | null = null;
   private phase: 'idle' | 'lead' | 'walk' | 'face' | 'reach' | 'twist' | 'hold' | 'release' = 'idle';
+  /** How far open the door stood when her hand set out for it (radians): she keeps facing it as it stood then. */
+  private takenAngle = 0;
+  /** On her way to the handle: the nearest she has come to her spot, and how long she has come no nearer. */
+  private walkBest = Infinity;
+  private walkStall = 0;
   private timer = 0;
   private readonly spot = new THREE.Vector3();
   private readonly lookPoint = new THREE.Vector3();
@@ -477,7 +499,7 @@ export class DoorUse {
   }
 
   /** The way she keeps facing while she holds it (toward the door), or null. */
-  faceYaw(): number | null { return this.holding ? this.door.faceYaw(this.side, this.hand) : null; }
+  faceYaw(): number | null { return this.holding ? this.door.faceYaw(this.side, this.hand, this.takenAngle) : null; }
 
   /**
    * One frame. `at` is where she stands; writes where she should walk and look (as the table's and the bars' do).
@@ -512,18 +534,31 @@ export class DoorUse {
     if (this.phase === 'idle' || !h) return;
 
     door.handlePoint(this.side, this.lookPoint);
-    const face = door.faceYaw(this.side, this.hand);
+    // (on her way she faces the panel where it is now; from the moment her hand sets out, where it was then)
+    const approaching = this.phase === 'lead' || this.phase === 'walk' || this.phase === 'face';
+    if (approaching) this.takenAngle = door.angle;
+    const face = door.faceYaw(this.side, this.hand, this.takenAngle);
     out.look = face;
     if (this.phase === 'lead' || this.phase === 'walk' || this.phase === 'face') out.lookAt = this.lookPoint;
     if (this.phase === 'lead') {
       out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
       if (this.timer < DOOR.lead) return;
       this.phase = 'walk';
+      this.walkBest = Infinity;
+      this.walkStall = 0;
     }
     if (this.phase === 'walk') {
       door.standSpot(this.side, this.hand, h.bellyAhead(), this.spot);
       out.look = Math.atan2(this.lookPoint.x - atX, this.lookPoint.z - atZ);
-      if (Math.hypot(this.spot.x - atX, this.spot.z - atZ) > DOOR.arrived) { out.walkTo = this.spot; return; }
+      const away = Math.hypot(this.spot.x - atX, this.spot.z - atZ);
+      if (away > DOOR.arrived) {
+        // NEVER STUCK ON THE WAY: if she has come no nearer for a while (something solid between her and the spot),
+        // she gives up and the controls are hers again, instead of the game waiting on her for ever
+        if (away < this.walkBest - DOOR.walkHeadway) { this.walkBest = away; this.walkStall = 0; }
+        else if ((this.walkStall += dt) > DOOR.walkGiveUp) { this.phase = 'idle'; return; }
+        out.walkTo = this.spot;
+        return;
+      }
       out.look = face;
       this.phase = 'face';
       this.timer = 0;

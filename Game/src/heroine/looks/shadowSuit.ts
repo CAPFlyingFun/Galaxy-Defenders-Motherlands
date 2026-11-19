@@ -143,8 +143,8 @@ export const EXPORT_SUIT_LAYER = {
 export const SHADOW_SUIT_COLOURS = Object.freeze({
   /** the catsuit: Joshua's (the builder's athletic knit, its Black: colour 4), as a hex for the 3D gear */
   suit: '#101016',
-  /** the stripes: look 1's red */
-  red: '#b3122a',
+  /** the stripes: neon red (Joshua, 2026-11-19: "a brighter neon red: FF0000") */
+  red: '#ff0000',
 });
 
 /** A colour in one of the builder's fabric families: its first colour (White) dyed with a tint, as the builder saves one. */

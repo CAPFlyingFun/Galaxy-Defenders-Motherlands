@@ -146,8 +146,8 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const TABLE_WALK = 1.1;
 /**
- * BLAZE'S PREGNANCY, from her Character Builder export (Joshua, 2026-11-17): her first visible belly (firstWeekBump)
- * and full term (deliveryBump, week 41). How far along she is between them slows her paces and tires her sooner
+ * BLAZE'S PREGNANCY, from her Character Builder export (Joshua, 2026-11-19): her first visible belly (firstWeekBump,
+ * 10 %) and full term (deliveryBump, 150 %, week 42). How far along she is between them slows her paces and tires her sooner
  * (src/input/pace.ts PACES_FULL_TERM, src/vitals/heroineVitals.ts byPaceFullTerm). LATER: read from her look.
  */
 /** Where the third-person camera style is kept on this device. */
@@ -175,7 +175,7 @@ const FIRST_PERSON_WALK_PITCH = -0.14;
 const ACTION_PITCH_SECONDS = 0.3;
 /** The over-the-shoulder camera with nothing to look at: a little up (radians, about 10 degrees). */
 const SHOULDER_REST_PITCH = 0.17;
-const PREGNANCY_ARC = { firstBump: 25, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
+const PREGNANCY_ARC = { firstBump: 10, fullTermBump: 150 } as const; // her pace walking up to the weapon table, metres a second (a walk)
 const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the view like a drag of this many pixels a second
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const SHADOW_FLOOR_RADIUS = 4; // metres: the patch of ground round her feet that can show her real shadow
@@ -436,8 +436,15 @@ async function start(): Promise<void> {
    */
   // (Joshua, 2026-11-18: one setting for BOTH views, so she can be watched working on her own in either, or played)
   const aimedByHand = (): boolean => graphics.autoFire === 'off';
-  /** Side steps now: third person MANUAL, at a walk, nothing else running (she keeps facing the camera's way). */
-  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && pace.level < SIDE_WALK_UNDER;
+  /** Her facing held to the camera's way now: third person MANUAL, at a walk or backing up, nothing else running. */
+  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && (pace.level < SIDE_WALK_UNDER || backingUp());
+  /**
+   * The stick pulled back (more back than to either side). BACKING UP she keeps facing the camera's way at ANY pace
+   * (Joshua, 2026-11-19: "facing South (camera was facing North) to go backwards... it did for a moment but then
+   * started facing direction of travel not staying facing the camera's direction and backing up"), never faster
+   * than her jog. Only ahead and to the sides does she turn and run once she is past a walk.
+   */
+  const backingUp = (): boolean => controls.moveY < 0 && Math.abs(controls.moveY) >= Math.abs(controls.moveX);
   /** Everything that follows from the view and the aiming: the camera's style, the buttons, what a click does. */
   const applyView = (): void => {
     rig.setStyle(rig.mode === 'third' && aimedByHand() ? 'shoulder' : cameraStyle);
@@ -787,6 +794,8 @@ async function start(): Promise<void> {
       }
       sideStepping = facingHeld && moveX !== 0;
       let speed = pace.speed;
+      // (backing up: no faster than her jog)
+      if (facingHeld && moveY < 0) speed = Math.min(speed, pace.paceSpeed(1));
       if (sideStepping) {
         // (a crab step's top speed: a brisk walk, slower the further along she is)
         const c = Math.max(0, Math.min(1, pace.carrying));

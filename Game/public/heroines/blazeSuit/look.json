@@ -1,18 +1,18 @@
 {
   "version": 1,
   "look": "blazeSuit",
-  "bakedAt": "2026-11-17T15:30:39.446Z",
+  "bakedAt": "2026-11-19T07:07:31.029Z",
   "builderVersion": "0.9.40",
-  "belly": 100,
+  "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.6984529006225646,
+  "barefootHeightMetres": 1.7002524149739038,
   "navel": 20,
   "motion": {
     "walkBob": 200,
     "walkSway": 200,
     "breastBounce": 200
   },
-  "weeks": 37.2,
+  "weeks": 12,
   "normalScale": [
     1,
     -1
@@ -48,11 +48,11 @@
       "sneakerR-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
       "sneakerR-plain: 4090 points, 7280 triangles"
     ],
-    "lowestPointOverTheFloorMetres": 0.0005551650727082213,
-    "solesOverTheFloorMetres": 0.01787195453670562,
+    "lowestPointOverTheFloorMetres": -0.00005970725671000876,
+    "solesOverTheFloorMetres": 0.016072440185366462,
     "crownOverTheFloorMetres": 1.7163248551592702,
-    "pointsTheBuilderMoved": 51147,
-    "movedMostGeometryUnits": 0.039109287788945214,
+    "pointsTheBuilderMoved": 44184,
+    "movedMostGeometryUnits": 0.1504676205410111,
     "pointsWithChangedBones": 13408,
     "restSkinSpread": 0.16351471035154197,
     "captureMissing": {

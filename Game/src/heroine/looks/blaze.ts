@@ -20,10 +20,12 @@ export const BLAZE_LOOK: HeroineLook = {
   name: 'Blaze',
   body: {
     "model": "v2-body",
-    "bump": 100,
-    // (Joshua's export of 2026-11-17 09:24: "I updated a few stats for Blaze". Her BODY is his new one; her outfit
-    // below is left as it was: "leave the same outfit".)
-    "shape": "{\"version\":1,\"shape\":{\"bellyLower\":5,\"navel\":20,\"babyKicks\":200,\"milk\":50,\"breastBounce\":200,\"walkBob\":200,\"walkSway\":200,\"legGap\":1.5}}",
+    // (Joshua's export of 2026-11-19 00:58: "the updated Blaze stats as she will find out soon in the story she is
+    // pregnant, but not visually be pregnant yet... the story will slowly add it as it progresses". Her BODY and her
+    // PREGNANCY are his new ones -- 10 % belly, her first belly at 10 %, full term at 150 % in week 42, 30 % after her
+    // birth; breast size 5 and her baby floating -- and her outfit below is left as it was, as on 2026-11-17.)
+    "bump": 10,
+    "shape": "{\"version\":1,\"shape\":{\"bellyLower\":5,\"navel\":20,\"babyFloat\":200,\"breastSize\":5,\"milk\":50,\"breastBounce\":200,\"walkBob\":200,\"walkSway\":200,\"legGap\":1.5}}",
     "refine": false,
     "random": {
       "rules": {},
@@ -33,10 +35,10 @@ export const BLAZE_LOOK: HeroineLook = {
       "pregnant": true,
       "week": null,
       "weekAtBump": null,
-      "firstWeekBump": 25,
+      "firstWeekBump": 10,
       "deliveryBump": 150,
-      "deliveryWeek": 41,
-      "afterBump": null,
+      "deliveryWeek": 42,
+      "afterBump": 30,
       "births": null
     }
   },

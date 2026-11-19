@@ -36,7 +36,7 @@ export const PACES = [
 
 /**
  * HER PACES AT FULL TERM (Joshua, 2026-11-17; Blaze at 150%, week 41): walk 2.0 mph, jog 3.5, run 4.9, sprint 7.0
- * (short bursts), in metres a second. From her first visible belly (25%) to full term, each pace's top speed goes from
+ * (short bursts), in metres a second. From her first visible belly (10% since 2026-11-19) to full term, each pace's top speed goes from
  * PACES to these in a straight line (`Pace.carrying`); research: walking in the third trimester measured about 19%
  * slower, and runners lose about a minute a mile each trimester.
  */

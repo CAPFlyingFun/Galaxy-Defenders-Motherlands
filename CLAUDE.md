@@ -90,8 +90,8 @@ use the game's single copy of three.js.
   leather belt slung on her hips that sags in front (`beltLine`), and black guns with red (`gun`, per look; the clips
   in her pouches and on the table match). The suit is his athletic knit in its Dark gray, darkened about half way to Black by the game (`clothShine.darken`).
   Its knit is a LIVE KNIT drawn by the game over the bake (`clothShine.knit`, `outfitMaterial.ts`: his pack's Dark gray
-  swatch, `public/fabrics/athletic-darkgray-tile.jpg`, laid on from three sides), sized while she plays by the
-  TEMPORARY Settings -> CAMERA -> Knit stitch (test) slider (0.5x-4x, `gdm.knitStitch`) until Joshua picks a number.
+  swatch, `public/fabrics/athletic-darkgray-tile.jpg`, laid on from three sides), at stitch 2.2x (Joshua's pick, after a
+  temporary live slider; `setKnitStitch` still sizes it live for test pages).
   See-through halved from his export (nipple 0.225, navel 0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.

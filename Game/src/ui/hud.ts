@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { FOV_RANGE, KNIT_STITCH_RANGE, OUTFIT_CHOICES, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, OUTFIT_CHOICES, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
@@ -335,7 +335,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird' | 'tableHeight' | 'knitStitch'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird' | 'tableHeight'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -353,8 +353,6 @@ export class Hud {
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('3rd person zoom', 'zoomThird', ZOOM_MIN, 1, 0.005, (v) => `${thirdPersonDistance(v).toFixed(1)} m`);
-    // (TEMPORARY, Joshua 2026-11-19: to find the catsuit's best stitch size by eye; it changes her at once)
-    sliderRow('Knit stitch (test)', 'knitStitch', KNIT_STITCH_RANGE.least, KNIT_STITCH_RANGE.most, 0.1, (v) => `${v.toFixed(1)}x`);
     element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: how far behind her the 3rd person camera starts (1.6 m to 23 m); pinch to zoom in play.');
     // ---- Settings: the weapon table (Joshua, 2026-11-17: "how can you adjust the table height") ----------------
     element('h2', 'gd-settings-part', settings, 'WEAPON TABLE');

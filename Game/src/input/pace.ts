@@ -53,9 +53,8 @@ export const PACE_TUNING = {
   fastUpSeconds: 2,
   /** Pushed past what her stamina allows, she drops back a pace in this many seconds. */
   tiredDownSeconds: 1,
-  /** With less stamina than this she cannot sprint; with less than the second, she cannot run either. */
-  sprintNeedsStamina: 0.15,
-  runNeedsStamina: 0.05,
+  // (Joshua, 2026-11-18: there is no slowing as her stamina runs low any more; at 20% she had already dropped from a
+  //  sprint. She keeps her pace right down to empty, then stops at once, as letting go of the stick does.)
   /**
    * OUT OF STAMINA (Joshua, 2026-11-17: "as soon as you run out of stamina, the max speed is walk... after a 5s hold
    * which will prevent any walking"): at empty she stands winded this long, seconds, the MOVE stick doing nothing
@@ -163,8 +162,8 @@ export class Pace {
       else if (this.ring === 4) this.level += dt / t.fastUpSeconds;
       // (ring 2 holds)
 
-      // what her stamina allows: a sprint, only a run, or only a jog
-      const most = this.winded ? 1 : limits.stamina < t.runNeedsStamina ? 2 : limits.stamina < t.sprintNeedsStamina ? 3 : 4;
+      // what her stamina allows: everything until it is empty; winded (after the hold), only a walk
+      const most = this.winded ? 1 : 4;
       if (this.level > most) this.level = Math.max(most, this.level - dt / t.tiredDownSeconds);
     }
 

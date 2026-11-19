@@ -32,7 +32,9 @@ use the game's single copy of three.js.
   her head turns up to 90 degrees, her shoulders/arms/hands 80% of that (72), her belly/torso 60% (54), her upper
   legs 40% (36), her lower legs and feet 20% (18). Past 90 body North is pulled round; when the looking stops it
   comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
-  target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first).
+  target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), EXCEPT in third
+  person MANUAL (Joshua, 2026-11-18): there she keeps facing the way the camera looks; forward/back go straight,
+  left/right are side steps (her feet step as far as she goes; her own side-step walk is still to come).
 - Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real
   loading bar, percentage and time left (`Game/index.html`, `Game/src/ui/splash.ts`; the numbers come from
   `Game/src/core/loadMeter.ts`, which counts real bytes and steps and remembers the device's last load), and the
@@ -56,7 +58,8 @@ use the game's single copy of three.js.
   Clip grips (table and belt) come from `Game/src/world/clipGrip.ts`.
 - Doors (Joshua, 2026-11-18; `Game/src/world/door.ts`): a lever on the pull side, a knob on the push side. OPEN DOOR
   walks her to the handle; she takes it with the hand OPPOSITE the handle's side (handle on her right: left hand), a
-  little side-on so her belly is beside her reach, and twists it. Then walking back pulls it, forward pushes it (her
+  little side-on so her belly is beside her reach, and twists it. Her grip is chosen as the way round the handle that
+  turns her wrist least (her joint limits had left her hand twisted), never palm up. Then walking back pulls it, forward pushes it (her
   elbow's spring: a few cm of play round where her hand closed on it), and LET GO is manual. Opened from the push side
   and let go it swings shut (waiting while she is in the doorway); from the pull side it stays. The door is solid.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version

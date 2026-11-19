@@ -797,7 +797,10 @@ async function start(): Promise<void> {
     // (while the table's action runs, she looks at the table)
     if (ask.look !== null) turnInput.look = ask.look;
     // (holding the door's handle she keeps facing the door, whichever way she steps: bodyTurn.ts `hold`)
-    turnInput.hold = doorUse.faceYaw();
+    // (MANUAL in third person, Joshua 2026-11-18: she keeps facing the way the camera looks, so the stick's forward and
+    //  back go straight ahead and behind, and left and right are side steps. Her body used to turn to the way she
+    //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
+    turnInput.hold = doorUse.faceYaw() ?? (rig.mode === 'third' && aimedByHand() && !busyNow() ? rig.yaw : null);
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her

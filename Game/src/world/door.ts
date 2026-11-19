@@ -45,7 +45,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import type { GripShape } from '@charb/actor/handGrip';
-import type { Hand, HeroineBody } from '../core/contracts';
+import type { Hand, HeroineBody, HeroineHands } from '../core/contracts';
 
 /** GAME TUNING (metres, radians, seconds). */
 export const DOOR = Object.freeze({
@@ -294,38 +294,105 @@ export class Door {
     return this.knob.localToWorld(out.set(0, 0, 0));
   }
 
-  /** THE GRIP for a hand on a side's handle (a pose for her hand bone, world), and its shape (for her fingers). */
-  grip(side: DoorSide, hand: Hand, heroine: HeroineBody, out: THREE.Matrix4): { pose: THREE.Matrix4; shape: GripShape } {
+  /**
+   * Which of the ways round a handle her hand holds it (chosen once, when her hand sets out; -1: not chosen yet).
+   * Kept for the whole hold so her hand never flips over in the middle of it.
+   */
+  private readonly gripChoice: Record<DoorSide, number> = { pull: -1, push: -1 };
+
+  /** Forget the chosen grips (a new reach chooses again). */
+  forgetGrip(): void { this.gripChoice.pull = -1; this.gripChoice.push = -1; }
+
+  /**
+   * THE GRIP for a hand on a side's handle (a pose for her hand bone, world), and its shape (for her fingers).
+   *
+   * WHY IT IS CHOSEN, NOT FIXED (Joshua, 2026-11-18: "her hand and palm all twisted, 180 degrees upside down... the
+   * hand should be either top of hand up or top of hand to the side"): one fixed grip asked her wrist to turn some
+   * 117 degrees, her joint limits (jointGuard.ts, about 80) stopped it part way, and her hand sat twisted on the
+   * handle. So several grips are tried, every way round the handle, and the one nearest how her hand would arrive
+   * with her wrist NOT turned (`natural`) is taken, never one with her palm facing up (the back of her hand down).
+   *   THE LEVER (a bar across the door): her palm anywhere round the bar but under it, so top of hand up (palm down
+   *   on it) or to the side (palm on its near or far face).
+   *   THE KNOB: her hand round it the way a handshake goes round, top of hand up or to the side, at any turn about
+   *   the knob's own axis; or cupped over its front.
+   */
+  grip(side: DoorSide, hand: Hand, heroine: HeroineBody, out: THREE.Matrix4, natural?: THREE.Quaternion): { pose: THREE.Matrix4; shape: GripShape } {
     this.root.updateMatrixWorld(true);
     const h = heroine.hands!;
+    const count = side === 'pull' ? GRIP_TRIES.lever : GRIP_TRIES.knob;
+    if (this.gripChoice[side] < 0 && natural) {
+      // try every way round, and keep the one her wrist turns least to reach
+      let best = -1, bestTurn = Infinity;
+      for (let k = 0; k < count; k++) {
+        if (!this.gripTry(side, k, hand, h, tryPose)) continue;
+        tryPose.decompose(v1, q2, v3);
+        const turned = q2.angleTo(natural);
+        if (turned < bestTurn) { bestTurn = turned; best = k; }
+      }
+      this.gripChoice[side] = best;
+    }
+    const k = Math.max(0, this.gripChoice[side]);
+    this.gripTry(side, k, hand, h, out);
+    // (the shape her fingers close on: the handle's axis as this grip holds it)
+    const radius = side === 'pull' ? DOOR.leverRadius : DOOR.knobRadius * 0.85;
+    const half = side === 'pull' ? DOOR.leverLong * 0.4 : DOOR.knobRadius * 0.8;
+    const a = v1.copy(atW).addScaledVector(axisW, half).toArray() as [number, number, number];
+    const b = v3.copy(atW).addScaledVector(axisW, -half).toArray() as [number, number, number];
+    return { pose: out, shape: { kind: 'cylinder', a, b, radius } };
+  }
+
+  /**
+   * One way round a handle (number k of the tries): fills `axisW` (the line her fingers close round), `atW` (the grip
+   * point) and `out` (her hand bone's pose). Returns false for a way that is not allowed (her palm facing up).
+   */
+  private gripTry(side: DoorSide, k: number, hand: Hand, h: HeroineHands, out: THREE.Matrix4): boolean {
+    // (every way round is tried with her fingers going round either way: even k one way, odd k the other)
+    const round = Math.floor(k / 2), wrapSign = k % 2 === 0 ? 1 : -1;
     if (side === 'pull') {
-      // THE LEVER, overhand: her palm down onto the bar (a little toward the door), her fingers over it and round its
-      // door side; the bar's own line is its axis (it tips down as it is twisted)
       const m = this.lever.matrixWorld;
       // (her hand's frame is the bar's frame turned back by the part of the twist her wrist takes up)
       q1.setFromAxisAngle(v2.set(0, 0, 1), -this.leverTwist * DOOR.leverDown * (1 - DOOR.leverHandTurn));
-      axisW.set(-1, 0, 0).applyQuaternion(q1).transformDirection(m);      // along the bar
-      palmW.set(0, -1, 0).applyQuaternion(q1).transformDirection(m).addScaledVector(v2.set(0, 0, -1).transformDirection(m), 0.35).normalize();
-      wrapW.set(0, 0, -1).transformDirection(m);                         // toward the door
+      axisW.set(-1, 0, 0).applyQuaternion(q1).transformDirection(m);             // along the bar
+      // her palm's place round the bar: straight down onto it, then on round (in the bar's own frame)
+      const turn = (round / (GRIP_TRIES.lever / 2)) * Math.PI * 2;
+      palmW.set(0, -Math.cos(turn), -Math.sin(turn)).applyQuaternion(q1).transformDirection(m);
+      if (palmW.y > GRIP_TRIES.palmUpMost) return false;                          // (palm up: back of hand down)
+      wrapW.crossVectors(axisW, palmW).multiplyScalar(wrapSign);
       this.handlePoint('pull', atW);
-      const a = v1.copy(atW).addScaledVector(axisW, DOOR.leverLong * 0.4).toArray() as [number, number, number];
-      const b = v3.copy(atW).addScaledVector(axisW, -DOOR.leverLong * 0.4).toArray() as [number, number, number];
       h.gripPose(hand, atW, axisW, palmW, wrapW, DOOR.leverRadius, out);
-      return { pose: out, shape: { kind: 'cylinder', a, b, radius: DOOR.leverRadius } };
+      return true;
     }
-    // THE KNOB, cupped: her palm on its near side (facing the door), her fingers round it; as it turns, her hand turns
-    // with it (the knob's own frame turns about the door's through-axis)
     const m = this.knob.matrixWorld;
-    axisW.set(0, 1, 0).transformDirection(m);                            // (up the knob, turned with it)
-    palmW.set(0, 0, 1).transformDirection(m);                            // toward the door
-    wrapW.set(1, 0, 0).transformDirection(m);
     this.handlePoint('push', atW);
-    const a = v1.copy(atW).addScaledVector(axisW, DOOR.knobRadius * 0.8).toArray() as [number, number, number];
-    const b = v3.copy(atW).addScaledVector(axisW, -DOOR.knobRadius * 0.8).toArray() as [number, number, number];
+    const tries = GRIP_TRIES.knob / 2;
+    if (round === tries - 1) {
+      // (the last way: cupped over the knob's front, her palm toward the door)
+      axisW.set(0, 1, 0).transformDirection(m);
+      palmW.set(0, 0, 1).transformDirection(m);
+      wrapW.set(wrapSign, 0, 0).transformDirection(m);
+    } else {
+      // round it like a handshake: her fingers close round a line square to the door, turned to any angle about the
+      // knob's own axis; her palm on the side of the knob that angle puts it
+      const turn = (round / (tries - 1)) * Math.PI * 2;
+      axisW.set(-Math.sin(turn), Math.cos(turn), 0).transformDirection(m);
+      palmW.set(Math.cos(turn), Math.sin(turn), 0).transformDirection(m);
+      wrapW.set(0, 0, wrapSign).transformDirection(m);
+    }
+    if (palmW.y > GRIP_TRIES.palmUpMost) return false;
     h.gripPose(hand, atW, axisW, palmW, wrapW, DOOR.knobRadius * 0.85, out);
-    return { pose: out, shape: { kind: 'cylinder', a, b, radius: DOOR.knobRadius * 0.85 } };
+    return true;
   }
 }
+
+/** How many grips are tried round each handle (both ways round for each), and how far up a palm may face. */
+const GRIP_TRIES = Object.freeze({
+  lever: 24,
+  knob: 26,
+  /** (the most her palm may face upward, as the y of its facing: a little, never palm up) */
+  palmUpMost: 0.35,
+});
+const tryPose = new THREE.Matrix4();
+const q2 = new THREE.Quaternion();
 
 /**
  * How far her body reaches from her middle, for the door to keep her out (`keepOut`): her side or her belly's front,
@@ -464,7 +531,9 @@ export class DoorUse {
     if (this.phase === 'face') {
       const off = Math.abs(Math.atan2(Math.sin(out.yaw - face), Math.cos(out.yaw - face)));
       if (off > DOOR.faced && this.timer < DOOR.faceWaitMost) return;
-      const grip = door.grip(this.side, this.hand, this.heroine, this.pose);
+      // the grip is chosen now, for how her hand would arrive with her wrist left as it is (see Door.grip)
+      door.forgetGrip();
+      const grip = door.grip(this.side, this.hand, this.heroine, this.pose, this.naturalHand(h));
       h.reach(this.hand, grip.pose.clone(), undefined, true);
       h.hold(this.hand, grip.shape, true);
       this.phase = 'reach';
@@ -502,6 +571,23 @@ export class DoorUse {
    * THE ELBOW'S SPRING: the door goes only as far as it must for the handle to stay within her arm's play of her
    * shoulder; it eases there. Too far to keep hold of (against the stop, or walked off sideways): she lets go.
    */
+  /**
+   * HOW HER HAND WOULD ARRIVE AT THE HANDLE WITH HER WRIST NOT TURNED: her arm swung, as one piece, from the way it
+   * hangs now (shoulder to wrist) to the way of the handle; her hand carried round with it. The grip nearest this
+   * asks her wrist for the least turn.
+   */
+  private naturalHand(h: HeroineHands): THREE.Quaternion {
+    const wrist = h.handBone(this.hand), upper = wrist.parent?.parent;
+    wrist.updateWorldMatrix(true, false);
+    const out = new THREE.Quaternion();
+    wrist.getWorldQuaternion(out);
+    if (!upper) return out;
+    const shoulder = new THREE.Vector3().setFromMatrixPosition(upper.matrixWorld);
+    const hangs = new THREE.Vector3().setFromMatrixPosition(wrist.matrixWorld).sub(shoulder).normalize();
+    const toHandle = this.door.handlePoint(this.side, new THREE.Vector3()).sub(shoulder).normalize();
+    return out.premultiply(new THREE.Quaternion().setFromUnitVectors(hangs, toHandle));
+  }
+
   private follow(dt: number, pull: THREE.Vector3 | null): void {
     const door = this.door, root = this.heroine.root;
     root.updateMatrixWorld(true);

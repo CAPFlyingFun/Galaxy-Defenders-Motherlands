@@ -870,6 +870,10 @@ if (uHideHead > 0.5) {
         const movedX = root.position.x - lastX, movedZ = root.position.z - lastZ;
         if (placed && movedX * movedX + movedZ * movedZ < JUMP_METRES * JUMP_METRES) {
           along = movedX * Math.sin(yawNow) + movedZ * Math.cos(yawNow);
+          // (a SIDE STEP, facing one way and going across it: she steps as far as she goes, forward steps unless she is
+          //  mostly backing up, so her feet keep up with her instead of sliding. Her own side-step walk can come later.)
+          const went = Math.hypot(movedX, movedZ);
+          if (Math.abs(along) < went * 0.7) along = along < -went * 0.3 ? -went : went;
           moving = movedX * movedX + movedZ * movedZ > 1e-10 || Math.abs(Math.sin(yawNow - lastYaw)) > 1e-5;
         } else ground.letGo();                                     // (put somewhere else: the spots her feet stood on are not here)
       }

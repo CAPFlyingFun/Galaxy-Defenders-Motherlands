@@ -62,7 +62,7 @@ const SIDE_WALK_UNDER = 1.5;
 const SIDE_WALK_MOST = 1.0;
 const SIDE_WALK_MOST_FULL_TERM = 0.8;
 const SIDE_EFFORT = 1.25;
-import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
+import { CAMERA_STYLES, CAMERA_STYLE_NAMES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
 interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
@@ -156,6 +156,15 @@ const TABLE_WALK = 1.1;
  */
 /** Where the third-person camera style is kept on this device. */
 const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
+/**
+ * THE CAMERA STYLES AIMED BY HAND (Joshua, 2026-11-19: "allow some camera modes in manual... walking is fine, trying to
+ * shoot and aim would be different and would need a closer view"): over her shoulder (the aiming view), follow, and
+ * the two side views. While FIRE is held, and for MANUAL_AIM_HOLD seconds after, the camera is over her shoulder
+ * whatever is chosen, so the crosshair aims where she does. Kept on this device apart from the other list.
+ */
+const MANUAL_CAMERA_STYLES: readonly CameraStyle[] = ['shoulder', 'follow', 'sideLeft', 'sideRight'];
+const MANUAL_CAMERA_STYLE_KEY = 'gdm.cameraStyleManual';
+const MANUAL_AIM_HOLD = 1.2;
 // First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
 // it tips down when she has no hands to look at (radians, about 45 degrees; with hands it looks at them).
 const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
@@ -505,6 +514,13 @@ async function start(): Promise<void> {
     const kept = localStorage.getItem(CAMERA_STYLE_KEY) as CameraStyle | null;
     if (kept && CAMERA_STYLES.includes(kept)) cameraStyle = kept;
   } catch { /* (no storage: follow) */ }
+  let manualStyle: CameraStyle = 'shoulder';
+  try {
+    const kept = localStorage.getItem(MANUAL_CAMERA_STYLE_KEY) as CameraStyle | null;
+    if (kept && MANUAL_CAMERA_STYLES.includes(kept)) manualStyle = kept;
+  } catch { /* (no storage: over her shoulder) */ }
+  /** Seconds since FIRE was last held (aimed by hand: the camera stays over her shoulder this long after). */
+  let sinceFire = Infinity;
   rig.droneLimit = DOME_RADIUS - 3;
   if (island) {
     // the island: the camera sees out to the far coast (16 km of haze), keeps over the hills, and the drone is free
@@ -533,12 +549,12 @@ async function start(): Promise<void> {
   const backingUp = (): boolean => controls.moveY < 0 && Math.abs(controls.moveY) >= Math.abs(controls.moveX);
   /** Everything that follows from the view and the aiming: the camera's style, the buttons, what a click does. */
   const applyView = (): void => {
-    rig.setStyle(rig.mode === 'third' && aimedByHand() ? 'shoulder' : cameraStyle);
+    rig.setStyle(rig.mode === 'third' && aimedByHand() ? (sinceFire < MANUAL_AIM_HOLD ? 'shoulder' : manualStyle) : cameraStyle);
     heroine.setFirstPerson(rig.mode === 'first');
     controls.clickMode = aimedByHand() ? 'click-fires' : 'look-only';
     // (the HUD keeps hold of the MOVE stick through this, so she goes on at the pace she had: src/ui/hud.ts)
     hud.setView(rig.mode, aimedByHand());
-    hud.setCameraStyle(cameraStyle);
+    hud.setCameraStyle(CAMERA_STYLE_NAMES[aimedByHand() ? manualStyle : cameraStyle]);
     hud.setAimMode(!aimedByHand());
   };
   const toggleView = () => {
@@ -637,8 +653,14 @@ async function start(): Promise<void> {
     },
     onToggleView: toggleView,
     onCameraStyle: () => {
-      cameraStyle = CAMERA_STYLES[(CAMERA_STYLES.indexOf(cameraStyle) + 1) % CAMERA_STYLES.length];
-      try { localStorage.setItem(CAMERA_STYLE_KEY, cameraStyle); } catch { /* (kept for this visit only) */ }
+      if (aimedByHand()) {
+        // (aimed by hand: its own few styles)
+        manualStyle = MANUAL_CAMERA_STYLES[(MANUAL_CAMERA_STYLES.indexOf(manualStyle) + 1) % MANUAL_CAMERA_STYLES.length];
+        try { localStorage.setItem(MANUAL_CAMERA_STYLE_KEY, manualStyle); } catch { /* (kept for this visit only) */ }
+      } else {
+        cameraStyle = CAMERA_STYLES[(CAMERA_STYLES.indexOf(cameraStyle) + 1) % CAMERA_STYLES.length];
+        try { localStorage.setItem(CAMERA_STYLE_KEY, cameraStyle); } catch { /* (kept for this visit only) */ }
+      }
       applyView();
     },
     onDomeDebug: domeDebug,
@@ -1099,6 +1121,10 @@ async function start(): Promise<void> {
       rig.head.pitch = free + (actionPitch - free) * headDoing;
     }
     rig.head.valid = true;
+    // AIMED BY HAND, FIRING: over her shoulder while FIRE is held and a moment after, then back to the style chosen
+    if (controls.fireHeld) sinceFire = 0; else sinceFire += dt;
+    if (rig.mode === 'third' && aimedByHand()) rig.setStyle(sinceFire < MANUAL_AIM_HOLD ? 'shoulder' : manualStyle);
+    hud.setCrosshairAway(rig.mode === 'third' && rig.style !== 'shoulder');
     rig.update(dt, heroine);
     // (the island: its tiles follow her, the sea follows the camera)
     island?.update(dt, motion.x, motion.z, rig.camera);
@@ -1112,7 +1138,12 @@ async function start(): Promise<void> {
     } else if (aimedByHand()) {
       // (aimed by hand, in first person or over her shoulder: at the crosshair, down the camera's line of sight)
       targets.setAimed(-1);
-      heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
+      if (rig.mode === 'third' && rig.style !== 'shoulder') {
+        // (aimed by hand but the camera is not behind her, follow or a side view: she aims level the way the player
+        //  turned her, not down the camera's line, which in a side view runs across her)
+        aim.set(motion.x + Math.sin(rig.yaw) * AIM_RANGE, groundY + 1.4, motion.z + Math.cos(rig.yaw) * AIM_RANGE);
+        heroine.aimAt(aim);
+      } else heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
     } else if (turn.aimed) {
       // (the target her top half has turned to, picked above with her turning)
       targets.setAimed(aimTarget);

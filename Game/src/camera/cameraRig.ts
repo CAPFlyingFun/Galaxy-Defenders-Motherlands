@@ -40,8 +40,13 @@ import type { HeroineBody } from '../core/contracts';
 
 export type ViewMode = 'third' | 'first';
 /** How the third-person camera behaves (see the top of this file). */
-export type CameraStyle = 'follow' | 'shoulder' | 'orbit' | 'top' | 'drone' | 'cinematic';
-export const CAMERA_STYLES: readonly CameraStyle[] = ['follow', 'shoulder', 'orbit', 'top', 'drone', 'cinematic'];
+export type CameraStyle = 'follow' | 'shoulder' | 'orbit' | 'top' | 'drone' | 'cinematic' | 'sideLeft' | 'sideRight';
+export const CAMERA_STYLES: readonly CameraStyle[] = ['follow', 'shoulder', 'orbit', 'top', 'drone', 'cinematic', 'sideLeft', 'sideRight'];
+/** Each style's name under the CAM button. */
+export const CAMERA_STYLE_NAMES: Readonly<Record<CameraStyle, string>> = Object.freeze({
+  follow: 'follow', shoulder: 'shoulder', orbit: 'orbit', top: 'top', drone: 'drone', cinematic: 'cinematic',
+  sideLeft: 'side L', sideRight: 'side R',
+});
 
 /** GAME TUNING for the camera styles (metres, seconds, radians). */
 export const STYLE = Object.freeze({
@@ -64,6 +69,12 @@ export const STYLE = Object.freeze({
   droneSpeed: 9, droneLow: 2.5, droneHigh: 30, droneRange: 60,
   /** CINEMATIC: how long each shot lasts, and how far it drifts while it does. */
   shotSeconds: 6, shotDrift: 0.9,
+  /**
+   * SIDE (Joshua, 2026-11-19: "a side view camera locked to either side of her full profile to show the belly and side
+   * profile"): square to her left or her right side, turning with her; how far (closest, furthest with the zoom), the
+   * height it stands at and looks at (her middle, so all of her shows), and how quickly it follows her turning.
+   */
+  sideNear: 1.8, sideFar: 7, sideUp: 0.95, sideFollow: 4,
 });
 
 /**
@@ -143,6 +154,9 @@ export class CameraRig {
   private shotTime = 0;
   /** The way she faced when this shot began (the shot's frame keeps it), and whether it has been read yet. */
   private shotYaw = 0;
+  /** SIDE: the way her body faced, as the camera follows it (eased), and whether it has been set yet. */
+  private sideYaw = 0;
+  private sidePlaced = false;
   private shotYawSet = false;
   private readonly shotAt = new THREE.Vector3();
 
@@ -188,12 +202,12 @@ export class CameraRig {
     this.fitFov();
   }
 
-  /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */
   /** Look this way at once (no easing round to it): where she arrives on a map. */
   faceAtOnce(yaw: number): void {
     this.yaw = this.easedYaw = yaw;
   }
 
+  /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */
   setZoom(zoom: number): void {
     this.zoom = clamp(zoom, ZOOM_MIN, 1);
   }
@@ -211,6 +225,7 @@ export class CameraRig {
     // (each starts where it makes sense: the drone where the camera is now, the cinematic at its first shot, top looking down)
     this.dronePlaced = false;
     this.shot = 0; this.shotTime = 0; this.shotYawSet = false;
+    this.sidePlaced = false; // (the side view starts square to her, at once)
     if (style === 'top') this.pitch = STYLE.topPitch;
     else if (this.pitch < THIRD_PITCH_MIN) this.pitch = THIRD_PITCH_START;
     if (style === 'shoulder') this.pitch = clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
@@ -256,7 +271,7 @@ export class CameraRig {
     // Ease toward what the player asked for. (1 - e^(-rate*dt)) is smooth at any frame rate.
     const ease = 1 - Math.exp(-SMOOTHING * dt);
     if (this.style === 'orbit') this.yaw += STYLE.orbitSpeed * dt; // (circling on its own; a drag adds to it)
-    if (this.style === 'shoulder' || this.style === 'top' || this.style === 'drone' || this.style === 'cinematic') {
+    if (this.style === 'shoulder' || this.style === 'top' || this.style === 'drone' || this.style === 'cinematic' || this.style === 'sideLeft' || this.style === 'sideRight') {
       this.easedYaw += (this.yaw - this.easedYaw) * ease;
       this.easedPitch += (this.pitch - this.easedPitch) * ease;
       this.easedZoom += (this.zoom - this.easedZoom) * ease;
@@ -327,6 +342,25 @@ export class CameraRig {
       this.keepAboveGround(feet.y);
       // (the player's own look starts from here when the view changes)
       this.easedYaw = yaw;
+      return;
+    }
+    if (this.style === 'sideLeft' || this.style === 'sideRight') {
+      // SQUARE TO HER SIDE, whichever way she faces: her left is across her front (x = cos, z = -sin of her yaw). The
+      // camera stands out that side at her middle's height, looking straight across at her, so her whole profile (her
+      // belly and her back) shows; it swings round with her, eased, so a turn does not jerk it.
+      const her = heroine.root.rotation.y;
+      if (!this.sidePlaced) { this.sideYaw = her; this.sidePlaced = true; }
+      let turn = her - this.sideYaw;
+      turn = Math.atan2(Math.sin(turn), Math.cos(turn)); // (the short way round)
+      this.sideYaw += turn * (1 - Math.exp(-STYLE.sideFollow * dt));
+      const out = this.style === 'sideLeft' ? 1 : -1;
+      const sideX = Math.cos(this.sideYaw) * out, sideZ = -Math.sin(this.sideYaw) * out;
+      const back = STYLE.sideNear + (STYLE.sideFar - STYLE.sideNear) * zoom;
+      this.camera.position.set(feet.x + sideX * back, feet.y + STYLE.sideUp, feet.z + sideZ * back);
+      this.keepAboveGround(feet.y);
+      this.shotAt.set(feet.x, feet.y + STYLE.sideUp, feet.z);
+      this.camera.lookAt(this.shotAt);
+      this.look.copy(this.shotAt).sub(this.camera.position).normalize();
       return;
     }
     if (this.style === 'top') {
@@ -400,7 +434,7 @@ export class CameraRig {
   get viewYaw(): number {
     if (this.mode === 'first') return this.yaw;
     // (the cinematic camera turns on its own: read the way it really looks)
-    if (this.style === 'cinematic') return Math.atan2(this.look.x, this.look.z);
+    if (this.style === 'cinematic' || this.style === 'sideLeft' || this.style === 'sideRight') return Math.atan2(this.look.x, this.look.z);
     return this.easedYaw;
   }
 

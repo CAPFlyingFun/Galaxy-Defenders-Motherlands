@@ -380,3 +380,4 @@
   pointer-events: auto; white-space: nowrap; z-index: 5;
 }
 .gd-lapse-chip[hidden] { display: none; }
+.gd-crosshair.is-away { visibility: hidden; }

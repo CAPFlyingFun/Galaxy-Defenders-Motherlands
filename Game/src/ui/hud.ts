@@ -520,8 +520,9 @@ export class Hud {
     // crosshair when she is aimed by hand, and always in first person (on her own there, the stick looks round)
     this.lookStick.hidden = !(manual || first);
     this.crosshair.hidden = !(manual || first);
-    // (the camera styles are for third person aimed on her own; aimed by hand, the camera is over her shoulder)
-    this.camButton.hidden = first || manual;
+    // (the camera styles are for third person, aimed on her own or by hand: by hand there are a few, and the camera goes
+    //  over her shoulder while she aims and fires: main.ts MANUAL_CAMERA_STYLES)
+    this.camButton.hidden = first;
     // The button names the view it switches TO.
     this.viewName.textContent = first ? '3rd' : '1st';
 
@@ -550,6 +551,14 @@ export class Hud {
     this.lapseChip.hidden = lapse === null;
     if (lapse !== null) this.lapseChip.textContent = `⏱ ${lapse} · ${p}%  ■`;
     if (this.lapseButton) this.lapseButton.textContent = lapse === null ? 'Time lapse ▶ week 12 → 42' : 'Stop the time lapse ■';
+  }
+
+  /**
+   * The crosshair hidden while the camera is not behind her (aimed by hand in follow or a side view: there it would sit
+   * on her, and FIRE brings the camera over her shoulder first), shown again when it is. Only ever hides it.
+   */
+  setCrosshairAway(away: boolean): void {
+    this.crosshair.classList.toggle('is-away', away);
   }
 
   setDomeLabel(text: string): void {

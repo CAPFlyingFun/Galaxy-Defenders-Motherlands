@@ -102,6 +102,11 @@ use the game's single copy of three.js.
   See-through halved from his export (nipple 0.225, navel 0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
+- CAMERA STYLES (Joshua, 2026-11-19; `Game/src/camera/cameraRig.ts`): the CAM button also goes to SIDE L and SIDE R,
+  square to her left or right side at her middle's height, turning with her (eased), so her whole profile and belly
+  show. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
+  side L, side R; `gdm.cameraStyleManual`); while FIRE is held and 1.2 s after, the camera is over her shoulder whatever
+  is chosen, and away from it she aims level the way she was turned and the crosshair is hidden.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

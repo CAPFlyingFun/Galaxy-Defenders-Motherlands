@@ -820,7 +820,12 @@ async function start(): Promise<void> {
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
     // (aimed by hand: she looks where the camera looks, in either view)
-    if (aimedByHand()) turnInput.look = rig.yaw;
+    // (...except RUNNING in third person MANUAL, Joshua 2026-11-19: she looks the way she runs, so her body turns right
+    //  round when the stick sends her back toward the camera. Looking where the camera looks, her head could turn only
+    //  90 degrees from her body, and her body stopped side-on.)
+    const runningFree = rig.mode === 'third' && aimedByHand() && !walkSides() && (controls.moveX !== 0 || controls.moveY !== 0) && !busyNow();
+    if (aimedByHand() && !runningFree) turnInput.look = rig.yaw;
+    else if (runningFree) turnInput.look = null;
     else {
       // ON HER OWN she picks a target. With a camera that follows her (first person, over the shoulder) she picks the
       // one nearest where that camera already looks, so she keeps to it: picked by where her body faces, walking

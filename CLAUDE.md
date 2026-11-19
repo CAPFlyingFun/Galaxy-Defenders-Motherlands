@@ -61,6 +61,11 @@ use the game's single copy of three.js.
   clip hand takes a fresh clip from a pouch on ITS side, holds the empty beside it, clicks the fresh one in, and tucks the
   empty (upright, dark top) into the pouch the fresh one came from; the table's RELOAD swaps empties for full clips.
   Clip grips (table and belt) come from `Game/src/world/clipGrip.ts`.
+  The belt is drawn TIGHT round her (Joshua, 2026-11-19: "span across her buttock cheeks vs dipping into them"):
+  `bridgeHollows` lays each edge on the outline a stretched band would take round her, seen from above, and runs it
+  straight across every hollow (between her cheeks, and across her thighs' tops at the buckle, which had folded into a
+  'W'). Checked at 10, 50, 100, 150 and 200% on the catsuit and the pink two-piece; at 200% the front is tucked under
+  her belly, not inside it.
 - Doors (Joshua, 2026-11-18; `Game/src/world/door.ts`): a lever on the pull side, a knob on the push side. OPEN DOOR
   walks her to the handle; she takes it with the hand OPPOSITE the handle's side (handle on her right: left hand), a
   little side-on so her belly is beside her reach, and twists it. Her grip is chosen as the way round the handle that

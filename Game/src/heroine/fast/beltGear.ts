@@ -74,6 +74,12 @@ export const BELT = Object.freeze({
   hugSpare: 0.09,
   /** How many of the belt's slices each way its dropped line is smoothed over. */
   hugSmooth: 4,
+  /**
+   * ACROSS HOLLOWS (`bridgeHollows`): where the way round her points this much backward or more (its cosine below
+   * minus this; -1 is all the way round), a hollow under the tight outline deeper than `hollowLeast` (metres) is bridged straight across.
+   */
+  hollowFrom: -1,   // (all the way round: at her front too the buckle lay across her thighs' tops in a 'W', 2026-11-19)
+  hollowLeast: 0,
   /** The straps' width, inner face off her skin, and thickness. */
   strapWidth: 0.024,
   strapStandOff: 0.002,
@@ -528,6 +534,8 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       beltTop[k].v = top.v; beltTop[k].w = top.w; beltBottom[k].v = bottom.v; beltBottom[k].w = bottom.w;
     }
     hugBody();
+    bridgeHollows(beltTop);
+    bridgeHollows(beltBottom);
     for (const b of blended) { const m = blendSpot(b.a, b.b, b.t); b.spot.v = m.v; b.spot.w = m.w; }
   };
   /**
@@ -626,6 +634,53 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       beltTop[k].v = top.v; beltTop[k].w = top.w; beltBottom[k].v = bottom.v; beltBottom[k].w = bottom.w;
       gapTop[k] = gapBottom[k] = null;
     }
+  }
+  /**
+   * ACROSS HER BACK THE BELT IS DRAWN TIGHT (Joshua, 2026-11-19: "Can the belt strap span across her buttock cheeks vs
+   * dipping into them?"). Pinned to her skin, the belt followed it down into the crease between her cheeks. A real belt
+   * round her lies like a band stretched round her: over each rise of her body and straight across every hollow
+   * between. So at her back the belt's edge (its top, then its bottom) is laid on the TIGHT OUTLINE round her -- the
+   * outline a stretched band would take, seen from above -- and wherever her skin goes in from that outline by more
+   * than `BELT.hollowLeast`, the belt there is blended straight across from the two places either side where it touches
+   * her (as across the gap between her legs, at her front). Her front is left to `hugBody`.
+   */
+  function bridgeHollows(edge: Spot[]): void {
+    const at = new THREE.Vector3();
+    const xs = new Float64Array(N), zs = new Float64Array(N);
+    for (let k = 0; k < N; k++) { spotPlace(edge[k], at); xs[k] = at.x - cx; zs[k] = at.z - cz; }
+    // the tight outline: which of the belt's places it touches (the outline seen from above round all of them)
+    const order = Array.from({ length: N }, (_, k) => k).sort((a, b) => xs[a] - xs[b] || zs[a] - zs[b]);
+    const cross = (o: number, a: number, b: number) => (xs[a] - xs[o]) * (zs[b] - zs[o]) - (zs[a] - zs[o]) * (xs[b] - xs[o]);
+    const lower: number[] = [], upper: number[] = [];
+    for (const k of order) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], k) <= 0) lower.pop();
+      lower.push(k);
+    }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const k = order[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], k) <= 0) upper.pop();
+      upper.push(k);
+    }
+    const touches = new Uint8Array(N);
+    for (const k of lower) touches[k] = 1;
+    for (const k of upper) touches[k] = 1;
+    // each place at her back that does not touch it: how far in from the line between its touching neighbours
+    const fresh: (Spot | null)[] = new Array(N).fill(null);
+    for (let k = 0; k < N; k++) {
+      if (touches[k] || Math.cos((k / N) * Math.PI * 2) > -BELT.hollowFrom) continue;
+      let l = -1, r = -1;
+      for (let d = 1; d < N / 2 && (l < 0 || r < 0); d++) {
+        if (l < 0 && touches[(k - d + N) % N]) l = d;
+        if (r < 0 && touches[(k + d) % N]) r = d;
+      }
+      if (l < 0 || r < 0) continue;
+      const a = (k - l + N) % N, b = (k + r) % N, t = l / (l + r);
+      // (the straight line between them at this place, and how far in her skin is from it)
+      const lx = xs[a] + (xs[b] - xs[a]) * t, lz = zs[a] + (zs[b] - zs[a]) * t;
+      if (Math.hypot(lx, lz) - Math.hypot(xs[k], zs[k]) < BELT.hollowLeast) continue;
+      fresh[k] = blendSpot(edge[a], edge[b], t);
+    }
+    for (let k = 0; k < N; k++) { const f = fresh[k]; if (f) { edge[k].v = f.v; edge[k].w = f.w; } }
   }
   /** (step 4's blends, kept until every angle's is worked out: each is made from its neighbours' unblended spots) */
   const gapTop: (Spot | null)[] = new Array(N).fill(null), gapBottom: (Spot | null)[] = new Array(N).fill(null);

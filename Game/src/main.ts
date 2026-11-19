@@ -489,6 +489,7 @@ async function start(): Promise<void> {
     rig.camera.far = 20000;
     rig.camera.updateProjectionMatrix();
     rig.groundAt = island.groundAt;
+    heroine.setGround?.(island.groundAt); // (her feet on the ground under each of them, along its slope)
     rig.droneLimit = Infinity;
     rig.faceAtOnce(island.arrivalFacing);
   }

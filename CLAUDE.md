@@ -151,7 +151,9 @@ use the game's single copy of three.js.
   stands on the drawn ground (`setPosition(x, z, y)`; the camera keeps above the ground). She wades to 0.6 m deep and
   cannot climb slopes over 1.2 m up per metre. The table, bars and door stand on the beach beside her. The domed town
   is kept as a test map (Settings -> WORLD -> Map, `gdm.map`, `?map=town`) until Joshua picks its place on the island.
-  Not yet: rivers/lakes (`hydro.json`), trees and plants (`veg/`), feet fitted to slopes, swimming.
+  Her FEET stand on the ground under each of them (`footGround.ts` 9, `setGround`): she comes down to her lower
+  planted foot's ground, the higher knee bends, each foot is tipped along its slope (up to about 28 degrees).
+  Not yet: rivers/lakes (`hydro.json`), trees and plants (`veg/`), swimming.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

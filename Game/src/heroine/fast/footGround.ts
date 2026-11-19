@@ -57,9 +57,18 @@
 //      reached from its hip, where that now is, to its foot, with its thigh and
 //      its shin each turned to face the way its band does.
 //
+//   9. UNEVEN GROUND (Joshua, 2026-11-19, the island: "making sure her feet
+//      actually walk and snap to the ground"). With `groundAt` set (the
+//      island's drawn ground: src/world/island/), each foot stands on the
+//      ground under IT, not on one flat floor at her root's height: she comes
+//      down as far as her LOWER planted foot's ground is below her root (or up,
+//      if both are higher), the knee of the higher foot bends to take up the
+//      rest, a swinging foot clears the ground under it, and each foot is
+//      tipped to lie along the slope it stands on (up to `tiltMost`).
+//
 // The builder has a fuller version of 3 and 4 for its own room (actor/
 // humanFeet.ts: heels that rise, feet that follow slopes). This is a small one
-// for flat ground, in the game's own space, that also handles running.
+// in the game's own space, that also handles running.
 //
 // Nothing here allocates while the game runs.
 // ============================================================================
@@ -73,6 +82,12 @@ export const FOOT_GROUND = {
   runDrop: 0.07,
   /** RUNNING: her bounce from lowest to highest when all of her Bob shows (her look's Bob and her speed scale it). */
   runBob: 0.025,
+  /** UNEVEN GROUND: a foot's ground is taken as at most this far above or below her root's (a cliff edge is not a step). */
+  groundMost: 0.45,
+  /** ...a foot is tipped to lie along its slope by at most this much (radians, about 28 degrees)... */
+  tiltMost: 0.5,
+  /** ...measured over this distance either side of it, metres (the island's ground is flat across each 27 m square). */
+  tiltSpan: 0.2,
   /** A swinging foot is kept at least this far off the floor through the middle of its swing... */
   clear: 0.015,
   /** ...easing in over this share of the swing after it leaves the ground, and out the same before it lands. */
@@ -171,7 +186,7 @@ const fract = (v: number) => v - Math.floor(v);
 const hipAt = new THREE.Vector3(), kneeAt = new THREE.Vector3(), ankleAt = new THREE.Vector3(), goal = new THREE.Vector3();
 const line = new THREE.Vector3(), bend = new THREE.Vector3(), ahead = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3();
 const parentQ = new THREE.Quaternion(), turn = new THREE.Quaternion(), footQ = new THREE.Quaternion();
-const UPRIGHT = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3();
+const UPRIGHT = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3(), slope = new THREE.Vector3();
 
 /** One foot's memory between frames. */
 interface Foot {
@@ -197,6 +212,15 @@ interface Foot {
 export class FootGround {
   /** How far she is lowered now, metres (0 standing). For a readout. */
   drop = 0;
+  /**
+   * UNEVEN GROUND: the ground's height at a place (world metres), or null on a flat floor at her root's height. NaN
+   * (nothing known there) counts as her root's height. Set by the game on the island (fastHeroine.ts setGround).
+   */
+  groundAt: ((x: number, z: number) => number) | null = null;
+  /** This frame: each foot's ground, metres above (+) or below (-) her root, and how it is tipped to lie on it. */
+  private readonly groundUnder: [number, number] = [0, 0];
+  private readonly tilt: [THREE.Quaternion, THREE.Quaternion] = [new THREE.Quaternion(), new THREE.Quaternion()];
+  private readonly tilted: [boolean, boolean] = [false, false];
   /** How far each foot was lifted by bending its knee this frame, metres (left, right). For a readout and the tests. */
   readonly raised: [number, number] = [0, 0];
   /** Whether each foot is planted this frame (left, right). */
@@ -279,6 +303,7 @@ export class FootGround {
     fit.position.y = this.fitFloorY;
     root.updateMatrixWorld(true);
     for (let side = 0; side < 2; side++) lift[side] = legs[side].ankle.matrixWorld.elements[13] - root.position.y - this.standY[side];
+    this.measureGround();
 
     // ---- which feet are planted, and how far through its swing each of the others is (0 leaving .. 1 landing) ----
     swing[0] = -1;
@@ -329,6 +354,13 @@ export class FootGround {
       }
       this.planted[0] = this.stepFoot !== 0;
       this.planted[1] = this.stepFoot !== 1;
+    }
+    // UNEVEN GROUND: down as far as her lower planted foot's ground is below her root (up, if both are higher), so that
+    // foot reaches its ground just as it would a flat floor; the higher foot's knee bends for the rest (below)
+    if (this.groundAt) {
+      const g = this.groundUnder;
+      const lowest = this.planted[0] && this.planted[1] ? Math.min(g[0], g[1]) : this.planted[0] ? g[0] : this.planted[1] ? g[1] : Math.min(g[0], g[1]);
+      drop -= lowest;
     }
     // (her hips turned: her hip joints are no longer over her feet, so she comes down a little for her legs to reach)
     const turned = twist !== null && Math.abs(twist.hips) > 1e-4;
@@ -430,7 +462,7 @@ export class FootGround {
       }
       this.held[side] = Math.hypot(foot.offX, foot.offZ);
 
-      const above = lift[side] - drop;                             // where her pose leaves this foot: over the floor (+) or under it (-)
+      const above = lift[side] - this.groundUnder[side] - drop;    // where her pose leaves this foot: over ITS ground (+) or under it (-)
       let want = Math.max(above, 0);                               // (a planted foot above the floor cannot be reached down: a leg cannot grow)
       if (swing[side] >= 0) want = Math.max(want, tuning.clear * walk * ease(0, tuning.clearEase, swing[side]) * ease(0, tuning.clearEase, 1 - swing[side]));
       if (this.stepFoot === side) want = Math.max(want, this.stepHigh * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)));
@@ -450,14 +482,15 @@ export class FootGround {
     const thighYaw = yaw + (turned ? twist.upperLegs : 0);
     for (let side = 0; side < 2; side++) {
       const foot = feet[side];
-      if (!turned && spread <= tuning.least && foot.raise <= tuning.least && this.held[side] <= tuning.least) continue;
+      if (!turned && !this.tilted[side] && spread <= tuning.least && foot.raise <= tuning.least && this.held[side] <= tuning.least) continue;
       goal.set(foot.homeX + foot.offX, foot.ankle.y + Math.max(0, foot.raise), foot.homeZ + foot.offZ);
       if (turned) {
         // her knee stands off the way her upper legs face; her foot lies as her pose had it, pivoted to its band
         bend.copy(foot.knee).applyAxisAngle(UPRIGHT, twist.upperLegs);
         footQ.setFromAxisAngle(UPRIGHT, twist.feet).multiply(foot.lie);
+        if (this.tilted[side]) footQ.premultiply(this.tilt[side]); // (laid along its slope)
         this.reach(legs[side], goal, bend, Math.sin(thighYaw), Math.cos(thighYaw), footQ, twist.upperLegs - twist.hips, twist.feet - twist.upperLegs);
-      } else this.reach(legs[side], goal, bend.copy(foot.knee), aheadX, aheadZ, foot.lie, 0, 0);
+      } else this.reach(legs[side], goal, bend.copy(foot.knee), aheadX, aheadZ, this.tilted[side] ? footQ.copy(this.tilt[side]).multiply(foot.lie) : foot.lie, 0, 0);
     }
 
     // ---- and she is set down: lowered, and moved over the foot she stands on ----
@@ -466,6 +499,34 @@ export class FootGround {
     this.hopNow = this.stepFoot >= 0 && this.stepHop > 0 ? this.stepHop * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)) : 0;
     fit.position.y = this.fitFloorY - drop + this.hopNow;
     fit.position.x = motion.sway;
+  }
+
+  /**
+   * UNEVEN GROUND: the ground under each foot (where it was last frame: where her pose puts it plus how far it is held
+   * from there), as metres above or below her root, and the tip that lays the foot along that ground's slope.
+   */
+  private measureGround(): void {
+    const at = this.groundAt, tuning = FOOT_GROUND;
+    for (let side = 0; side < 2; side++) {
+      this.groundUnder[side] = 0;
+      this.tilted[side] = false;
+      if (!at) continue;
+      const e = this.legs[side].ankle.matrixWorld.elements, foot = this.feet[side];
+      const x = e[12] + foot.offX, z = e[14] + foot.offZ, base = this.root.position.y;
+      const g = at(x, z);
+      if (!Number.isFinite(g)) continue;
+      this.groundUnder[side] = clamp(g - base, -tuning.groundMost, tuning.groundMost);
+      // the slope there: the ground's rise across a short span east-west and north-south, as the way the ground faces
+      const d = tuning.tiltSpan;
+      const east = at(x + d, z) - at(x - d, z), south = at(x, z + d) - at(x, z - d);
+      if (!Number.isFinite(east) || !Number.isFinite(south)) continue;
+      slope.set(-east / (2 * d), 1, -south / (2 * d)).normalize();
+      const angle = Math.acos(clamp(slope.y, -1, 1));
+      if (angle < 0.01) continue;
+      if (angle > tuning.tiltMost) slope.lerpVectors(UPRIGHT, slope, tuning.tiltMost / angle).normalize();
+      this.tilt[side].setFromUnitVectors(UPRIGHT, slope);
+      this.tilted[side] = true;
+    }
   }
 
   /** Begin a step (standing) with one foot from where it is now to a spot (world x and z). */

@@ -771,6 +771,8 @@ if (uHideHead > 0.5) {
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
     setFacing(now: BodyFacing | null): void { facing = now; },
     setSideSteps(level: number | null): void { sideLevel = level; },
+    // (the island's ground: each foot on the ground under it, laid along its slope: footGround.ts 9)
+    setGround(groundAt: ((x: number, z: number) => number) | null): void { ground.groundAt = groundAt; },
     // (her steps follow the distance she really covers, measured each frame in `update`: the game's speed is not needed)
     setWalk(_speed: number): void {},
     treadmill(speed: number): void { treadmill = speed; },

@@ -163,6 +163,11 @@ export interface HeroineBody {
    */
   setSideSteps?(level: number | null): void;
   /**
+   * UNEVEN GROUND (the island): the ground's height at a place, metres, so each foot stands on the ground under it and
+   * lies along its slope. Null (and a body without this): a flat floor at her root's height. Optional.
+   */
+  setGround?(groundAt: ((x: number, z: number) => number) | null): void;
+  /**
    * Ground speed in m/s (0 = standing). Her legs follow this; the game moves her root. (A body that reads how far
    * it really moved between frames, as the fast heroine does, does not need it.)
    */

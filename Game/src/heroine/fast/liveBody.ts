@@ -49,8 +49,14 @@ import type { HeroineLook } from '../heroineLook';
 import { SARAH_LAB_ACTION, SARAH_LAB_FIELD } from '@charb/sarahlab/sarahLabTool';
 import { readPregnancy } from '@charb/sarahlab/pregnancy';
 
-/** The hidden body's belly follows hers at most this often (seconds; 0: at every whole percent). */
-const LIVE_BELLY_EVERY = 0;
+/**
+ * WHEN THE HIDDEN BODY'S BELLY FOLLOWS HERS (Joshua, 2026-11-19: v0.2.70 passed on every whole percent at once, and
+ * dragging the belly slider closed the game on his iPhone: each change has the builder refit her womb and baby, many
+ * times a second while the slider moves). Now: once her belly has stayed put this long (seconds)...
+ */
+const LIVE_BELLY_SETTLE = 0.35;
+/** ...or, while it keeps changing (the time lapse), at most this often: a few percent at a time late in the lapse. */
+const LIVE_BELLY_EVERY = 1;
 /**
  * HER SHAPE, AS THE BUILDER WEIGHS IT (Joshua, 2026-11-19: the time lapse made "a pointy belly... it needs to basically
  * rebake the look every second at the new size"; "you can see how CCBS does it as the belly slider updates in real
@@ -91,7 +97,7 @@ export interface LiveBody {
   /**
    * HER BELLY AND HER PREGNANCY changed in the game (Settings, the time lapse; heroine/pregnancyPlan.ts): the hidden
    * body follows, by the room's own BELLY slider and PREGNANT button, so the baby's kicks come from a womb her size, and
-   * none come while she is not pregnant. Her belly is passed on at every whole percent it changes (Joshua: "have it update every 1%").
+   * none come while she is not pregnant. Her belly is passed on once it settles (or at most once a second while it keeps changing).
    */
   setBelly(percent: number): void;
   setPregnant(on: boolean): void;
@@ -158,15 +164,17 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
   const kickDir = Array.from({ length: KICKS }, () => new THREE.Vector4(0, 0, 1, 0.03));
   let disposed = false;
   // (her belly and pregnancy as the room has them, and the belly the game last asked for)
-  let roomBelly = look.body.bump, wantBelly = roomBelly, bellyWait = 0;
+  let roomBelly = look.body.bump, wantBelly = roomBelly, bellyWait = 0, stillFor = 0;
   let pregnant = readPregnancy((look.body as { pregnancy?: unknown }).pregnancy).pregnant;
   // READING HER SHAPE (SHAPE_SETTLE): her skin's body-shape weights, by name
   const names = Object.entries(skin.morphTargetDictionary ?? {});
+  let readings = 0, laterPoints: Float32Array | null = null;
   const readShape = (): LiveShape => {
     const weights: Record<string, number> = {}, influence = skin.morphTargetInfluences ?? [];
     for (const [name, index] of names) weights[name] = influence[index] ?? 0;
     const position = skin.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const points = new Float32Array(position.count * 3);
+    // (one array for every reading after the first: nothing new is made each time)
+    const points = readings++ === 0 ? new Float32Array(position.count * 3) : (laterPoints ??= new Float32Array(position.count * 3));
     for (let i = 0; i < position.count; i++) { points[i * 3] = position.getX(i); points[i * 3 + 1] = position.getY(i); points[i * 3 + 2] = position.getZ(i); }
     return { belly: roomBelly, weights, points };
   };
@@ -176,7 +184,7 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
     kickAt, kickDir, openShape,
     takeShape(): LiveShape | null { const s = fresh; fresh = null; return s; },
     openedIn: (performance.now() - began) / 1000,
-    setBelly(percent: number): void { wantBelly = Math.max(0, Math.min(200, Math.round(percent))); },
+    setBelly(percent: number): void { const b = Math.max(0, Math.min(200, Math.round(percent))); if (b !== wantBelly) { wantBelly = b; stillFor = 0; } },
     setPregnant(on: boolean): void {
       if (disposed || on === pregnant) return;
       pregnant = on;
@@ -187,7 +195,8 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
       if (disposed) return 0;
       const before = performance.now();
       bellyWait -= dt;
-      if (wantBelly !== roomBelly && bellyWait <= 0) {
+      stillFor += dt;
+      if (wantBelly !== roomBelly && (stillFor >= LIVE_BELLY_SETTLE || bellyWait <= 0)) {
         bellyWait = LIVE_BELLY_EVERY;
         roomBelly = wantBelly;
         room.setSlider(SARAH_LAB_FIELD.bump, roomBelly);

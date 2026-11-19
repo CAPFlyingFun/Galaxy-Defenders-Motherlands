@@ -170,12 +170,12 @@ use the game's single copy of three.js.
   week shown beside it off HER OWN builder chart (Blaze: START 10% = week 12, BIGGEST 150% at week 42, END 30%; the
   builder's hybrid curve), and a TIME LAPSE from week 12 to her delivery week at a day a second (7 s a week, 224 s),
   stopping there exactly, with the week in a chip at the top (a tap stops it). Off: her belly is only her shape (no
-  weeks for her vitals, no slowing, the hidden live body's PREGNANT pressed off so no kicks); the live body's belly
-  follows hers at most once a second. The story's plan: 10% not pregnant for a while; pregnancy on at 10% (= week 12);
+  weeks for her vitals, no slowing, the hidden live body's PREGNANT pressed off so no kicks). The story's plan: 10% not pregnant for a while; pregnancy on at 10% (= week 12);
   growing with the weeks over quests to 150% at 42; off at the birth; over 3-4 game months settling to 30%. The birth and
   the settling are for later.
   HER BELLY'S SHAPE comes from the builder itself (Joshua, 2026-11-19: the time lapse gave "a pointy belly"; "update
-  every 1%"): the hidden live body's belly follows hers at every whole percent, and 0.2 s after a change the WEIGHTS the
+  every 1%"): the hidden live body's belly follows hers once it has stayed put 0.35 s (or once a second while it keeps
+  changing: at every whole percent at once, dragging the slider closed the game on the iPhone), and 0.2 s after a change the WEIGHTS the
   builder gives every body shape, and the points it moves itself, are read off its skin (`liveBody.ts` `takeShape`,
   CPU only) and she takes their change since her baked belly (`shapedBody.ts` `setBuilderWeights`; her four motion
   shapes stay with her motion, which tilts a bigger belly by itself). v0.2.68 read her whole skin back from the graphics

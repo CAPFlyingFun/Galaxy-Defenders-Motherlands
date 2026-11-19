@@ -259,7 +259,9 @@ export class ShapedBody {
   setBuilderWeights(now: Readonly<Record<string, number>>, open: Readonly<Record<string, number>>, pointsNow: Float32Array, pointsOpen: Float32Array): void {
     const s = this.source, n = s.count;
     const change: Record<string, number> = {};
-    const moves = new Float32Array(n * 3);
+    // (one array, made once and reused)
+    const moves = (this.builderMoves ??= new Float32Array(n * 3));
+    moves.fill(0);
     // (the points the builder moved itself, if hers are the same points)
     if (pointsNow.length === n * 3 && pointsOpen.length === n * 3) for (let k = 0; k < n * 3; k++) moves[k] = pointsNow[k] - pointsOpen[k];
     for (const name of Object.keys(now)) {

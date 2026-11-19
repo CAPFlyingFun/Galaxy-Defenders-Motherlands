@@ -130,12 +130,12 @@ use the game's single copy of three.js.
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.
-- `models/sarah-skeleton.glb` IS NOT SHIPPED (`Game/charb-files.json`; 2026-11-19). Given it, the builder's room fits a
-  whole skeleton into her hidden live body on the phone itself: v0.2.59 shipped it and the iPhone loaded once, then
-  froze and crash-reloaded ("A problem repeatedly occurred"); v0.2.58 without it ran at 58 FPS. Joshua wants the
-  skeleton in (the organs are placed by it): to come back as work done AHEAD of time (fitted once, saved, loaded as a
-  file), not worked out on the phone. The game's other memory fixes: every reload lets go of the graphics first
-  (`core/restart.ts`); the hidden live body opens BARE (`liveBody.ts` `bareLook`). The dev server reads Char_B
+- HER LIVE BODY IS COMPLETE (Joshua, 2026-11-19): `models/sarah-skeleton.glb` is shipped (`Game/charb-files.json`), and
+  as in the builder it is FITTED INSIDE HER ONLY WHEN WANTED (X-RAY raised, or her sneakers off: `SarahLabScene.ts`,
+  "seconds of work on a phone"). So the hidden live body always wears the builder's sneakers (`liveBody.ts` `bareLook`;
+  never drawn): with no shoes it was fitted on every load, and the iPhone froze and crash-reloaded ("A problem
+  repeatedly occurred"), as the builder's own room did on 2026-11-11. Also: every reload lets go of the graphics first
+  (`core/restart.ts`); the hidden live body opens without clothes, fabrics or hair. The dev server reads Char_B
   directly: check the BUILT game.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,

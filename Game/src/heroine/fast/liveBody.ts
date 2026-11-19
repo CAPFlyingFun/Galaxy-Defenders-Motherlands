@@ -66,7 +66,7 @@ export interface LiveBody {
 
 /**
  * Her look with nothing on that is only there to be seen (see "it opens bare" above): her body and face as they are,
- * no hair, and clothes that are a COMPLETE but empty export (the builder takes a missing layer as "take it off", and
+ * no hair, her sneakers on (see below), and clothes that are a COMPLETE but empty export (the builder takes a missing layer as "take it off", and
  * an outfit name it does not know as "put the default tee on"), so no paint, fabric, garment or shoe is loaded.
  */
 export function bareLook(look: HeroineLook): HeroineLook {
@@ -81,7 +81,10 @@ export function bareLook(look: HeroineLook): HeroineLook {
       layers: [null, null, null],
       garments: {},
       detail: { nipple: null, navel: null },
-      shoes: 'none',
+      // IN HER SNEAKERS (never drawn): to the builder no sneakers means barefoot, and barefoot it fits her whole
+      // skeleton inside her as she loads ("seconds of work on a phone"; it froze the iPhone, 2026-11-19, as it froze the
+      // builder's own room on 2026-11-11). Shod, the skeleton waits until it is wanted (X-RAY), as in the builder.
+      shoes: 'sneakers',
     },
   };
 }

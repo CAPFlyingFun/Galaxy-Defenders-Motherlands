@@ -180,6 +180,11 @@ use the game's single copy of three.js.
   CPU only) and she takes their change since her baked belly (`shapedBody.ts` `setBuilderWeights`; her four motion
   shapes stay with her motion, which tilts a bigger belly by itself). v0.2.68 read her whole skin back from the graphics
   chip instead: three.js copied her 43 body shapes for it, about 160 MB each time, and an iPhone closes a page for that.
+  HER NAVEL comes out with her belly as in the builder (Joshua, 2026-11-19: "In CCBS it does automatically... in real
+  time"): the builder's shader pushes it out by her womb's pressure (`navelSoft.ts`), and that push is read on the CPU
+  (`navelOffsetOf`) with the points; where the builder moved points, her surface's directions are worked out again from
+  her triangles (`shapedBody.ts` `renormal`), or the outie stayed lit like the baked innie and read as a dark hole.
+  What stays as baked: the painted pictures (her suit's colour and fine detail), which only stretch with her.
   Without the live body she keeps the few size shapes only.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,

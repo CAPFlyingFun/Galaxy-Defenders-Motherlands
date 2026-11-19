@@ -295,6 +295,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     shapeNames,
     bakedBelly: look.manifest.belly,
     navel: look.manifest.navel,
+    triangles: fullIndex,
   });
 
   // ---- 3. her detail levels ----------------------------------------------------------------------------------------

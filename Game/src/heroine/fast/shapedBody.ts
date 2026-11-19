@@ -66,6 +66,8 @@ export interface ShapedBodySource {
   /** The belly (0-200 %) the baked points are for, and her NAVEL control's setting (-100..100). */
   readonly bakedBelly: number;
   readonly navel: number;
+  /** Her triangles (three point numbers each): for her surface's directions where the builder moves points itself. */
+  readonly triangles?: Uint32Array;
 }
 
 /** One detail level's copy of her: its geometry, and which of her points each of its points is. */
@@ -118,6 +120,15 @@ export class ShapedBody {
    */
   private builderMoves: Float32Array | null = null;
   private liveBase: { position: Float32Array; normal: Float32Array } | null = null;
+  /**
+   * WHERE THE BUILDER MOVED POINTS ITSELF (her navel pushed out by her belly, above all), her surface's directions there
+   * are worked out again from her triangles as they now lie: the points, and how far each direction was turned from
+   * what the body shapes alone gave (a live level adds the same turn). Without it her navel came out as an outie
+   * still lit like the innie she was baked with, and read as a dark hole (Joshua, 2026-11-19).
+   */
+  private normalFix: { points: Uint32Array; turn: Float32Array } | null = null;
+  /** Which triangles each point is in (made once, when first needed). */
+  private pointTriangles: { start: Uint32Array; list: Uint32Array } | null = null;
 
   constructor(private readonly source: ShapedBodySource) {
     this.belly = source.bakedBelly;
@@ -155,7 +166,14 @@ export class ShapedBody {
     if (this.liveBase) return this.liveBase;
     const position = neutral.position.slice();
     for (let k = 0; k < position.length; k++) position[k] += extra[k];
-    return (this.liveBase = { position, normal: neutral.normal });
+    // (her directions where the builder moved her points, turned as on the other levels)
+    let normal = neutral.normal;
+    const fix = this.normalFix;
+    if (fix) {
+      normal = neutral.normal.slice();
+      fix.points.forEach((v, j) => { normal[v * 3] += fix.turn[j * 3]; normal[v * 3 + 1] += fix.turn[j * 3 + 1]; normal[v * 3 + 2] += fix.turn[j * 3 + 2]; });
+    }
+    return (this.liveBase = { position, normal });
   }
   private neutralShape(): { position: Float32Array; normal: Float32Array } {
     if (this.neutral) return this.neutral;
@@ -305,7 +323,50 @@ export class ShapedBody {
         if (turns) { this.normal[v * 3] += turns.getX(v) * change; this.normal[v * 3 + 1] += turns.getY(v) * change; this.normal[v * 3 + 2] += turns.getZ(v) * change; }
       }
     }
+    this.normalFix = extra && s.triangles ? this.renormal(extra, s.triangles) : null;
     for (const level of this.levels.values()) this.fill(level);
+  }
+
+  /** Her surface's directions again wherever the builder moved her points by more than a tenth of a millimetre. */
+  private renormal(moved: Float32Array, triangles: Uint32Array): { points: Uint32Array; turn: Float32Array } | null {
+    const n = this.source.count, P = this.position, N = this.normal;
+    // (which triangles each point is in: counted, then listed)
+    if (!this.pointTriangles) {
+      const start = new Uint32Array(n + 1);
+      for (let k = 0; k < triangles.length; k++) start[triangles[k] + 1]++;
+      for (let v = 0; v < n; v++) start[v + 1] += start[v];
+      const list = new Uint32Array(triangles.length), fill = start.slice(0, n);
+      for (let k = 0; k < triangles.length; k++) list[fill[triangles[k]]++] = (k / 3) | 0;
+      this.pointTriangles = { start, list };
+    }
+    const { start, list } = this.pointTriangles;
+    // the points moved, and every point of a triangle one of them is in (its direction changed too)
+    const near = new Set<number>();
+    for (let v = 0; v < n; v++) {
+      if (Math.hypot(moved[v * 3], moved[v * 3 + 1], moved[v * 3 + 2]) < 1e-4) continue;
+      for (let i = start[v]; i < start[v + 1]; i++) { const t = list[i] * 3; near.add(triangles[t]); near.add(triangles[t + 1]); near.add(triangles[t + 2]); }
+    }
+    if (near.size === 0) return null;
+    const points = Uint32Array.from(near), turn = new Float32Array(points.length * 3);
+    points.forEach((v, j) => {
+      // her surface's direction at v: the sum of its triangles' (each as big as the triangle is)
+      let x = 0, y = 0, z = 0;
+      for (let i = start[v]; i < start[v + 1]; i++) {
+        const t = list[i] * 3, a = triangles[t] * 3, b = triangles[t + 1] * 3, c = triangles[t + 2] * 3;
+        const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+        const wx = P[c] - P[a], wy = P[c + 1] - P[a + 1], wz = P[c + 2] - P[a + 2];
+        x += uy * wz - uz * wy; y += uz * wx - ux * wz; z += ux * wy - uy * wx;
+      }
+      const length = Math.hypot(x, y, z);
+      if (length < 1e-12) return;
+      // (kept as long as the direction it replaces, and the same way out: the file's triangles may turn either way)
+      const o = v * 3, was = Math.hypot(N[o], N[o + 1], N[o + 2]) || 1;
+      let k = was / length;
+      if (x * N[o] + y * N[o + 1] + z * N[o + 2] < 0) k = -k;
+      turn[j * 3] = x * k - N[o]; turn[j * 3 + 1] = y * k - N[o + 1]; turn[j * 3 + 2] = z * k - N[o + 2];
+      N[o] = x * k; N[o + 1] = y * k; N[o + 2] = z * k;
+    });
+    return { points, turn };
   }
 
 

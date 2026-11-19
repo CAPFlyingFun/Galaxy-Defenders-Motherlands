@@ -48,6 +48,7 @@ import { findPaintedSkin } from '../paintMask';
 import type { HeroineLook } from '../heroineLook';
 import { SARAH_LAB_ACTION, SARAH_LAB_FIELD } from '@charb/sarahlab/sarahLabTool';
 import { readPregnancy } from '@charb/sarahlab/pregnancy';
+import { navelOffsetOf } from '@charb/sarahlab/navelSoft';
 
 /**
  * WHEN THE HIDDEN BODY'S BELLY FOLLOWS HERS (Joshua, 2026-11-19: v0.2.70 passed on every whole percent at once, and
@@ -176,6 +177,15 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
     // (one array for every reading after the first: nothing new is made each time)
     const points = readings++ === 0 ? new Float32Array(position.count * 3) : (laterPoints ??= new Float32Array(position.count * 3));
     for (let i = 0; i < position.count; i++) { points[i * 3] = position.getX(i); points[i * 3 + 1] = position.getY(i); points[i * 3 + 2] = position.getZ(i); }
+    // HER NAVEL PUSHED OUT (Joshua, 2026-11-19: "the bellybutton... not included in the update. In CCBS it does
+    // automatically"): the builder lays her navel in, and its shader pushes it out every frame by how much her womb
+    // presses on it (navelSoft.ts: an outie at a big belly). That push is added here as the builder's own CPU readers
+    // add it (`navelOffsetOf`), so her navel comes out with her belly in the game too.
+    const navel = navelOffsetOf(skin);
+    if (navel && navel.out.value) {
+      const k = navel.out.value, d = navel.delta, n = Math.min(position.count, Math.floor(d.length / 4));
+      for (let v = 0; v < n; v++) { const o = v * 4; if (d[o] || d[o + 1] || d[o + 2]) { points[v * 3] += k * d[o]; points[v * 3 + 1] += k * d[o + 1]; points[v * 3 + 2] += k * d[o + 2]; } }
+    }
     return { belly: roomBelly, weights, points };
   };
   const openShape = readShape();

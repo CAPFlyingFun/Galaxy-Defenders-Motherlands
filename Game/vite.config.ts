@@ -252,6 +252,8 @@ export default defineConfig({
       // Char_B has no node_modules of its own: its `import 'three'` must land on the game's copy.
       { find: /^three$/, replacement: here('./node_modules/three/build/three.module.js') },
       { find: /^three\//, replacement: here('./node_modules/three') + '/' },
+      // (the builder's export zip, v0.9.45: its `import 'fflate'` lands on the game's copy the same way)
+      { find: /^fflate$/, replacement: here('./node_modules/fflate/esm/browser.js') },
     ],
     dedupe: ['three'],
   },

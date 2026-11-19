@@ -124,6 +124,10 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
+- THE BUILDER, v0.9.45 (copied 2026-11-19; Joshua says when to copy a newer one): it can now UPLOAD AN IMAGE as a
+  piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
+  and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
+  scaled to size, for more exact looks.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

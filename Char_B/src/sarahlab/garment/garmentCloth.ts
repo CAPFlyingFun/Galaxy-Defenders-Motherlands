@@ -992,6 +992,8 @@ export class GarmentCloth {
     const skinMs = this.skin.update(x.subarray(0, n * 3), this.after);
     // her navel and nipples: domes over them stand in for her skin (garmentDetail.ts, the cloth tee's method)
     this.detail?.follow(this.skin, x, this.after, this.before, n, !this.primed);
+    // another cloth worn under this one raises its floors (`clothLayers.ts`)
+    this.over?.(this.after, n);
     if (!this.primed) { copyContacts(this.after, this.before); this.primed = true; }
     const damping = this.sim.settings.damping;
     if (this.warm > 0) { this.warm -= dt; this.sim.settings.damping = Math.max(damping, WARM_DAMPING); }
@@ -1000,6 +1002,8 @@ export class GarmentCloth {
     if (this.weightless) this.sim.settings.gravity = [0, 0, 0];
     const stats = this.sim.step(dt, this.before, this.after, caps);
     this.sim.settings.damping = damping; this.sim.settings.gravity = gravity;
+    // another cloth worn over this one holds it in to her (`clothLayers.ts` `cinchUnder`)
+    this.belt?.(this.after, n, this.sim.positions, this.sim.velocities);
     this.capsBefore = capsules ? snapshotCapsules(capsules, this.capsBefore) : null;
     const swap = this.before; this.before = this.after; this.after = swap;
     const t1 = performance.now();
@@ -1014,7 +1018,7 @@ export class GarmentCloth {
     }
     this.position.needsUpdate = true; this.normal.needsUpdate = true;
     // her navel drawn finely onto the cloth over it (navelPatch.ts, navelSurface.ts)
-    this.navelPatch.draw(this.drawnAll, this.detail?.navelSurface ?? null);
+    this.navelPatch.draw(this.drawnNow(), this.detail?.navelSurface ?? null);
     const k = 1 / SMOOTHING, s = this.shown;
     s.skinMs += (skinMs - s.skinMs) * k; s.simMs += (stats.ms - s.simMs) * k; s.drawMs += (performance.now() - t1 - s.drawMs) * k;
     this.last = stats;
@@ -1260,6 +1264,43 @@ export class GarmentCloth {
 
   /** What it draws now: its own sheet, and the cloth drawn finely round her navel when that is drawn (a probe's look at the tee alone). */
   get drawn(): THREE.Mesh[] { return this.navelPatch.mesh.visible ? [this.mesh, this.navelPatch.mesh] : [this.mesh]; }
+
+  /**
+   * ANOTHER CLOTH UNDER THIS ONE (a skirt under an untucked tee: `clothLayers.ts`): called each frame with this cloth's
+   * skin contacts (its first `n` slots) before it is stepped, to raise its floors over the other. Null: none.
+   */
+  over: ((contacts: SkinContacts, n: number) => void) | null = null;
+
+  /**
+   * WHAT OF IT IS UNDER ANOTHER CLOTH AND NOT DRAWN (`clothLayers.ts` `coveredBy`): a mark a slot (1 covered), set each
+   * frame by the room from `belt`; null: all of it is drawn. Only its own triangles are left out, never her skin.
+   */
+  hidden: Uint8Array | null = null;
+  private hiddenKey = ''; private shownTris: Uint32Array | null = null; private shownOf: Uint32Array | null = null;
+  /** Its drawn triangles less those whose three points are all `hidden`; the same array until the set changes. */
+  private drawnNow(): Uint32Array {
+    const all = this.drawnAll, h = this.hidden;
+    if (!h) { this.hiddenKey = ''; this.shownTris = null; return all; }
+    const vp = this.sewn.vertexParticle, slot = this.slotOf, out: number[] = [];
+    let key = '';
+    for (let t = 0; t + 2 < all.length; t += 3) {
+      const a = slot[vp[all[t]]], b = slot[vp[all[t + 1]]], c = slot[vp[all[t + 2]]];
+      if (a >= 0 && b >= 0 && c >= 0 && h[a] && h[b] && h[c]) key += t + ',';
+      else out.push(all[t], all[t + 1], all[t + 2]);
+    }
+    if (this.shownTris && this.shownOf === all && key === this.hiddenKey) return this.shownTris;
+    this.hiddenKey = key; this.shownOf = all;
+    return (this.shownTris = Uint32Array.from(out));
+  }
+
+  /**
+   * ANOTHER CLOTH OVER THIS ONE THAT HOLDS IT IN (a skirt over a tucked tee: `clothLayers.ts` `cinchUnder`): called each
+   * frame after its step with its skin contacts, its points and their speeds (its first `n` slots). Null: none.
+   */
+  belt: ((contacts: SkinContacts, n: number, x: Float32Array, v: Float32Array) => void) | null = null;
+
+  /** What is worn of it now, world (3 numbers a slot, `active` slots; the simulation's own array: read, never kept). */
+  get wornPositions(): Float32Array { return this.sim.positions; }
 
   /** The particles' positions now (world, 3 each, particle order; NaN where not worn): for a probe. */
   get positions(): Float32Array {

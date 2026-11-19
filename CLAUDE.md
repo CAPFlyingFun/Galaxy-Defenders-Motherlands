@@ -33,15 +33,13 @@ use the game's single copy of three.js.
   legs 40% (36), her lower legs and feet 20% (18). Past 90 body North is pulled round; when the looking stops it
   comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
   target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), EXCEPT in third
-  person MANUAL (Joshua, 2026-11-18): there she keeps facing the way the camera looks; forward/back go straight,
-  left/right are side steps: the CRAB STEP (Joshua, 2026-11-18; `footGround.ts` 8). Stick zones, North up: within 20
-  degrees of ahead she walks, within 20 of behind she walks backward (no faster than her jog), every other way her
-  feet crab-step along that exact line, feet still facing ahead: the lead foot (the side she goes to) steps out a
-  shoulder width (further when fast), her body catches up, the trailing foot comes in a shoulder width behind it. By
-  ring: crab walk (walk, jog), shuffle (run: trailing foot closes to half a width, feet low), skip (sprint: a hop,
-  both feet off the ground; the hop fades with her belly, none from 100%, a fast shuffle). Side top speeds by pace
-  and belly in `main.ts` SIDE_PACES; a metre sideways costs 1.25 times the stamina. She stands with her feet her
-  shoulder width apart (measured from her own bones). Only while her facing is held (manual third person, a door).
+  person MANUAL AT A WALK (Joshua, 2026-11-18): there she keeps facing the way the camera looks and the stick snaps to
+  FOUR moves only, nothing between: walk ahead, walk back, and the CRAB STEP left or right (`footGround.ts` 8: the lead
+  foot steps out a shoulder width, her body catches up, the trailing foot comes in a shoulder width behind it; at most
+  1.0 m/s, 0.8 at full term; a metre sideways costs 1.25 times the stamina). Jogging or faster there are no side
+  steps: the stick moves her ahead, back, left or right of the camera and her body turns to run that way. (A shuffle
+  and a skip are built in `footGround.ts` but not used.) She stands with her feet her shoulder width apart (measured
+  from her own bones). Holding a door, her facing is held too (the same four moves).
 - Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real
   loading bar, percentage and time left (`Game/index.html`, `Game/src/ui/splash.ts`; the numbers come from
   `Game/src/core/loadMeter.ts`, which counts real bytes and steps and remembers the device's last load), and the

@@ -64,11 +64,12 @@ import type { LiveBody } from './liveBody';
 import { weekForBump } from '@charb/sarahlab/baby';
 
 /**
- * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. With her facing held, she walks straight ahead or back within
- * SIDE_ZONE_FROM of either (20 degrees: his 340-020 and 160-200); every other way is a crab step. A skip's hop is
- * all there at SIDE_HOP_FULL belly percent and gone by SIDE_HOP_GONE.
+ * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. With her facing held the game gives her only four moves (ahead, back,
+ * left, right: src/main.ts); going more across than along the way she faces (past SIDE_ZONE_FROM) her feet take crab
+ * steps. (The shuffle and the skip, below and in footGround.ts, are kept for later: the game asks only for a crab walk
+ * now, Joshua: "only side step in walk".) A skip's hop is all there at SIDE_HOP_FULL belly percent, gone by SIDE_HOP_GONE.
  */
-const SIDE_ZONE_FROM = (20 * Math.PI) / 180;
+const SIDE_ZONE_FROM = (45 * Math.PI) / 180;
 const SIDE_HOP_FULL = 25;
 const SIDE_HOP_GONE = 100;
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
@@ -888,11 +889,9 @@ if (uHideHead > 0.5) {
         const movedX = root.position.x - lastX, movedZ = root.position.z - lastZ;
         if (placed && movedX * movedX + movedZ * movedZ < JUMP_METRES * JUMP_METRES) {
           along = movedX * Math.sin(yawNow) + movedZ * Math.cos(yawNow);
-          // SIDE STEPS (Joshua's zones, 2026-11-18, the stick's North up): straight ahead (within 20 degrees) she
-          // walks; straight back (within 20 degrees of behind) she walks backward; EVERY OTHER WAY her feet take crab
-          // steps along that exact line, her feet still facing ahead (footGround.ts). Only while the game holds her
-          // facing (`setSideSteps`): otherwise her body turns to the way she goes. Her left is across her forward:
-          // x = cos(yaw), z = -sin(yaw).
+          // SIDE STEPS (Joshua, 2026-11-18): going more across the way she faces than along it, her feet take crab
+          // steps, her feet still facing ahead (footGround.ts). Only while the game holds her facing (`setSideSteps`):
+          // otherwise her body turns to the way she goes. Her left is across her forward: x = cos(yaw), z = -sin(yaw).
           const across = movedX * Math.cos(yawNow) - movedZ * Math.sin(yawNow);
           const went = Math.hypot(movedX, movedZ);
           const offAxis = Math.abs(Math.atan2(across, Math.abs(along)));   // 0 straight ahead or back .. pi/2 straight across

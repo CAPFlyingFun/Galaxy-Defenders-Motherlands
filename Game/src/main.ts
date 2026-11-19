@@ -48,16 +48,16 @@ import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 
 /**
- * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. With her facing held, the stick within SIDE_ZONE of straight ahead or
- * back walks her; every other way she crab-steps (crab walk at a walk or jog, a shuffle at a run, a skip at a sprint).
- * Her top speed side-stepping at each pace (walk, jog, run, sprint), metres a second: SIDE_PACES from her first belly,
- * SIDE_PACES_FULL_TERM at full term (no hop by then: a fast shuffle, about a brisk walk), in a straight line between,
- * as her forward paces go (input/pace.ts). Backing up she goes no faster than her jog. A metre sideways costs
- * SIDE_EFFORT times a metre forward (less efficient; with a big belly real work).
+ * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
+ * a walk is 1, a jog 2), she keeps facing the way the camera looks and the stick gives FOUR moves, nothing between:
+ * walk ahead, walk back, crab step left, crab step right (the nearest of the four to the way it is pushed). Faster,
+ * there are no side steps: the stick moves her ahead, back, left or right of the camera and her body turns to run
+ * that way. A crab step goes no faster than SIDE_WALK_MOST metres a second (her first belly) .. SIDE_WALK_MOST_FULL_TERM
+ * (full term). A metre sideways costs SIDE_EFFORT times a metre forward (less efficient; with a big belly real work).
  */
-const SIDE_ZONE = (20 * Math.PI) / 180;
-const SIDE_PACES = [1.0, 1.6, 2.0, 2.4] as const;
-const SIDE_PACES_FULL_TERM = [0.8, 1.0, 1.2, 1.35] as const;
+const SIDE_WALK_UNDER = 1.5;
+const SIDE_WALK_MOST = 1.0;
+const SIDE_WALK_MOST_FULL_TERM = 0.8;
 const SIDE_EFFORT = 1.25;
 import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
 
@@ -436,6 +436,8 @@ async function start(): Promise<void> {
    */
   // (Joshua, 2026-11-18: one setting for BOTH views, so she can be watched working on her own in either, or played)
   const aimedByHand = (): boolean => graphics.autoFire === 'off';
+  /** Side steps now: third person MANUAL, at a walk, nothing else running (she keeps facing the camera's way). */
+  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && pace.level < SIDE_WALK_UNDER;
   /** Everything that follows from the view and the aiming: the camera's style, the buttons, what a click does. */
   const applyView = (): void => {
     rig.setStyle(rig.mode === 'third' && aimedByHand() ? 'shoulder' : cameraStyle);
@@ -774,23 +776,25 @@ async function start(): Promise<void> {
       // shoulder the camera is locked to her head, so taking "up" from the camera made a loop: walking back or
       // sideways her body turned to the way she went, her head was pulled round, the camera with it, "back" changed
       // and her body turned again: the camera spun (Joshua, 2026-11-18: 670 degrees in 9 s backwards, 2454 sideways).
-      // SIDE STEPS (her facing held: third person MANUAL, or a door): which zone the stick is in, North up
-      const facingHeld = turnInput.hold !== undefined && turnInput.hold !== null;
-      const offAxis = Math.atan2(Math.abs(controls.moveX), Math.abs(controls.moveY)); // 0 ahead or back .. pi/2 across
-      sideStepping = facingHeld && push > 0 && offAxis > SIDE_ZONE;
-      const backing = facingHeld && push > 0 && offAxis <= SIDE_ZONE && controls.moveY < 0;
+      // SIDE STEPS (third person MANUAL at a walk, or holding a door: her facing held): the stick snaps to the nearest
+      // of FOUR moves, ahead, back, left, right (Joshua: "only those 4 directions"), and left and right are crab steps
+      const facingHeld = (turnInput.hold !== undefined && turnInput.hold !== null) || walkSides();
+      let moveX = controls.moveX, moveY = controls.moveY;
+      if (facingHeld && push > 0) {
+        if (Math.abs(moveX) > Math.abs(moveY)) moveY = 0; else moveX = 0;
+        moveX = Math.sign(moveX) * (moveX !== 0 ? push : 0);
+        moveY = Math.sign(moveY) * (moveY !== 0 ? push : 0);
+      }
+      sideStepping = facingHeld && moveX !== 0;
       let speed = pace.speed;
       if (sideStepping) {
-        // (her top speed side-stepping at this pace: blended between the paces, slower the further along she is)
+        // (a crab step's top speed: a brisk walk, slower the further along she is)
         const c = Math.max(0, Math.min(1, pace.carrying));
-        const at = (i: number): number => SIDE_PACES[i] + (SIDE_PACES_FULL_TERM[i] - SIDE_PACES[i]) * c;
-        const lo = Math.max(0, Math.min(3, Math.floor(pace.level) - 1)), hi = Math.min(3, lo + 1);
-        const most = pace.level <= 1 ? at(0) : at(lo) + (at(hi) - at(lo)) * Math.min(1, pace.level - Math.floor(pace.level));
-        speed = Math.min(speed, most);
-      } else if (backing) speed = Math.min(speed, pace.paceSpeed(1));
-      // her feet: crab steps every way but straight ahead or back, in the style her pace asks for (fastHeroine.ts)
-      heroine.setSideSteps?.(facingHeld ? Math.max(1, pace.level) : null);
-      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, speed);
+        speed = Math.min(speed, SIDE_WALK_MOST + (SIDE_WALK_MOST_FULL_TERM - SIDE_WALK_MOST) * c);
+      }
+      // her feet: crab steps for left and right (fastHeroine.ts); a crab walk only (the walk's pace, 1)
+      heroine.setSideSteps?.(facingHeld ? 1 : null);
+      motion.update(dt, moveX, moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, speed);
     }
     // THE DOOR: its handle draws her where the door cannot go (holding it), and it is solid (src/world/door.ts)
     if (doorUse.holding) { motion.x += doorAsk.pull.x; motion.z += doorAsk.pull.z; }
@@ -833,7 +837,8 @@ async function start(): Promise<void> {
     // (MANUAL in third person, Joshua 2026-11-18: she keeps facing the way the camera looks, so the stick's forward and
     //  back go straight ahead and behind, and left and right are side steps. Her body used to turn to the way she
     //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
-    turnInput.hold = doorUse.faceYaw() ?? (rig.mode === 'third' && aimedByHand() && !busyNow() ? rig.yaw : null);
+    //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
+    turnInput.hold = doorUse.faceYaw() ?? (walkSides() ? rig.yaw : null);
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her

@@ -21,6 +21,7 @@
 //                    the next one will show a time)
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
+import { restartGame } from '../core/restart';
 
 export interface Splash {
   /** The game is ready: the bar fills, the splash fades away and is taken off the page. */
@@ -133,7 +134,8 @@ export function connectSplash(meter: LoadMeter): Splash {
  * If the page has no splash, the words are put in the middle of the page.
  */
 export function showSplashError(text: string, colour: string): void {
-  const again = (): void => location.reload();
+  // (letting go of what the game already holds first: core/restart.ts)
+  const again = (): void => restartGame();
   const splash = document.getElementById('splash');
   const step = document.getElementById('splash-step');
   if (splash && step) {

@@ -22,6 +22,15 @@
 //     how wide (the builder's softBody.ts: up to three at once)
 // The baby that kicks is never drawn: a kick is only a place and a push.
 //
+// IT OPENS BARE (Joshua, 2026-11-19: "if you saved the body as the lite
+// version, it keeps the heavy version out so it doesn't load both"): the
+// hidden copy is never drawn, so it gets none of what is only for looking at:
+// no clothes, no fabrics, no hair, her light skin. What the kicks need -- her
+// body, her baby and the springs -- is all still there. (Opened fully dressed,
+// it held a second outfit's paint and fabrics and a second head of hair in the
+// phone's memory, for nothing; on an iPhone that is enough for Safari to throw
+// the game away and start it again.)
+//
 // SHE STANDS STILL IN THERE. The hidden copy is never told she walks. What
 // made the Visual body stutter each time she started walking was the room
 // laying its hidden parts again for the new pose; standing, it never does.
@@ -33,6 +42,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { KICKS } from '@charb/sarahlab/softBody';
+import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
 import { openBuilderRoom, type BuilderRoom } from '../builderRoom';
 import { findPaintedSkin } from '../paintMask';
 import type { HeroineLook } from '../heroineLook';
@@ -54,6 +64,28 @@ export interface LiveBody {
   dispose(): void;
 }
 
+/**
+ * Her look with nothing on that is only there to be seen (see "it opens bare" above): her body and face as they are,
+ * no hair, and clothes that are a COMPLETE but empty export (the builder takes a missing layer as "take it off", and
+ * an outfit name it does not know as "put the default tee on"), so no paint, fabric, garment or shoe is loaded.
+ */
+export function bareLook(look: HeroineLook): HeroineLook {
+  const head = (look.body.head ?? {}) as Record<string, unknown>;
+  const outfit = ((look.clothes ?? {}) as { outfit?: unknown }).outfit;
+  return {
+    name: look.name,
+    body: { ...look.body, head: { ...head, hair: { ...((head.hair ?? {}) as object), style: HAIR_STYLE_NONE } } },
+    clothes: {
+      outfit: typeof outfit === 'string' ? outfit : 'painted swimsuit',
+      shirtLength: 0,
+      layers: [null, null, null],
+      garments: {},
+      detail: { nipple: null, navel: null },
+      shoes: 'none',
+    },
+  };
+}
+
 /** The uniforms three.js keeps for a compiled material (the very objects the builder's shader patch put there). */
 type Uniforms = Record<string, { value: unknown } | undefined>;
 
@@ -64,7 +96,7 @@ type Uniforms = Record<string, { value: unknown } | undefined>;
 export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineLook, onProgress?: (stage: string) => void): Promise<LiveBody> {
   const began = performance.now();
   // (her light skin: the hidden copy is never looked at, and its inner parts are the same either way)
-  const room: BuilderRoom = await openBuilderRoom({ renderer, look, lightSkin: true, onProgress });
+  const room: BuilderRoom = await openBuilderRoom({ renderer, look: bareLook(look), lightSkin: true, onProgress });
 
   // Her skin in the room, and the numbers its shader is given: the kicks are among them.
   const skin = findPaintedSkin(room.model);

@@ -17,6 +17,7 @@ import { isUpright, keepLandscape, onStageResize, refitNow } from './core/orient
 import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
+import { setRestart } from './core/restart';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -219,6 +220,12 @@ async function start(): Promise<void> {
   // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
   const graphics = loadHeroineSettings();
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // (if loading fails part-way and the splash's "tap to try again" reloads, the graphics chip is let go of first;
+  //  once the game is up, `restart` below takes over with the full clean-up)
+  setRestart(() => {
+    try { renderer.dispose(); renderer.forceContextLoss(); } catch { /* reloading anyway */ }
+    window.setTimeout(() => location.reload(), 300);
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, graphics.sharpness));
   host.appendChild(renderer.domElement);
 
@@ -512,6 +519,8 @@ async function start(): Promise<void> {
     } catch (error) { console.warn('Letting go before the restart did not finish; restarting anyway.', error); }
     window.setTimeout(() => location.reload(), 300);
   };
+  // (every other way of starting again -- the splash, the control editor -- goes through this one: core/restart.ts)
+  setRestart(restart);
 
   const hud = new Hud(uiHost, controls, {
     debug,

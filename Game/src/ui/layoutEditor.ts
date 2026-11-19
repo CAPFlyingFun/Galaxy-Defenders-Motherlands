@@ -29,6 +29,7 @@
 // heads-up display's own code (hud.ts) does not need to know about it.
 // ============================================================================
 import { isRotated, toGameX, toGameY } from '../core/orientation';
+import { restartGame } from '../core/restart';
 
 /** Where the arrangement is kept on this device. */
 const STORAGE_KEY = 'gdm.hudLayout';
@@ -321,7 +322,8 @@ function openEditor(): void {
     // Back to the game's own arrangement. The controls were moved out of their corner boxes, so the simplest
     // sure way to put every one back is to forget the saved places and start the page again.
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* nothing was saved */ }
-    location.reload();
+    // (letting go of the game's graphics first: core/restart.ts)
+    restartGame();
   });
   barButton('Done', closeEditor);
 

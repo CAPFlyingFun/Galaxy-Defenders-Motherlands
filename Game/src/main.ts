@@ -426,6 +426,8 @@ async function start(): Promise<void> {
   const eyeAt = new THREE.Vector3(), handsAt = new THREE.Vector3(), handOne = new THREE.Vector3();
   /** Where she looks, up and down, while she does something: wanted this frame, and eased (radians). */
   let actionPitchWant = 0, actionPitch = 0;
+  /** How much the over-the-shoulder camera follows her head's look rather than her target, 0 to 1 (eased). */
+  let headDoing = 0;
   /** First person: how far the view is tipped down on top of the player's look, glancing at a holster (radians). */
   let fpGlance = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
@@ -991,12 +993,21 @@ async function start(): Promise<void> {
     //  aim, and it turns only when the player turns it. Walking backwards her body turns to the way she goes and her
     //  head with it; a camera that followed her head swung round with it. On her own, it follows her head.)
     rig.head.yaw = aimedByHand() && !busyNow() ? rig.yaw : turn.head;
+    // (ON HER OWN, WHATEVER HER HEAD IS DOING, THE CAMERA DOES TOO -- Joshua, 2026-11-19: "following her head's
+    //  direction, before resuming back at the target". At the table, a bar or a door, and ALSO holstering, drawing
+    //  or reloading from her belt on the go, it looks down with her head; then it eases back up to the target over
+    //  the same time her head takes, never jumping. `headDoing` is how much it is following her head: 0 to 1.)
+    const doing = busyNow() || (!!(beltAsk.lookAt ?? holsterAsk.lookAt) && !aimedByHand());
+    headDoing += ((doing ? 1 : 0) - headDoing) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
     if (aimedByHand() && !busyNow()) rig.head.pitch = rig.pitch;
-    else if (busyNow()) rig.head.pitch = actionPitch;
-    else if (rig.mode === 'third' && turn.aimed) {
-      const at = targets.position(aimTarget);
-      rig.head.pitch = Math.atan2(at.y - rig.head.at.y, Math.max(1, Math.hypot(at.x - rig.head.at.x, at.z - rig.head.at.z)));
-    } else rig.head.pitch += (SHOULDER_REST_PITCH - rig.head.pitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+    else {
+      let free: number;
+      if (rig.mode === 'third' && turn.aimed) {
+        const at = targets.position(aimTarget);
+        free = Math.atan2(at.y - rig.head.at.y, Math.max(1, Math.hypot(at.x - rig.head.at.x, at.z - rig.head.at.z)));
+      } else free = rig.head.pitch + (SHOULDER_REST_PITCH - rig.head.pitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+      rig.head.pitch = free + (actionPitch - free) * headDoing;
+    }
     rig.head.valid = true;
     rig.update(dt, heroine);
 

@@ -50,6 +50,12 @@ export const STYLE = Object.freeze({
   /** ...and how far below her eyes it sits (metres), and how far down and up it may look (radians). */
   shoulderDown: -0.12,
   shoulderPitchMin: -1.1, shoulderPitchMax: 0.9,
+  /**
+   * ...and LOOKING DOWN WITH HER (Joshua, 2026-11-19: "a higher view looking down and what she is doing"): for each
+   * radian her head looks down, it rises this much higher and comes this much further back (metres), so her hands and
+   * what they hold stay in view over her shoulder.
+   */
+  shoulderLiftPerDown: 0.32, shoulderBackPerDown: 0.35,
   /** ORBIT: how fast it circles her, radians a second (about one turn in 40 seconds). */
   orbitSpeed: 0.16,
   /** TOP: how far it looks down, and its distance from her (closest, furthest with the zoom). */
@@ -291,12 +297,13 @@ export class CameraRig {
       const yaw = this.head.valid ? this.head.yaw : this.easedYaw;
       const pitch = clamp(this.head.valid ? this.head.pitch : this.easedPitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
       this.setLook(yaw, pitch);
-      const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom;
+      const down = Math.max(0, -pitch);
+      const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom + down * STYLE.shoulderBackPerDown;
       const rightX = -Math.cos(yaw), rightZ = Math.sin(yaw);
       if (this.head.valid) this.pivot.copy(this.head.at); else this.pivot.set(feet.x, STYLE.shoulderUp + 0.1, feet.z);
       this.pivot.x += rightX * STYLE.shoulderSide;
       this.pivot.z += rightZ * STYLE.shoulderSide;
-      this.pivot.y += STYLE.shoulderDown;
+      this.pivot.y += STYLE.shoulderDown + down * STYLE.shoulderLiftPerDown;
       this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
       this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
       // (the player's own look starts from here when the view changes)

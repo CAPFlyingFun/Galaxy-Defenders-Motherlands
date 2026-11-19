@@ -32,8 +32,11 @@
 //
 // THE TIME LEFT. From the same memory: "last time, at this mark, there were
 // 12 seconds to go". That is corrected by how fast THIS load has been going
-// compared with the last (a slower connection, a busier phone), and then
-// simply counts down until the next mark corrects it again. The first time on
+// compared with the last (a slower connection, a busier phone), and counts
+// down -- but never past where last time's next mark was: a part that is
+// slower this time holds the time (and slows the pace) instead of running it
+// down to nothing and jumping back up (Joshua, 2026-11-19: it looked like a
+// timer for each part). Changes ease in over a second and a half. The first time on
 // a device there is nothing to go by, so no time is shown at all, rather than
 // a number pulled out of the air. The same if the game was put in the
 // background part-way through (its clock would no longer mean anything).
@@ -117,6 +120,9 @@ const PACE_LIMITS = { fastest: 0.25, slowest: 4 } as const;
 
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 /** A time to the nearest thousandth of a second (what is written down need be no finer). */
+/** How long a new reckoning of the time left takes to ease in, seconds (secondsLeft). */
+const EASE_SECONDS = 1.5;
+
 const tidy = (seconds: number): number => Math.round(seconds * 1000) / 1000;
 
 /**
@@ -328,8 +334,11 @@ export function startLoadMeter(kind: string): LoadMeter {
    * the page itself took to arrive says nothing about how fast the rest will go.
    */
   const pace = (): number => {
-    const newest = notes[notes.length - 1];
-    if (!newest) return 1;
+    const noted = notes[notes.length - 1];
+    if (!noted) return 1;
+    // (the newest note is taken as NOW, at the position it reached: time spent waiting with the bar still counts as this
+    //  load going slower. Without that, a long wait was not noticed until the bar moved again, and then all at once)
+    const newest: Note = { at: Math.max(noted.at, now()), position: noted.position };
     let from = notes[0];
     for (const note of notes) {
       if (newest.position - note.position >= lookBack) from = note;
@@ -341,6 +350,15 @@ export function startLoadMeter(kind: string): LoadMeter {
     const trust = Math.min(1, covered / lookBack);
     return clamp(1 + (measured - 1) * trust, PACE_LIMITS.fastest, PACE_LIMITS.slowest);
   };
+
+  /** Where (seconds along last time's load) last time's next mark after `at` was; the end, if none. */
+  const markTimes = last.marks.map((mark) => mark[1]).sort((a, b) => a - b);
+  const lastMarkAfter = (at: number): number => {
+    for (const time of markTimes) if (time > at + 1e-6) return Math.min(time, total);
+    return total;
+  };
+  /** The time left as last shown, and when (see secondsLeft). */
+  let shownLeft: number | null = null, shownAt = 0;
 
   const record = (): LoadRecord => ({ seconds: tidy(now()), marks: mine.map((mark) => [...mark] as LoadMark) });
   const fraction = (): number => (finished ? 1 : Math.min(0.99, position / total));
@@ -369,8 +387,25 @@ export function startLoadMeter(kind: string): LoadMeter {
 
     secondsLeft(): number | null {
       if (!remembered || interrupted || finished) return null;
-      // What was left at this point last time, at this load's pace, less the time gone by since we got here.
-      return Math.max(0, (total - position) * pace() - (now() - movedAt));
+      // THE WHOLE LOAD'S TIME LEFT (Joshua, 2026-11-19: "the ETA... fix it to be the sum of all of it"). Where we would
+      // be by now at this load's pace: on from where the bar last moved by the time since, but NEVER past where last
+      // time's next part began -- the bar has not got there. (It used to count on down to "almost there" while a slow
+      // part held the bar still, then jumped back up when the next part began: it looked like a timer for each part.)
+      // A wait longer than that shows up instead in the pace, which takes the waiting in: the time holds or grows.
+      const speed = pace();
+      const nextAt = lastMarkAfter(position);
+      const reckoned = Math.min(nextAt, position + (now() - movedAt) / speed);
+      const target = Math.max(0, (total - reckoned) * speed);
+      // ...and SHOWN smoothly: it counts down a second each second, and eases toward a new reckoning over about a
+      // second and a half rather than jumping to it
+      const t = now();
+      if (shownLeft === null) shownLeft = target;
+      else {
+        const counted = Math.max(0, shownLeft - (t - shownAt));
+        shownLeft = counted + (target - counted) * Math.min(1, (t - shownAt) / EASE_SECONDS);
+      }
+      shownAt = t;
+      return shownLeft;
     },
 
     report(): LoadReport {

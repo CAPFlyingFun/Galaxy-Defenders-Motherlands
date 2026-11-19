@@ -287,9 +287,10 @@ const paintTrim: MaskPainter = (surface: PaintSurface): Float32Array => {
 
 
 /** How the suit shows what is under it: Joshua's own setting from his export. */
-// (HALF his see-through, Joshua 2026-11-19: "for all the visibility through clothing, can you try halfway for all":
-//  his nipple 0.45 -> 0.225, navel 0.8 -> 0.4)
-const DETAIL = { ...EXPORT_SUIT_LAYER.detail, override: { nipple: EXPORT_SUIT_LAYER.detail.override.nipple / 2, navel: EXPORT_SUIT_LAYER.detail.override.navel / 2 } };
+// HOW MUCH SHOWS THROUGH THE SUIT (Joshua, 2026-11-19). First halved from his export ("try halfway for all": nipple
+// 0.45 -> 0.225, navel 0.8 -> 0.4); then, his belly button lost at 150%: "set the navel and nipples through clothes
+// what I had before... Nipples at 43%, Navel at 81%".
+const DETAIL = { ...EXPORT_SUIT_LAYER.detail, override: { nipple: 0.43, navel: 0.81 } };
 /**
  * THE CATSUIT'S FABRIC: Joshua's athletic knit, but its Dark gray, darkened, and at a bigger stitch (Joshua, 2026-11-19, of
  * Look 1's picture: "almost looks like it has little holes for the type of fabric and ours is more plain... scale it

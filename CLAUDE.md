@@ -99,7 +99,7 @@ use the game's single copy of three.js.
   mesh, but where no skin shows through the holes"), drawn by `Game/scripts/make_mesh_tile.py` as
   `public/fabrics/perforated-mesh-tile.png`, at 1.5x (Joshua's pick: the picture's own hole size, 1.2x, blurs at game distance). The athletic swatch
   (`athletic-darkgray-tile.jpg`, `ATHLETIC_KNIT`; Joshua picked 2.2x for it) is kept.
-  See-through halved from his export (nipple 0.225, navel 0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
+  See-through: nipple 0.43, navel 0.81 (Joshua, 2026-11-19: "I can't really see the belly button at 150%"; was halved to 0.225/0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
 - CAMERA STYLES (Joshua, 2026-11-19; `Game/src/camera/cameraRig.ts`): the CAM button also goes to SIDE L and SIDE R,

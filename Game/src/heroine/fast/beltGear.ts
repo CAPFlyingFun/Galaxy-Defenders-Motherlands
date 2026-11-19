@@ -59,6 +59,8 @@ export const BELT = Object.freeze({
    * of the belt above her hip joints, at her front, her sides and her back. (Measured on Blaze's leggings.)
    */
   fallbackAboveHips: [-0.025, 0.07, 0.13] as readonly number[],
+  /** Grey on more than this share of her middle is a grey garment, not a waistband trim (the belt then takes its own line). */
+  trimMostShare: 0.35,
   /**
    * THE BELT KEPT CLOSE UNDER A BIG BELLY (`hugBody`): at her front (where the way round her has at least this much of
    * straight ahead in it), the belt stands no further out than her pelvis does plus `hugSpare`. Her pelvis is measured
@@ -408,6 +410,11 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       }
       canvas.width = canvas.height = 1;
     }
+    // (a TRIM is a band: when most of her middle is grey, the grey is the garment itself -- the gray suit,
+    //  graySuit.ts -- and its top is up under her bust. Then there is no trim to follow, and the belt takes its own line)
+    let middleCount = 0;
+    for (const v of middle) if (rest[v * 3 + 1] >= hipY - 0.12) middleCount++;
+    if (greys.length > middleCount * BELT.trimMostShare) greys.length = 0;
     if (greys.length >= N) {
       trimPoints = greys.length;
       for (const v of greys) { cx += rest[v * 3]; cz += rest[v * 3 + 2]; }

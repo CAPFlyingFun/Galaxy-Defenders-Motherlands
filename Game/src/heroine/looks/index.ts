@@ -5,12 +5,15 @@
 import type { HeroineLook } from '../heroineLook';
 import { BLAZE_LOOK } from './blaze';
 import { BLAZE_SUIT_LOOK } from './blazeSuit';
+import { GRAY_SUIT_LOOK } from './graySuit';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
   blazeSuit: BLAZE_SUIT_LOOK,
   /** Blaze exactly as Joshua exported her from the Character Room: the all-pink two-piece (blaze.ts). */
   blaze: BLAZE_LOOK,
+  /** Blaze in the gray and red suit: Joshua's outfit design 2 (graySuit.ts). Not the default until he approves it. */
+  graySuit: GRAY_SUIT_LOOK,
 };
 
 /** The look the game's heroine wears when the address does not name one. */

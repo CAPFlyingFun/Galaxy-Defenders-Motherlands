@@ -54,9 +54,24 @@ export interface PaintSurface {
   readonly knee: number;
   /**
    * Fill `out` with point `v`'s place on its leg. False when the point is not paintable leg or hip skin (her arms and
-   * hands, and everything above her waist): leave such a point unpainted.
+   * hands, and everything above her waist): `trunkPlace` and `armPlace` cover those.
    */
   legPlace(v: number, out: LegPlace): boolean;
+  /**
+   * Fill `out` with point `v`'s place on her TRUNK (her hips, belly, chest, back and shoulders up to the base of her
+   * neck). Here `along` is how far UP her trunk: 0 at her hip joints, 1 at the base of her neck; `turn` is degrees
+   * round a line straight up through the middle of her hips (0 her front, +90 her side, 180 her back; the same on both
+   * sides, mirrored, as on her legs); `radius` how far the point is from that line (leg lengths: her belly's front is
+   * far out). False for her arms, her head and neck, and her legs below her hip joints.
+   */
+  trunkPlace(v: number, out: LegPlace): boolean;
+  /**
+   * Fill `out` with point `v`'s place on its ARM: `along` 0 at her shoulder joint, 1 at her wrist (her elbow about
+   * half way); `turn` degrees round her arm (0 its front, +90 its OUTER side, away from her body, 180 its back);
+   * `radius` how far from the arm's bone (leg lengths). False for anything that is not an arm (her hands too: past her
+   * wrist).
+   */
+  armPlace(v: number, out: LegPlace): boolean;
 }
 
 /**
@@ -73,6 +88,9 @@ const RAMP = 0.06;
 
 /** No leg or hip skin is further than this from its leg's bone (leg lengths; her thigh's is about 0.14 at its thickest). */
 const MAX_LEG_RADIUS = 0.24;
+
+/** Low on her trunk, a point nearer than this to the line up her middle (leg lengths) is between her legs: not painted. */
+const TRUNK_NEAR_AXIS = 0.09;
 
 /** Signed distances (leg lengths) to the mask's bytes: 128 on the edge, 255 a ramp's width inside, 0 a ramp's width outside. */
 export function finishMask(distance: Float32Array): Uint8Array {
@@ -211,6 +229,18 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
 
   const arm = new Int8Array(count).fill(-1);   // -1 not asked yet, 0 no, 1 yes (worked out only for points low enough to matter)
 
+  // ---- her trunk and her arms (Joshua, 2026-11-18: the gray and red suit's panels run over all of her) -----------
+  const neckBase = at(joints.neck), neckHeight = neckBase[1];
+  const trunkAxisZ = hipZ;
+  const arms = [
+    { shoulder: at(joints.shoulderL), elbow: at(joints.elbowL), wrist: at(joints.wristL) },
+    { shoulder: at(joints.shoulderR), elbow: at(joints.elbowR), wrist: at(joints.wristR) },
+  ].map((a) => {
+    const line = sub(a.wrist, a.shoulder), lineSquared = dot(line, line);
+    return { ...a, line, lineSquared, elbowAt: dot(sub(a.elbow, a.shoulder), line) / lineSquared };
+  });
+  const armMiddleX = (arms[0].shoulder[0] + arms[1].shoulder[0]) / 2;
+
   return {
     count,
     knee: (legs[0].kneeAt + legs[1].kneeAt) / 2,
@@ -239,6 +269,44 @@ export function measureSkin(skin: THREE.SkinnedMesh): PaintSurface {
       out.radius = Math.hypot(dx, dz) / legLength;
       // further from the bone than any thigh or hip is: the underside of a big belly hanging in front of her legs
       if (out.radius > MAX_LEG_RADIUS) return false;
+      return true;
+    },
+    trunkPlace(v: number, out: LegPlace): boolean {
+      const p: V3 = [points.getX(v), points.getY(v), points.getZ(v)];
+      // her trunk is between a little under her hip joints and the base of her neck
+      if (p[1] < hipHeight - 0.12 * legLength || p[1] > neckHeight) return false;
+      if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
+      if (arm[v] === 1) return false;
+      // round a line straight up through the middle of her hips; each side measured outward from her front
+      const dx = Math.abs(p[0] - middleX), dz = (p[2] - trunkAxisZ) * facing;
+      out.along = (p[1] - hipHeight) / Math.max(1e-6, neckHeight - hipHeight);
+      out.turn = Math.atan2(dx, dz) / RADIANS;
+      out.radius = Math.hypot(dx, dz) / legLength;
+      // (between her legs, right by the line her turn is measured round, which way round a point is means nothing)
+      if (out.along < 0.05 && out.radius < TRUNK_NEAR_AXIS) return false;
+      return true;
+    },
+    armPlace(v: number, out: LegPlace): boolean {
+      if (arm[v] < 0) arm[v] = isArm(v) ? 1 : 0;
+      if (arm[v] !== 1) return false;
+      const p: V3 = [points.getX(v), points.getY(v), points.getZ(v)];
+      // its own arm: the one on the point's side of her middle
+      const a = (p[0] - armMiddleX) * (arms[0].shoulder[0] - armMiddleX) >= 0 ? arms[0] : arms[1];
+      const outward = Math.sign(a.shoulder[0] - armMiddleX) || 1;
+      const along = dot(sub(p, a.shoulder), a.line) / a.lineSquared;
+      if (along > 1.02) return false;   // (her hand)
+      // the bone beside the point: her upper arm's above her elbow, her forearm's below
+      const axis: V3 = along <= a.elbowAt
+        ? mix(a.shoulder, a.elbow, Math.max(0, along) / a.elbowAt)
+        : mix(a.elbow, a.wrist, (along - a.elbowAt) / (1 - a.elbowAt));
+      // round the arm: its front is her front (z), its outer side away from her middle (x), whichever way it hangs
+      const dir = sub(a.elbow, a.shoulder), dirLength = Math.sqrt(dot(dir, dir)) || 1;
+      const unit: V3 = [dir[0] / dirLength, dir[1] / dirLength, dir[2] / dirLength];
+      const off = sub(p, axis), along3 = dot(off, unit);
+      const flat: V3 = [off[0] - unit[0] * along3, off[1] - unit[1] * along3, off[2] - unit[2] * along3];
+      out.along = along;
+      out.turn = Math.atan2(flat[0] * outward, flat[2] * facing) / RADIANS;
+      out.radius = Math.sqrt(dot(flat, flat)) / legLength;
       return true;
     },
   };

@@ -48,6 +48,11 @@ export interface HeroineLook {
    * is a number for every point of her skin and her full and light skins have different points.
    */
   readonly maskPainters?: readonly (MaskPainter | null)[];
+  /**
+   * Leave out the strip of fabric the builder stretches across her cleavage (the bake does not keep it). For a suit
+   * painted on her skin up to her neck (graySuit.ts), where the paint itself runs into her cleavage.
+   */
+  readonly noCleavageBridge?: boolean;
 }
 
 /** The belly the game's heroine starts with, percent (the builder's slider runs 0-200). */

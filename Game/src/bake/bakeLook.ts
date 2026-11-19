@@ -166,7 +166,10 @@ async function start(): Promise<void> {
     return out;
   });
   // (her hair comes from its own file; the two pieces between her legs are under her leggings and are never seen)
-  const isExtraPiece = (mesh: THREE.Mesh): boolean => !/^sarah(Hair|Vulva|Vagina)$/.test(mesh.name) && mesh.name !== 'finger-fills';
+  // (a look may leave the fabric across her cleavage out: on a high-necked suit painted on her skin, graySuit.ts, the
+  //  strip's edges came out in her skin's colour, and the suit's paint already runs into her cleavage)
+  const isExtraPiece = (mesh: THREE.Mesh): boolean => !/^sarah(Hair|Vulva|Vagina)$/.test(mesh.name) && mesh.name !== 'finger-fills'
+    && !(look.noCleavageBridge && mesh.name === 'cleavageBridge');
   const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece);
   // the lowest point of anything she stands on (her sneakers' soles), over the room's floor
   let lowest = bottom;

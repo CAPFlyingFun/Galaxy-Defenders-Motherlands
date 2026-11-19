@@ -43,30 +43,37 @@
 import * as THREE from 'three';
 import { KICKS } from '@charb/sarahlab/softBody';
 import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
-import { ROOM_UNITS, openBuilderRoom, type BuilderRoom } from '../builderRoom';
-import { captureVertices } from '@charb/sarahlab/storyBake';
+import { openBuilderRoom, type BuilderRoom } from '../builderRoom';
 import { findPaintedSkin } from '../paintMask';
 import type { HeroineLook } from '../heroineLook';
 import { SARAH_LAB_ACTION, SARAH_LAB_FIELD } from '@charb/sarahlab/sarahLabTool';
 import { readPregnancy } from '@charb/sarahlab/pregnancy';
 
-/** The hidden body's belly follows hers at most this often (seconds): each change has the room refit her womb and baby. */
-const LIVE_BELLY_EVERY = 1;
+/** The hidden body's belly follows hers at most this often (seconds; 0: at every whole percent). */
+const LIVE_BELLY_EVERY = 0;
 /**
- * HER SHAPE, READ FROM THE BUILDER (Joshua, 2026-11-19: the time lapse made "a pointy belly... it needs to basically
- * rebake the look every second at the new size"). This long after the hidden body's belly (or pregnancy) changed, its
- * skin is read back, every point as the builder finally shapes it (its belly round the baby and all), the way the bake
- * reads it (`captureVertices`), so the drawn body can take that shape (shapedBody.ts `setBuilderShape`). Seconds.
+ * HER SHAPE, AS THE BUILDER WEIGHS IT (Joshua, 2026-11-19: the time lapse made "a pointy belly... it needs to basically
+ * rebake the look every second at the new size"; "you can see how CCBS does it as the belly slider updates in real
+ * time"). The builder shapes her belly by its body shapes, each at a weight its own rules work out for her size (more
+ * of them, and finer, than the few the drawn body worked out by itself). This long after the hidden body's belly (or
+ * pregnancy) changed, those weights are read off its skin, so the drawn body can take the same ones
+ * (shapedBody.ts `setBuilderWeights`). Seconds.
+ *
+ * (v0.2.68 read her whole skin back from the graphics chip instead; that made three.js copy all 43 of her body shapes for
+ * 115,710 points, about 160 MB, at every reading and once while loading: more than an iPhone allows a page, so the game
+ * was closed and loaded again. Reading the weights costs nothing.)
  */
-const SHAPE_SETTLE = 0.5;
+const SHAPE_SETTLE = 0.2;
 
-/** The hidden body's skin as the builder shapes it, read back: every point and its direction, in her rest frame. */
+/** The hidden body's body-shape weights, by name: her belly when they were read, and each shape's weight. */
 export interface LiveShape {
-  /** Her belly when it was read, percent, and whether she was pregnant. */
   readonly belly: number;
-  readonly pregnant: boolean;
-  readonly position: Float32Array;
-  readonly normal: Float32Array;
+  readonly weights: Readonly<Record<string, number>>;
+  /**
+   * Her skin's own points as the builder has them (x, y, z each): besides the weights, the builder also moves a few of
+   * her points itself as her belly changes (up to about 2 cm at 64% against 150%), so those are read too.
+   */
+  readonly points: Float32Array;
 }
 
 export interface LiveBody {
@@ -84,14 +91,14 @@ export interface LiveBody {
   /**
    * HER BELLY AND HER PREGNANCY changed in the game (Settings, the time lapse; heroine/pregnancyPlan.ts): the hidden
    * body follows, by the room's own BELLY slider and PREGNANT button, so the baby's kicks come from a womb her size, and
-   * none come while she is not pregnant. Her belly is passed on at most once a second.
+   * none come while she is not pregnant. Her belly is passed on at every whole percent it changes (Joshua: "have it update every 1%").
    */
   setBelly(percent: number): void;
   setPregnant(on: boolean): void;
-  /** Her skin as the builder shaped it when it opened (her look's own belly), read back. Null if it could not be read. */
-  readonly openShape: LiveShape | null;
+  /** Her body-shape weights as the builder had them when it opened (her look's own belly). */
+  readonly openShape: LiveShape;
   /**
-   * Her skin read back again after her belly or pregnancy last changed, once it has settled; each new reading once
+   * Her body-shape weights read again after her belly or pregnancy last changed, once settled; each new reading once
    * (null until there is a new one). See SHAPE_SETTLE.
    */
   takeShape(): LiveShape | null;
@@ -139,6 +146,7 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
 
   // Her skin in the room, and the numbers its shader is given: the kicks are among them.
   const skin = findPaintedSkin(room.model);
+  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__live = { room, skin, renderer }; // (for test pages only)
   if (!skin) { room.dispose(); throw new Error('the hidden body has no skin to read the baby\'s kicks from'); }
   const material = Array.isArray(skin.material) ? skin.material[0] : skin.material;
   const uniforms = (renderer.properties.get(material) as { uniforms?: Uniforms }).uniforms;
@@ -152,33 +160,15 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
   // (her belly and pregnancy as the room has them, and the belly the game last asked for)
   let roomBelly = look.body.bump, wantBelly = roomBelly, bellyWait = 0;
   let pregnant = readPregnancy((look.body as { pregnancy?: unknown }).pregnancy).pregnant;
-  // READING HER SHAPE BACK (SHAPE_SETTLE): the room's view (as the bake's camera stands), and how long until the next read
-  const camera = new THREE.PerspectiveCamera(40, 1, 1, 2000);
-  camera.position.set(0, 1.0 * ROOM_UNITS, 3.2 * ROOM_UNITS);
-  camera.lookAt(0, 1.0 * ROOM_UNITS, 0);
-  camera.updateMatrixWorld(true);
-  const bones = skin.skeleton.bones;
-  const kickW = new Float32Array(KICKS);
-  const keep = bones.map(() => ({ p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3() }));
-  const readShape = (): LiveShape | null => {
-    try {
-      // (in her bind pose, as the bake reads her: the hidden body's stand and breath moving her bones would otherwise
-      //  be read as part of her shape. Her bones are put back as they were straight after.)
-      bones.forEach((b, i) => { keep[i].p.copy(b.position); keep[i].q.copy(b.quaternion); keep[i].s.copy(b.scale); });
-      // (and with no kick on her skin: a kick read back would stay in her shape as a lump)
-      for (let k = 0; k < KICKS; k++) if (at[k]) { kickW[k] = at[k].w; at[k].w = 0; }
-      skin.skeleton.pose();
-      skin.updateMatrixWorld(true);
-      const got = captureVertices(renderer, skin, camera);
-      return { belly: roomBelly, pregnant, position: got.position, normal: got.normal };
-    } catch (error) {
-      console.warn('The hidden body\'s shape could not be read back; her belly keeps the simple shapes.', error);
-      return null;
-    } finally {
-      bones.forEach((b, i) => { b.position.copy(keep[i].p); b.quaternion.copy(keep[i].q); b.scale.copy(keep[i].s); });
-      skin.updateMatrixWorld(true);
-      for (let k = 0; k < KICKS; k++) if (at[k]) at[k].w = kickW[k];
-    }
+  // READING HER SHAPE (SHAPE_SETTLE): her skin's body-shape weights, by name
+  const names = Object.entries(skin.morphTargetDictionary ?? {});
+  const readShape = (): LiveShape => {
+    const weights: Record<string, number> = {}, influence = skin.morphTargetInfluences ?? [];
+    for (const [name, index] of names) weights[name] = influence[index] ?? 0;
+    const position = skin.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const points = new Float32Array(position.count * 3);
+    for (let i = 0; i < position.count; i++) { points[i * 3] = position.getX(i); points[i * 3 + 1] = position.getY(i); points[i * 3 + 2] = position.getZ(i); }
+    return { belly: roomBelly, weights, points };
   };
   const openShape = readShape();
   let readIn = Infinity, fresh: LiveShape | null = null;
@@ -206,7 +196,7 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
       room.step(dt);
       // (her shape read back once it has settled after a change)
       readIn -= dt;
-      if (readIn <= 0) { readIn = Infinity; fresh = readShape() ?? fresh; }
+      if (readIn <= 0) { readIn = Infinity; fresh = readShape(); }
       for (let k = 0; k < KICKS; k++) { if (at[k]) kickAt[k].copy(at[k]); if (dir[k]) kickDir[k].copy(dir[k]); }
       return performance.now() - before;
     },

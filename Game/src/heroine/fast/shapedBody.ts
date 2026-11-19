@@ -105,13 +105,18 @@ export class ShapedBody {
    */
   private neutral: { position: Float32Array; normal: Float32Array } | null = null;
   /**
-   * THE BUILDER'S OWN BELLY (Joshua, 2026-11-19: her belly came out "pointy" away from her baked size). Her size
-   * shapes alone are only part of how the builder shapes a belly: it also rounds it over her womb and baby. So when her
-   * hidden live body is there, its skin is read back at her new size (liveBody.ts) and the part the size shapes miss is
-   * kept here, point by point, and added on top of them (`setBuilderShape`). Null: the size shapes alone.
+   * THE BUILDER'S OWN WEIGHTS (Joshua, 2026-11-19: her belly came out "pointy" away from her baked size; "you can see how
+   * CCBS does it as the belly slider updates in real time"). The few size shapes worked out here (`shapeWeightsAt`) are
+   * only part of how the builder shapes a belly. When her hidden live body is there, the weights IT gives every body
+   * shape are read off it (liveBody.ts), and how far each has changed since her baked belly is kept here: her shape is
+   * then her baked shape plus exactly those changes. Null: the few size shapes alone.
    */
-  private correction: { position: Float32Array; normal: Float32Array } | null = null;
-  /** A live level's starting shape with the correction in it (made when first needed after it changes). */
+  private builderChange: Record<string, number> | null = null;
+  /**
+   * ...and the points the builder moves itself as her belly changes (besides the weights: up to about 2 cm at 64%
+   * against 150%), added to every point, x, y, z each (null: none).
+   */
+  private builderMoves: Float32Array | null = null;
   private liveBase: { position: Float32Array; normal: Float32Array } | null = null;
 
   constructor(private readonly source: ShapedBodySource) {
@@ -135,13 +140,22 @@ export class ShapedBody {
   /** Does a level of this detail carry all her body shapes live? */
   isLive(detail: number): boolean { return detail <= LIVE_UP_TO; }
   /** Every size shape's weight for her belly as it is now, by name (the builder's rules): a live level's weights. */
-  shapeWeights(): Record<string, number> { return shapeWeightsAt(this.belly, this.source.navel); }
+  shapeWeights(): Record<string, number> { return this.weightsNow(); }
   /** Let a level's copy go (it is made again if she comes back to it): a live level is big. */
   release(detail: number): void {
     const level = this.levels.get(detail);
     if (!level) return;
     level.geometry.dispose();
     this.levels.delete(detail);
+  }
+  /** A live level's starting shape: no size shape added (the graphics chip adds them by her weights), the builder's own moves added. */
+  private liveStart(): { position: Float32Array; normal: Float32Array } {
+    const neutral = this.neutralShape(), extra = this.builderMoves;
+    if (!extra) return neutral;
+    if (this.liveBase) return this.liveBase;
+    const position = neutral.position.slice();
+    for (let k = 0; k < position.length; k++) position[k] += extra[k];
+    return (this.liveBase = { position, normal: neutral.normal });
   }
   private neutralShape(): { position: Float32Array; normal: Float32Array } {
     if (this.neutral) return this.neutral;
@@ -238,40 +252,47 @@ export class ShapedBody {
   }
 
   /**
-   * THE BUILDER'S OWN SHAPE for a belly, read back from her hidden live body (liveBody.ts): `moved` and `turned` are
-   * how far each of its points (and their directions) moved from its shape at her baked belly to its shape at
-   * `atBelly`. What her size shapes already give for that change is taken off, and the rest (the builder's rounding
-   * over her womb and baby) is kept and added to her from now on. Moves under `least` (her breath, a bone settling
-   * between the two readings) are left out.
+   * THE BUILDER'S OWN WEIGHTS for her belly now (liveBody.ts): `now` and `open` are its weight for every body shape now
+   * and when it opened at her baked belly. The change of each (but her four motion shapes, which are moved here, and
+   * changes too small to see) goes onto her baked shape from now on, on every level.
    */
-  setBuilderShape(atBelly: number, moved: Float32Array, turned: Float32Array, least: number): void {
+  setBuilderWeights(now: Readonly<Record<string, number>>, open: Readonly<Record<string, number>>, pointsNow: Float32Array, pointsOpen: Float32Array): void {
     const s = this.source, n = s.count;
-    if (moved.length !== n * 3 || turned.length !== n * 3) return; // (not the same points: nothing is kept)
-    const position = moved.slice(), normal = turned.slice();
-    const now = shapeWeightsAt(atBelly, s.navel), baked = shapeWeightsAt(s.bakedBelly, s.navel);
-    for (const name of Object.keys({ ...now, ...baked })) {
-      const change = (now[name] ?? 0) - (baked[name] ?? 0);
-      if (Math.abs(change) < 1e-6) continue;
-      const moves = s.shapeMoves(name), turns = s.shapeTurns(name);
-      if (moves) for (let v = 0; v < n; v++) { position[v * 3] -= moves.getX(v) * change; position[v * 3 + 1] -= moves.getY(v) * change; position[v * 3 + 2] -= moves.getZ(v) * change; }
-      if (turns) for (let v = 0; v < n; v++) { normal[v * 3] -= turns.getX(v) * change; normal[v * 3 + 1] -= turns.getY(v) * change; normal[v * 3 + 2] -= turns.getZ(v) * change; }
+    const change: Record<string, number> = {};
+    const moves = new Float32Array(n * 3);
+    // (the points the builder moved itself, if hers are the same points)
+    if (pointsNow.length === n * 3 && pointsOpen.length === n * 3) for (let k = 0; k < n * 3; k++) moves[k] = pointsNow[k] - pointsOpen[k];
+    for (const name of Object.keys(now)) {
+      const shape = s.shapeMoves(name);
+      if (!shape) continue;
+      const d = now[name] - (open[name] ?? 0);
+      if (Math.abs(d) <= 1e-4) continue;
+      // (her four motion shapes are moved here by her motion, which already tilts a bigger belly further: bodyMotion.ts)
+      if (!MOTION_SHAPES.includes(name)) change[name] = d;
     }
-    for (let v = 0; v < n; v++) {
-      if (Math.hypot(position[v * 3], position[v * 3 + 1], position[v * 3 + 2]) >= least) continue;
-      position[v * 3] = position[v * 3 + 1] = position[v * 3 + 2] = 0;
-      normal[v * 3] = normal[v * 3 + 1] = normal[v * 3 + 2] = 0;
-    }
-    this.correction = { position, normal };
+    this.builderChange = change;
+    this.builderMoves = moves;
     this.liveBase = null;
     this.reshape();
   }
 
-  /** Her points and directions again: baked, plus her size shapes' change of belly, plus the builder's correction. */
+  /** Every body shape's weight now: her baked ones plus the builder's changes, or the few size shapes for her belly. */
+  private weightsNow(): Record<string, number> {
+    const s = this.source;
+    if (!this.builderChange) return shapeWeightsAt(this.belly, s.navel);
+    const out = shapeWeightsAt(s.bakedBelly, s.navel);
+    for (const [name, d] of Object.entries(this.builderChange)) out[name] = (out[name] ?? 0) + d;
+    return out;
+  }
+
+  /** Her points and directions again: baked, plus each body shape's change of weight since then. */
   private reshape(): void {
-    const s = this.source, belly = this.belly;
+    const s = this.source;
     this.position.set(s.position);
     this.normal.set(s.normal);
-    const now = shapeWeightsAt(belly, s.navel), baked = shapeWeightsAt(s.bakedBelly, s.navel);
+    const now = this.weightsNow(), baked = shapeWeightsAt(s.bakedBelly, s.navel);
+    const extra = this.builderMoves;
+    if (extra) for (let k = 0; k < extra.length; k++) this.position[k] += extra[k];
     for (const name of Object.keys(now)) {
       const change = now[name] - (baked[name] ?? 0);
       if (Math.abs(change) < 1e-6) continue;
@@ -282,20 +303,9 @@ export class ShapedBody {
         if (turns) { this.normal[v * 3] += turns.getX(v) * change; this.normal[v * 3 + 1] += turns.getY(v) * change; this.normal[v * 3 + 2] += turns.getZ(v) * change; }
       }
     }
-    const c = this.correction;
-    if (c) for (let k = 0; k < this.position.length; k++) { this.position[k] += c.position[k]; this.normal[k] += c.normal[k]; }
     for (const level of this.levels.values()) this.fill(level);
   }
 
-  /** A live level's starting shape: no size shape added (the graphics chip adds them), the builder's correction added. */
-  private liveStart(): { position: Float32Array; normal: Float32Array } {
-    const neutral = this.neutralShape(), c = this.correction;
-    if (!c) return neutral;
-    if (this.liveBase) return this.liveBase;
-    const position = neutral.position.slice(), normal = neutral.normal.slice();
-    for (let k = 0; k < position.length; k++) { position[k] += c.position[k]; normal[k] += c.normal[k]; }
-    return (this.liveBase = { position, normal });
-  }
 
   /** Write her points and directions, as shaped now, into a level's copy. */
   private fill(level: Level): void {

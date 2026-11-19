@@ -30,6 +30,8 @@ export interface Splash {
 /** How long the splash takes to fade (index.html: `#splash { transition: opacity .4s }`), milliseconds. */
 const FADE_MS = 400;
 /** What the time line says on a device's first load, when no time can honestly be given. */
+/** The first seconds of a load, before the time left can be told (loadMeter.ts: it waits for a few seconds of numbers). */
+const ESTIMATING_NOTE = 'estimating time left…';
 const FIRST_LOAD_NOTE = 'Timing this first load, so the next one can show the time left';
 
 /**
@@ -102,7 +104,7 @@ export function connectSplash(meter: LoadMeter): Splash {
     if (meter.label) { writeStep(meter.label); writeCoverStep(meter.label); }
     // The time left, when it can be told. If it cannot: on a first load the line says why; otherwise it says nothing.
     const left = meter.secondsLeft();
-    const timeText = left !== null ? timeLeftText(left) : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '';
+    const timeText = left !== null ? timeLeftText(left) : meter.estimating ? ESTIMATING_NOTE : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '';
     writeTime(timeText);
     writeCoverTime(timeText);
   };

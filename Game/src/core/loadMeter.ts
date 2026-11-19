@@ -31,12 +31,12 @@
 // but what moves the bar along them is still only real bytes and real steps.
 //
 // THE TIME LEFT. From the same memory: "last time, at this mark, there were
-// 12 seconds to go". That is corrected by how fast THIS load has been going
-// compared with the last (a slower connection, a busier phone), and counts
-// down -- but never past where last time's next mark was: a part that is
-// slower this time holds the time (and slows the pace) instead of running it
-// down to nothing and jumping back up (Joshua, 2026-11-19: it looked like a
-// timer for each part). Changes ease in over a second and a half. The first time on
+// 12 seconds to go". That is scaled by how fast THIS load has been going
+// compared with the last, as a RUNNING AVERAGE over the last 5 seconds only
+// (Joshua, 2026-11-19): a part that is slower this time makes the time grow
+// rather than sit still or run out. Nothing is told for the first 5 seconds
+// (the splash says it is estimating), and changes ease in over a second and a
+// half. It is always the whole load's time, never one part's. The first time on
 // a device there is nothing to go by, so no time is shown at all, rather than
 // a number pulled out of the air. The same if the game was put in the
 // background part-way through (its clock would no longer mean anything).
@@ -78,6 +78,8 @@ export interface LoadMeter {
   readonly label: string;
   /** Seconds left, as nearly as can honestly be told; null when it cannot be told (see the top of this file). */
   secondsLeft(): number | null;
+  /** True in the first seconds of a remembered load, before the time left can be told: the splash says it is estimating. */
+  readonly estimating: boolean;
   /**
    * True while this is a device's FIRST load of this kind and it is being timed for the next one: no time left can
    * be told yet, and the splash says so. (False once the game has been in the background: that load is not kept.)
@@ -110,11 +112,11 @@ export interface LoadReport {
 const STORAGE_KEY = 'gdm.loadRecords';
 const KINDS_KEPT = 6;
 /**
- * The time left looks back over this much of last time's load to judge how fast this one is going: three tenths
- * of it, but never less than 3 or more than 10 seconds' worth. Long enough to be steady, short enough to notice a
- * change (the files arriving quickly from the phone's own store, then the slow work of building her).
+ * THE TIME LEFT (Joshua, 2026-11-19: "a running 5s average, and it waits to start until 5s after launch until it
+ * gets some numbers"): how fast this load is going is judged over the last `window` real seconds only, and no time
+ * is told until `waitFirst` seconds after it began (till then the splash says it is estimating).
  */
-const LOOK_BACK = { share: 0.3, least: 3, most: 10 } as const;
+const RUNNING = { window: 5, waitFirst: 5 } as const;
 /** This load is never taken to be going more than four times faster or slower than the last one. */
 const PACE_LIMITS = { fastest: 0.25, slowest: 4 } as const;
 
@@ -217,7 +219,6 @@ export function startLoadMeter(kind: string): LoadMeter {
   const remembered = kept !== null;
   const last: LoadRecord = kept ?? firstTimeRecord(kind);
   const total = last.seconds;
-  const lookBack = clamp(total * LOOK_BACK.share, LOOK_BACK.least, LOOK_BACK.most);
   /** Last time's marks, by name. */
   const lastMarks = new Map<string, LoadMark>();
   for (const mark of last.marks) if (!lastMarks.has(mark[0])) lastMarks.set(mark[0], mark);
@@ -333,30 +334,24 @@ export function startLoadMeter(kind: string): LoadMeter {
    * It is judged from the first note onward (the game's code starting), not from the page being opened: how long
    * the page itself took to arrive says nothing about how fast the rest will go.
    */
+  /** Where the bar was at `at` (seconds since this load began): the last note at or before it. */
+  const positionAt = (at: number): number => {
+    let found = 0;
+    for (const note of notes) { if (note.at <= at) found = note.position; else break; }
+    return found;
+  };
+  /**
+   * THIS LOAD'S PACE, A RUNNING 5-SECOND AVERAGE: of the last `RUNNING.window` real seconds, how much of last time's
+   * load did it get through? Seconds now per second then. A bar standing still in that window makes the pace slower
+   * (so the time left grows, rather than sitting on a number); never more than four times faster or slower.
+   */
   const pace = (): number => {
-    const noted = notes[notes.length - 1];
-    if (!noted) return 1;
-    // (the newest note is taken as NOW, at the position it reached: time spent waiting with the bar still counts as this
-    //  load going slower. Without that, a long wait was not noticed until the bar moved again, and then all at once)
-    const newest: Note = { at: Math.max(noted.at, now()), position: noted.position };
-    let from = notes[0];
-    for (const note of notes) {
-      if (newest.position - note.position >= lookBack) from = note;
-      else break;
-    }
-    const covered = newest.position - from.position;
-    if (covered <= 0) return 1;
-    const measured = (newest.at - from.at) / covered;
-    const trust = Math.min(1, covered / lookBack);
-    return clamp(1 + (measured - 1) * trust, PACE_LIMITS.fastest, PACE_LIMITS.slowest);
+    const t = now(), from = Math.max(0, t - RUNNING.window);
+    const covered = position - positionAt(from);
+    if (covered <= 1e-6) return PACE_LIMITS.slowest;
+    return clamp((t - from) / covered, PACE_LIMITS.fastest, PACE_LIMITS.slowest);
   };
 
-  /** Where (seconds along last time's load) last time's next mark after `at` was; the end, if none. */
-  const markTimes = last.marks.map((mark) => mark[1]).sort((a, b) => a - b);
-  const lastMarkAfter = (at: number): number => {
-    for (const time of markTimes) if (time > at + 1e-6) return Math.min(time, total);
-    return total;
-  };
   /** The time left as last shown, and when (see secondsLeft). */
   let shownLeft: number | null = null, shownAt = 0;
 
@@ -387,17 +382,12 @@ export function startLoadMeter(kind: string): LoadMeter {
 
     secondsLeft(): number | null {
       if (!remembered || interrupted || finished) return null;
-      // THE WHOLE LOAD'S TIME LEFT (Joshua, 2026-11-19: "the ETA... fix it to be the sum of all of it"). Where we would
-      // be by now at this load's pace: on from where the bar last moved by the time since, but NEVER past where last
-      // time's next part began -- the bar has not got there. (It used to count on down to "almost there" while a slow
-      // part held the bar still, then jumped back up when the next part began: it looked like a timer for each part.)
-      // A wait longer than that shows up instead in the pace, which takes the waiting in: the time holds or grows.
-      const speed = pace();
-      const nextAt = lastMarkAfter(position);
-      const reckoned = Math.min(nextAt, position + (now() - movedAt) / speed);
-      const target = Math.max(0, (total - reckoned) * speed);
-      // ...and SHOWN smoothly: it counts down a second each second, and eases toward a new reckoning over about a
-      // second and a half rather than jumping to it
+      // (nothing told in the first seconds: there is not yet anything to judge the pace by)
+      if (now() < RUNNING.waitFirst) return null;
+      // THE WHOLE LOAD'S TIME LEFT: what was left at this point last time, at this load's running pace
+      const target = (total - position) * pace();
+      // ...SHOWN SMOOTHLY: it counts down a second each second, and eases toward each new reckoning over about a second
+      // and a half rather than jumping to it
       const t = now();
       if (shownLeft === null) shownLeft = target;
       else {
@@ -407,6 +397,8 @@ export function startLoadMeter(kind: string): LoadMeter {
       shownAt = t;
       return shownLeft;
     },
+    /** True in the first seconds of a remembered load, before a time left can be told (the splash says it is estimating). */
+    get estimating(): boolean { return remembered && !interrupted && !finished && now() < RUNNING.waitFirst; },
 
     report(): LoadReport {
       return { kind, remembered, elapsed: now(), position, total, fraction: fraction(), bytes, record: record() };

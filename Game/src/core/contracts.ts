@@ -155,6 +155,13 @@ export interface HeroineBody {
    */
   setFacing?(facing: BodyFacing | null): void;
   /**
+   * SIDE STEPS (Joshua, 2026-11-18): the game holds her facing (third person MANUAL, a door) and she may be moved any
+   * way across it; her feet then take crab steps for every way but nearly straight ahead or back. `level` is her pace
+   * (1 walk .. 4 sprint: the style of step: crab walk, shuffle, skip). Null: her body turns to the way she goes, and
+   * she always walks. Optional: a body without crab steps leaves this out.
+   */
+  setSideSteps?(level: number | null): void;
+  /**
    * Ground speed in m/s (0 = standing). Her legs follow this; the game moves her root. (A body that reads how far
    * it really moved between frames, as the fast heroine does, does not need it.)
    */

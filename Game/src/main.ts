@@ -47,8 +47,18 @@ import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 
-/** How fast she may side-step (crab steps, third person MANUAL), metres a second: about a brisk walk. GAME TUNING. */
-const SIDE_STEP_MOST = 1.0;
+/**
+ * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. With her facing held, the stick within SIDE_ZONE of straight ahead or
+ * back walks her; every other way she crab-steps (crab walk at a walk or jog, a shuffle at a run, a skip at a sprint).
+ * Her top speed side-stepping at each pace (walk, jog, run, sprint), metres a second: SIDE_PACES from her first belly,
+ * SIDE_PACES_FULL_TERM at full term (no hop by then: a fast shuffle, about a brisk walk), in a straight line between,
+ * as her forward paces go (input/pace.ts). Backing up she goes no faster than her jog. A metre sideways costs
+ * SIDE_EFFORT times a metre forward (less efficient; with a big belly real work).
+ */
+const SIDE_ZONE = (20 * Math.PI) / 180;
+const SIDE_PACES = [1.0, 1.6, 2.0, 2.4] as const;
+const SIDE_PACES_FULL_TERM = [0.8, 1.0, 1.2, 1.35] as const;
+const SIDE_EFFORT = 1.25;
 import { CAMERA_STYLES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
@@ -562,6 +572,8 @@ async function start(): Promise<void> {
   let grabWhich: 'both' | Hand = 'both';
   /** What THE PROMPT is for this frame: the table, a bar, the door, or nothing. */
   let promptIs: 'table' | 'grab' | 'door' | null = null;
+  /** She is side-stepping this frame (crab steps: her stamina pays a little more per metre). */
+  let sideStepping = false;
   /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
   function useDoor(which: 'both' | Hand): void {
     if (doorUse.holding) { doorUse.letGo(); return; }
@@ -737,7 +749,9 @@ async function start(): Promise<void> {
     if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable, grabWhich); grabAfterTable = null; }
     // (whichever is running walks her and turns her)
     const ask = tableUse.busy ? tableAsk : grabUse.busy ? grabAsk : doorAsk;
+    sideStepping = false;
     if (busyNow()) {
+      heroine.setSideSteps?.(null);
       pace.step(dt, 0, limits);
       if (ask.walkTo) {
         // (straight to her spot at a walk, the last step no further than the spot)
@@ -760,10 +774,23 @@ async function start(): Promise<void> {
       // shoulder the camera is locked to her head, so taking "up" from the camera made a loop: walking back or
       // sideways her body turned to the way she went, her head was pulled round, the camera with it, "back" changed
       // and her body turned again: the camera spun (Joshua, 2026-11-18: 670 degrees in 9 s backwards, 2454 sideways).
-      // (SIDE STEPS, third person MANUAL: more across than along, she crab-steps, which goes no faster than
-      //  SIDE_STEP_MOST: past that her feet could not keep up a step at a time)
-      const sideStepping = rig.mode === 'third' && aimedByHand() && Math.abs(controls.moveX) > Math.abs(controls.moveY);
-      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, sideStepping ? Math.min(pace.speed, SIDE_STEP_MOST) : pace.speed);
+      // SIDE STEPS (her facing held: third person MANUAL, or a door): which zone the stick is in, North up
+      const facingHeld = turnInput.hold !== undefined && turnInput.hold !== null;
+      const offAxis = Math.atan2(Math.abs(controls.moveX), Math.abs(controls.moveY)); // 0 ahead or back .. pi/2 across
+      sideStepping = facingHeld && push > 0 && offAxis > SIDE_ZONE;
+      const backing = facingHeld && push > 0 && offAxis <= SIDE_ZONE && controls.moveY < 0;
+      let speed = pace.speed;
+      if (sideStepping) {
+        // (her top speed side-stepping at this pace: blended between the paces, slower the further along she is)
+        const c = Math.max(0, Math.min(1, pace.carrying));
+        const at = (i: number): number => SIDE_PACES[i] + (SIDE_PACES_FULL_TERM[i] - SIDE_PACES[i]) * c;
+        const lo = Math.max(0, Math.min(3, Math.floor(pace.level) - 1)), hi = Math.min(3, lo + 1);
+        const most = pace.level <= 1 ? at(0) : at(lo) + (at(hi) - at(lo)) * Math.min(1, pace.level - Math.floor(pace.level));
+        speed = Math.min(speed, most);
+      } else if (backing) speed = Math.min(speed, pace.paceSpeed(1));
+      // her feet: crab steps every way but straight ahead or back, in the style her pace asks for (fastHeroine.ts)
+      heroine.setSideSteps?.(facingHeld ? Math.max(1, pace.level) : null);
+      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, speed);
     }
     // THE DOOR: its handle draws her where the door cannot go (holding it), and it is solid (src/world/door.ts)
     if (doorUse.holding) { motion.x += doorAsk.pull.x; motion.z += doorAsk.pull.z; }
@@ -994,7 +1021,7 @@ async function start(): Promise<void> {
     //  enemies coming close will add to it.)
     let threat = 0;
     for (const section of dome.sections) threat = Math.max(threat, section.shattered ? 1 : 0.6 * (1 - section.hp / SECTION_MAX_HP));
-    vitals.step(dt, { speed: motion.speed, firing: shooting, threat, carrying });
+    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying });
     const reading = vitals.reading;
     limits = reading;
     heroine.setVitals?.(reading);

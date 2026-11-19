@@ -113,15 +113,23 @@ export const FOOT_GROUND = {
    * metres a second across.
    */
   crabReach: 1,
+  /** ...plus this share of how far she goes while the step is in the air (fast steps reach further). */
+  crabSpeedReach: 2,
+  /** ...but never more than this many shoulder widths (her legs only open so far). */
+  crabReachMost: 1.8,
   crabTrailAt: 0.8,
   crabLeadAt: 0.12,
   crabHeight: 0.06,
   crabSeconds: 0.3,
   crabSecondsLeast: 0.14,
   crabFrom: 0.05,
-  /** Her trailing foot lands where its home will be this share of the way through its step (all of it overshot when
-   * she slowed to a stop, and set it down past her lead foot). */
-  crabTrailLead: 0.5,
+  /** THE SHUFFLE: her trailing foot lands this share of a shoulder width closer to her lead foot than a crab walk's,
+   * steps in this much sooner (of a shoulder width), and her feet are lifted this share less. */
+  shuffleCloses: 0.5,
+  shuffleSooner: 0.3,
+  shuffleLower: 0.6,
+  /** THE SKIP: how high her body hops as her trailing foot comes in (metres, with all of its hop), both feet in the air. */
+  skipHop: 0.06,
   /** Standing, a planted foot may be held this far from its home before it slips (crab steps hold feet well out). */
   standLockMost: 0.6,
 } as const;
@@ -130,7 +138,14 @@ export const FOOT_GROUND = {
  * Going sideways, for the crab step: the way she goes over the ground (world x and z, a unit direction), how fast
  * (metres a second), and which foot leads (0 her left, 1 her right: the side she goes toward).
  */
-export interface CrabMove { x: number; z: number; speed: number; lead: 0 | 1 }
+export interface CrabMove {
+  x: number; z: number; speed: number; lead: 0 | 1;
+  /** The style of step: 0 a crab walk, 1 a shuffle (the trailing foot closes in to half a shoulder width, feet low,
+   * quicker), 2 a skip (a shuffle with a hop: both feet off the ground as the trailing foot comes in). In between, a blend. */
+  style: number;
+  /** How much of a skip's hop her body allows, 0..1 (her belly: a big belly shuffles instead). */
+  hop: number;
+}
 
 /** One leg's bones: the hip joint (it turns her thigh), the knee (it turns her shin) and the ankle (her foot). */
 export interface LegBones { readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
@@ -198,6 +213,11 @@ export class FootGround {
   private stepHigh: number = FOOT_GROUND.stepHeight;
   /** Going sideways, which foot steps next: her lead foot (out) or her trailing foot (in). */
   private crabNext: 'lead' | 'trail' = 'lead';
+  /** The step being taken is a crab step (her trailing foot's, `stepHop` high: a skip's hop). */
+  crabbing = false;
+  private stepHop = 0;
+  /** How high she is hopping this frame (metres). */
+  private hopNow = 0;
   /** Her shoulder width, metres (set by the heroine, from her shoulder bones), and how far apart her pose stands her
    * ankles (measured when she is made). Her stance spreads her feet from the second to the first. */
   shoulderWidth = 0;
@@ -264,8 +284,13 @@ export class FootGround {
     swing[0] = -1;
     swing[1] = -1;
     let drop = 0;
-    if (walk > 0 && strides) {
+    // (her walk's own steps: while she walks, unless she has gone over to crab steps, which take her feet at once
+    //  even while the builder's walk is still fading from her legs)
+    const walking = walk > 0 && strides !== null && strides !== undefined && !(crab && crab.speed >= tuning.crabFrom) && !this.crabbing;
+    if (walking && strides) {
       this.stepFoot = -1;                                          // (walking has steps of its own)
+      this.crabbing = false;
+      this.stepHop = 0;
       const table = run >= 0.5 ? strides.run : strides.walk;
       const k = Math.min(STRIDE_SAMPLES - 1, Math.floor(motion.phase * STRIDE_SAMPLES));
       for (let side = 0; side < 2; side++) {
@@ -298,6 +323,8 @@ export class FootGround {
           const f = feet[this.stepFoot];
           f.locked = true; f.lockX = this.stepTo[0]; f.lockZ = this.stepTo[1];
           this.stepFoot = -1;
+          this.crabbing = false;
+          this.stepHop = 0;
         }
       }
       this.planted[0] = this.stepFoot !== 0;
@@ -324,7 +351,7 @@ export class FootGround {
       foot.homeZ = foot.ankle.z + leftZ * out;
     }
     // STANDING: WHICH FOOT STEPS NEXT (when none is stepping)
-    if (!(walk > 0 && strides) && this.stepFoot < 0) {
+    if (!walking && this.stepFoot < 0) {
       if (crab && crab.speed >= tuning.crabFrom && this.shoulderWidth > 0) {
         // THE CRAB STEP: how far each foot is out from its home, the way she goes (+ ahead of it, - left behind)
         const width = this.shoulderWidth;
@@ -335,13 +362,25 @@ export class FootGround {
           return (atX - f.homeX - shiftX) * crab.x + (atZ - f.homeZ - shiftZ) * crab.z;
         };
         const seconds = clamp(width / (2.2 * crab.speed), tuning.crabSecondsLeast, tuning.crabSeconds);
+        // (the style: how much of a shuffle, and how much of a skip's hop)
+        const shuffle = clamp(crab.style, 0, 1), skip = clamp(crab.style - 1, 0, 1) * clamp(crab.hop, 0, 1);
+        const high = tuning.crabHeight * (1 - tuning.shuffleLower * shuffle);
         if (this.crabNext === 'lead' && along(lead) <= width * tuning.crabLeadAt) {
           // her lead foot steps OUT: one shoulder width further the way she goes
-          this.beginStep(lead, crab.x * width * tuning.crabReach, crab.z * width * tuning.crabReach, seconds, tuning.crabHeight, false);
+          // (faster, it reaches further, as a skip's stride lengthens: her body would otherwise outrun her feet)
+          const out = Math.min(width * tuning.crabReachMost, width * tuning.crabReach + crab.speed * seconds * tuning.crabSpeedReach);
+          this.beginStep(lead, crab.x * out, crab.z * out, seconds, high, false);
+          this.crabbing = true;
           this.crabNext = 'trail';
-        } else if (this.crabNext === 'trail' && along(trail) <= -width * tuning.crabTrailAt) {
-          // her trailing foot steps IN: to under its shoulder, where its home will be as it lands
-          this.beginStep(trail, crab.x * crab.speed * seconds * tuning.crabTrailLead, crab.z * crab.speed * seconds * tuning.crabTrailLead, seconds, tuning.crabHeight, true);
+        } else if (this.crabNext === 'trail' && along(trail) <= -width * (tuning.crabTrailAt - tuning.shuffleSooner * shuffle)) {
+          // her trailing foot steps IN: to a shoulder width behind her lead foot (under its shoulder once her body is
+          // over her lead foot), or, shuffling, closer: half that
+          const l = feet[lead];
+          const leadX = l.locked ? l.lockX : l.homeX + l.offX, leadZ = l.locked ? l.lockZ : l.homeZ + l.offZ;
+          const gap = width * (1 - tuning.shuffleCloses * shuffle);
+          this.beginStepTo(trail, leadX - crab.x * gap, leadZ - crab.z * gap, seconds, high);
+          this.crabbing = true;
+          this.stepHop = tuning.skipHop * skip;
           this.crabNext = 'lead';
         }
       } else {
@@ -366,7 +405,7 @@ export class FootGround {
       foot.knee.addScaledVector(line, -foot.knee.dot(line));
       // where her pose (and her sway, and her stance) puts this ankle over the ground
       const poseX = foot.homeX + shiftX, poseZ = foot.homeZ + shiftZ;
-      if (this.stepFoot === side && !(walk > 0 && strides)) {
+      if (this.stepFoot === side && !walking) {
         // STEPPING (standing): carried from where it left to where it lands, smoothly, lifted on the way
         const t = clamp(this.stepClock, 0, 1), smooth = t * t * (3 - 2 * t);
         foot.locked = false;
@@ -377,7 +416,7 @@ export class FootGround {
         if (!foot.locked) { foot.locked = true; foot.lockX = poseX + foot.offX; foot.lockZ = poseZ + foot.offZ; }
         foot.offX = foot.lockX - poseX;
         foot.offZ = foot.lockZ - poseZ;
-        const far = Math.hypot(foot.offX, foot.offZ), most = walk > 0 ? tuning.lockMost : tuning.standLockMost;
+        const far = Math.hypot(foot.offX, foot.offZ), most = walking ? tuning.lockMost : tuning.standLockMost;
         if (far > most) {
           // (further than a foot can be held: it slips, and its spot goes with it)
           const keep = most / far;
@@ -422,8 +461,18 @@ export class FootGround {
     }
 
     // ---- and she is set down: lowered, and moved over the foot she stands on ----
-    fit.position.y = this.fitFloorY - drop;
+    // (a SKIP: her whole body hops through the middle of her trailing foot's step, carrying her planted foot up off
+    //  the ground with it: for a moment both feet are in the air)
+    this.hopNow = this.stepFoot >= 0 && this.stepHop > 0 ? this.stepHop * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)) : 0;
+    fit.position.y = this.fitFloorY - drop + this.hopNow;
     fit.position.x = motion.sway;
+  }
+
+  /** Begin a step (standing) with one foot from where it is now to a spot (world x and z). */
+  private beginStepTo(side: number, toX: number, toZ: number, seconds: number, high: number): void {
+    this.beginStep(side, 0, 0, seconds, high, false);
+    this.stepTo[0] = toX;
+    this.stepTo[1] = toZ;
   }
 
   /**
@@ -440,6 +489,8 @@ export class FootGround {
     this.stepClock = 0;
     this.stepSeconds = seconds;
     this.stepHigh = high;
+    this.crabbing = false;
+    this.stepHop = 0;
   }
 
   /**

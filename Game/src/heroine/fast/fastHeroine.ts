@@ -62,6 +62,15 @@ import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
 import type { LiveBody } from './liveBody';
 import { weekForBump } from '@charb/sarahlab/baby';
+
+/**
+ * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. With her facing held, she walks straight ahead or back within
+ * SIDE_ZONE_FROM of either (20 degrees: his 340-020 and 160-200); every other way is a crab step. A skip's hop is
+ * all there at SIDE_HOP_FULL belly percent and gone by SIDE_HOP_GONE.
+ */
+const SIDE_ZONE_FROM = (20 * Math.PI) / 180;
+const SIDE_HOP_FULL = 25;
+const SIDE_HOP_GONE = 100;
 import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 
 // ------------------------------------------------------------------ tuning (the same numbers as builderHeroine.ts)
@@ -506,7 +515,9 @@ if (uHideHead > 0.5) {
   /** How her hips and legs are turned this frame (one object, rewritten each frame: footGround.ts reads it). */
   const legTwist: LegTwist = { hipsBone, hips: 0, upperLegs: 0, feet: 0 };
   /** Going sideways this frame (the crab step), refilled each frame. */
-  const crabMove: CrabMove = { x: 0, z: 0, speed: 0, lead: 0 };
+  const crabMove: CrabMove = { x: 0, z: 0, speed: 0, lead: 0, style: 0, hop: 0 };
+  /** The game holds her facing and she side-steps (`setSideSteps`): her pace level then, or null. */
+  let sideLevel: number | null = null;
 
   // HER ARMS KEEP CLEAR OF HER BELLY AND HER BREASTS (armClear.ts; Joshua, 2026-11-17: "a simple collision to prevent
   // the arms from crossing into the belly", "don't forget about the breasts"). Her belly and each breast are measured
@@ -736,6 +747,7 @@ if (uHideHead > 0.5) {
     setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
     setFacing(now: BodyFacing | null): void { facing = now; },
+    setSideSteps(level: number | null): void { sideLevel = level; },
     // (her steps follow the distance she really covers, measured each frame in `update`: the game's speed is not needed)
     setWalk(_speed: number): void {},
     treadmill(speed: number): void { treadmill = speed; },
@@ -876,19 +888,30 @@ if (uHideHead > 0.5) {
         const movedX = root.position.x - lastX, movedZ = root.position.z - lastZ;
         if (placed && movedX * movedX + movedZ * movedZ < JUMP_METRES * JUMP_METRES) {
           along = movedX * Math.sin(yawNow) + movedZ * Math.cos(yawNow);
-          // GOING SIDEWAYS (more across the way she faces than along it): the CRAB STEP (footGround.ts), not the
-          // builder's walk: her lead foot steps out a shoulder width, her trailing foot follows in under its shoulder
-          // (Joshua, 2026-11-18). Her left is across her forward: x = cos(yaw), z = -sin(yaw).
+          // SIDE STEPS (Joshua's zones, 2026-11-18, the stick's North up): straight ahead (within 20 degrees) she
+          // walks; straight back (within 20 degrees of behind) she walks backward; EVERY OTHER WAY her feet take crab
+          // steps along that exact line, her feet still facing ahead (footGround.ts). Only while the game holds her
+          // facing (`setSideSteps`): otherwise her body turns to the way she goes. Her left is across her forward:
+          // x = cos(yaw), z = -sin(yaw).
           const across = movedX * Math.cos(yawNow) - movedZ * Math.sin(yawNow);
           const went = Math.hypot(movedX, movedZ);
-          if (frame.dt > 0 && went > 1e-6 && Math.abs(across) > Math.abs(along)) {
+          const offAxis = Math.abs(Math.atan2(across, Math.abs(along)));   // 0 straight ahead or back .. pi/2 straight across
+          const stepping = ground.stepFoot >= 0 && ground.crabbing;        // (a crab step still in the air finishes first)
+          if (sideLevel !== null && frame.dt > 0 && went > 1e-6 && (offAxis > SIDE_ZONE_FROM || stepping)) {
             crab = crabMove;
             crabMove.x = movedX / went; crabMove.z = movedZ / went;
             crabMove.speed = went / frame.dt;
             crabMove.lead = across > 0 ? 0 : 1;
+            // THE STYLE OF STEP, from her pace: a crab walk (walk, jog), a shuffle (run), a skip (sprint); and how much
+            // of a skip's hop her belly allows (all of it at 25 %, none from 100 %: late on it is a fast shuffle)
+            crabMove.style = Math.max(0, Math.min(2, sideLevel - 2));
+            crabMove.hop = Math.max(0, Math.min(1, (SIDE_HOP_GONE - body.belly) / (SIDE_HOP_GONE - SIDE_HOP_FULL)));
             along = 0;
+          } else if (stepping && went <= 1e-6) {
+            // (stopped with a crab step in the air: it lands where it was going)
+            crab = crabMove;
+            crabMove.speed = 0;
           }
-          moving = movedX * movedX + movedZ * movedZ > 1e-10 || Math.abs(Math.sin(yawNow - lastYaw)) > 1e-5;
         } else ground.letGo();                                     // (put somewhere else: the spots her feet stood on are not here)
       }
       lastX = root.position.x; lastZ = root.position.z; lastYaw = yawNow; placed = true;

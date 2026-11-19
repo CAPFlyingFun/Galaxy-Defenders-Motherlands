@@ -252,11 +252,11 @@ const GLOVE = Object.freeze({ from: 0.97, to: 1.2 });
 
 /**
  * THE COLLAR (Joshua, 2026-11-19, with a close-up of Look 1: "make sure you have the collar going up to her neck"): a
- * mock neck in the glossy black, from a few cm under the base of her neck (over the suit's neckline, so no skin shows
- * between) up her neck to about a quarter of the way to the top of her head behind, dipping a little lower in front
+ * mock neck in the glossy black, from just under the base of her neck (the suit, painted by `paintSuit`, runs up
+ * to it; reaching lower it showed as a black yoke on the dark gray) up her neck to about a quarter of the way to the top of her head behind, dipping a little lower in front
  * under her chin. Heights in her neck's own measure (`neckPlace`).
  */
-const COLLAR = Object.freeze({ bottom: -0.25, back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14 });
+const COLLAR = Object.freeze({ bottom: -0.04, back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14 });
 
 /**
  * PAINT LAYER 2, ALL IN THE GLOSSY BLACK: the stripes' borders, the fingerless gloves and the collar. (The builder has
@@ -288,6 +288,16 @@ const paintTrim: MaskPainter = (surface: PaintSurface): Float32Array => {
 
 /** How the suit shows what is under it: Joshua's own setting from his export. */
 const DETAIL = EXPORT_SUIT_LAYER.detail;
+/**
+ * THE CATSUIT'S FABRIC: Joshua's athletic knit, but its DARK GRAY and at a bigger stitch (Joshua, 2026-11-19, of
+ * Look 1's picture: "almost looks like it has little holes for the type of fabric and ours is more plain... scale it
+ * bigger to match... slightly more dark grey than actually black"). At his 0.5 the knit was too fine to show on her.
+ */
+const SUIT_FABRIC = Object.freeze({ colour: 3, stitch: 2 });
+const SUIT_LAYER = {
+  ...EXPORT_SUIT_LAYER,
+  choice: { ...EXPORT_SUIT_LAYER.choice, fabric: { ...EXPORT_SUIT_LAYER.choice.fabric, colour: SUIT_FABRIC.colour }, stitch: SUIT_FABRIC.stitch },
+};
 /** THE GLOSSY BLACK of the trim: the builder's FLAT family (no knit), its Black. The game makes it shine (looks/gear.ts). */
 const GLOSS_PICK = { fabric: { family: 'flat', colour: 4 }, match: true, trim: null, stitch: 0.5, opacity: 1 } as const;
 const C = SHADOW_SUIT_COLOURS;
@@ -301,8 +311,9 @@ export const SHADOW_SUIT_LOOK: HeroineLook = {
     shoes: 'none',
     detail: { nipple: null, navel: null },
     layers: [
-      // PAINT LAYER 1: Joshua's black catsuit: his fabric, colour and detail exactly, its shape painted by `paintSuit`
-      EXPORT_SUIT_LAYER,
+      // PAINT LAYER 1: the catsuit: Joshua's athletic knit in its dark gray at a bigger stitch, his detail settings, its
+      // shape painted by `paintSuit`
+      SUIT_LAYER,
       // PAINT LAYER 2: the glossy black trim (the stripes' borders, the gloves, the collar), painted by `paintTrim`
       { choice: GLOSS_PICK, detail: DETAIL, template: null, mask: '' },
       // PAINT LAYER 3: the red stripes, painted by `paintStripes`

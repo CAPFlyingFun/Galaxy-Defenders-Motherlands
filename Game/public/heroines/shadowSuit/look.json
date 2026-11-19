@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "shadowSuit",
-  "bakedAt": "2026-11-19T13:49:01.782Z",
+  "bakedAt": "2026-11-19T13:58:58.535Z",
   "builderVersion": "0.9.40",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.713636303401573,
+  "barefootHeightMetres": 1.7136624552171795,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -43,11 +43,11 @@
     ],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7002735292367095,
-    "pointsTheBuilderMoved": 73385,
-    "movedMostGeometryUnits": 0.15036489491368635,
+    "crownOverTheFloorMetres": 1.700299681052316,
+    "pointsTheBuilderMoved": 73382,
+    "movedMostGeometryUnits": 0.15041542056603854,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16350318607708852,
+    "restSkinSpread": 0.16351130655826226,
     "captureMissing": {
       "position": 0,
       "normal": 0

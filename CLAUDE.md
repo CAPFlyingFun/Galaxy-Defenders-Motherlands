@@ -88,7 +88,8 @@ use the game's single copy of three.js.
   the Flat cloth's roughness, her skin keeps its own. Her suit layer is painted by code (`paintSuit`, his fabric) so
   it covers her cleavage (the builder's 3 paint layers are all used); a
   leather belt slung on her hips that sags in front (`beltLine`), and black guns with red (`gun`, per look; the clips
-  in her pouches and on the table match). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
+  in her pouches and on the table match). The suit is his athletic knit in its DARK GRAY at stitch 2 (his picture's mesh look; at 0.5 the knit was
+  too fine to show). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version

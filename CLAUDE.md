@@ -82,8 +82,11 @@ use the game's single copy of three.js.
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
   `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
   CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted
-  by code, fingerless gloves and a mock collar up her neck (`paintMask.ts` `neckPlace`) in his exact black, a glossy
-  leather shine (`clothShine` in `looks/gear.ts`: the game swaps the cloth's roughness, her skin keeps its own), a
+  by code (neon red FF0000) with a GLOSSY BLACK BORDER each side, glossy fingerless gloves and a mock collar up her neck
+  (`paintMask.ts` `neckPlace`) in the builder's smooth Flat black; the knit suit at HALF the shine (Joshua: the full
+  shine picked out her nipples). `clothShine` in `looks/gear.ts` is `{ cloth, trim }`: the game swaps the knit's and
+  the Flat cloth's roughness, her skin keeps its own. Her suit layer is painted by code (`paintSuit`, his fabric) so
+  it covers her cleavage (the builder's 3 paint layers are all used); a
   leather belt slung on her hips that sags in front (`beltLine`), and black guns with red (`gun`, per look; the clips
   in her pouches and on the table match). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a

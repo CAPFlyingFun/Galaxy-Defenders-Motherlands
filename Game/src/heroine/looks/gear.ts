@@ -10,6 +10,7 @@
 import type { SuitGearStyle } from '../fast/suitGear';
 import type { BELT_COLOURS } from '../fast/beltGear';
 import type { GunColours } from '../guns';
+import type { ClothShine } from '../fast/outfitMaterial';
 
 export interface LookGear {
   /** The belt, straps, holsters and pouches (any left out keep beltGear.ts's own). */
@@ -17,11 +18,12 @@ export interface LookGear {
   /** The belt's own line (beltGear.ts `line`): slung on her hips, never following a waistband. */
   readonly beltLine?: readonly [number, number, number];
   /**
-   * How glossy her painted suit is, as a roughness (0 mirror, 1 matt): the builder's knits bake at 0.72 and up, her skin
-   * well under 0.6, so the game swaps every cloth value for this one and leaves her skin as it is (`outfitMaterial.ts`).
-   * Unset: the fabric's own. (Joshua, 2026-11-19, of the catsuit: "add a glossy almost leather shine to it".)
+   * How glossy her painted suit is, as roughnesses (0 mirror, 1 matt): `cloth` for its knits (the builder's bake them at
+   * 0.72 and up), `trim` for its smooth Flat cloth (0.92); her skin is well under 0.6 and keeps its own
+   * (`outfitMaterial.ts`). Unset: the fabrics' own. (Joshua, 2026-11-19, of the catsuit: "add a glossy almost leather
+   * shine to it"; then, the shine picking out her nipples: half the shine on the knit, the glossy black on the trim.)
    */
-  readonly clothShine?: number;
+  readonly clothShine?: ClothShine;
   /** Her guns' colours (and every clip's: in her pouches and on the table). Left out: dark metal and magenta. */
   readonly gun?: GunColours;
   /** The fitted pieces, if any. */
@@ -39,7 +41,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     // (a leather brown light enough to read on the near-black suit, as look 1's belt does)
     belt: { belt: 0x6e5443, edge: 0x947866, buckle: 0xb4b8c0, accent: 0xff0000, strap: 0x5a4436, holster: 0x121214, plate: 0x1c1c20 },
     beltLine: [-0.06, 0.035, 0.1],
-    clothShine: 0.42,
+    // (the knit: half the gloss it had, 0.42 -> about 0.57, half way back to the knit's own 0.72; the smooth trim: glossy)
+    clothShine: { cloth: 0.57, trim: 0.22 },
     // (blackened metal and the suit's red, as the guns in Look 1's picture)
     gun: { metal: 0x141518, glow: 0xff0000 },
     pieces: {

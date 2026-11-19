@@ -41,8 +41,20 @@ export const FINE_FROM_DETAIL = 25;
  */
 /** Roughness at and above this in her surface picture is cloth (the builder's knits are 0.72 to 0.97; her skin is under 0.6). */
 const CLOTH_FROM = 0.62;
+/**
+ * ...and at and above this, the SMOOTH cloth: the builder's Flat family (0.92), which a look uses for glossy trim. (The
+ * athletic knit is 0.72, well under it. Jersey, rib and sweater knits are up here too: a look that wants its trim to
+ * shine does not use them.)
+ */
+const TRIM_FROM = 0.85;
 
-export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, clothShine?: number): SkinMaterials {
+/**
+ * How shiny a look's cloth is: `cloth` the roughness its knits take, `trim` the roughness its smooth (Flat) cloth takes.
+ * Either left out: that cloth keeps its own.
+ */
+export interface ClothShine { readonly cloth?: number; readonly trim?: number }
+
+export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine): SkinMaterials {
   const from = fileMaterial as THREE.MeshStandardMaterial;
   // A sharper picture at a slant (the side of her leg seen along its length), at little cost.
   const sharpness = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -61,17 +73,20 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // (the bake divided her lit direction by the builder's own setting, so reading it back with that setting gives the
     // direction the builder lit her with)
     if (withDetail) material.normalScale.set(look.manifest.normalScale[0], look.manifest.normalScale[1]);
-    // A GLOSSY SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
-    // takes the look's roughness instead, blended in over a short range so the suit's edge on her skin stays soft.
-    // One line in the shader; her skin, face and hair keep their own.
-    if (clothShine !== undefined) {
+    // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
+    // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
+    // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
+    if (shine && (shine.cloth !== undefined || shine.trim !== undefined)) {
+      const lines: string[] = ['float ownRoughness = roughnessFactor;'];
+      const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
+      if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
+      if (shine.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
       material.onBeforeCompile = (shader) => {
         shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>',
-          '#include <roughnessmap_fragment>\n' +
-          `roughnessFactor = mix(roughnessFactor, ${clothShine.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, roughnessFactor));`);
+          '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${clothShine}`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}`;
     }
     return material;
   };

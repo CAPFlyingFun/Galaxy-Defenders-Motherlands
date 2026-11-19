@@ -9,17 +9,16 @@
 // need to do is do the collar and paint stripes on it"): copied here exactly as
 // saved -- her braid, eye and lip colours and face, and her body.
 //
-//   Paint layer 1, THE CATSUIT: his layer exactly: the builder's "Full bodysuit"
-//     in the builder's ATHLETIC knit, its Black, its neckline a little under the
-//     base of her neck.
+//   Paint layer 1, THE CATSUIT: his fabric exactly (the builder's ATHLETIC knit,
+//     its Black, his detail settings), its shape painted by code from her ankles
+//     to her wrists and neck, so it covers her cleavage too (`paintSuit`).
 //
-//   Paint layer 2, THE FINGERLESS GLOVES AND THE COLLAR (painted by code:
-//     paintMask.ts), in the suit's own black: her hands from her wrist to the
-//     roots of her fingers; a mock collar up her neck, reaching down over the
-//     suit's neckline so no seam shows;
-//     the same layer covers her cleavage, where the builder takes the suit's own
-//     paint off for a strip of fabric we leave out (it showed as a line). (In a
-//     near-black, the cleavage showed as a darker patch: so the suit's colour.)
+//   Paint layer 2, THE GLOSSY BLACK TRIM (painted by code: paintMask.ts), in
+//     the builder's smooth FLAT black, which the game makes shine (looks/gear.ts
+//     `clothShine`; the knit suit gets half the shine): a border each side of
+//     every red stripe (Joshua: "plain black, sheen black, and red in the
+//     middle"), fingerless gloves from her wrist to the roots of her fingers,
+//     and a mock collar up her neck. (The builder has three paint layers.)
 //
 //   Paint layer 3, THE RED STRIPES (painted by code): look 1's lines. On her
 //     front, from the top of her shoulder down past the outside of her breast
@@ -32,7 +31,7 @@
 // work for the belly later"), thigh holsters, tall flat combat boots, cuffs.
 // ============================================================================
 import type { HeroineLook } from '../heroineLook';
-import { plate, stripe, type LegPlace, type MaskPainter, type PaintSurface } from '../paintMask';
+import { stripe, type LegPlace, type MaskPainter, type PaintSurface } from '../paintMask';
 import { BLAZE_LOOK } from './blaze';
 
 /** Joshua's export of Blaze in her black catsuit (2026-11-19), exactly as saved. */
@@ -188,67 +187,95 @@ const ARM_STRIPE = through([[0, 75], [0.5, 85], [1, 80]]);
  */
 const STRIPE_TOP = Object.freeze({ front: 0.92, back: 0.88 });
 
+/**
+ * How far inside the red stripes a point is, with each stripe made `wider` (leg lengths) on each side: 0 the stripes
+ * themselves (paint layer 3), more for the glossy black borders round them (paint layer 2).
+ */
+function stripes(surface: PaintSurface, v: number, place: LegPlace, wider: number): number {
+  let best = -1;
+  if (surface.trunkPlace(v, place)) {
+    best = Math.max(best,
+      stripe(place, { from: -0.2, to: STRIPE_TOP.front, half: 0.018 + wider, path: FRONT_STRIPE }),
+      stripe(place, { from: -0.2, to: STRIPE_TOP.back, half: 0.016 + wider, path: BACK_STRIPE }));
+  }
+  if (surface.legPlace(v, place)) best = Math.max(best, stripe(place, { from: -0.2, to: 0.95, half: 0.016 + wider, path: LEG_STRIPE }));
+  if (surface.armPlace(v, place) && place.along <= 0.95) best = Math.max(best, stripe(place, { from: 0.02, to: 0.92, half: 0.013 + wider, path: ARM_STRIPE }));
+  return best;
+}
+
 const paintStripes: MaskPainter = (surface: PaintSurface): Float32Array => {
   const inside = new Float32Array(surface.count).fill(-1);
   const place: LegPlace = { along: 0, turn: 0, radius: 0 };
+  for (let v = 0; v < surface.count; v++) inside[v] = stripes(surface, v, place, 0);
+  return inside;
+};
+
+// ------------------------------------------------------------------ the catsuit itself (paint layer 1)
+
+/**
+ * PAINT LAYER 1 BY CODE: all of her from her ankles to her wrists and up to the base of her neck, in Joshua's own
+ * catsuit fabric. (His template, the builder's "Full bodysuit", leaves her cleavage bare for a cleavage piece that in
+ * the game is smaller than the gap, and the builder has only three paint layers, the trim and the red using the other
+ * two. Painted here it covers her cleavage too. Where it ends is under her boots, her gloves and her collar.)
+ */
+const SUIT_ENDS = Object.freeze({ ankle: 0.97, wrist: 1.02 });
+
+const paintSuit: MaskPainter = (surface: PaintSurface): Float32Array => {
+  const inside = new Float32Array(surface.count).fill(-1);
+  const place: LegPlace = { along: 0, turn: 0, radius: 0 };
   for (let v = 0; v < surface.count; v++) {
+    // (each how far inside the suit the point is, leg lengths: well inside except near where it ends)
     let best = -1;
-    if (surface.trunkPlace(v, place)) {
-      best = Math.max(best,
-        stripe(place, { from: -0.2, to: STRIPE_TOP.front, half: 0.018, path: FRONT_STRIPE }),
-        stripe(place, { from: -0.2, to: STRIPE_TOP.back, half: 0.016, path: BACK_STRIPE }));
-    }
-    if (surface.legPlace(v, place)) best = Math.max(best, stripe(place, { from: -0.2, to: 0.95, half: 0.016, path: LEG_STRIPE }));
-    if (surface.armPlace(v, place) && place.along <= 0.95) best = Math.max(best, stripe(place, { from: 0.02, to: 0.92, half: 0.013, path: ARM_STRIPE }));
+    if (surface.armPlace(v, place)) best = (SUIT_ENDS.wrist - place.along) * 0.6;
+    else if (surface.legPlace(v, place)) best = (SUIT_ENDS.ankle - place.along) * 0.78;
+    else if (surface.trunkPlace(v, place)) best = 1;
+    else if (surface.neckPlace(v, place)) best = (0.02 - place.along) * 0.35;   // (up to just over the base of her neck)
     inside[v] = best;
   }
   return inside;
 };
 
-// ------------------------------------------------------------------ the fingerless gloves (paint layer 2)
+// ------------------------------------------------------------------ the glossy black trim (paint layer 2)
 
-/** Her hand from her wrist (1 along her arm) to the roots of her fingers. */
+/**
+ * THE BORDERS (Joshua, 2026-11-19: "add a shiny black border on each side of the red strips so is more plain black,
+ * sheen black, and red in the middle"): each stripe in glossy black this much wider on each side (leg lengths; 0.01 is
+ * about 8 mm). The red is painted over the middle of it.
+ */
+const BORDER = 0.015;
+
+/** Her hand from her wrist (1 along her arm) to the roots of her fingers: the fingerless gloves. */
 const GLOVE = Object.freeze({ from: 0.97, to: 1.2 });
 
 /**
  * THE COLLAR (Joshua, 2026-11-19, with a close-up of Look 1: "make sure you have the collar going up to her neck"): a
- * mock neck in the suit's own colour (reaching down over the suit's neckline, a few cm under the base of her neck, so
- * no seam shows), standing up her neck to about a quarter of the way from its base to the top of
- * her head behind, dipping a little lower in front under her chin. Heights in her neck's own measure (`neckPlace`).
+ * mock neck in the glossy black, from a few cm under the base of her neck (over the suit's neckline, so no skin shows
+ * between) up her neck to about a quarter of the way to the top of her head behind, dipping a little lower in front
+ * under her chin. Heights in her neck's own measure (`neckPlace`).
  */
-const COLLAR = Object.freeze({ bottom: -0.3, bottomBack: -0.42, back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14, sharpBottom: 3 });
+const COLLAR = Object.freeze({ bottom: -0.25, back: 0.27, front: 0.21, chin: 0.11, chinFrom: 0.14 });
 
-const paintGloves: MaskPainter = (surface: PaintSurface): Float32Array => {
+/**
+ * PAINT LAYER 2, ALL IN THE GLOSSY BLACK: the stripes' borders, the fingerless gloves and the collar. (The builder has
+ * three paint layers: the suit, this, the red.)
+ */
+const paintTrim: MaskPainter = (surface: PaintSurface): Float32Array => {
   const inside = new Float32Array(surface.count).fill(-1);
   const place: LegPlace = { along: 0, turn: 0, radius: 0 };
   for (let v = 0; v < surface.count; v++) {
-    if (surface.armPlace(v, place)) {
-      // all the way round her hand between those two places: how far inside that band she is (leg lengths)
-      inside[v] = Math.min(place.along - GLOVE.from, GLOVE.to - place.along) * 0.6;
-      continue;
-    }
-    if (surface.trunkPlace(v, place)) {
-      // ...and HER CLEAVAGE: the builder takes the suit's paint off there (for a strip of fabric across it, which we
-      // leave out: on the gray suit it showed as a line across her breasts), so this layer covers it in the suit's colour
-      inside[v] = plate(place, { from: 0.62, to: 0.98, centre: 0, widthTop: 34, widthBottom: 30, corner: 0.03 });
-    }
+    // the borders: the stripes made wider
+    let best = stripes(surface, v, place, BORDER);
+    // the gloves: all the way round her hand between those two places (how far inside that band, leg lengths)
+    if (surface.armPlace(v, place)) best = Math.max(best, Math.min(place.along - GLOVE.from, GLOVE.to - place.along) * 0.6);
     if (surface.neckPlace(v, place)) {
       // the collar's top: highest behind, lowest at the front, rising smoothly round her sides
       const top = COLLAR.front + (COLLAR.back - COLLAR.front) * (Math.abs(place.turn) / 180);
+      const inBand = Math.min(top - place.along, place.along - COLLAR.bottom) * 0.35;
       // (a point far out from her neck's line up at her jaw's height is her jaw or chin, not her neck: left bare. Lower
       //  down, far out is the top of her shoulders, which rise above the base of her neck: covered)
-      // (its BOTTOM edge at the base of her neck, a smooth line, so the suit's red neckline band below it shows whole
-      //  instead of being cut raggedly point by point: Joshua, 2026-11-19, "fix the jagged edges")
-      //  Behind, it reaches lower, to below her shoulders' tops, so the red band's top edge there is this smooth line too:
-      //  the builder's own edge there followed her skin's points and came out ragged)
-      const backward = smooth(90, 150, Math.abs(place.turn));
-      const bottom = COLLAR.bottom + (COLLAR.bottomBack - COLLAR.bottom) * backward;
-      // (its bottom edge blended over a third of the usual width: blended wide, the knit frayed it into teeth over the
-      //  red below)
-      const inBand = Math.min((top - place.along) * 0.35, (place.along - bottom) * 0.35 * COLLAR.sharpBottom);
-      const collar = place.radius > COLLAR.chin && place.along > COLLAR.chinFrom ? -1 : inBand;
-      inside[v] = Math.max(inside[v], collar);
+      best = Math.max(best, place.radius > COLLAR.chin && place.along > COLLAR.chinFrom ? -1 : inBand);
     }
+    inside[v] = best;
   }
   return inside;
 };
@@ -258,8 +285,8 @@ const paintGloves: MaskPainter = (surface: PaintSurface): Float32Array => {
 
 /** How the suit shows what is under it: Joshua's own setting from his export. */
 const DETAIL = EXPORT_SUIT_LAYER.detail;
-/** The suit's own fabric pick (his): the gloves and collar are painted in exactly it, so no edge shows. */
-const SUIT_PICK = EXPORT_SUIT_LAYER.choice;
+/** THE GLOSSY BLACK of the trim: the builder's FLAT family (no knit), its Black. The game makes it shine (looks/gear.ts). */
+const GLOSS_PICK = { fabric: { family: 'flat', colour: 4 }, match: true, trim: null, stitch: 0.5, opacity: 1 } as const;
 const C = SHADOW_SUIT_COLOURS;
 
 export const SHADOW_SUIT_LOOK: HeroineLook = {
@@ -271,17 +298,14 @@ export const SHADOW_SUIT_LOOK: HeroineLook = {
     shoes: 'none',
     detail: { nipple: null, navel: null },
     layers: [
-      // PAINT LAYER 1: Joshua's black catsuit, exactly as he saved it
+      // PAINT LAYER 1: Joshua's black catsuit: his fabric, colour and detail exactly, its shape painted by `paintSuit`
       EXPORT_SUIT_LAYER,
-      // PAINT LAYER 2: the fingerless gloves and the collar, painted by `paintGloves` once she is loaded, in his suit's
-      // own fabric and colour
-      { choice: SUIT_PICK, detail: DETAIL, template: null, mask: '' },
+      // PAINT LAYER 2: the glossy black trim (the stripes' borders, the gloves, the collar), painted by `paintTrim`
+      { choice: GLOSS_PICK, detail: DETAIL, template: null, mask: '' },
       // PAINT LAYER 3: the red stripes, painted by `paintStripes`
       { choice: { fabric: dyed('athletic', C.red), match: true, trim: dyed('athletic', C.red), stitch: 0.5, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
     ],
   },
-  maskPainters: [null, paintGloves, paintStripes],
-  // (no strip across her cleavage: the suit's paint runs into it, as on the gray suit)
-  noCleavageBridge: true,
+  maskPainters: [paintSuit, paintTrim, paintStripes],
 };
 

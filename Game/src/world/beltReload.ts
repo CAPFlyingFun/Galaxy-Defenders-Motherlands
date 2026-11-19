@@ -9,7 +9,8 @@
 // (B takes clips from the pouches on ITS side of her: A's clips are on the
 // other hip, so a hand never reaches round behind her):
 //
-//   1. B's gun goes into its holster (her B hand is free);
+//   1. B's gun goes into its holster (her B hand is free), and only then is
+//      A's gun drawn, if it was holstered: she never holds both;
 //   2. A holds its gun up in front of her chest, tipped toward B (as at the
 //      table); B takes the fresh clip out of a pouch (front pouch first);
 //   3. B brings it under the gun's grip, takes the empty clip out of the gun
@@ -138,14 +139,16 @@ export class BeltReload {
   private plan(h: HeroineHands, a: Hand): void {
     const b = other(a);
     const gunAt = (out: THREE.Matrix4) => this.table.chestGun(a, out);
-    // 0. her gun A in her hand (drawn, if it was holstered); her gun B into its holster
+    // 0. her gun B into its holster FIRST, then her gun A in her hand (drawn, if it was holstered): she never holds
+    //    both while reloading (Joshua, 2026-11-19: "she shouldn't have both guns drawn if she's reloading one... she
+    //    needs a free hand". Drawn first, the second gun came out while the first was still in her other hand.)
     this.steps.push(() => {
       this.gunHand = a;
-      if (!h.hasGun(a) && this.holsters.holstered[a]) this.holsters.start(a, 0);
+      if (h.hasGun(b)) this.holsters.start(b, 0);
       return { jobs: {}, waitWhile: () => this.holsters.busy };
     });
     this.steps.push(() => {
-      if (h.hasGun(b)) this.holsters.start(b, 0);
+      if (!h.hasGun(a) && this.holsters.holstered[a]) this.holsters.start(a, 0);
       return { jobs: {}, waitWhile: () => this.holsters.busy };
     });
     // 1. gun A up in front of her chest; hand B to the front-most full pouch on its side, by the clip's top

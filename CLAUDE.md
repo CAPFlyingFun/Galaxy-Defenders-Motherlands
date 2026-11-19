@@ -130,10 +130,12 @@ use the game's single copy of three.js.
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.
-- NEVER SHIP `models/sarah-skeleton.glb` (`Game/charb-files.json`; 2026-11-19): given it, the builder's room fits a
-  whole skeleton into her body as the live body opens, and the load froze on Joshua's iPhone at "live body: body and
-  outfit" (first blamed on v0.9.45, wrongly: v0.9.40 froze the same). Without the file the room skips that step. The
-  dev server reads Char_B directly, so a preview does NOT show what the phone gets: check the BUILT game.
+- HER LIVE BODY IS COMPLETE (Joshua, 2026-11-19): `models/sarah-skeleton.glb` is shipped (`Game/charb-files.json`) so the
+  builder's room lays her skeleton inside her and places her organs by it. It was left out once while an iPhone freeze
+  was tracked down ("A problem repeatedly occurred": too much held at once). What fixed that: every reload lets go of
+  the graphics first (`core/restart.ts`) and the hidden live body opens BARE, no clothes, fabrics or hair
+  (`liveBody.ts` `bareLook`). The dev server reads Char_B directly, so a preview does NOT show what the phone gets:
+  check the BUILT game.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

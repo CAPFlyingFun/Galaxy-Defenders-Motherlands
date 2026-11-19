@@ -14,11 +14,12 @@
 //     grows (an edge baked for one belly stays where it was baked: bakedLook.ts).
 //     Its edging (the bands at her neck, wrists and ankles) is the suit's red.
 //
-//   Paint layer 2, THE SUIT BEHIND HER CLEAVAGE STRIP (painted by code:
-//     paintMask.ts): the builder takes the suit's own paint off from behind the
-//     strip of fabric across her cleavage, which left skin showing round the
-//     strip; this layer, in the suit's gray, fills it. (His picture's darker
-//     gray panels would have used this layer: they can come later as 3D trim.)
+//   Paint layer 2, THE DARKER GRAY PANELS (painted by code: paintMask.ts): the
+//     mid-gray of his picture, on the inside of her thighs, the outside of her
+//     calves and her sides under her arms.
+//
+//   No strip of fabric across her cleavage (Joshua's pick of the two tried):
+//     the suit is open there, a small window between her breasts.
 //
 //   Paint layer 3, THE RED BANDS (painted by code): his picture's sweeping red.
 //     On her front, from the base of her neck down past the outside of each
@@ -49,7 +50,7 @@ import { BLAZE_SUIT_LOOK } from './blazeSuit';
 export const GRAY_SUIT_COLOURS = Object.freeze({
   /** the suit itself: a light, cool gray */
   suit: '#d3d5da',
-  /** the darker gray of his picture's side panels (for the 3D trim) */
+  /** the darker gray panels */
   panel: '#8d9098',
   /** the red: a deep wine red, as in his picture */
   red: '#8e1f36',
@@ -102,21 +103,25 @@ const paintRed: MaskPainter = (surface: PaintSurface): Float32Array => {
   return inside;
 };
 
-// ------------------------------------------------------------------ the suit behind her cleavage strip (paint layer 2)
+// ------------------------------------------------------------------ the darker gray panels (paint layer 2)
 
-/**
- * The builder takes a top's paint off the skin behind the strip of fabric it stretches across her cleavage, so only
- * the strip shows there; round the strip's edges that left her bare skin showing. Paint on ANOTHER layer stays, so
- * this layer, in the suit's own gray, covers her cleavage under the strip. (It was to be the darker gray panels:
- * the builder has three paint layers and this needs one. The panels can come back as 3D trim later.)
- */
-const paintUnderStrip: MaskPainter = (surface: PaintSurface): Float32Array => {
+const paintPanels: MaskPainter = (surface: PaintSurface): Float32Array => {
   const inside = new Float32Array(surface.count).fill(-1);
   const place: LegPlace = { along: 0, turn: 0, radius: 0 };
   for (let v = 0; v < surface.count; v++) {
-    if (!surface.trunkPlace(v, place)) continue;
-    // her chest's front between her breasts, from under them to her collarbones
-    inside[v] = plate(place, { from: 0.62, to: 0.98, centre: 0, widthTop: 34, widthBottom: 30, corner: 0.03 });
+    let best = -1;
+    if (surface.legPlace(v, place)) {
+      best = Math.max(best,
+        // the inside of her thigh, from her crotch toward her knee
+        plate(place, { from: 0.08, to: 0.4, centre: -105, widthTop: 55, widthBottom: 40, corner: 0.05 }),
+        // the outside of her calf, behind the red band
+        plate(place, { from: 0.56, to: 0.88, centre: 125, widthTop: 45, widthBottom: 35, corner: 0.04 }));
+    }
+    if (surface.trunkPlace(v, place)) {
+      // her side under her arm, between the front and back red bands
+      best = Math.max(best, plate(place, { from: 0.3, to: 0.82, centre: 96, widthTop: 18, widthBottom: 22, corner: 0.04 }));
+    }
+    inside[v] = best;
   }
   return inside;
 };
@@ -126,8 +131,13 @@ const paintUnderStrip: MaskPainter = (surface: PaintSurface): Float32Array => {
 const bodysuit = COVERAGE_TEMPLATES.find((t) => t.id === 'bodysuitFull');
 if (!bodysuit) throw new Error("[graySuit] the builder has no 'bodysuitFull' template any more: graySuit.ts must be looked at again");
 
-/** How the suit shows what is under it: her navel a little (the suit is thin), her nipples hardly at all. */
-const DETAIL = { mode: 'auto', material: null, override: { nipple: 0.15, navel: 0.35 } } as const;
+/**
+ * How the suit shows what is under it: her nipples hardly at all, her NAVEL WHOLLY (1). Joshua, 2026-11-19: under the
+ * suit her navel "sinks so far in" and the outie did not show. Flattening it under the cloth is a push baked at the
+ * belly she is baked at (100 %, where her pregnancy makes it an outie) and then kept at every other size, so it
+ * squashed her outie and drove her small-belly innie deeper. Shown wholly, her navel is what her pregnancy makes it.
+ */
+const DETAIL = { mode: 'auto', material: null, override: { nipple: 0.15, navel: 1 } } as const;
 
 const C = GRAY_SUIT_COLOURS;
 
@@ -140,7 +150,7 @@ export const GRAY_SUIT_LOOK: HeroineLook = {
     // (the outfit's NAME stays Blaze's own: the builder knows it, and a name it does not know makes it fall back to
     //  its default outfit, which put its cloth tee over the suit in blotches)
     shoes: 'none',
-    detail: { nipple: 0.15, navel: 0.35 },
+    detail: { nipple: 0.15, navel: 1 },
     layers: [
       // PAINT LAYER 1: the suit, from her ankles to her neck and wrists, red at its edges (a high neck: 1 is the
       // base of her neck, where his picture's collar starts)
@@ -150,11 +160,14 @@ export const GRAY_SUIT_LOOK: HeroineLook = {
         template: { id: bodysuit.id, params: { ...bodysuit.params, neckFront: 1.0, neckBack: 1.0 } },
         mask: '',
       },
-      // PAINT LAYER 2: the suit's gray behind her cleavage strip, painted by `paintUnderStrip` once she is loaded
-      { choice: { fabric: flatTint(C.suit), match: true, trim: flatTint(C.suit), stitch: 1, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
+      // PAINT LAYER 2: the darker gray panels, painted by `paintPanels` once she is loaded
+      { choice: { fabric: flatTint(C.panel), match: true, trim: flatTint(C.panel), stitch: 1, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
       // PAINT LAYER 3: the red bands, painted by `paintRed`
       { choice: { fabric: flatTint(C.red), match: true, trim: flatTint(C.red), stitch: 1, opacity: 1 }, detail: DETAIL, template: null, mask: '' },
     ],
   },
-  maskPainters: [null, paintUnderStrip, paintRed],
+  maskPainters: [null, paintPanels, paintRed],
+  // (Joshua, 2026-11-18, of the two pictures: "Gray4 looked better, Gray5 has this weird strip at the breasts": no strip
+  //  across her cleavage, so the suit is open there, a small window between her breasts)
+  noCleavageBridge: true,
 };

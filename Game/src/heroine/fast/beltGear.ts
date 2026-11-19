@@ -92,8 +92,8 @@ export const BELT = Object.freeze({
   clipShows: 0.016,
 });
 
-/** The colours (one material with each point's own colour: one draw). */
-const COLOUR = Object.freeze({
+/** The colours (one material with each point's own colour: one draw). An outfit can change any of them (`colours`). */
+export const BELT_COLOURS = Object.freeze({
   // (gunmetal grey with lighter edges: her leggings are black, and a black belt on them could not be seen)
   belt: 0x3a3d45,
   edge: 0x8c9099,
@@ -133,6 +133,8 @@ export interface BeltGearSource {
   readonly leftSign: number;
   /** Each gun's place in the world as it hangs in her relaxed hand now (where the holster's height comes from). */
   readonly gunHanging: Record<Hand, THREE.Matrix4>;
+  /** The outfit's own colours for the belt, straps, holsters and pouches (looks/gear.ts); left out: BELT_COLOURS. */
+  readonly colours?: Partial<Record<keyof typeof BELT_COLOURS, number>>;
 }
 
 export interface BeltGear {
@@ -281,6 +283,7 @@ class SolidPiece {
 
 export function buildBeltGear(src: BeltGearSource): BeltGear {
   const { root, skin, meshToRest, skinIndex, skinWeight } = src;
+  const COLOUR = { ...BELT_COLOURS, ...src.colours };
   const bones = skin.skeleton.bones;
   const count = src.points.length / 3;
   root.updateMatrixWorld(true);

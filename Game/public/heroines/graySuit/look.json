@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "graySuit",
-  "bakedAt": "2026-11-19T05:50:58.793Z",
+  "bakedAt": "2026-11-19T06:14:41.023Z",
   "builderVersion": "0.9.40",
   "belly": 100,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7118629418120586,
+  "barefootHeightMetres": 1.7116937580253977,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -27,7 +27,7 @@
     "normal": "normal.webp",
     "surface": "surface.webp",
     "shape": "shape.bin",
-    "pieces": "pieces.bin"
+    "pieces": null
   },
   "facts": {
     "drawnInTheRoom": [
@@ -38,16 +38,14 @@
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
       "sarahHair | sarahHair | 28020 triangles | skinned, 17012 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
-    "extraPieces": [
-      "cleavageBridge: 754 points, 1368 triangles, picture cleavageBridge.webp"
-    ],
+    "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.011563260759742462,
     "solesOverTheFloorMetres": -0.011563260759742462,
-    "crownOverTheFloorMetres": 1.700299681052316,
-    "pointsTheBuilderMoved": 71227,
-    "movedMostGeometryUnits": 0.039128637990509585,
+    "crownOverTheFloorMetres": 1.7001304972656552,
+    "pointsTheBuilderMoved": 71251,
+    "movedMostGeometryUnits": 0.03923455916604795,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16351130655826226,
+    "restSkinSpread": 0.16339184491224937,
     "captureMissing": {
       "position": 0,
       "normal": 0

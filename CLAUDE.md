@@ -67,6 +67,14 @@ use the game's single copy of three.js.
   turns her wrist least (her joint limits had left her hand twisted), never palm up. Then walking back pulls it, forward pushes it (her
   elbow's spring: a few cm of play round where her hand closed on it), and LET GO is manual. Opened from the push side
   and let go it swings shut (waiting while she is in the doorway); from the pull side it stays. The door is solid.
+- THE GRAY AND RED SUIT (Joshua's outfit design 2, 2026-11-18; `docs/reference/outfits/`; look `graySuit`, open with
+  `?look=graySuit`, NOT the default until he approves): `Game/src/heroine/looks/graySuit.ts` paints the builder's full
+  bodysuit in light gray with red edging, red bands painted by code (`paintMask.ts` now measures her trunk and arms as
+  well as her legs) and darker gray panels; no strip across her cleavage (his pick); her navel shown wholly through the
+  suit (flattening it was baked at 100% and drove it in at other sizes). Baked with `scripts/bake_heroine.py graySuit`.
+  Its 3D pieces (`Game/src/heroine/fast/suitGear.ts`, chosen per look in `looks/gear.ts`): tall FLAT combat boots
+  (Joshua: no heels), wrist cuffs and shoulder plates, each a shell measured round her own skin on one bone; the belt
+  gear takes the look's colours. Still to come: glowing lines along the red bands, a smoother boot.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

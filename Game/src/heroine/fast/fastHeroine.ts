@@ -55,6 +55,8 @@ import { LowerBody } from './lowerBody';
 import { DetailLevels, DetailMaker, skinImportance, type Detail } from './detailLevels';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
+import { buildSuitGear, type SuitGear } from './suitGear';
+import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
@@ -617,7 +619,20 @@ if (uHideHead > 0.5) {
       left: new THREE.Matrix4().copy(arms.left.hand.matrixWorld).multiply(seat.left),
       right: new THREE.Matrix4().copy(arms.right.hand.matrixWorld).multiply(seat.right),
     },
+    // (the outfit's own colours for it: looks/gear.ts)
+    colours: LOOK_GEAR[look.manifest.look]?.belt,
   });
+  // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist
+  // cuffs and shoulder plates, each a shell shaped round her own skin on one bone. Made now, while she stands.
+  const piecesStyle = LOOK_GEAR[look.manifest.look]?.pieces;
+  const suit: SuitGear | null = piecesStyle ? buildSuitGear({
+    skin, points: body.points, skinIndex: holdIndex, skinWeight: holdWeight, root, leftSign,
+    arm: { left: { upper: arms.left.upper, fore: arms.left.fore, hand: arms.left.hand }, right: { upper: arms.right.upper, fore: arms.right.fore, hand: arms.right.hand } },
+    leg: {
+      left: { thigh: bones[joints.hipL], shin: bones[joints.kneeL], foot: bones[joints.ankleL] },
+      right: { thigh: bones[joints.hipR], shin: bones[joints.kneeR], foot: bones[joints.ankleR] },
+    },
+  }, piecesStyle) : null;
   const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
   /** Each hand's reach is to something within reach as she stands (her own holster): her body does not get down to it. */
   const stayUp: [boolean, boolean] = [false, false];
@@ -1051,6 +1066,7 @@ if (uHideHead > 0.5) {
       hair?.dispose();
       pieces.dispose();
       gear.dispose();
+      suit?.dispose();
       skin.onBeforeRender = () => {};
       body.dispose();
       materials.dispose();

@@ -46,7 +46,7 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     // (darken: the knit's Dark gray about half way to its Black -- Joshua: "darkening the image about 50%")
     // (knit: the game's knit over the suit -- the PERFORATED MESH of his picture; the athletic knit was at the stitch
     //  Joshua picked from the 1x-4x pictures, 2.2x)
-    clothShine: { cloth: 0.49, trim: 0.22, darken: 0.48, knit: { ...PERFORATED_MESH, stitch: 1.2, strength: 1 } },
+    clothShine: { cloth: 0.49, trim: 0.22, darken: 0.48, knit: { ...PERFORATED_MESH, stitch: 1.5, strength: 1 } },
     // (blackened metal and the suit's red, as the guns in Look 1's picture)
     gun: { metal: 0x141518, glow: 0xff0000 },
     pieces: {

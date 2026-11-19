@@ -724,7 +724,11 @@ async function start(): Promise<void> {
       pace.step(dt, push, limits);
       // The stick moves her relative to the way the camera looks: up is away from the camera, right is to its right
       // (in third person the camera keeps the side of her it was dragged to). The walls stop her there too.
-      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' ? rig.yaw : rig.viewYaw, pace.speed);
+      // AIMED BY HAND (first person, or MANUAL in third person), "up" is the way the player aims (rig.yaw). Over the
+      // shoulder the camera is locked to her head, so taking "up" from the camera made a loop: walking back or
+      // sideways her body turned to the way she went, her head was pulled round, the camera with it, "back" changed
+      // and her body turned again: the camera spun (Joshua, 2026-11-18: 670 degrees in 9 s backwards, 2454 sideways).
+      motion.update(dt, controls.moveX, controls.moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, pace.speed);
     }
     // THE BUTTONS THAT SHOW ONLY WHEN NEEDED (Joshua, 2026-11-18): the prompt near the table or a bar (holding a bar,
     // LET GO; else the table if she is near it; else the bar), HOLSTER / DRAW with a gun in a hand or a holster,
@@ -879,7 +883,10 @@ async function start(): Promise<void> {
     // looks where her head looks, turning and tipping with it. Up and down: where the player aims (aimed by hand),
     // where she is looking while she does something, or at the target she is aimed at.
     heroine.eye(rig.head.at);
-    rig.head.yaw = turn.head;
+    // (aimed by hand, the shoulder camera looks where the player aims, from her head: the middle of the screen is the
+    //  aim, and it turns only when the player turns it. Walking backwards her body turns to the way she goes and her
+    //  head with it; a camera that followed her head swung round with it. On her own, it follows her head.)
+    rig.head.yaw = aimedByHand() && !busyNow() ? rig.yaw : turn.head;
     if (aimedByHand() && !busyNow()) rig.head.pitch = rig.pitch;
     else if (busyNow()) rig.head.pitch = actionPitch;
     else if (rig.mode === 'third' && turn.aimed) {

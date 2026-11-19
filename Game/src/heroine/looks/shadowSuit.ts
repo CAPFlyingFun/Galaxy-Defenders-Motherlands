@@ -287,7 +287,9 @@ const paintTrim: MaskPainter = (surface: PaintSurface): Float32Array => {
 
 
 /** How the suit shows what is under it: Joshua's own setting from his export. */
-const DETAIL = EXPORT_SUIT_LAYER.detail;
+// (HALF his see-through, Joshua 2026-11-19: "for all the visibility through clothing, can you try halfway for all":
+//  his nipple 0.45 -> 0.225, navel 0.8 -> 0.4)
+const DETAIL = { ...EXPORT_SUIT_LAYER.detail, override: { nipple: EXPORT_SUIT_LAYER.detail.override.nipple / 2, navel: EXPORT_SUIT_LAYER.detail.override.navel / 2 } };
 /**
  * THE CATSUIT'S FABRIC: Joshua's athletic knit, but its Dark gray, darkened, and at a bigger stitch (Joshua, 2026-11-19, of
  * Look 1's picture: "almost looks like it has little holes for the type of fabric and ours is more plain... scale it
@@ -296,9 +298,12 @@ const DETAIL = EXPORT_SUIT_LAYER.detail;
 // (Then, 2026-11-19: "that gray is slightly too light, and the black is too dark... match between the two". The knit
 //  stays its Dark gray, whose stitches show; the GAME darkens it about half way to its Black: looks/gear.ts
 //  `clothShine.darken`. Dyed that dark instead, by the builder's colour picker, the stitches were lost.)
-const SUIT_FABRIC = Object.freeze({ colour: 3, stitch: 2 });
+// (Its BAKED stitch is back to Joshua's fine 0.5, which hardly shows: the knit you see is the game's LIVE knit, drawn
+//  over it at a size set in Settings while she plays -- looks/gear.ts `clothShine.knit`, outfitMaterial.ts)
+const SUIT_FABRIC = Object.freeze({ colour: 3, stitch: 0.5 });
 const SUIT_LAYER = {
   ...EXPORT_SUIT_LAYER,
+  detail: DETAIL,
   choice: { ...EXPORT_SUIT_LAYER.choice, fabric: { ...EXPORT_SUIT_LAYER.choice.fabric, colour: SUIT_FABRIC.colour }, stitch: SUIT_FABRIC.stitch },
 };
 /** THE GLOSSY BLACK of the trim: the builder's FLAT family (no knit), its Black. The game makes it shine (looks/gear.ts). */

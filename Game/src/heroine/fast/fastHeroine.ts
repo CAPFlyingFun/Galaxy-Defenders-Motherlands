@@ -326,7 +326,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // ---- 4. her outfit: the baked pictures on one plain material -----------------------------------------------------
   // (or, the DEV Room's way, the file's own skin material with a tee and leggings coloured over it in the shader)
   const fileMaterial = Array.isArray(skin.material) ? skin.material[0] : skin.material;
-  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, LOOK_GEAR[look.manifest.look]?.clothShine);
+  // (her skin model's own units to a metre, for the live knit's size: her height in the model is about 1.68 m)
+  skin.geometry.computeBoundingBox();
+  const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
+  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, LOOK_GEAR[look.manifest.look]?.clothShine, unitsPerMetre);
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;
@@ -845,6 +848,11 @@ if (uHideHead > 0.5) {
       out.x += Math.sin(yaw) * EYE_FORWARD;
       out.z += Math.cos(yaw) * EYE_FORWARD;
       return out;
+    },
+
+    setKnitStitch(stitch: number): void {
+      // (only the baked-look materials have a live knit; the DEV Room's way has none)
+      if ('setKnitStitch' in materials) (materials as { setKnitStitch(stitch: number): void }).setKnitStitch(stitch);
     },
 
     setFirstPerson(on: boolean): void {

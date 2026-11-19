@@ -394,6 +394,8 @@ async function start(): Promise<void> {
   const rig = new CameraRig();
   // (the camera as the player set it up in Settings: each view's field of view, and where the zoom starts)
   rig.setFov(graphics.fovThird, graphics.fovFirst);
+  // (the live knit at the stitch last chosen in Settings: TEMPORARY, Joshua 2026-11-19)
+  heroine.setKnitStitch?.(graphics.knitStitch);
   rig.setZoom(graphics.zoomThird);
   const controls = new Controls(renderer.domElement);
 
@@ -531,6 +533,7 @@ async function start(): Promise<void> {
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
+      else if (key === 'knitStitch') heroine.setKnitStitch?.(graphics.knitStitch);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();

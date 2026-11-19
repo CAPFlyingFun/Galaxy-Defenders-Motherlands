@@ -176,6 +176,8 @@ export interface HeroineBody {
   eye(out: THREE.Vector3): THREE.Vector3;
   /** First person hides her head (and hair) so the camera is not inside it; her body stays drawn. */
   setFirstPerson(on: boolean): void;
+  /** TEMPORARY (Joshua, 2026-11-19): the live knit's stitch size, for an outfit that has one (looks/gear.ts `knit`). */
+  setKnitStitch?(stitch: number): void;
   /** Belly size, 0-200 (%), as in the Character Builder. */
   setBelly(percent: number): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

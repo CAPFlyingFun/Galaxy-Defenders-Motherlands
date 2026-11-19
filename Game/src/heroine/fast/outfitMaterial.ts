@@ -29,6 +29,8 @@ export interface SkinMaterials {
   readonly fine: THREE.MeshStandardMaterial;
   /** For lighter levels: the same without it. */
   readonly plain: THREE.MeshStandardMaterial;
+  /** The live knit's stitch size (see ClothShine `knit`); nothing when the look has no live knit. */
+  setKnitStitch(stitch: number): void;
   dispose(): void;
 }
 
@@ -61,9 +63,36 @@ export interface ClothShine {
    * left as they are. Left out: no darkening.
    */
   readonly darken?: number;
+  /**
+   * A LIVE KNIT drawn over the suit's grays by the game (Joshua, 2026-11-19: "a temporary texture stitch amount from
+   * 0.5-4x so I can adjust in the game in real time"): the athletic knit's Dark gray swatch from his fabric pack
+   * (public/fabrics/athletic-darkgray-tile.jpg), laid on her from three sides, so it needs no seams on her skin's
+   * picture and its size can change while she moves (`SkinMaterials.setKnitStitch`). Its stitch is the builder's:
+   * 1 is the knit at its own size, a 5 cm repeat. Left out: none (the knit is only what the bake painted).
+   */
+  readonly knit?: { readonly stitch: number; readonly strength: number };
 }
 
-export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine): SkinMaterials {
+/** The live knit's swatch, its middle brightness (0 to 1, measured from the file) and its repeat at stitch 1 (metres). */
+const KNIT = Object.freeze({ file: 'fabrics/athletic-darkgray-tile.jpg', middle: 46.2 / 255, tileMetres: 0.05 });
+
+/**
+ * @param unitsPerMetre  how many of her skin model's own units make a metre (the live knit's size is in metres)
+ */
+export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine, unitsPerMetre = 1): SkinMaterials {
+  // THE LIVE KNIT's swatch and its numbers, shared by both materials (so the slider moves them together)
+  const knitUniforms = shine?.knit ? {
+    knitMap: { value: new THREE.TextureLoader().load(import.meta.env.BASE_URL + KNIT.file, (t) => { t.needsUpdate = true; }) },
+    knitTile: { value: KNIT.tileMetres * shine.knit.stitch * unitsPerMetre },
+    knitStrength: { value: shine.knit.strength },
+    knitMiddle: { value: KNIT.middle },
+  } : null;
+  if (knitUniforms) {
+    const t = knitUniforms.knitMap.value;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.NoColorSpace;   // (read as plain numbers: how light each part of a stitch is)
+    t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  }
   const from = fileMaterial as THREE.MeshStandardMaterial;
   // A sharper picture at a slant (the side of her leg seen along its length), at little cost.
   const sharpness = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -85,31 +114,56 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined)) {
+    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.knit)) {
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
       const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
       if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
       if (shine.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
       // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
       // trim) and the colour is a gray (its channels nearly equal: a red stripe is not), the colour is darkened
-      const darken = shine.darken === undefined ? '' : [
+      const knitSuit = [
+        // where the roughness picture says knit (not skin, not the smooth trim), and the colour there is a gray
         'float knitRoughness = texture2D(roughnessMap, vRoughnessMapUv).g;',
         `float knitHere = smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, knitRoughness) * (1.0 - smoothstep(${(TRIM_FROM - 0.04).toFixed(3)}, ${TRIM_FROM.toFixed(3)}, knitRoughness));`,
         'float knitColourful = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)) - min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));',
-        'float knitGray = 1.0 - smoothstep(0.02, 0.06, knitColourful);',
-        `diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitHere * knitGray);`,
-      ].join('\n');
+        'float knitGray = (1.0 - smoothstep(0.02, 0.06, knitColourful)) * knitHere;',
+      ];
+      if (shine.darken !== undefined) knitSuit.push(`diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitGray);`);
+      if (knitUniforms) knitSuit.push(
+        // THE LIVE KNIT, from three sides (each side's picture weighted by how much her skin faces it), as lighter and
+        // darker than its middle: the suit's own colour goes lighter where a stitch stands and darker in its holes
+        'vec3 knitSide = abs(normalize(vKnitNormal)); knitSide /= (knitSide.x + knitSide.y + knitSide.z);',
+        'vec3 knitAt = vKnitPos / knitTile;',
+        'float knitLight = texture2D(knitMap, knitAt.zy).r * knitSide.x + texture2D(knitMap, knitAt.xz).r * knitSide.y + texture2D(knitMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z;',
+        'diffuseColor.rgb *= mix(1.0, knitLight / knitMiddle, knitGray * knitStrength);',
+      );
       material.onBeforeCompile = (shader) => {
+        if (knitUniforms) {
+          Object.assign(shader.uniforms, knitUniforms);
+          // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
+          //  shape's morphs, so it stretches round her belly as cloth would)
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;')
+            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitNormal = objectNormal;');
+          shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
+            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;');
+        }
         shader.fragmentShader = shader.fragmentShader
-          .replace('#include <map_fragment>', '#include <map_fragment>\n' + darken)
+          .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}`;
     }
     return material;
   };
   const fine = make(true), plain = make(false);
   freeMaterial(fileMaterial);
-  return { fine, plain, dispose(): void { fine.dispose(); plain.dispose(); } };
+  return {
+    fine, plain,
+    setKnitStitch(stitch: number): void {
+      if (knitUniforms) knitUniforms.knitTile.value = KNIT.tileMetres * stitch * unitsPerMetre;
+    },
+    dispose(): void { fine.dispose(); plain.dispose(); knitUniforms?.knitMap.value.dispose(); },
+  };
 }

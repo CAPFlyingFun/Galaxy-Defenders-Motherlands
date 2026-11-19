@@ -88,8 +88,11 @@ use the game's single copy of three.js.
   the Flat cloth's roughness, her skin keeps its own. Her suit layer is painted by code (`paintSuit`, his fabric) so
   it covers her cleavage (the builder's 3 paint layers are all used); a
   leather belt slung on her hips that sags in front (`beltLine`), and black guns with red (`gun`, per look; the clips
-  in her pouches and on the table match). The suit is his athletic knit in its Dark gray, darkened about half way to Black by the game (`clothShine.darken`), at stitch 2 (his picture's mesh look; at 0.5 the knit was
-  too fine to show). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
+  in her pouches and on the table match). The suit is his athletic knit in its Dark gray, darkened about half way to Black by the game (`clothShine.darken`).
+  Its knit is a LIVE KNIT drawn by the game over the bake (`clothShine.knit`, `outfitMaterial.ts`: his pack's Dark gray
+  swatch, `public/fabrics/athletic-darkgray-tile.jpg`, laid on from three sides), sized while she plays by the
+  TEMPORARY Settings -> CAMERA -> Knit stitch (test) slider (0.5x-4x, `gdm.knitStitch`) until Joshua picks a number.
+  See-through halved from his export (nipple 0.225, navel 0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version

@@ -56,7 +56,16 @@ export interface HeroineSettings {
    * The address's ?look= still wins. Changing it reloads the game.
    */
   outfit: string;
+  /**
+   * TEMPORARY (Joshua, 2026-11-19: "a temporary texture stitch amount from 0.5-4x so I can adjust in the game in real
+   * time to see, then I can share the number that looks the best"): the live knit's stitch size (KNIT_STITCH_RANGE).
+   * Only an outfit with a live knit (looks/gear.ts) shows it. Changes her at once.
+   */
+  knitStitch: number;
 }
+
+/** The live knit's stitch, least and most (the builder's own range for a fabric's stitch is 0.5x to 4x). */
+export const KNIT_STITCH_RANGE = Object.freeze({ least: 0.5, most: 4, start: 2 });
 
 /** The heights the weapon table may be set to, metres, and its own (src/world/weaponTable.ts TABLE.height). */
 export const TABLE_RANGE = Object.freeze({ least: 0.05, most: 1.1, start: 0.78 });
@@ -90,6 +99,7 @@ export const SETTING_KEYS = Object.freeze({
   liveBody: 'gdm.liveBody',
   fovThird: 'gdm.fovThird',
   fovFirst: 'gdm.fovFirst',
+  knitStitch: 'gdm.knitStitch',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
@@ -157,5 +167,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
+    knitStitch: asNumber(read(SETTING_KEYS.knitStitch), KNIT_STITCH_RANGE.least, KNIT_STITCH_RANGE.most) ?? KNIT_STITCH_RANGE.start,
   };
 }

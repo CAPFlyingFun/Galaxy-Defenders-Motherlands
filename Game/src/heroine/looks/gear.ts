@@ -44,7 +44,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     // (the knit: between the full gloss, 0.42, and half of it, 0.57 -- Joshua, 2026-11-19: "I prefer the more glossy
     //  look as it looks more like a sci-fi spacesuit... between the two... a good compromise"; the smooth trim: glossier)
     // (darken: the knit's Dark gray about half way to its Black -- Joshua: "darkening the image about 50%")
-    clothShine: { cloth: 0.49, trim: 0.22, darken: 0.48 },
+    // (knit: the live knit, Settings -> Knit stitch (test) sizes it while she plays; 2 is where it starts)
+    clothShine: { cloth: 0.49, trim: 0.22, darken: 0.48, knit: { stitch: 2, strength: 1 } },
     // (blackened metal and the suit's red, as the guns in Look 1's picture)
     gun: { metal: 0x141518, glow: 0xff0000 },
     pieces: {

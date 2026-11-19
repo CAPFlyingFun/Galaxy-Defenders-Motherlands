@@ -142,6 +142,16 @@ use the game's single copy of three.js.
   repeatedly occurred"), as the builder's own room did on 2026-11-11. Also: every reload lets go of the graphics first
   (`core/restart.ts`); the hidden live body opens without clothes, fabrics or hair. The dev server reads Char_B
   directly: check the BUILT game.
+- THE ISLAND IS THE MAIN MAP (Joshua, 2026-11-19; `Game/src/world/island/`): Beyond Extinction's real Kauai DEM at TRUE
+  SCALE (56 km, 8 x 8 tiles of 7 km, copied into `Game/public/island/`, see its `COPIED_FROM.md`; never edited by hand).
+  The 3 x 3 tiles round her are loaded (in a worker), the one(s) within 1.5 km of her at the fine grid (192 phone /
+  256 computer) and the rest at half; past them one coarse mesh of the whole island (`overview.png`, made by
+  `scripts/make_island_overview.py`). Sea, shore and day sky from Beyond Extinction. The game's (0, 0) is her arrival
+  point, BE's Wailua beach spawn (island metres 21290, 1288), facing inland; heights are metres above the sea and she
+  stands on the drawn ground (`setPosition(x, z, y)`; the camera keeps above the ground). She wades to 0.6 m deep and
+  cannot climb slopes over 1.2 m up per metre. The table, bars and door stand on the beach beside her. The domed town
+  is kept as a test map (Settings -> WORLD -> Map, `gdm.map`, `?map=town`) until Joshua picks its place on the island.
+  Not yet: rivers/lakes (`hydro.json`), trees and plants (`veg/`), feet fitted to slopes, swimming.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

@@ -131,6 +131,11 @@ export class CameraRig {
   /** DRONE: the stick this frame (right, forward: -1..1), and how far from the plaza centre it may go (the dome). */
   readonly droneStick = { x: 0, y: 0 };
   droneLimit = 70;
+  /**
+   * THE GROUND'S HEIGHT at a place, metres, on a map with hills (the island: src/world/island/islandWorld.ts); null on
+   * the flat town (ground 0 everywhere). The camera never goes under it; NaN (not loaded there) counts as her feet's.
+   */
+  groundAt: ((x: number, z: number) => number) | null = null;
   private readonly drone = new THREE.Vector3();
   private dronePlaced = false;
   /** CINEMATIC: which shot, and how long it has run. */
@@ -184,6 +189,11 @@ export class CameraRig {
   }
 
   /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */
+  /** Look this way at once (no easing round to it): where she arrives on a map. */
+  faceAtOnce(yaw: number): void {
+    this.yaw = this.easedYaw = yaw;
+  }
+
   setZoom(zoom: number): void {
     this.zoom = clamp(zoom, ZOOM_MIN, 1);
   }
@@ -269,7 +279,7 @@ export class CameraRig {
       this.pivot.z = feet.z;
       this.pivotPlaced = true;
     }
-    this.pivot.y = pivotHeight;
+    this.pivot.y = feet.y + pivotHeight; // (above her feet, wherever the ground is)
 
     this.setLook(this.easedYaw, this.easedPitch);
     let distance = DISTANCE_NEAR + (DISTANCE_FAR - DISTANCE_NEAR) * this.easedZoom;
@@ -285,6 +295,15 @@ export class CameraRig {
     // later job; `CityWalls` in src/world/collision.ts is where the walls are known.)
 
     this.camera.position.copy(this.pivot).addScaledVector(this.look, -distance);
+    // (on hills: never under the slope behind her)
+    this.keepAboveGround(feet.y);
+  }
+
+  /** The lowest the camera may be at its own place: just over the ground there (or over her feet's level). */
+  private keepAboveGround(feetY: number): void {
+    const c = this.camera.position;
+    const ground = this.groundAt ? this.groundAt(c.x, c.z) : 0;
+    c.y = Math.max((Number.isFinite(ground) ? ground : feetY) + MIN_CAMERA_HEIGHT, c.y);
   }
 
   /** The styles other than follow and orbit (shoulder, top, drone, cinematic). */
@@ -300,12 +319,12 @@ export class CameraRig {
       const down = Math.max(0, -pitch);
       const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom + down * STYLE.shoulderBackPerDown;
       const rightX = -Math.cos(yaw), rightZ = Math.sin(yaw);
-      if (this.head.valid) this.pivot.copy(this.head.at); else this.pivot.set(feet.x, STYLE.shoulderUp + 0.1, feet.z);
+      if (this.head.valid) this.pivot.copy(this.head.at); else this.pivot.set(feet.x, feet.y + STYLE.shoulderUp + 0.1, feet.z);
       this.pivot.x += rightX * STYLE.shoulderSide;
       this.pivot.z += rightZ * STYLE.shoulderSide;
       this.pivot.y += STYLE.shoulderDown + down * STYLE.shoulderLiftPerDown;
       this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
-      this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
+      this.keepAboveGround(feet.y);
       // (the player's own look starts from here when the view changes)
       this.easedYaw = yaw;
       return;
@@ -314,7 +333,7 @@ export class CameraRig {
       // high up, looking down at her at its own angle; the zoom takes it further up and back
       this.setLook(this.easedYaw, STYLE.topPitch);
       const back = STYLE.topNear + (STYLE.topFar - STYLE.topNear) * zoom;
-      this.pivot.set(feet.x, 0.8, feet.z);
+      this.pivot.set(feet.x, feet.y + 0.8, feet.z);
       this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
       return;
     }
@@ -326,7 +345,7 @@ export class CameraRig {
       this.drone.x += (fx * this.droneStick.y - fz * this.droneStick.x) * step;
       this.drone.z += (fz * this.droneStick.y + fx * this.droneStick.x) * step;
       const height = STYLE.droneLow + (STYLE.droneHigh - STYLE.droneLow) * zoom;
-      this.drone.y += (height - this.drone.y) * ease;
+      this.drone.y += (feet.y + height - this.drone.y) * ease; // (its height over her feet)
       // (near her: no further than its range)
       let dx = this.drone.x - feet.x, dz = this.drone.z - feet.z, d = Math.hypot(dx, dz);
       if (d > STYLE.droneRange) { this.drone.x = feet.x + dx / d * STYLE.droneRange; this.drone.z = feet.z + dz / d * STYLE.droneRange; }
@@ -347,10 +366,10 @@ export class CameraRig {
     const toWorld = (local: readonly number[], drift: number, out: THREE.Vector3): THREE.Vector3 => {
       const x = local[0] + shot.drift[0] * drift, y = local[1] + shot.drift[1] * drift, z = local[2] + shot.drift[2] * drift;
       // (her left is x, her front z: turned by her yaw)
-      return out.set(feet.x + x * Math.cos(yaw) + z * Math.sin(yaw), y, feet.z - x * Math.sin(yaw) + z * Math.cos(yaw));
+      return out.set(feet.x + x * Math.cos(yaw) + z * Math.sin(yaw), feet.y + y, feet.z - x * Math.sin(yaw) + z * Math.cos(yaw));
     };
     toWorld(shot.from, (along - 0.5) * STYLE.shotDrift, this.camera.position);
-    this.camera.position.y = Math.max(MIN_CAMERA_HEIGHT, this.camera.position.y);
+    this.keepAboveGround(feet.y);
     toWorld(shot.at, 0, this.shotAt);
     this.camera.lookAt(this.shotAt);
     this.look.copy(this.shotAt).sub(this.camera.position).normalize();

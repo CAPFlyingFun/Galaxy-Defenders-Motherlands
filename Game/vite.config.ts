@@ -176,11 +176,14 @@ function pwa(): Plugin {
         for (const f of [...list].sort()) hash.update(f).update(readFileSync(join(dist, f)));
         return hash.digest('hex').slice(0, 12);
       };
-      const app = files.filter((f) => !f.startsWith('charb/'));
+      // (the island's 30 MB of ground tiles are kept as they are first used, like her big files: its own store)
+      const app = files.filter((f) => !f.startsWith('charb/') && !f.startsWith('island/'));
       const charbFiles = files.filter((f) => f.startsWith('charb/'));
+      const islandFiles = files.filter((f) => f.startsWith('island/'));
       const sw = `// Written by the build (vite.config.ts, pwa()). Do not edit: it is replaced on every build.
 const APP = 'gdm-app-${fingerprint(app)}';
 const CHARB = 'gdm-charb-${fingerprint(charbFiles)}';
+const ISLAND = 'gdm-island-${fingerprint(islandFiles)}';
 const APP_FILES = ${JSON.stringify(['./', ...app.filter((f) => f !== 'index.html')])};
 
 // Installing: fetch the game's own files and keep them. (Her big files are kept later, as they are first used.)
@@ -191,7 +194,7 @@ self.addEventListener('install', (event) => {
 // Taking over: throw away the stores of older versions of THIS game (other sites' stores are left alone).
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((names) => Promise.all(
-    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB)).map((n) => caches.delete(n)),
+    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB) || (n.startsWith('gdm-island-') && n !== ISLAND)).map((n) => caches.delete(n)),
   )).then(() => self.clients.claim()));
 });
 
@@ -212,7 +215,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Everything else: the stored copy if there is one; otherwise the network, and keep what comes back.
-  const store = url.pathname.includes('/charb/') ? CHARB : APP;
+  const store = url.pathname.includes('/charb/') ? CHARB : url.pathname.includes('/island/') ? ISLAND : APP;
   event.respondWith(caches.open(store).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
     if (response.ok && response.status === 200) cache.put(request, response.clone());
     return response;
@@ -220,7 +223,7 @@ self.addEventListener('fetch', (event) => {
 });
 `;
       writeFileSync(join(dist, 'sw.js'), sw);
-      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install, ${charbFiles.length} builder files kept on first use`);
+      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install, ${charbFiles.length} builder files and ${islandFiles.length} island files kept on first use`);
     },
   };
 }

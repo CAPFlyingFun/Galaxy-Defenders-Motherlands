@@ -27,6 +27,8 @@ export type DetailChoice = 'autoLive' | 'auto' | Detail;
 export type Sharpness = 1 | 2;
 export type SkinChoice = 'light' | 'full';
 export type ShadowChoice = 'on' | 'off';
+/** Which map she is on: the real island (the main game), or the domed town (kept to test in until its place is chosen). */
+export type MapChoice = 'island' | 'town';
 
 export interface HeroineSettings {
   body: BodyMode;
@@ -56,6 +58,11 @@ export interface HeroineSettings {
    * The address's ?look= still wins. Changing it reloads the game.
    */
   outfit: string;
+  /**
+   * THE MAP (Joshua, 2026-11-19): the real island from Beyond Extinction (src/world/island/), or the domed town, kept as
+   * a test map until its place on the island is chosen. The address's ?map= still wins. Changing it reloads the game.
+   */
+  map: MapChoice;
 }
 
 
@@ -96,6 +103,7 @@ export const SETTING_KEYS = Object.freeze({
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
   autoFire: 'gdm.autoFire2',
   outfit: 'gdm.outfit',
+  map: 'gdm.map',
 });
 
 function read(key: string): string | null {
@@ -158,5 +166,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
+    // (the island unless the town was chosen)
+    map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
   };
 }

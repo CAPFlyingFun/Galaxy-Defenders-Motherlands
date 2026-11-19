@@ -133,11 +133,13 @@ const tidy = (seconds: number): number => Math.round(seconds * 1000) / 1000;
  * Visual body takes several times as long as the Performance one, and their steps are different.
  * `settings` is the game's heroine settings (src/heroine/heroineSettings.ts); only two of them matter here.
  */
-export function loadKind(settings: { body: string; liveBody: string }, address: URLSearchParams = new URLSearchParams(location.search)): string {
+export function loadKind(settings: { body: string; liveBody: string; map?: string }, address: URLSearchParams = new URLSearchParams(location.search)): string {
   const body = address.get('heroine') === 'standin' ? 'standin' : settings.body === 'performance' ? 'fast' : 'room';
   // (only the fast body can carry the live body; a different look or suit downloads different files)
   const live = body === 'fast' && settings.liveBody === 'on' ? 'live' : '';
-  return [body, live, address.get('look') ?? '', address.get('suit') ?? ''].filter((word) => word !== '').join(' ');
+  // (the island and the town load quite different files)
+  const map = settings.map === 'town' ? '' : 'island';
+  return [body, live, map, address.get('look') ?? '', address.get('suit') ?? ''].filter((word) => word !== '').join(' ');
 }
 
 /**

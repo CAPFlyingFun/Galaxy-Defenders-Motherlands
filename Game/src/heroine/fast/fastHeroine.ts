@@ -767,7 +767,7 @@ if (uHideHead > 0.5) {
     weeks: look.manifest.weeks ?? weekForBump(body.belly),
     gear,
 
-    setPosition(x: number, z: number): void { root.position.set(x, 0, z); },
+    setPosition(x: number, z: number, y = 0): void { root.position.set(x, y, z); }, // (y: the ground under her, on the island)
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
     setFacing(now: BodyFacing | null): void { facing = now; },
     setSideSteps(level: number | null): void { sideLevel = level; },

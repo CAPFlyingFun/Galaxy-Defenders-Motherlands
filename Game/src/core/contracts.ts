@@ -142,7 +142,8 @@ export interface HeroineBody {
   /** True once she is fully loaded AND dressed (a character appears dressed, all at once). */
   readonly ready: boolean;
 
-  setPosition(x: number, z: number): void;
+  /** Where her feet are: (x, z) on the map, and `y` the ground's height there (0 on the flat town; the island's hills). */
+  setPosition(x: number, z: number, y?: number): void;
   /**
    * Which way she faces, in radians about Y (0 = +Z). For a body with `setFacing`, this is BODY NORTH: the way she
    * faces when nothing of her is turned.

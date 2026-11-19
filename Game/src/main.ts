@@ -40,6 +40,7 @@ import { createSky } from './world/sky';
 import { SkyTargets } from './world/targets';
 import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
+import type { IslandWorld } from './world/island/islandWorld';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
 import { Door, DoorUse, DOOR, bodyRadius as doorBodyRadius } from './world/door';
@@ -231,18 +232,49 @@ async function start(): Promise<void> {
 
   // ---- World --------------------------------------------------------------------
   const scene = new THREE.Scene();
+  // THE MAP (Joshua, 2026-11-19): the real island (the main game), or the domed town, kept to test in until its place
+  // on the island is chosen (Settings -> WORLD -> Map, or ?map=town). The town's pieces are still made on the island
+  // (the code round them expects them) but are not put in the scene, so they are neither drawn nor in her way.
+  const onIsland = graphics.map === 'island';
   const sky = createSky(renderer);
-  scene.background = sky.background;
-  scene.add(sky.stars);
+  if (!onIsland) {
+    scene.background = sky.background;
+    scene.add(sky.stars);
+  }
 
   const ground = createGround();
-  scene.add(ground.mesh);
+  if (!onIsland) scene.add(ground.mesh);
 
   const city = createCity();
-  scene.add(city.group);
+  if (!onIsland) scene.add(city.group);
 
   const dome = await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`);
-  scene.add(dome.group);
+  if (!onIsland) scene.add(dome.group);
+
+  // THE ISLAND (src/world/island/): its 3 x 3 tiles round her, the coarse far island, the sea and the day sky. The
+  // game waits, behind the splash, until the ground round her arrival point is all in.
+  let island: IslandWorld | null = null;
+  if (onIsland) {
+    meter.step('island', 'Opening the island…');
+    const { createIslandWorld } = await import('./world/island/islandWorld');
+    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene);
+    scene.add(island.group);
+    let told = -1;
+    await island.ready(0, 0, (done, of) => {
+      if (done === told) return;
+      told = done;
+      meter.step(`island ground ${done}`, `The island: ground ${done} of ${of}…`);
+    });
+    await breathe();
+  }
+  /** The ground's height under her, metres (0 on the flat town; the last good height if a tile is not in yet). */
+  let groundY = 0;
+  const groundUnder = (x: number, z: number): number => {
+    if (!island) return 0;
+    const g = island.groundAt(x, z);
+    if (Number.isFinite(g)) groundY = g;
+    return groundY;
+  };
 
   const targets = new SkyTargets();
   scene.add(targets.mesh);
@@ -292,7 +324,7 @@ async function start(): Promise<void> {
     realShadows = graphics.shadows === 'on';
     renderer.shadowMap.enabled = realShadows;
     keyLight.castShadow = realShadows;
-    shadowFloor.visible = realShadows;
+    shadowFloor.visible = realShadows && !island; // (on the island the ground itself takes her shadow)
     heroine.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
     // (materials are compiled with or without shadows: they are made again for the new setting)
     scene.traverse((node) => { const m = (node as THREE.Mesh).material; if (m) for (const one of Array.isArray(m) ? m : [m]) one.needsUpdate = true; });
@@ -323,10 +355,12 @@ async function start(): Promise<void> {
   // the other"). The buildings are solid and the dome's glass stops her: `walls` knows both (src/world/collision.ts)
   // and `motion` asks it where each step really ends.
   const walls = new CityWalls(city.footprints);
-  const motion = new PlayerMotion(walls);
+  const motion = new PlayerMotion(island ? island.walls : walls);
+  if (island) { motion.x = 0; motion.z = 0; } // (she arrives at the island's centre point: the beach)
   // Which way each part of her faces (src/input/bodyTurn.ts). She starts looking out at the city (+Z). A body that
   // can turn its parts apart is handed this once and reads it every frame.
   const turn = new BodyTurn();
+  if (island) turn.reset(island.arrivalFacing); // (on the island she arrives facing inland, the sea behind her)
   heroine.setFacing?.(turn);
 
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
@@ -351,6 +385,14 @@ async function start(): Promise<void> {
   const door = new Door();
   door.place(-5.2, 10.2, Math.PI);
   scene.add(door.root);
+  // (on the island the table, bars and door stand on the beach beside her, on the sand's own height)
+  if (island) {
+    table.root.position.y = groundUnder(1.6, 9.85);
+    bars.pole.position.y = groundUnder(-1.3, 10.1);
+    bars.rail.position.y = groundUnder(-3.0, 10.3);
+    door.root.position.y = groundUnder(-5.2, 10.2);
+    for (const thing of [table.root, bars.pole, bars.rail, door.root]) thing.updateMatrixWorld(true);
+  }
   const grabUse = new GrabUse(bars, heroine);
   const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
   // (the door: opening it, holding its handle while she walks it open or shut, letting go)
@@ -442,6 +484,14 @@ async function start(): Promise<void> {
     if (kept && CAMERA_STYLES.includes(kept)) cameraStyle = kept;
   } catch { /* (no storage: follow) */ }
   rig.droneLimit = DOME_RADIUS - 3;
+  if (island) {
+    // the island: the camera sees out to the far coast (16 km of haze), keeps over the hills, and the drone is free
+    rig.camera.far = 20000;
+    rig.camera.updateProjectionMatrix();
+    rig.groundAt = island.groundAt;
+    rig.droneLimit = Infinity;
+    rig.faceAtOnce(island.arrivalFacing);
+  }
   /**
    * AIMED BY HAND: always in first person; in third person when auto-fire is off (Joshua, 2026-11-18: "so you could
    * also shoot in 3rd person... over the shoulder view and a simple cross hair"). Then the camera is over her
@@ -640,7 +690,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -897,11 +947,12 @@ async function start(): Promise<void> {
     actionPitch += (actionPitchWant - actionPitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
     turn.headPitch = rig.mode === 'third' ? actionPitch : 0;
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
-    keyLight.position.set(motion.x - 4, 10, motion.z + 6);
-    keyLight.target.position.set(motion.x, 0, motion.z);
+    const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)
+    keyLight.position.set(motion.x - 4, feetY + 10, motion.z + 6);
+    keyLight.target.position.set(motion.x, feetY, motion.z);
     shadowFloor.position.x = motion.x;
     shadowFloor.position.z = motion.z;
-    heroine.setPosition(motion.x, motion.z);
+    heroine.setPosition(motion.x, motion.z, feetY);
     // (a body that turns its parts apart was handed `turn` once, where it was made, and reads it each frame; one
     //  that cannot faces one way, all of it: where she looks, or the way she goes)
     heroine.setYaw(heroine.setFacing || rig.mode !== 'first' ? turn.base : turn.head);
@@ -1010,6 +1061,8 @@ async function start(): Promise<void> {
     }
     rig.head.valid = true;
     rig.update(dt, heroine);
+    // (the island: its tiles follow her, the sea follows the camera)
+    island?.update(dt, motion.x, motion.z, rig.camera);
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.
     targets.update(info);

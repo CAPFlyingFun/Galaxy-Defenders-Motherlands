@@ -40,6 +40,8 @@ interface Arm {
 
 class StandInHeroine implements HeroineBody {
   readonly root = new THREE.Group();
+  /** The ground's height under her (the island's hills; 0 on the flat town). */
+  private groundY = 0;
   readonly height = HEIGHT;
   /** The stand-in is built from code, so she is ready at once. */
   readonly ready = true;
@@ -98,9 +100,10 @@ class StandInHeroine implements HeroineBody {
 
   // ---- The HeroineBody contract --------------------------------------------
 
-  setPosition(x: number, z: number): void {
+  setPosition(x: number, z: number, y = 0): void {
     this.root.position.x = x;
     this.root.position.z = z;
+    this.groundY = y;
   }
 
   setYaw(yaw: number): void {
@@ -156,7 +159,7 @@ class StandInHeroine implements HeroineBody {
     this.leftLeg.rotation.x = swing;
     this.rightLeg.rotation.x = -swing;
     // A small bounce on every step.
-    this.root.position.y = Math.abs(Math.cos(this.stride)) * 0.025 * moving;
+    this.root.position.y = this.groundY + Math.abs(Math.cos(this.stride)) * 0.025 * moving;
 
     // --- Arms: swing toward the target, or down to rest ---------------------
     this.updateArm(this.arms.left, SHOULDER_OUT, frame.dt);

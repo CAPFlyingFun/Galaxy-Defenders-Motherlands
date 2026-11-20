@@ -28,8 +28,14 @@
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
 import { ACTIVITY, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
-import { STOMACH } from '@charb/actor/abdominalOrgans';
+import { ABDOMEN_PLACE, STOMACH } from '@charb/actor/abdominalOrgans';
 import { eat as gutEat, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
+
+/** Her food bar (0..1) from the food in her stomach, millilitres (VITALS_TUNING.foodBar). */
+export function foodBarOf(stomachFoodMl: number): number {
+  const room = ABDOMEN_PLACE.stomachRoomMl, most = STOMACH.mostMl, ml = Math.max(0, stomachFoodMl);
+  return ml <= room ? 0.5 * (ml / room) : Math.min(1, 0.5 + 0.5 * ((ml - room) / (most - room)));
+}
 
 /** Everything about the game's side of her vitals that is a choice, not a measurement. All GAME TUNING. */
 export const VITALS_TUNING = {
@@ -57,6 +63,15 @@ export const VITALS_TUNING = {
   gutHoursPerSecond: 1 / 240,
   /** Sweat, millilitres of water an hour (her gut's hours): this much at rest, up to this much at her hardest. */
   sweatMlPerHour: [30, 500] as readonly [rest: number, hardest: number],
+  /**
+   * HER FOOD BAR IS HER STOMACH (Joshua, 2026-11-19: "sync up the food stats with the stomach size? Full food = max
+   * stomach, half food = about normal, below 1/3 to 1/4, hungry kicks in... sometimes it's really close to 25-30% where I
+   * feel my stomach shrinking"). The bar is the food in her stomach: empty 0; at the room her stomach has between her
+   * other organs (the builder's ABDOMEN_PLACE.stomachRoomMl, 450 mL, where her belly starts to stand out) half; at the
+   * most a stomach holds (STOMACH.mostMl, 1.5 L, her belly at its fullest) full. HUNGER starts under `hungryUnder` of the
+   * bar and is at its worst empty. Under half her belly draws IN, up to `shrinkMl` of room at empty (a third of it by 30%).
+   */
+  foodBar: { hungryUnder: 1 / 3, shrinkMl: 180 },
   /** She starts a mission having eaten and drunk: this much food and water (mL) is in her at the start. */
   startMeal: [450, 400] as readonly [foodMl: number, waterMl: number],
   /**
@@ -179,6 +194,8 @@ export interface VitalsReading {
   readonly water: number;
   /** what is in her stomach, millilitres (food and water together) */
   readonly stomachMl: number;
+  /** how far her belly draws in with her stomach nearly empty, millilitres of room (0 from half her food bar up) */
+  readonly bellyShrinkMl: number;
   /** how full her stomach is, 0 empty .. 1 full */
   readonly stomach: number;
   /** percent points to ADD to her belly (the builder's 0-200 slider) for what is in her stomach */
@@ -264,7 +281,7 @@ export class HeroineVitals {
     this.now = stepVitals(this.vitals, 0, 0, this.body);
     const [foodMl, waterMl] = VITALS_TUNING.startMeal;
     this.gut = gutEat(this.gut, foodMl, waterMl);
-    this.needs = gutNeeds(this.gut);
+    this.needs = this.gameNeeds();
   }
 
   /**
@@ -332,7 +349,7 @@ export class HeroineVitals {
     this.gut = stepGut(this.gut, hours);
     const [sweatRest, sweatHard] = tuning.sweatMlPerHour;
     this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * this.now.felt) * hours;
-    this.needs = gutNeeds(this.gut);
+    this.needs = this.gameNeeds();
 
     // 3. Her health: it mends while she is fed and watered, and wears away while she is starving or parched.
     const h = tuning.health;
@@ -347,7 +364,7 @@ export class HeroineVitals {
   /** She eats and/or drinks: millilitres of food and of water (a snack bar is about 150, a canteen swig 250). */
   consume(foodMl: number, waterMl: number): void {
     this.gut = gutEat(this.gut, Math.max(0, foodMl), Math.max(0, waterMl));
-    this.needs = gutNeeds(this.gut);
+    this.needs = this.gameNeeds();
   }
 
   /** She is hurt (an enemy's hit) or mended (a med kit): health down or up by `amount`. */
@@ -355,6 +372,16 @@ export class HeroineVitals {
     this.health = clamp(this.health + amount, 0, VITALS_TUNING.health.most);
     // (a hit frightens her at once)
     if (amount < 0) this.fear = Math.min(1, this.fear - amount * VITALS_TUNING.stress.fearPerHealthLost);
+  }
+
+  /**
+   * Her hunger and thirst. Thirst as the builder's gut has it; HUNGER from her food bar (Joshua: hungry below a third of
+   * it): 0 above `hungryUnder`, rising to 1 at empty.
+   */
+  private gameNeeds(): GutNeeds {
+    const needs = gutNeeds(this.gut);
+    const bar = foodBarOf(this.gut.stomachFoodMl), under = VITALS_TUNING.foodBar.hungryUnder;
+    return { ...needs, hunger: clamp((under - bar) / under, 0, 1) };
   }
 
   get alive(): boolean {
@@ -378,9 +405,10 @@ export class HeroineVitals {
       stamina: this.vitals.energy,   // (her own, after the game's extra drain)
       effort: this.now.felt,
       health: this.health,
-      food: 1 - this.needs.hunger,
+      food: foodBarOf(this.gut.stomachFoodMl),
       water: 1 - this.needs.thirst,
       stomachMl,
+      bellyShrinkMl: VITALS_TUNING.foodBar.shrinkMl * clamp((0.5 - foodBarOf(this.gut.stomachFoodMl)) / 0.5, 0, 1),
       stomach,
       bellyExtra: stomach * tuning.bellyWhenFull,
       speedShare,

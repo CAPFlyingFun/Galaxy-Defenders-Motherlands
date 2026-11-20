@@ -46,6 +46,8 @@ export interface BodyVitals {
   readonly breathsPerMinute: number;
   /** what is in her stomach, millilitres */
   readonly stomachMl: number;
+  /** how far her belly draws in with her stomach nearly empty, millilitres of room (vitals/heroineVitals.ts foodBar) */
+  readonly bellyShrinkMl?: number;
 }
 
 /**

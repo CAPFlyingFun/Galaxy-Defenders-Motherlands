@@ -246,6 +246,12 @@ use the game's single copy of three.js.
   water's depth at her feet each frame (a river or lake's surface, or the sea's, `island.seaLevel`, above the ground);
   `SkinWetness`: wet at once, fully wet 120 s after leaving the water, then dry over 30 s. Settings -> TEST TOOLS -> Get wet
   soaks her all over (for the town map).
+- HER FOOD BAR IS HER STOMACH (Joshua, 2026-11-19: "Full food = max stomach, half food = about normal, below 1/3 to 1/4,
+  hungry kicks in"; `Game/src/vitals/heroineVitals.ts` `foodBarOf`, `VITALS_TUNING.foodBar`): the bar is the FOOD in her
+  stomach: empty 0, the builder's stomach room (450 mL, where her belly starts to stand out) half, the most a stomach
+  holds (1.5 L, her belly at its fullest) full. HUNGER (speed, health) from the bar: none above a third, worst empty
+  (thirst stays the builder's gut's). Under half her belly draws in, up to 180 mL of room at empty
+  (`bellyShrinkMl` -> `skinBreath.ts`). Water in her stomach still stands her belly out but is not on the food bar.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

@@ -51,6 +51,8 @@ export interface BreathNow {
   readonly breathLitres: number;
   /** what is in her stomach, millilitres (food and water together) */
   readonly stomachMl: number;
+  /** how far her belly draws in with her stomach nearly empty, millilitres of room (heroineVitals.ts foodBar) */
+  readonly bellyShrinkMl?: number;
 }
 
 export class SkinBreath {
@@ -163,8 +165,10 @@ export class SkinBreath {
       B.x = (share * air) / s.chest;
       B.y = ((1 - share) * air) / s.belly;
     } else { B.x = 0; B.y = 0; }
-    // what her stomach holds beyond its room, as room her belly's skin gives for
-    this.uniforms.breathFull.value = s.full > 0 ? (stomachGiveMl(now.stomachMl) * 1e-6) / s.full : 0;
+    // what her stomach holds beyond its room, as room her belly's skin gives for; less what it has drawn in, nearly empty
+    // (the same move the other way: her belly low and round drawing in)
+    const roomMl = stomachGiveMl(now.stomachMl) - (now.bellyShrinkMl ?? 0);
+    this.uniforms.breathFull.value = s.full > 0 ? (roomMl * 1e-6) / s.full : 0;
   }
 
   /** This frame's kicks, from the hidden live body (liveBody.ts). */

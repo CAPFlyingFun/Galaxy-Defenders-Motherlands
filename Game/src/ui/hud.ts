@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -139,6 +139,9 @@ function tapButton(button: HTMLElement, tap: () => void): void {
     if (event.detail === 0 && performance.now() - answeredAt > SAME_TAP_MS) tap();
   });
 }
+
+/** The bellies every outfit is pictured at for Settings (public/thumbs/; the one nearest hers is shown). */
+const THUMB_BELLIES = [10, 50, 80, 120, 150] as const;
 
 export class Hud {
   private readonly root: HTMLElement;
@@ -328,7 +331,9 @@ export class Hud {
     element('span', '', debugRow, 'Show full readout');
     debugBox.addEventListener('change', () => options.onDebugChange(debugBox.checked));
     // (the gear answers as the finger lands too, so Settings opens even while the MOVE stick is held)
-    tapButton(gear, () => (settings.hidden = !settings.hidden));
+    // (the outfit pictures follow her belly and the catsuit style: brought up to date as Settings opens)
+    let refreshOutfits = (): void => {};
+    tapButton(gear, () => { settings.hidden = !settings.hidden; if (!settings.hidden) refreshOutfits(); });
 
     // ---- Settings: how the heroine is drawn -----------------------------------
     // Each row is a label with a drop-down list. `choices` pairs what is shown with what is kept.
@@ -341,17 +346,46 @@ export class Hud {
         option.value = String(i);
         if (value === options.graphics[key]) option.selected = true;
       });
-      list.addEventListener('change', () => options.onGraphicsChange(key, choices[Number(list.value)][1]));
+      list.addEventListener('change', () => { options.onGraphicsChange(key, choices[Number(list.value)][1]); refreshOutfits(); });
       if (note) element('small', 'gd-note', settings, note);
       return line;
     };
     // (the map: Joshua, 2026-11-19, the real island for the main game, the town kept as a test map)
     element('h2', 'gd-settings-part', settings, 'WORLD');
     choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen. Changing it reloads the game.');
-    choiceRow('Trees', 'trees', [['On', 'on'], ['Off', 'off']], 'The island\'s forest: photo trees on the real island\'s own vegetation map, drawn to 900 m. Changing it reloads the game.');
+    choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Changes at once.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');
-    // (her outfit, to test each as it is made: Joshua, 2026-11-19)
-    choiceRow('Outfit', 'outfit', OUTFIT_CHOICES, 'Her outfit, to try each as it is made. It changes while you play (a few seconds).');
+    // HER OUTFIT, AS PICTURES (Joshua, 2026-11-20: "a little thumbnail of what they look like, like in CCBS... bake the
+    // images at 10%, 50%, 80%, 120%, and 150% and it will pick the closest based on the belly slider"): every outfit
+    // was pictured ahead of time at those five bellies (public/thumbs/<look>-<belly>.webp, by the script
+    // scripts/make_outfit_thumbs.py), so nothing is drawn live; each tile shows the one nearest her belly, and a catsuit
+    // in the style chosen under Catsuit style. A tap puts it on (it changes while you play).
+    {
+      const line = element('div', 'gd-outfits', settings);
+      element('span', 'gd-outfits-title', line, 'Outfit');
+      const grid = element('div', 'gd-outfit-grid', line);
+      const tiles = OUTFIT_CHOICES.map(([text, value]) => {
+        const tile = element('button', 'gd-outfit', grid);
+        tile.type = 'button';
+        const picture = element('img', '', tile);
+        picture.alt = text;
+        picture.decoding = 'async';
+        element('span', '', tile, text);
+        // (a plain click, not the instant tap of the game's buttons: a finger dragging the list must be able to scroll it)
+        tile.addEventListener('click', () => { options.onGraphicsChange('outfit', value); refreshOutfits(); });
+        return { tile, picture, value };
+      });
+      refreshOutfits = () => {
+        const belly = options.graphics.belly ?? BELLY_RANGE.least;
+        const nearest = THUMB_BELLIES.reduce((best, b) => (Math.abs(b - belly) < Math.abs(best - belly) ? b : best));
+        for (const { tile, picture, value } of tiles) {
+          const src = `${import.meta.env.BASE_URL}thumbs/${outfitLook(value, options.graphics.catsuitNeck)}-${nearest}.webp`;
+          if (!picture.src.endsWith(src)) picture.src = src;
+          tile.classList.toggle('is-on', value === options.graphics.outfit);
+        }
+      };
+      element('small', 'gd-note', settings, 'Her outfit, to try each as it is made; each picture at the belly nearest hers. It changes while you play (a few seconds).');
+    }
     // (every catsuit colour in the same three styles: Joshua, 2026-11-20)
     choiceRow('Catsuit style', 'catsuitNeck', CATSUIT_NECKS, 'The style every catsuit is worn in: a keyhole under a turtleneck, a low neck, or a high neck. It changes while you play.');
     choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body, on the DEV Room\'s settings. Visual: the Character Builder\'s own room. Changing it reloads the game.');
@@ -421,6 +455,7 @@ export class Hud {
         const v = Number(slider.value);
         value.textContent = this.bellyTextOf(v);
         options.onGraphicsChange('belly', v);
+        refreshOutfits();
       });
       tapButton(lock, () => {
         const open = !options.graphics.bellyUnlocked;

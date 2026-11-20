@@ -30,12 +30,21 @@
 // CHANGED FOR THIS GAME: positions are the island's own metres inside a group
 // moved by her arrival point (the game's 0, 0), as the rivers are
 // (islandWorld.ts); pictures come from public/island/; the camera's position
-// is turned into island metres for the distances. Her walking through them is
-// not stopped yet (a photo has no trunk to bump into): that comes with the
-// near 3D trees (phase 2, Thronemound's baked trees, real trunks up close).
+// is turned into island metres for the distances.
+//
+// PHASE 2 (Joshua, 2026-11-20): LANDSCAPING MODES and REAL 3D TREES
+// (treeObjects.ts, treeModels.ts). Every planted tree is also kept in its
+// patch's list (`Cell.trees`), so in Hybrid the photo turns into a 3D model of
+// the same kind on the very same spot near the camera, and in Objects only the
+// 3D models stand in for all of them. Their trunks are solid (`trunkBlocks`).
+// Every fade is a WIPE UP THE TREE ("trunk first, then the tops").
 // ============================================================================
 import * as THREE from 'three';
 import type { HydroGround, KauaiHydro } from './hydro';
+import {
+  FADE_FRAGMENT_CUT, FADE_FRAGMENT_HEAD, FADE_VERTEX_HEAD, SWAP_M, TreeObjects, fadeRange, fadeUniforms, setFade, trunkRadius,
+  type FadeRange, type Landscaping, type Planted,
+} from './treeObjects';
 
 /**
  * THE FOREST'S NUMBERS (Beyond Extinction's, as it ships on phones):
@@ -93,19 +102,17 @@ function hash(i: number, j: number, salt: number): number {
  * only, its crown swayed by the wind (more the higher up the picture), and dissolved by distance in a fine dither (no
  * see-through sorting needed). All in the vertex and fragment programs.
  */
-function billboardMaterial(picture: THREE.Texture, sway: number, time: { value: number }, fadeStart: { value: number }, fadeEnd: { value: number }): THREE.Material {
+function billboardMaterial(picture: THREE.Texture, sway: number, time: { value: number }, fade: FadeRange): THREE.Material {
   const material = new THREE.MeshBasicMaterial({ map: picture, alphaTest: 0.5, side: THREE.DoubleSide, transparent: false, fog: true });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = time;
     shader.uniforms.uSway = { value: sway };
-    shader.uniforms.uFadeStart = fadeStart;
-    shader.uniforms.uFadeEnd = fadeEnd;
+    // (how far it fades in, where its 3D model takes over in Hybrid, and out: treeObjects.ts)
+    fadeUniforms(shader, fade);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
-        uniform float uTime, uSway, uFadeStart, uFadeEnd;
-        varying float vOpacity;
-        // metres from the camera -> how solid: whole up to uFadeStart, gone by uFadeEnd
-        float treeFade(float m) { return clamp((uFadeEnd - m) / max(uFadeEnd - uFadeStart, 1.0), 0.0, 1.0); }`)
+        uniform float uTime, uSway;
+        ${FADE_VERTEX_HEAD}`)
       .replace('#include <project_vertex>', `
         vec3 bbBase = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;   // the foot of the trunk
         float bbW = length(instanceMatrix[0].xyz);                                      // its width
@@ -120,14 +127,12 @@ function billboardMaterial(picture: THREE.Texture, sway: number, time: { value: 
         vec3 bbWorld = bbBase + bbRight * (position.x * bbW + bbSway) + vec3(0.0, position.y * bbH, 0.0);
         vec4 mvPosition = viewMatrix * vec4(bbWorld, 1.0);
         gl_Position = projectionMatrix * mvPosition;
-        vOpacity = treeFade(bbLen);`);
+        treeFade(bbLen, position.y);   // (the wipe climbs the picture: foot 0, top 1)`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        varying float vOpacity;
-        float bayer2(vec2 a) { a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }
-        float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }`)
+        ${FADE_FRAGMENT_HEAD}`)
       .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
-        if (vOpacity < bayer4(gl_FragCoord.xy)) discard;`);
+        ${FADE_FRAGMENT_CUT}`);
   };
   material.customProgramCacheKey = () => 'island-billboard-tree';
   return material;
@@ -214,7 +219,11 @@ function sampleBilinear(r: Raster | null, x: number, z: number): number {
 }
 
 /** One planted patch. */
-interface Cell { ci: number; cj: number; cx: number; cz: number; meshes: THREE.InstancedMesh[] }
+/**
+ * One planted patch: its photo draws, and every tree in it (for the 3D trees and the solid trunks; `trunks` only those
+ * with a trunk to bump into).
+ */
+interface Cell { ci: number; cj: number; cx: number; cz: number; meshes: THREE.InstancedMesh[]; trees: Planted[]; trunks: Planted[] }
 /** The rivers and lakes near a patch (hydro.ts). */
 type WaterSet = ReturnType<KauaiHydro['waterNear']>;
 
@@ -248,8 +257,12 @@ function touchesWater(px: number, pz: number, water: WaterSet): boolean {
 export class IslandTrees {
   readonly group = new THREE.Group();
   private readonly time = { value: 0 };
-  private readonly fadeEnd = { value: DRAW_M };
-  private readonly fadeStart = { value: DRAW_M * 0.75 };
+  /** The photos' fade (in: only in Hybrid, where the 3D trees take over; out: by DRAW_M). */
+  private readonly fade = fadeRange(0, 0, DRAW_M * 0.75, DRAW_M);
+  /** Settings -> WORLD -> Landscaping (treeObjects.ts). */
+  private mode: Landscaping;
+  /** The 3D trees, made the first time Hybrid or Objects only is chosen. */
+  private objects: TreeObjects | null = null;
   private readonly quad: THREE.PlaneGeometry;
   private materials: (THREE.Material | null)[] = [];
   private pictures: (THREE.Texture | null)[] = [];
@@ -271,12 +284,15 @@ export class IslandTrees {
   get counts(): { trees: number; draws: number } {
     let trees = 0, draws = 0;
     for (const cell of this.cells.values()) for (const m of cell.meshes) if (m.visible) { trees += m.count; draws++; }
+    if (this.objects) { const o = this.objects.counts(); trees += o.trees; draws += o.draws; }
     return { trees, draws };
   }
 
-  constructor(parent: THREE.Object3D, private readonly base: string) {
+  constructor(parent: THREE.Object3D, private readonly base: string, mode: Landscaping = 'hybrid') {
     this.group.name = 'island-trees';
     parent.add(this.group);
+    this.mode = mode;
+    this.setMode(mode);
     this.quad = new THREE.PlaneGeometry(1, 1);
     this.quad.translate(0, 0.5, 0);   // (its foot at the bottom, so each tree stands on its spot)
     void this.init();
@@ -302,7 +318,7 @@ export class IslandTrees {
       picture.anisotropy = 4;
       const img = picture.image as { width: number; height: number } | undefined;
       this.widths[s] = sp.height * (img && img.height ? img.width / img.height : 0.6);
-      return billboardMaterial(picture, sp.sway, this.time, this.fadeStart, this.fadeEnd);
+      return billboardMaterial(picture, sp.sway, this.time, this.fade);
     });
     this.ready = true;
   }
@@ -313,6 +329,7 @@ export class IslandTrees {
     if (this.cells.has(key)) return;
     const x0 = ci * CHUNK, z0 = cj * CHUNK;
     const buckets: THREE.Matrix4[][] = SPECIES.map(() => []);
+    const trees: Planted[] = [];
     const dummy = this.dummy;
     for (let gx = x0; gx < x0 + CHUNK; gx += STEP) {
       for (let gz = z0; gz < z0 + CHUNK; gz += STEP) {
@@ -351,6 +368,8 @@ export class IslandTrees {
         dummy.scale.set(this.widths[pick] * scale, SPECIES[pick].height * scale, 1);
         dummy.updateMatrix();
         buckets[pick].push(dummy.matrix.clone());
+        // (and kept, for its 3D model: the same kind, as tall, on the same spot, turned its own way)
+        trees.push({ x: px, y: h - 0.1, z: pz, height: SPECIES[pick].height * scale, turn: hash(i, j, 29) * Math.PI * 2, kind: pick });
       }
     }
     const meshes: THREE.InstancedMesh[] = [];
@@ -369,7 +388,8 @@ export class IslandTrees {
       this.group.add(im);
       meshes.push(im);
     });
-    this.cells.set(key, { ci, cj, cx: x0 + CHUNK / 2, cz: z0 + CHUNK / 2, meshes });
+    const trunks = trees.filter((t) => trunkRadius(t.kind, t.height) > 0);
+    this.cells.set(key, { ci, cj, cx: x0 + CHUNK / 2, cz: z0 + CHUNK / 2, meshes, trees, trunks });
   }
 
   private disposeCell(cell: Cell): void {
@@ -407,18 +427,60 @@ export class IslandTrees {
       const water = hydro.waterNear(x0 - WATER_MARGIN, z0 - WATER_MARGIN, x0 + CHUNK + WATER_MARGIN, z0 + CHUNK + WATER_MARGIN, WATER_MARGIN);
       this.buildCell(ci, cj, ground, water);
     }
-    // a whole patch is hidden once it is past the fade (each tree fades by itself before that)
+    // a whole patch is hidden once it is past the fade (each tree fades by itself before that); no photos at all in
+    // Objects only
     const most = DRAW_M + CHUNK;
+    const photos = this.mode === 'images' || this.mode === 'hybrid';
     for (const cell of this.cells.values()) {
-      const vis = (cell.cx - camX) ** 2 + (cell.cz - camZ) ** 2 < most * most;
+      const vis = photos && (cell.cx - camX) ** 2 + (cell.cz - camZ) ** 2 < most * most;
       for (const m of cell.meshes) m.visible = vis;
     }
+    // the 3D trees near the camera (Hybrid, Objects only)
+    if (this.mode === 'hybrid' || this.mode === 'objects') {
+      if (!this.objects) this.objects = new TreeObjects(this.group, this.base, this.time);
+      this.objects.update(this.mode, camX, camZ, this.cells.size, () => this.cells.values());
+    } else this.objects?.update(this.mode, camX, camZ, this.cells.size, () => []);
+  }
+
+  /**
+   * SETTINGS -> WORLD -> LANDSCAPING, live: Images only, Hybrid, Objects only or Off (treeObjects.ts). The photos fade
+   * in from the swap in Hybrid (where the 3D trees fade out).
+   */
+  setMode(mode: Landscaping): void {
+    this.mode = mode;
+    this.group.visible = mode !== 'off';
+    if (mode === 'hybrid') setFade(this.fade, SWAP_M.start, SWAP_M.end, DRAW_M * 0.75, DRAW_M);
+    else setFade(this.fade, 0, 0, DRAW_M * 0.75, DRAW_M);
+  }
+
+  /**
+   * IS THERE A TRUNK IN THE WAY? (island metres; `body` her own radius). Only with 3D trees (Hybrid, Objects only) and
+   * only trunks that are drawn: those near the camera, as she always is.
+   */
+  trunkBlocks(x: number, z: number, body: number): boolean {
+    if (this.mode !== 'hybrid' && this.mode !== 'objects') return false;
+    const ci = Math.floor(x / CHUNK), cj = Math.floor(z / CHUNK);
+    for (let a = ci - 1; a <= ci + 1; a++) {
+      for (let b = cj - 1; b <= cj + 1; b++) {
+        const cell = this.cells.get(`${a},${b}`);
+        if (!cell) continue;
+        // (a neighbouring patch only matters within a couple of metres of its edge)
+        if (a !== ci && Math.abs(x - (a < ci ? ci * CHUNK : (ci + 1) * CHUNK)) > 3) continue;
+        if (b !== cj && Math.abs(z - (b < cj ? cj * CHUNK : (cj + 1) * CHUNK)) > 3) continue;
+        for (const t of cell.trunks) {
+          const r = trunkRadius(t.kind, t.height) + body;
+          if ((t.x - x) ** 2 + (t.z - z) ** 2 < r * r) return true;
+        }
+      }
+    }
+    return false;
   }
 
   dispose(): void {
     this.disposed = true;
     for (const cell of [...this.cells.values()]) this.disposeCell(cell);
     this.buildQueue.length = 0;
+    this.objects?.dispose();
     for (const m of this.materials) m?.dispose();
     for (const p of this.pictures) p?.dispose();
     this.quad.dispose();

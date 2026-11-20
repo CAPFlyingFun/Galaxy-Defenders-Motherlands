@@ -30,6 +30,15 @@ export type ShadowChoice = 'on' | 'off';
 /** Which map she is on: the real island (the main game), or the domed town (kept to test in until its place is chosen). */
 export type MapChoice = 'island' | 'town';
 
+/** Settings -> WORLD -> Landscaping (src/world/island/treeObjects.ts). */
+export type LandscapingChoice = 'images' | 'hybrid' | 'objects' | 'off';
+export const LANDSCAPING_CHOICES: readonly (readonly [string, LandscapingChoice])[] = [
+  ['Images only', 'images'], ['Hybrid', 'hybrid'], ['Objects only', 'objects'], ['Off', 'off'],
+];
+function asLandscaping(v: string | null): LandscapingChoice {
+  return v === 'images' || v === 'objects' || v === 'off' ? v : 'hybrid';
+}
+
 export interface HeroineSettings {
   body: BodyMode;
   detail: DetailChoice;
@@ -68,8 +77,12 @@ export interface HeroineSettings {
    * a test map until its place on the island is chosen. The address's ?map= still wins. Changing it reloads the game.
    */
   map: MapChoice;
-  /** THE ISLAND'S FOREST (Joshua, 2026-11-20, landscaping): Beyond Extinction's photo trees. Changing it reloads the game. */
-  trees: ShadowChoice;
+  /**
+   * LANDSCAPING (Joshua, 2026-11-20: "three modes under a new landscaping: Only Image Landscaping / Hybrid - Image +
+   * Objects / Only Objects"; src/world/island/treeObjects.ts): Images only (Beyond Extinction's photo trees), Hybrid
+   * (the default: real 3D trees near the camera, photos beyond), Objects only (3D trees to 280 m), or Off. Live.
+   */
+  landscaping: LandscapingChoice;
   /**
    * HER PREGNANCY, to test (Joshua, 2026-11-19: "a toggle pregnancy on/off as well as a full range belly slider from
    * 0-200%, but only 10-150% is the default range with unlock available... like the CCBS"; heroine/pregnancyPlan.ts).
@@ -175,7 +188,7 @@ export const SETTING_KEYS = Object.freeze({
   outfit: 'gdm.outfit',
   catsuitNeck: 'gdm.catsuitNeck',
   map: 'gdm.map',
-  trees: 'gdm.trees',
+  landscaping: 'gdm.landscaping',
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
@@ -252,7 +265,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     catsuitNeck: asCatsuitNeck(address.get('neck') ?? read(SETTING_KEYS.catsuitNeck)),
     // (the island unless the town was chosen)
     map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
-    trees: (address.get('trees') ?? read(SETTING_KEYS.trees)) === 'off' ? 'off' : 'on',
+    // (Hybrid unless another was chosen; v0.2.93's Trees off is kept as Off)
+    landscaping: asLandscaping(address.get('land') ?? read(SETTING_KEYS.landscaping) ?? (read('gdm.trees') === 'off' || address.get('trees') === 'off' ? 'off' : null)),
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',

@@ -181,7 +181,8 @@ function pwa(): Plugin {
       // all of them were fetched at install, about 36 MB of outfits she was not wearing, competing with the game's own
       // loading; and a push that changed only code fetched them all again. The test and bake pages are not kept at all.
       const LAB_PAGES = ['armor-lab.html', 'bake.html', 'heroine-lab.html', 'vitals-lab.html'];
-      const isLook = (f: string) => f.startsWith('heroines/') || f.startsWith('fabrics/');
+      // (the outfit pictures in Settings too: about 135 small ones, fetched as Settings shows them)
+      const isLook = (f: string) => f.startsWith('heroines/') || f.startsWith('fabrics/') || f.startsWith('thumbs/');
       const app = files.filter((f) => !f.startsWith('charb/') && !f.startsWith('island/') && !isLook(f) && !LAB_PAGES.includes(f));
       const charbFiles = files.filter((f) => f.startsWith('charb/'));
       const islandFiles = files.filter((f) => f.startsWith('island/'));
@@ -224,7 +225,7 @@ self.addEventListener('fetch', (event) => {
 
   // Everything else: the stored copy if there is one; otherwise the network, and keep what comes back.
   const store = url.pathname.includes('/charb/') ? CHARB : url.pathname.includes('/island/') ? ISLAND
-    : url.pathname.includes('/heroines/') || url.pathname.includes('/fabrics/') ? LOOKS : APP;
+    : url.pathname.includes('/heroines/') || url.pathname.includes('/fabrics/') || url.pathname.includes('/thumbs/') ? LOOKS : APP;
   event.respondWith(caches.open(store).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
     // (kept while the worker waits for it; a full store only means it is fetched again next time)
     if (response.ok && response.status === 200) event.waitUntil(cache.put(request, response.clone()).catch(() => {}));

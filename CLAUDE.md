@@ -237,10 +237,25 @@ use the game's single copy of three.js.
   shrubs (BE's USGS/ESA rasters, `public/island/veg/`) and off the rivers and lakes, kind by height above the sea (palm,
   cycad, sago, fern, aspen, conifer, bush under all), streamed within 1050 m of the camera, drawn to 900 m (dithered
   out), let go past 2600 m. Settings -> WORLD -> Trees (`gdm.trees`, `?trees=off`); the full readout's `trees N · D
-  draws`. At the arrival: about 1,000-4,800 trees in 47-82 draws, 2 triangles each. PHASE 2 (planned): TCS's
-  (Thronemound-Colony-Sim) BAKED 3D TREES near her (`src/world/tree.ts` `bakeTree`: limbs tessellated into one buffer,
-  bark photos, leaves by vertex colour, one instanced draw per kind) with solid trunks she walks round, the photos
-  beyond; ground cover (grass, ferns) near her. Not yet: swimming.
+  draws`. At the arrival: about 1,000-4,800 trees in 47-82 draws, 2 triangles each.
+  LANDSCAPING, PHASE 2 (Joshua, 2026-11-20: "Only Image Landscaping / Hybrid - Image + Objects / Only Objects";
+  `treeObjects.ts`, `treeModels.ts`): Settings -> WORLD -> Landscaping (`gdm.landscaping`, `?land=`; live): Images only,
+  HYBRID (default: within 60-80 m each photo turns into a 3D model of its kind on the same spot), Objects only (3D to
+  280 m, light models past 80 m), Off. The 3D trees are made in code after Thronemound's tree maker (leaning, flared,
+  tapering trunks; boughs on a golden spiral; palm/cycad/sago/fern rosettes of drooping fronds; conifer tiers; leaf
+  cards from one leaf picture drawn in code), Thronemound's bark photos (`public/island/bark/`), a palm bark drawn in
+  code; one instanced draw per kind per piece. Their TRUNKS ARE SOLID (`trunkBlocks`, her body 0.25 m round). EVERY
+  FADE WIPES UP THE TREE (Joshua: "fade top to bottom... you can see the trunk of it first"): the trunk shows first and
+  the top last; photo and 3D wipes are exact opposites at the swap. Next: ground cover (grass, small ferns) near her.
+  Not yet: swimming.
+- WATER TO FIX, NOTED (Joshua, 2026-11-20, screenshots on the beach): the river/lagoon water is drawn in SPLOTCHES (a
+  pale flat patch sits on the turquoise), and it is too see-through: she was stopped by the sea's edge before he could
+  tell she was in water. Come back after the movement work.
+- OUTFIT PICTURES IN SETTINGS (Joshua, 2026-11-20: "a little thumbnail... bake the images at 10%, 50%, 80%, 120%, and
+  150% and it will pick the closest based on the belly slider"): `public/thumbs/<look>-<belly>.webp` (135, 120 x 200,
+  about 4 KB each), made by `Game/scripts/make_outfit_thumbs.py` from the built game; Settings -> Outfit is a grid of
+  them (hud.ts), each the picture nearest her belly, a catsuit in the chosen style. Re-run the script for a look after
+  re-baking it. Hidden once the story game decides outfits.
 - HER PREGNANCY (Joshua, 2026-11-19; `Game/src/heroine/pregnancyPlan.ts`): Settings -> PREGNANCY has Pregnancy on/off
   (`gdm.pregnant`), a Belly slider 10-150% with a lock that opens all of 0-200% (`gdm.belly`, `gdm.bellyUnlocked`), the
   week shown beside it off HER OWN builder chart (Blaze: START 10% = week 12, BIGGEST 150% at week 42, END 30%; the

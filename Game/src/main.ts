@@ -284,7 +284,7 @@ async function start(): Promise<void> {
   if (onIsland) {
     meter.step('island', 'Opening the island…');
     const { createIslandWorld } = await import('./world/island/islandWorld');
-    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, { trees: graphics.trees !== 'off' });
+    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, { landscaping: graphics.landscaping });
     scene.add(island.group);
     let told = -1;
     await island.ready(0, 0, (done, of) => {
@@ -832,6 +832,7 @@ async function start(): Promise<void> {
       else if (key === 'autoFire') applyView();
       else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
       else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
+      else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
       else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();

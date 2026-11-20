@@ -15,7 +15,7 @@ The lab's recipe, line for line (`generateFromImage` and `normalizeLevels`):
 NOT done: the lab's "make edges tile" blend. Her picture is a layout of separate pieces of her, not a repeating
 pattern, so blending its edges would only smear the pieces that touch them.
 
-Run:  python3 scripts/make_skin_height.py public/heroines/<look>/albedo.webp public/heroines/<look>/skinHeight.webp [2048]
+Run:  python3 scripts/make_skin_height.py public/heroines/<look>/albedo.webp public/heroines/<look>/skinHeight.webp [4096]
 """
 import sys
 
@@ -50,4 +50,4 @@ def main(source: str, target: str, size: int) -> None:
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 2048)
+    main(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 4096)

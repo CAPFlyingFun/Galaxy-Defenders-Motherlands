@@ -216,7 +216,7 @@ use the game's single copy of three.js.
   `?face_locks=on` for the builder's own place).
 - SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab at 512, then
   "a higher quality version" from the one in the repo; `Game/src/heroine/fast/skinTexture.ts`): each look's own baked
-  skin picture turned into a 2048 HEIGHT MAP by the lab's own recipe (`scripts/make_skin_height.py` ->
+  skin picture turned into a 4096 HEIGHT MAP (the same size as her colour picture; Joshua: "keep it 4K") by the lab's own recipe (`scripts/make_skin_height.py` ->
   `public/heroines/<look>/skinHeight.webp`; her game body's picture layout is not the builder's skin file's, so it is
   made per look), read at the same picture position as her colour, as a 0.5 mm bump on her bare skin only. Subtle: her
   skin picture is smooth. OFF unless chosen: Settings -> HEROINE -> Skin texture (experiment) (`gdm.skinTexture`,

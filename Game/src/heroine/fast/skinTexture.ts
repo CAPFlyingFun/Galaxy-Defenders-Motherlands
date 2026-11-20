@@ -5,7 +5,7 @@
 // (docs/tools/Local_Texture_Lab.html) at 512 to see "how it works with her
 // body texture", then asked for a higher quality version from the picture in
 // the repo. Her game body has its own picture layout, so each look gets a
-// HEIGHT MAP made from its own baked skin picture, at 2048 x 2048, by the lab's
+// HEIGHT MAP made from its own baked skin picture, at 4096 x 4096 (as big as her colour picture), by the lab's
 // own recipe (scripts/make_skin_height.py writes heroines/<look>/skinHeight.webp).
 //
 // It is read at the SAME picture position as her colour, so every crease and

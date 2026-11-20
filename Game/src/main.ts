@@ -25,6 +25,7 @@ import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
 import { HeroineVitals } from './vitals/heroineVitals';
 import { VitalsPanel } from './vitals/vitalsPanel';
 import { loadHeroineSettings, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
+import type { IntakeAction } from './ui/hud';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
@@ -576,6 +577,33 @@ async function start(): Promise<void> {
   const aim = new THREE.Vector3();
   const sectionInView = () => dome.sectionAtPoint(rig.aimPointOnBall(DOME_RADIUS, aim));
 
+  // FOOD AND DRINK, TO TEST (Joshua, 2026-11-19; Settings -> FOOD & DRINK). Eating and drinking take a few seconds: what
+  // is being eaten goes into her a little each frame (`eating`, below in the loop), so her bar and her belly rise as she
+  // eats. The amounts are ordinary portions, millilitres.
+  const INTAKE: Record<'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen', { food: number; water: number; seconds: number }> = {
+    snack: { food: 150, water: 0, seconds: 3 },
+    smallMeal: { food: 400, water: 0, seconds: 6 },
+    fullMeal: { food: 700, water: 0, seconds: 10 },
+    sip: { food: 0, water: 100, seconds: 1.5 },
+    bottle: { food: 0, water: 500, seconds: 5 },
+    canteen: { food: 0, water: 1000, seconds: 8 },
+  };
+  /** What she is eating or drinking now, still to go into her, and the seconds left to take it. */
+  const eating = { food: 0, water: 0, seconds: 0 };
+  /** Seconds left squatting for the bathroom (her bladder is emptied when they run out). */
+  let bathroomLeft = 0;
+  const BATHROOM_SECONDS = 5;
+  const intake = (action: IntakeAction) => {
+    if (action === 'hungry') { vitals.setFoodBar(0.25); return; }
+    if (action === 'thirsty') { vitals.setWaterBar(0.25); return; }
+    if (action === 'bathroom') { bathroomLeft = BATHROOM_SECONDS; heroine.squatFor?.(BATHROOM_SECONDS); return; }
+    const portion = INTAKE[action];
+    eating.food += portion.food;
+    eating.water += portion.water;
+    eating.seconds = Math.max(eating.seconds, 0) + portion.seconds;
+  };
+  vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
+
   const domeDebug = (action: DomeDebugAction) => {
     if (action === 'wet') { heroine.soakSkin?.(); return; }
     if (action === 'hit') sectionInView().damage(25);
@@ -658,6 +686,7 @@ async function start(): Promise<void> {
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();
       else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
+      else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
       else restart();
     },
     onToggleView: toggleView,
@@ -673,6 +702,7 @@ async function start(): Promise<void> {
       applyView();
     },
     onDomeDebug: domeDebug,
+    onIntake: intake,
     // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
     onPrompt: (which) => {
       if (promptIs === 'table') useTable(which);
@@ -759,7 +789,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -1203,6 +1233,16 @@ async function start(): Promise<void> {
     //  enemies coming close will add to it.)
     let threat = 0;
     for (const section of dome.sections) threat = Math.max(threat, section.shattered ? 1 : 0.6 * (1 - section.hp / SECTION_MAX_HP));
+    // (what she is eating or drinking goes in a little each frame, evenly over its seconds)
+    if (eating.seconds > 0) {
+      const share = Math.min(1, dt / eating.seconds);
+      const food = eating.food * share, water = eating.water * share;
+      vitals.consume(food, water);
+      eating.food -= food; eating.water -= water; eating.seconds -= dt;
+      if (eating.seconds <= 0) { eating.food = 0; eating.water = 0; eating.seconds = 0; }
+    }
+    // (the bathroom: squatting, then her bladder emptied)
+    if (bathroomLeft > 0) { bathroomLeft -= dt; if (bathroomLeft <= 0) vitals.relieve(); }
     vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying });
     const reading = vitals.reading;
     limits = reading;
@@ -1257,6 +1297,9 @@ async function start(): Promise<void> {
           lines.push(`stride ${strides.walk.stride.toFixed(2)}/${strides.run.stride.toFixed(2)} m · ${feet.speed.toFixed(1)} m/s`);
           lines.push(`north ${Math.round(turn.base * 57.3)}° · head ${Math.round(turn.head * 57.3)}°` + (rig.mode === 'third' && turn.aimed ? ' · aimed' : ''));
         }
+        // (her stomach, food + water, and her bladder: Settings -> FOOD & DRINK)
+        const inside = vitals.contents;
+        lines.push(`gut ${Math.round(inside.foodMl)}+${Math.round(inside.waterMl)} · bladder ${Math.round(inside.bladderMl)}`);
         hud.setReadout(lines.join('\n'));
         readoutTimer = 0;
         readoutFrames = 0;

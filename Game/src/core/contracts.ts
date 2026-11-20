@@ -195,6 +195,8 @@ export interface HeroineBody {
   setWaterDepth?(metres: number): void;
   /** Her skin's own shine: -1 dry .. 0 natural .. +1 oily (Settings -> HEROINE -> Skin shine). */
   setSkinShine?(oily: number): void;
+  /** Squat down for this many seconds, then stand up (the bathroom, until there is a toilet). */
+  squatFor?(seconds: number): void;
   /** Wet her all over at once (Settings -> TEST TOOLS -> Get wet). */
   soakSkin?(): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

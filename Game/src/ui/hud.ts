@@ -34,6 +34,8 @@ import { DETAILS } from '../heroine/fast/detailLevels';
 
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
+/** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
+export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'bathroom';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -56,6 +58,8 @@ export interface HudOptions {
   /** Her thigh holsters: put away or draw both ('both'), or the gun of the hand picked (src/world/holsterUse.ts). */
   onHolster?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
+  /** A button in Settings -> FOOD & DRINK. */
+  onIntake?(action: IntakeAction): void;
   /**
    * HER PREGNANCY, to test (heroine/pregnancyPlan.ts): what her belly percent is as a week ("week 24", or "not
    * pregnant"), and the time lapse (week 12 to her delivery week, a day a second) started or stopped.
@@ -443,6 +447,18 @@ export class Hud {
     sliderRow('Table height', 'tableHeight', TABLE_RANGE.least, TABLE_RANGE.most, 0.01, (v) => `${Math.round(v * 100)} cm`);
     element('small', 'gd-note', settings, 'Low tables have her squat or kneel to reach her guns; the floor, kneel or squat at random.');
     // ---- Settings: test tools (the dome's buttons used to sit in the readout, in the corner) -------------------------
+    // ---- Settings: food and drink, to test (Joshua, 2026-11-19: "adding food and drink next with different sizes/amounts
+    // to choose from to watch how the food adds, maybe a manual hungry button or quick drain"; main.ts `intake`) ------
+    element('h2', 'gd-settings-part', settings, 'FOOD & DRINK');
+    const intakeRow = (items: readonly (readonly [string, IntakeAction])[]): void => {
+      const row = element('div', 'gd-debug-row', settings);
+      for (const [label, action] of items) tapButton(element('button', 'gd-button', row, label), () => options.onIntake?.(action));
+    };
+    intakeRow([['Snack bar 150 mL', 'snack'], ['Small meal 400 mL', 'smallMeal'], ['Full meal 700 mL', 'fullMeal']]);
+    intakeRow([['Sip 100 mL', 'sip'], ['Bottle 500 mL', 'bottle'], ['Canteen 1 L', 'canteen']]);
+    intakeRow([['Make hungry', 'hungry'], ['Make thirsty', 'thirsty'], ['Bathroom', 'bathroom']]);
+    element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 5 s and her bladder is emptied (until there is a toilet). The full readout shows her stomach and bladder.');
+    choiceRow('Body clock', 'bodyClock', [['1x (real time)', 1], ['6x (1 h = 6 h)', 6], ['15x (as it was)', 15], ['60x (fast test)', 60]], 'How fast her stomach empties and her bladder fills: game hours for each real hour.');
     element('h2', 'gd-settings-part', settings, 'TEST TOOLS');
     const tools = element('div', 'gd-debug-row', settings);
     const tool = (label: string, action: DomeDebugAction) => tapButton(element('button', 'gd-button', tools, label), () => options.onDomeDebug(action));

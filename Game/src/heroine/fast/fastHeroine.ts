@@ -138,6 +138,12 @@ const HEAD_GLSL_BONES = 8;
  * this many metres of her middle; it counts as far again only past SHARP_LEAVE (a little give, so no flicker).
  */
 const SHARP_WITHIN = 2.0;
+/**
+ * SQUATTING ON PURPOSE (Joshua, 2026-11-19: until there is a toilet, "she can just sit or squat down for 5s and then
+ * stand up"): she gets down to a point this far above her floor and ahead of her (metres), low enough for lowerBody.ts
+ * to choose its squat (the Character Builder's, which works for every belly) and not so low that she kneels.
+ */
+const SQUAT_POINT = Object.freeze({ up: 0.32, ahead: 0.22 });
 const SHARP_LEAVE = 2.3;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
 const VIEW_BALL_RADIUS = 1.5;
@@ -387,6 +393,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   /** Her feet in her model's own height (the bottom of her baked shape): the water line is measured up from here. */
   const feetInModel = box.min.y;
   let waterDepth = 0;
+  /** Seconds left of squatting on purpose (`squatFor`: the bathroom, for now). */
+  let squatLeft = 0;
   if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
   skin.castShadow = false;
@@ -958,6 +966,7 @@ if (uHideHead > 0.5) {
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); live?.setBelly(bellyWanted); },
     setPregnant(on: boolean): void { live?.setPregnant(on); },
     setWaterDepth(metres: number): void { waterDepth = Math.max(0, metres); },
+    squatFor(seconds: number): void { squatLeft = Math.max(squatLeft, seconds); },
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
     soakSkin(): void { wetness.soak(); },
     bellyNow: () => body.belly,
@@ -1098,7 +1107,10 @@ if (uHideHead > 0.5) {
         let count = 0;
         reachPoint.set(0, 0, 0);
         for (const i of [0, 1] as const) if (reach.hasJob(i) && !stayUp[i] && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
-        lower.aimAt(count > 0 ? reachPoint.multiplyScalar(1 / count) : null, armClear.eggs[0] ?? null, body.belly);
+        // (SQUATTING ON PURPOSE: the bathroom, until there is a toilet: a point just above the floor in front of her,
+        //  which is what makes lowerBody.ts choose its squat)
+        if (squatLeft > 0) { squatLeft -= frame.dt; root.localToWorld(reachPoint.set(0, SQUAT_POINT.up, SQUAT_POINT.ahead)); count = 1; }
+        lower.aimAt(count > 0 ? (squatLeft > 0 ? reachPoint : reachPoint.multiplyScalar(1 / count)) : null, armClear.eggs[0] ?? null, body.belly);
         lower.apply(frame.dt, body.belly);
         // HER BELLY KEPT OFF THE TABLE (Joshua: "so it doesn't matter the belly size"): its point nearest the table's
         // face; if that is closer than KEEP_GAP (and her belly is low enough to meet the table, not above its top),

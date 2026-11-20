@@ -90,6 +90,8 @@ export interface HeroineSettings {
   faceLocks: ShadowChoice;
   /** HER SKIN'S SHINE, 0 dry .. 25 natural (Joshua's pick, the default) .. 100 oily (fast/skinShine.ts). Takes hold at once. */
   skinShine: number;
+  /** HER BODY'S CLOCK: game hours per real hour for her stomach and gut (Joshua, 2026-11-19, to test). Takes hold at once. */
+  bodyClock: number;
 }
 
 
@@ -149,6 +151,7 @@ export const SETTING_KEYS = Object.freeze({
   skinTexture: 'gdm.skinDepth',
   faceLocks: 'gdm.faceLocks',
   skinShine: 'gdm.skinShine',
+  bodyClock: 'gdm.bodyClock',
 });
 
 function read(key: string): string | null {
@@ -223,5 +226,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'off' ? 'off' : 'on',
     faceLocks: (address.get('face_locks') ?? read(SETTING_KEYS.faceLocks)) === 'on' ? 'on' : 'off',
     skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
+    // (15: what the game has run at; Joshua's real-life plan is 6)
+    bodyClock: asNumber(address.get('clock') ?? read(SETTING_KEYS.bodyClock), 1, 60) ?? 15,
   };
 }

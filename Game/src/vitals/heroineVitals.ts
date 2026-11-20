@@ -29,7 +29,7 @@
 // ============================================================================
 import { ACTIVITY, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { ABDOMEN_PLACE, STOMACH } from '@charb/actor/abdominalOrgans';
-import { eat as gutEat, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
+import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
 
 /** Her food bar (0..1) from the food in her stomach, millilitres (VITALS_TUNING.foodBar). */
 export function foodBarOf(stomachFoodMl: number): number {
@@ -345,7 +345,7 @@ export class HeroineVitals {
     }
 
     // 2. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
-    const hours = dt * tuning.gutHoursPerSecond;
+    const hours = dt * this.gutHoursPerSecond;
     this.gut = stepGut(this.gut, hours);
     const [sweatRest, sweatHard] = tuning.sweatMlPerHour;
     this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * this.now.felt) * hours;
@@ -359,6 +359,39 @@ export class HeroineVitals {
       if (this.health > h.needsFloor) this.health = Math.max(h.needsFloor, this.health - h.lossPerSecond * ((worstNeed - h.badOver) / (1 - h.badOver)) * dt);
     } else if (worstNeed < h.wellUnder) this.health += h.regenPerSecond * dt;
     this.health = clamp(this.health, 0, h.most);
+  }
+
+  /**
+   * HER BODY'S CLOCK: hours that pass for her stomach and gut in one real second (VITALS_TUNING.gutHoursPerSecond to
+   * start). Settings -> FOOD & DRINK -> Body clock changes it to test (Joshua, 2026-11-19: "real life 1 hour is 6 hours
+   * in the game" is 6 / 3600).
+   */
+  gutHoursPerSecond: number = VITALS_TUNING.gutHoursPerSecond;
+
+  /** What is in her now, millilitres: her stomach (food, water), her bladder (for the readout and the tests). */
+  get contents(): { readonly foodMl: number; readonly waterMl: number; readonly bladderMl: number } {
+    return { foodMl: this.gut.stomachFoodMl, waterMl: this.gut.stomachWaterMl, bladderMl: this.gut.bladderMl };
+  }
+
+  /** TEST: her food bar down to `bar` (0..1) at once: her stomach's food set to what that bar is, nothing on its way. */
+  setFoodBar(bar: number): void {
+    const room = ABDOMEN_PLACE.stomachRoomMl, most = STOMACH.mostMl, b = clamp(bar, 0, 1);
+    this.gut = { ...this.gut, stomachFoodMl: b <= 0.5 ? (b / 0.5) * room : room + ((b - 0.5) / 0.5) * (most - room), intestineMl: 0 };
+    this.needs = this.gameNeeds();
+  }
+
+  /** TEST: her water bar down to `bar` (0..1) at once: as short of water as the builder's gut makes that thirst. */
+  setWaterBar(bar: number): void {
+    const thirst = 1 - clamp(bar, 0, 1), from = GUT.thirstFrom * 0.5;
+    const lost = from + thirst * (GUT.thirstFull - from);
+    this.gut = { ...this.gut, waterMl: -lost * GUT.kg * 1000, stomachWaterMl: 0 };
+    this.needs = this.gameNeeds();
+  }
+
+  /** She uses the bathroom: her bladder emptied (and her rectum, if she needed to go). */
+  relieve(): void {
+    this.gut = { ...this.gut, bladderMl: 0, rectumMl: 0 };
+    this.needs = this.gameNeeds();
   }
 
   /** She eats and/or drinks: millilitres of food and of water (a snack bar is about 150, a canteen swig 250). */

@@ -68,6 +68,8 @@ export interface SuitGearStyle {
    * Left out: just under where a belt would be.
    */
   readonly hipPanelTop?: readonly [number, number];
+  /** How high the boots come: their top as a share of the way down her shin (0 her knee). Left out: `SUIT_GEAR.bootTop`. */
+  readonly bootTop?: number;
 }
 
 /** GAME TUNING: sizes of the pieces (metres) and where on each bone they sit (shares of the bone's length). */
@@ -241,7 +243,7 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
     if (style.boots) {
       const line = childAt(leg.shin, leg.foot);
       const front = dirIn(leg.shin, 0, 0, 1), outward = dirIn(leg.shin, side, 0, 0);
-      const top = anime ? SUIT_GEAR.animeBootTop : SUIT_GEAR.bootTop;
+      const top = style.bootTop ?? (anime ? SUIT_GEAR.animeBootTop : SUIT_GEAR.bootTop);
       const profile = measureRound(pointsOn(leg.shin, false), line, front, outward, top, SUIT_GEAR.bootBottom);
       const combatPaint: Paint = (t, angle) => {
         const share = SUIT_GEAR.bootTop + (SUIT_GEAR.bootBottom - SUIT_GEAR.bootTop) * t;

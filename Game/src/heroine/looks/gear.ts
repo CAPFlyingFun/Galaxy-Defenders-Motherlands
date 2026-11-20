@@ -65,6 +65,34 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     gun: { metal: 0x141518, glow: 0xff0000 },
   },
   /**
+   * THE BRONZE CATSUIT (bronzeSuit.ts; one of Joshua's catsuit styles): its smooth bronze very glossy, as his picture's
+   * near-liquid sheen; a dark leather belt with bronze fittings; flat knee-high bronze boots, no cuffs; bronzed guns.
+   */
+  bronzeSuit: {
+    belt: { belt: 0x3a2416, edge: 0x6a4228, buckle: 0xc07a40, accent: 0xc07a40, strap: 0x2e1c10, holster: 0x2a1a0e, plate: 0x4a2812 },
+    beltLine: [-0.06, 0.035, 0.1],
+    clothShine: { cloth: 0.3, trim: 0.16 },
+    gun: { metal: 0x2a1a0e, glow: 0xc07a40 },
+    pieces: {
+      plate: '#8a5028', trim: '#4a2812', accent: '#c07a40', sole: '#1e120a', glow: '',
+      boots: true, cuffs: false, shoulders: false,
+      // (KNEE-HIGH and flat: Joshua, 2026-11-20, "knee high flat-footed boots")
+      bootTop: 0.03,
+    },
+  },  // (version B: the same gear)
+  bronzeSuitLow: {
+    belt: { belt: 0x3a2416, edge: 0x6a4228, buckle: 0xc07a40, accent: 0xc07a40, strap: 0x2e1c10, holster: 0x2a1a0e, plate: 0x4a2812 },
+    beltLine: [-0.06, 0.035, 0.1],
+    clothShine: { cloth: 0.3, trim: 0.16 },
+    gun: { metal: 0x2a1a0e, glow: 0xc07a40 },
+    pieces: {
+      plate: '#8a5028', trim: '#4a2812', accent: '#c07a40', sole: '#1e120a', glow: '',
+      boots: true, cuffs: false, shoulders: false,
+      // (KNEE-HIGH and flat: Joshua, 2026-11-20, "knee high flat-footed boots")
+      bootTop: 0.03,
+    },
+  },
+  /**
    * THE ANIME SPACE HEROINE (spaceHeroine.ts; look 2 of Joshua's board): a brown leather belt with gold buckle and
    * edges; the holster navy; her guns dark with gold. Her leotard a smooth satin sheen. (Her 3D pieces come next.)
    */

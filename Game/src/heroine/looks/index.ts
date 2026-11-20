@@ -10,6 +10,7 @@ import { BLAZE_PINK_LOOK } from './blazePink';
 import { SHADOW_SUIT_LOOK } from './shadowSuit';
 import { BLAZE_CATSUIT_LOOK } from './blazeCatsuit';
 import { SPACE_HEROINE_LOOK } from './spaceHeroine';
+import { BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
@@ -26,6 +27,10 @@ export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   blazeCatsuit: BLAZE_CATSUIT_LOOK,
   /** Blaze as the Anime Space Heroine: look 2 of Joshua's outfit board (spaceHeroine.ts). */
   spaceHeroine: SPACE_HEROINE_LOOK,
+  /** Blaze in the bronze catsuit: one of Joshua's catsuit styles (bronzeSuit.ts). */
+  bronzeSuit: BRONZE_SUIT_LOOK,
+  /** The same, its low sweetheart neckline and her neck bare (bronzeSuit.ts, version B). */
+  bronzeSuitLow: BRONZE_SUIT_LOW_LOOK,
 };
 
 /** The look the game's heroine wears when the address does not name one. */

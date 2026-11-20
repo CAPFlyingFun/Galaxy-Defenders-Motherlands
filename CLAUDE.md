@@ -106,6 +106,14 @@ use the game's single copy of three.js.
   (`update`); their gold-hemmed tops hang OVER the belt's lower half, clamped by four gold studs each (`hipPanelTop`,
   Joshua 2026-11-20: "they look like they are floating"). Belt: ONE holster, her right (`holsters`), no pouches (`pouches: false`: table reloads only); a gun put
   away on her left is stowed out of sight. Her arm keeps clear of a holstered gun only where a holster is drawn.
+- CATSUIT STYLES ARE THE THEME (Joshua, 2026-11-20: "one piece catsuits like the back one, just different variations of
+  looks as styles are better for the theme"; references `docs/reference/outfits/looks5-6-catsuit-styles-*.jpg`, a green
+  and gold armoured one and a glossy bronze/brown one): each built on his catsuit export, colours, painted panels,
+  his texture pictures and a few 3D pieces. THE BRONZE CATSUIT (`looks/bronzeSuit.ts`), all three layers by code (trunk
+  measured FIRST: the top of her chest by her collarbones also counts as her shoulders), very glossy (cloth 0.3, trim
+  0.16), dark seams down her sides and under her bust, lighter cups, flat KNEE-HIGH bronze boots (`bootTop` 0.03; his
+  ask), in TWO necklines (his ask): `bronzeSuit` a keyhole over her chest and a band up her neck; `bronzeSuitLow` a low
+  sweetheart line, her upper chest and neck bare ("can always add a collar piece after"). Next: the green and gold.
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
   `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
   CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted

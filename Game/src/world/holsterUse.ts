@@ -122,6 +122,26 @@ export class HolsterUse {
     return this.busy;
   }
 
+  /**
+   * A NEW OUTFIT (main.ts `changeOutfit`): she is a new body with her guns back in her hands, so every gun that was
+   * holstered is put straight into the new body's holster, in its seat (no reach: the change happens behind a cover).
+   * A body with no holster on that side keeps that gun in her hand.
+   */
+  reseat(): void {
+    const h = this.heroine.hands;
+    this.settling = [];
+    this.phase = 'idle';
+    this.hands = [];
+    for (const hand of ['left', 'right'] as const) {
+      if (!this.holstered[hand]) continue;
+      const holster = h?.holster(hand);
+      if (!h || !holster) { this.holstered[hand] = false; continue; }
+      const gun = h.releaseGun(hand, holster.bone);
+      gun.matrix.copy(holster.seat);
+      gun.matrixWorldNeedsUpdate = true;
+    }
+  }
+
   /** One frame. Writes where she looks (`lookAt`: the holster) while an action runs, else null. */
   update(dt: number, out: { lookAt: THREE.Vector3 | null }): void {
     this.moveSettling(dt);

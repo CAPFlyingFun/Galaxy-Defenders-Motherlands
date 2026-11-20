@@ -168,6 +168,28 @@ export class TableUse {
   /** Whether a reload would do anything (a gun is not full, or her pouches are not). */
   get needsReload(): boolean { return !this.gunsFull || this.pouchesLow(); }
 
+  /**
+   * A NEW OUTFIT (main.ts `changeOutfit`, only while nothing runs here): she is a new body, with new guns in her hands
+   * and their own clips in them. A gun that lay on the table is laid on its stand again (the new body's), and the clips
+   * this table knows of are the new guns'. Each gun keeps its rounds.
+   */
+  reseat(): void {
+    const h = this.heroine.hands;
+    this.settling = [];
+    this.clipHeld.left = this.clipHeld.right = null;
+    this.clipTouched.left = this.clipTouched.right = null;
+    this.clipIn.left = h?.gunClip('left') ?? null;
+    this.clipIn.right = h?.gunClip('right') ?? null;
+    this.table.root.updateWorldMatrix(true, false);
+    for (const hand of [...this.lying.keys()]) {
+      if (!h) { this.lying.delete(hand); continue; }
+      const gun = h.releaseGun(hand, this.table.root);
+      gun.matrix.copy(this.table.root.matrixWorld).invert().multiply(this.table.slot(hand, slotAt));
+      gun.matrixWorldNeedsUpdate = true;
+      this.lying.set(hand, gun);
+    }
+  }
+
   /** Change the table's height (Settings); the guns lying on it go up or down with their stands. */
   setHeight(height: number): void {
     if (this.busy) return;

@@ -109,6 +109,11 @@ export interface LiveBody {
    * (null until there is a new one). See SHAPE_SETTLE.
    */
   takeShape(): LiveShape | null;
+  /**
+   * Read her shape again soon, though nothing changed: a NEW OUTFIT on the same body (main.ts `changeOutfit`) starts at
+   * its own baked belly, and takes the builder's shape from this reading as it would after a change of belly.
+   */
+  readAgain(): void;
   /** How long the hidden body took to open, seconds. */
   readonly openedIn: number;
   dispose(): void;
@@ -193,6 +198,7 @@ export async function openLiveBody(renderer: THREE.WebGLRenderer, look: HeroineL
   return {
     kickAt, kickDir, openShape,
     takeShape(): LiveShape | null { const s = fresh; fresh = null; return s; },
+    readAgain(): void { readIn = Math.min(readIn, SHAPE_SETTLE); },
     openedIn: (performance.now() - began) / 1000,
     setBelly(percent: number): void { const b = Math.max(0, Math.min(200, Math.round(percent))); if (b !== wantBelly) { wantBelly = b; stillFor = 0; } },
     setPregnant(on: boolean): void {

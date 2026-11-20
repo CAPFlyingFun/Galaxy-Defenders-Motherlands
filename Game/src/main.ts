@@ -106,12 +106,13 @@ type GameHeroine = HeroineBody & {
  * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
  * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void): Promise<GameHeroine> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin') return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
-  // (her outfit: the address's ?look=, else the one chosen in Settings: heroineSettings.ts OUTFIT_CHOICES)
-  const look = lookKey(asked.get('look') ?? (settings.outfit || null));
+  // (her outfit: the one asked for -- at the start the address's ?look=, else the one chosen in Settings
+  //  (heroineSettings.ts OUTFIT_CHOICES); after a change in Settings, the new one: see `changeOutfit`)
+  const look = lookKey(outfit);
   say('Loading Blaze…');
   if (settings.body === 'performance') {
     try {
@@ -152,6 +153,16 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     return createStandInHeroine();
   }
 }
+
+/**
+ * The Settings choices that change HER (a new body of the same kind) and are done WHILE THE GAME RUNS (main's
+ * `changeOutfit`); every other one that needs a new heroine (the Body, Light or Full, the live body) still starts the
+ * game again.
+ */
+const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'suitKnit', 'hairStrands', 'skinTexture', 'faceLocks', 'sharpParts'];
+
+/** How wide the portrait cover's still picture of the game is made, pixels (it is shown far smaller). */
+const SNAPSHOT_WIDTH = 480;
 
 const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
 const TABLE_WALK = 1.1;
@@ -334,7 +345,26 @@ async function start(): Promise<void> {
   // ---- Heroine, camera, controls -----------------------------------------------
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
   await breathe();
-  const heroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text));
+  // HER OUTFIT NOW: the address's ?look= wins at the start, else the one chosen in Settings. A change in Settings
+  // changes her outfit WHILE THE GAME RUNS (see `changeOutfit` below), and this follows it.
+  let outfitNow: string | null = new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null);
+  /**
+   * THE HEROINE AS THE REST OF THE GAME KNOWS HER (Joshua, 2026-11-20: "when I select a new outfit, does it restart the
+   * whole app? It should freeze the screen, remove the old clothing, apply the new one, then unfreeze"). Everything
+   * that works with her (the table, the bars, the door, her holsters, her belt reload, the camera, the loop below) is
+   * given THIS one object, once. It is a stand-in that passes every question on to whichever body she is now
+   * (`bodyNow`): a JavaScript Proxy. A change of outfit swaps `bodyNow` for the new body, and everything keeps working
+   * with no new hand-over: they all ask `heroine.hands`, `heroine.root` and so on afresh each time.
+   */
+  let bodyNow: GameHeroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
+  const heroine: GameHeroine = new Proxy({} as GameHeroine, {
+    get(_stand, key) {
+      const value = (bodyNow as unknown as Record<PropertyKey, unknown>)[key];
+      // (her methods are run on her own body, as if called on it directly)
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(bodyNow) : value;
+    },
+    has(_stand, key) { return key in bodyNow; },
+  });
   // (her skin's shine as chosen in Settings: 0 dry .. 25 natural .. 100 oily)
   heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
   await breathe();
@@ -363,7 +393,7 @@ async function start(): Promise<void> {
       await breathe();
       meter.step('live body', 'Blaze\'s live body: fetching its code…');
       const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
-      const live = await openLiveBody(renderer, LOOKS[lookKey(new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null))], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
+      const live = await openLiveBody(renderer, LOOKS[lookKey(outfitNow)], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
       heroine.attachLive(live);
       liveOpened = true;
     } catch (error) {
@@ -389,7 +419,7 @@ async function start(): Promise<void> {
   // (src/world/weaponTable.ts, src/world/tableUse.ts; her hands: src/heroine/fast/handReach.ts, lowerBody.ts).
   // (its clips in her outfit's gun colours, so a clip from the table matches her guns: looks/gear.ts)
   const [{ lookKey: tableLookKey }, { LOOK_GEAR }] = await Promise.all([import('./heroine/looks'), import('./heroine/looks/gear')]);
-  const tableLook = tableLookKey(new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null));
+  const tableLook = tableLookKey(outfitNow);
   const table = new WeaponTable(graphics.tableHeight, LOOK_GEAR[tableLook]?.gun);
   table.place(1.6, 9.85, 0);
   scene.add(table.root);
@@ -431,10 +461,14 @@ async function start(): Promise<void> {
   const holsterAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
   // RELOADING FROM HER BELT, ON THE GO (Joshua, 2026-11-18; src/world/beltReload.ts): one gun at a time, the other
   // holstered; the empty goes back into the pouch the fresh clip came from. The table's RELOAD refills her pouches.
-  const gear = (heroine as unknown as { gear?: BeltGear }).gear ?? null;
-  const beltReload = new BeltReload(heroine, gear, tableUse, holsterUse);
+  // (her belt gear is asked for each time: a new outfit brings a new belt)
+  const gearNow = (): BeltGear | null => (heroine as unknown as { gear?: BeltGear }).gear ?? null;
+  const beltReload = new BeltReload(heroine, gearNow, tableUse, holsterUse);
   const beltAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
-  tableUse.pouchesLow = () => !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
+  tableUse.pouchesLow = () => {
+    const gear = gearNow();
+    return !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
+  };
   /** Whether the table's reload is running (when it ends, her pouches are full again). */
   let tableReloading = false;
   /** A table action waiting for her holstered guns to be drawn first; a bar waiting for her guns to be put away. */
@@ -651,6 +685,113 @@ async function start(): Promise<void> {
   // (every other way of starting again -- the splash, the control editor -- goes through this one: core/restart.ts)
   setRestart(restart);
 
+  /**
+   * CHANGING HER OUTFIT WHILE THE GAME RUNS (Joshua, 2026-11-20: "It should freeze the screen, remove the old clothing,
+   * apply the new one, then unfreeze with the outfit... CCBS actually switches almost instantly with no issues or
+   * restarting of the whole app"). Settings -> HEROINE -> Outfit (and the other choices that make her a different
+   * body: suit fabric, hair strands, skin depth, the locks by her face, the sharp face, bust and belly) come here
+   * instead of restarting the game:
+   *
+   *   1. whatever she is doing ends first (a bar or a door is let go; a holster, a reload, the table, a squat finish);
+   *   2. the picture FREEZES (the loop draws nothing and no game time passes) under a small "Changing outfit" cover;
+   *   3. the old body is LET GO FIRST, before the new one is loaded, so the phone never holds two of her at once
+   *      (holding two is what crashed the iPhone before). Her hidden live body is kept when the new outfit is on the
+   *      same body (most are: it is the slowest thing of hers to open), else it is let go and opened again;
+   *   4. the new body is made, put where she stood, facing the same way, with her belly, pregnancy, skin shine, view,
+   *      shadows, guns (in her hands, holstered or on the table, each with its rounds) and full pouches as they were;
+   *   5. the graphics chip is given the new body's materials ahead of time, and the picture UNFREEZES.
+   *
+   * Two changes made quickly one after the other run one after the other, the last one winning.
+   */
+  /** True while the picture is frozen for a change (the loop does nothing). */
+  let frozen = false;
+  /** A change is running; another was asked for meanwhile. */
+  let outfitChanging = false, outfitAgain = false;
+  /** The small cover over the frozen picture. */
+  const outfitCover = document.createElement('div');
+  outfitCover.style.cssText = 'position:fixed;inset:0;z-index:1500;display:none;align-items:center;justify-content:center;background:rgba(4,6,13,.55);color:#5ee8c8;font:600 15px system-ui;letter-spacing:.06em;text-align:center;pointer-events:all;';
+  document.body.appendChild(outfitCover);
+  /** Nothing of hers is running that a change of body would cut short. */
+  const idleForChange = (): boolean => !busyNow() && !holsterUse.busy && !beltReload.busy && !tableAfterDraw
+    && !grabAfterHolster && !grabAfterTable && doorAfterHolster === null && bathroomLeft <= 0 && !grabUse.holding && !doorUse.holding;
+  /**
+   * What the cover says while she changes. Made OUT HERE on purpose: the new body keeps this for good (it is how she
+   * reports her loading), and a closure keeps everything its scope keeps -- made inside `swapBody` it held on to the
+   * old body's belt, and through it the whole old body (about 500 MB, found with a heap snapshot, 2026-11-20).
+   */
+  const sayChanging = (text: string): void => { outfitCover.textContent = text.replace('Loading Blaze', 'Changing outfit'); };
+  /** How many of a belt's pouches hold a full clip (also out here, for the same reason). */
+  const fullPouchesOf = (gear: BeltGear | null): number => {
+    let n = 0;
+    if (gear) for (let i = 0; i < gear.pouches; i++) if (gear.pouchState(i) === 'full') n++;
+    return n;
+  };
+  const swapBody = async (): Promise<void> => {
+    // 1. her hands let go of a bar or a door; then wait for whatever is running to finish (checked ten times a second)
+    if (grabUse.holding) grabUse.letGo();
+    if (doorUse.holding) doorUse.letGo();
+    while (!idleForChange()) await new Promise((done) => setTimeout(done, 100));
+    // 2. freeze, and the cover
+    frozen = true;
+    outfitCover.textContent = 'Changing outfit…';
+    outfitCover.style.display = 'flex';
+    await breathe();
+    const say = sayChanging;
+    // what carries over: her outfit's look (old and new), and how many pouches hold a full clip
+    const [{ lookKey, LOOKS }, { bareLook, openLiveBody }] = await Promise.all([import('./heroine/looks'), import('./heroine/fast/liveBody')]);
+    const fromLook = lookKey(outfitNow), toLook = lookKey(graphics.outfit || null);
+    const fullPouches = fullPouchesOf(gearNow());
+    // 3. let go of the old body first; her hidden live body is kept if the new outfit is on the same body
+    const bodyOf = (key: string): string => JSON.stringify(bareLook(LOOKS[key]).body);
+    const sameBody = bodyOf(fromLook) === bodyOf(toLook);
+    const oldBody = bodyNow as GameHeroine & { detachLive?: () => import('./heroine/fast/liveBody').LiveBody | null };
+    let live = oldBody.detachLive?.() ?? null;
+    if (live && !sameBody) { live.dispose(); live = null; }
+    oldBody.root.removeFromParent();
+    oldBody.dispose();
+    renderer.renderLists.dispose();
+    await breathe();
+    // 4. the new body, as she was
+    outfitNow = graphics.outfit || null;
+    bodyNow = await createHeroine(renderer, scene, graphics, say, outfitNow);
+    scene.add(heroine.root);
+    heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
+    heroine.setFacing?.(turn);
+    if (island) heroine.setGround?.(island.standAt);
+    heroine.setPosition(motion.x, motion.z, island ? island.groundAt(motion.x, motion.z) : 0);
+    heroine.setYaw(turn.base);
+    applyShadows();
+    applyView();
+    if (graphics.liveBody === 'on' && heroine.attachLive) {
+      try {
+        if (!live) { say('Changing outfit: her live body…'); live = await openLiveBody(renderer, LOOKS[toLook], (stage) => sayChanging(`Changing outfit: live body, ${stage}…`)); }
+        heroine.attachLive(live);
+        live.readAgain(); // (the builder's shape for her belly is read again for the new body)
+      } catch (error) { console.error('The live body could not be opened again; she carries on without it.', error); live = null; }
+    } else live?.dispose();
+    applyPregnancy(); // (after the live body is in, so it hears her belly and pregnancy too)
+    holsterUse.reseat();
+    tableUse.reseat();
+    gearNow()?.setClips(fullPouches);
+    // 5. her new materials handed to the graphics chip ahead of time (never waited on more than 5 s), then unfreeze
+    say('Changing outfit: getting the picture ready…');
+    try { await Promise.race([renderer.compileAsync(scene, rig.camera), new Promise((enough) => setTimeout(enough, 5000))]); }
+    catch (error) { console.warn('The new outfit\'s materials could not be got ready ahead of time.', error); }
+    outfitCover.style.display = 'none';
+    frozen = false;
+  };
+  const changeOutfit = async (): Promise<void> => {
+    if (outfitChanging) { outfitAgain = true; return; }
+    outfitChanging = true;
+    try {
+      do { outfitAgain = false; await swapBody(); } while (outfitAgain);
+    } catch (error) {
+      // (if anything went wrong part-way, the game starts again cleanly instead: she is never left half changed)
+      console.error('The outfit could not be changed while playing; starting again with it.', error);
+      restart();
+    } finally { outfitChanging = false; }
+  };
+
   const hud = new Hud(uiHost, controls, {
     debug,
     onDebugChange(on) {
@@ -689,6 +830,8 @@ async function start(): Promise<void> {
       else if (key === 'autoFire') applyView();
       else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
       else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
+      // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
+      else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();
     },
     onToggleView: toggleView,
@@ -792,7 +935,10 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake };
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake,
+      // (for the test scripts: change her outfit as Settings does, and whether a change is running)
+      changeOutfit: (key: string) => { graphics.outfit = key; saveSetting('outfit', key); return changeOutfit(); },
+      outfitChanging: () => outfitChanging };
   }
 
   // ---- LOADING ENDS HERE, AND PAUSING BEGINS (Joshua, 2026-11-17) ------------------------------------------------
@@ -817,6 +963,8 @@ async function start(): Promise<void> {
   let pause: Pause | null = null;
   /** The frame before this one was a paused one (so the first frame after a pause can say "carrying on"). */
   let wasPaused = false;
+  /** The small canvas the portrait strip's picture is copied down into (see `snapshot`). */
+  const snapshotCanvas = document.createElement('canvas');
   const beginPlaying = (): void => {
     // (this load is remembered as a guide for the next only if it went the way its kind says it should)
     meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
@@ -827,7 +975,18 @@ async function start(): Promise<void> {
     pause = createPause({
       stage, host: uiHost,
       // A still picture of the game for the upright screen's strip: drawn once more, and read straight off.
-      snapshot: () => { renderer.render(scene, rig.camera); return renderer.domElement.toDataURL('image/jpeg', 0.7); },
+      // SMALL (the iPhone audit, 2026-11-20): the strip shows it a few hundred pixels wide, but the whole screen was
+      // encoded at its full size (about 6 MB of picture at once); now it is copied down to SNAPSHOT_WIDTH first, into
+      // one small canvas kept for it. None while she is changing outfit (nothing of her to show).
+      snapshot: () => {
+        if (frozen) return null;
+        renderer.render(scene, rig.camera);
+        const from = renderer.domElement, k = Math.min(1, SNAPSHOT_WIDTH / from.width);
+        snapshotCanvas.width = Math.max(1, Math.round(from.width * k));
+        snapshotCanvas.height = Math.max(1, Math.round(from.height * k));
+        snapshotCanvas.getContext('2d')?.drawImage(from, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+        return snapshotCanvas.toDataURL('image/jpeg', 0.7);
+      },
       // Whatever the player was holding is let go: the sticks back to their middles, no button down.
       onPause: () => {
         // (the two arrow buttons of the old ring track are gone: FIRE is the only button there is to let go of)
@@ -871,6 +1030,13 @@ async function start(): Promise<void> {
     }
     // Carrying on after a pause: she is told, so the time she stood paused is not counted as one very slow frame
     // (her detail is chosen by the frame rate: src/heroine/fast/autoDetail.ts).
+    // CHANGING HER OUTFIT (`changeOutfit`): frozen as when paused; nothing is drawn, so the last picture stays up.
+    if (frozen) {
+      last = now;
+      wasPaused = true;
+      controls.takeLookX(); controls.takeLookY(); controls.takeZoom(); controls.takeClicks();
+      return;
+    }
     if (wasPaused) { wasPaused = false; heroine.resumed?.(); }
     // ---- (the game, as before) ---------------------------------------------------------------------------------
 
@@ -917,7 +1083,7 @@ async function start(): Promise<void> {
     holsterUse.update(dt, holsterAsk);
     beltReload.update(dt, beltAsk);
     // (the table's reload has ended: her pouches are full again, the empties swapped for full clips)
-    if (tableReloading && tableUse.action !== 'reload') gear?.setClips(gear.pouches);
+    if (tableReloading && tableUse.action !== 'reload') { const gear = gearNow(); gear?.setClips(gear.pouches); }
     tableReloading = tableUse.action === 'reload';
     // (her guns are drawn: on to the table; her guns are away: on to the bar)
     if (tableAfterDraw && !holsterUse.busy) { const which = tableAfterDraw; tableAfterDraw = null; tableUse.start(which); }

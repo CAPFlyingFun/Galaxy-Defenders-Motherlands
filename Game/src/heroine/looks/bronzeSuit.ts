@@ -25,11 +25,12 @@
 //     her upper chest: a SWEETHEART neckline curving over the top of each breast
 //     and dipping between them, up to the band round her neck. (Painted by code,
 //     not from the builder's bodysuit template, so it can be open there.)
-//   Paint layer 2, THE SEAMS: thin lines in a darker bronze: the
-//     edge of the neckline and of the neck band, the underside of her bust, and
-//     a seam down each side from her bust to her hip, as in his picture.
-//   Paint layer 3, THE CUPS: a lighter, brighter bronze over her
-//     bust, where his picture catches the light.
+//   Paint layer 2, THE TRIM STRIPS: in a darker bronze, about 1.4 cm wide,
+//     under her bust and down each side from her bust to her hip, and a thin
+//     edge round the neckline and the neck band.
+//   Paint layer 3, THE PINSTRIPE: a fine lighter bronze line down the middle
+//     of each strip. (It was lighter cups over her bust; their edge left a
+//     faint line under it, so they went, 2026-11-20.)
 //
 // The game makes it all shine (looks/gear.ts `clothShine`: smooth, glossy).
 // ============================================================================
@@ -42,11 +43,10 @@ import { EXPORT_BODY } from './shadowSuit';
 export const BRONZE_SUIT_COLOURS = Object.freeze({
   /** the catsuit: a warm copper bronze */
   bronze: '#84461f',
-  /** the seams: only a little darker than the suit, so they read as a crease, not a black line (Joshua, 2026-11-20: "I
-   *  see black or dark lines to the side of the belly"; was #3c1f0c) */
-  seam: '#6c3817',
-  /** the cups: only a little lighter, blended in rather than a patch (was #9a5428) */
-  cups: '#8d4b22',
+  /** the trim strips: a deep glossy bronze, a deliberate trim (Joshua, 2026-11-20: "adding some strip trim on purpose") */
+  seam: '#4c260e',
+  /** the pinstripe down the strips' middles (the name is the cups', which it replaced) */
+  cups: '#b8723a',
 });
 
 /** A colour as the builder saves one: its smooth Flat family's White (colour 0) dyed with a tint. */
@@ -101,8 +101,16 @@ const UNDER_BUST_TO = 52;
 
 /** How wide a seam is: its half width (leg lengths, about 2.5 mm each side). */
 const SEAM = 0.0045;
+/**
+ * THE TRIM STRIPS (Joshua, 2026-11-20: "I still see the line, although faint... what about maybe adding some strip trim
+ * on purpose to try and cover it up"): the seams made a deliberate strip, this half width (leg lengths, about 7 mm each
+ * side: 1.4 cm across) in the darker bronze, with a fine lighter pinstripe down its middle (`PINSTRIPE`). The lighter
+ * cups are gone: their edge was the faint line under her bust.
+ */
+const STRIP = 0.009;
+const PINSTRIPE = 0.0022;
 /** How softly a seam and the cups fade at their edges: their distances scaled down, so the builder eases them over more of her skin. */
-const SOFT = 0.45;
+const SOFT = 0.7;
 
 interface Measured { suit: number; neckEdge: number; band: number; seams: number; cups: number }
 
@@ -122,7 +130,7 @@ function measure(surface: PaintSurface, v: number, place: LegPlace, out: Measure
     const at = Math.min(SIDE_SEAM_SPAN.to, Math.max(SIDE_SEAM_SPAN.from, place.along));
     const side = Math.hypot((turn - SIDE_SEAM(at)) * RADIANS * r, place.along - at);
     const under = turn <= UNDER_BUST_TO ? Math.abs(place.along - UNDER_BUST(turn)) : Math.hypot(place.along - UNDER_BUST(UNDER_BUST_TO), (turn - UNDER_BUST_TO) * RADIANS * r);
-    out.seams = SEAM - Math.min(side, under);
+    out.seams = -Math.min(side, under);   // (minus how far from a seam's middle line: a strip is where this is above -its half width)
     // the cups: between the underside of her bust and the neckline, in front of the side seams
     out.cups = Math.min((place.along - UNDER_BUST(Math.min(turn, UNDER_BUST_TO))) * 0.8, below, (cupsTop - place.along) * 0.8, (SIDE_SEAM(0.55) - turn) * RADIANS * r);
     return out;
@@ -151,8 +159,8 @@ const painter = (pick: (m: Measured) => number, low: boolean, cupsTop = 1): Mask
 const painters = (low: boolean): MaskPainter[] => [
   painter((m) => m.suit, low),
   ...(SEAMS_AND_CUPS ? [
-    painter((m) => SOFT * Math.max(Math.min(m.seams, m.suit), SEAM * 1.2 - Math.abs(m.neckEdge - SEAM * 1.2), m.band > -0.02 ? SEAM - Math.abs(m.band - SEAM) : -1), low),
-    painter((m) => SOFT * (m.cups - SEAM * 2.5), low),
+    painter((m) => SOFT * Math.max(Math.min(m.seams + STRIP, m.suit), SEAM * 1.2 - Math.abs(m.neckEdge - SEAM * 1.2), m.band > -0.02 ? SEAM - Math.abs(m.band - SEAM) : -1), low),
+    painter((m) => SOFT * Math.min(m.seams + PINSTRIPE, m.suit), low),
   ] : [NOTHING, NOTHING]),
 ];
 
@@ -162,7 +170,10 @@ const painters = (low: boolean): MaskPainter[] => [
  * can only be as fine as her skin's points, so they are BLENDED: colours close to the suit's, edges eased (`SOFT`).
  * False leaves them off.
  */
-const SEAMS_AND_CUPS = true;
+// (OFF, 2026-11-20: made a deliberate 1.4 cm trim with a pinstripe, the strips WANDERED down her belly, the measure of
+//  where she curves stepping from point to point of her skin; a painted line there cannot be straight. A clean suit
+//  until the builder's catsuit has drawn edges, or the strips are made 3D like the belt.)
+const SEAMS_AND_CUPS = false;
 /** A paint layer left bare. */
 const NOTHING: MaskPainter = (surface) => new Float32Array(surface.count).fill(-1);
 
@@ -217,8 +228,8 @@ const templateSuit = (neckFront: number) => ({
  */
 const overTemplate = (cupsTop: number): (MaskPainter | null)[] => SEAMS_AND_CUPS ? [
   null,
-  painter((m) => SOFT * Math.min(m.seams, m.suit), false, cupsTop),
-  painter((m) => SOFT * (m.cups - SEAM * 2.5), false, cupsTop),
+  painter((m) => SOFT * Math.min(m.seams + STRIP, m.suit), false, cupsTop),
+  painter((m) => SOFT * Math.min(m.seams + PINSTRIPE, m.suit), false, cupsTop),
 ] : [null, NOTHING, NOTHING];
 
 const templateLook = (neckFront: number, cupsTop: number): HeroineLook => ({

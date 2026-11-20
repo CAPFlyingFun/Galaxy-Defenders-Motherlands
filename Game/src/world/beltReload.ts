@@ -87,12 +87,18 @@ export class BeltReload {
   private readonly lookPoint = new THREE.Vector3();
   private settling: { object: THREE.Object3D; from: THREE.Matrix4; to: THREE.Matrix4; t: number }[] = [];
 
+  /**
+   * Her belt gear is asked for each time (`gearOf`), not kept: a NEW OUTFIT (main.ts `changeOutfit`) brings a new belt.
+   */
   constructor(
     private readonly heroine: HeroineBody,
-    private readonly gear: BeltGear | null,
+    private readonly gearOf: () => BeltGear | null,
     private readonly table: TableUse,
     private readonly holsters: HolsterUse,
   ) {}
+
+  /** Her belt gear now (null: a body without one). */
+  private get gear(): BeltGear | null { return this.gearOf(); }
 
   /** Whether a reload runs (she still walks). */
   get busy(): boolean { return this.phase !== 'idle'; }

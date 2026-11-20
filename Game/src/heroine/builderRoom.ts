@@ -102,6 +102,29 @@ export interface BuilderRoom {
   dispose(): void;
 }
 
+/**
+ * PAGE LISTENERS THE ROOM LEAVES BEHIND (2026-11-20, found with heap snapshots while changing outfits in the game): the
+ * room's head panel (Char_B headPanel.ts) listens on the whole PAGE for a finger lifting ('pointerup', 'pointercancel'),
+ * and the room's own dispose never disposes that panel (it does its garment and skirt panels). So that listener stayed
+ * after the room closed, and through it the whole closed room: about 350 MB each time a hidden live body was let go.
+ * The panel is made a while after the room opens, so the page's addEventListener is watched once, for good, and every
+ * finger-lifted listener put on the page goes on the newest open room's list (the game has one room open at a time and
+ * never listens for these on the page itself); the room takes them off when it closes. (Builder's side to fix too:
+ * dispose headPanel with the others.)
+ */
+type PageListener = [string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined];
+let roomListeners: PageListener[] | null = null;
+let pageWatched = false;
+function watchPageListeners(): void {
+  if (pageWatched) return;
+  pageWatched = true;
+  const add = document.addEventListener;
+  document.addEventListener = function (this: Document, type: string, listener: EventListenerOrEventListenerObject | null, opts?: boolean | AddEventListenerOptions) {
+    if (listener && roomListeners && (type === 'pointerup' || type === 'pointercancel')) roomListeners.push([type, listener, opts]);
+    return add.call(this, type, listener as EventListenerOrEventListenerObject, opts);
+  } as typeof document.addEventListener;
+}
+
 /** Wait for the next animation frame, or 100 ms if the tab is hidden (a hidden tab gets no animation frames). */
 function nextFrame(): Promise<void> {
   return new Promise((done) => {
@@ -173,7 +196,16 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
     // The room calls this each time everything it was loading is in, compiled and drawn twice.
     onReady: () => { readyCount++; },
   };
+  // (the finger-lifted listeners its panels put on the page while it is open: see PAGE LISTENERS above)
+  const pageListeners: PageListener[] = [];
+  roomListeners = pageListeners;
+  watchPageListeners();
   const scene: AppScene = buildSarahLabScene({ renderer: roomRenderer, uiLayer: ui }, hooks);
+  const dropPageListeners = (): void => {
+    for (const [type, listener, opts] of pageListeners) document.removeEventListener(type, listener, opts);
+    pageListeners.length = 0;
+    if (roomListeners === pageListeners) roomListeners = null;
+  };
 
   // The room's own furniture (floor, ring, treadmill strip, stool, its four lights, helper drawings): everything that
   // is in its scene before she is. It is all taken out and parked in a group that is never drawn; the room may go on
@@ -256,6 +288,7 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
   } catch (error) {
     disposed = true;
     scene.dispose();
+    dropPageListeners();
     throw error;
   }
 
@@ -292,6 +325,7 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
     } catch (error) {
       disposed = true;
       scene.dispose();
+      dropPageListeners();
       throw new Error(`[heroine] her code-painted layers could not be made: ${String((error as Error)?.message ?? error)}`);
     }
   }
@@ -341,6 +375,7 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
       realCanvas.removeEventListener('webglcontextrestored', passOn);
       // The room frees her meshes, materials and textures itself.
       scene.dispose();
+      dropPageListeners(); // (and the listeners it left on the page: see `pageListeners` above)
       // Its furniture was parked outside its scene, so it is freed here.
       parked.traverse((n) => {
         const mesh = n as THREE.Mesh;

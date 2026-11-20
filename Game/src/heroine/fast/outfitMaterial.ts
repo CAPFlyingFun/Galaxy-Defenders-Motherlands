@@ -319,6 +319,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
       if (!knitUniforms) return;
       knitUniforms.knitTile.value = KNIT.tileMetres * stitch * unitsPerMetre;
     },
-    dispose(): void { fine.dispose(); plain.dispose(); knitUniforms?.knitMap.value.dispose(); knitUniforms?.knitHeightMap.value.dispose(); },
+    dispose(): void {
+      fine.dispose(); plain.dispose();
+      knitUniforms?.knitMap.value.dispose(); knitUniforms?.knitHeightMap.value.dispose();
+      // (the prints' pictures too: they live only in the shader's uniforms, so nothing else would find them. Found
+      //  changing outfits in the game, 2026-11-20: each change left its prints on the graphics chip)
+      for (const p of prints) p.map.dispose();
+    },
   };
 }

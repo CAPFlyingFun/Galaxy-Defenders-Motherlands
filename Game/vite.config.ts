@@ -177,13 +177,20 @@ function pwa(): Plugin {
         return hash.digest('hex').slice(0, 12);
       };
       // (the island's 30 MB of ground tiles are kept as they are first used, like her big files: its own store)
-      const app = files.filter((f) => !f.startsWith('charb/') && !f.startsWith('island/'));
+      // HER OUTFITS AND FABRICS are kept as they are first used too, in their own store (the iPhone audit, 2026-11-20):
+      // all of them were fetched at install, about 36 MB of outfits she was not wearing, competing with the game's own
+      // loading; and a push that changed only code fetched them all again. The test and bake pages are not kept at all.
+      const LAB_PAGES = ['armor-lab.html', 'bake.html', 'heroine-lab.html', 'vitals-lab.html'];
+      const isLook = (f: string) => f.startsWith('heroines/') || f.startsWith('fabrics/');
+      const app = files.filter((f) => !f.startsWith('charb/') && !f.startsWith('island/') && !isLook(f) && !LAB_PAGES.includes(f));
       const charbFiles = files.filter((f) => f.startsWith('charb/'));
       const islandFiles = files.filter((f) => f.startsWith('island/'));
+      const lookFiles = files.filter(isLook);
       const sw = `// Written by the build (vite.config.ts, pwa()). Do not edit: it is replaced on every build.
 const APP = 'gdm-app-${fingerprint(app)}';
 const CHARB = 'gdm-charb-${fingerprint(charbFiles)}';
 const ISLAND = 'gdm-island-${fingerprint(islandFiles)}';
+const LOOKS = 'gdm-looks-${fingerprint(lookFiles)}';
 const APP_FILES = ${JSON.stringify(['./', ...app.filter((f) => f !== 'index.html')])};
 
 // Installing: fetch the game's own files and keep them. (Her big files are kept later, as they are first used.)
@@ -194,7 +201,7 @@ self.addEventListener('install', (event) => {
 // Taking over: throw away the stores of older versions of THIS game (other sites' stores are left alone).
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((names) => Promise.all(
-    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB) || (n.startsWith('gdm-island-') && n !== ISLAND)).map((n) => caches.delete(n)),
+    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB) || (n.startsWith('gdm-island-') && n !== ISLAND) || (n.startsWith('gdm-looks-') && n !== LOOKS)).map((n) => caches.delete(n)),
   )).then(() => self.clients.claim()));
 });
 
@@ -208,22 +215,25 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {
       const copy = response.clone();
-      caches.open(APP).then((cache) => cache.put(request, copy));
+      // (the worker is kept alive until the copy is stored; a full store is not a reason to fail the page)
+      event.waitUntil(caches.open(APP).then((cache) => cache.put(request, copy)).catch(() => {}));
       return response;
     }).catch(() => caches.match(request, { ignoreSearch: true }).then((hit) => hit || caches.match('./'))));
     return;
   }
 
   // Everything else: the stored copy if there is one; otherwise the network, and keep what comes back.
-  const store = url.pathname.includes('/charb/') ? CHARB : url.pathname.includes('/island/') ? ISLAND : APP;
+  const store = url.pathname.includes('/charb/') ? CHARB : url.pathname.includes('/island/') ? ISLAND
+    : url.pathname.includes('/heroines/') || url.pathname.includes('/fabrics/') ? LOOKS : APP;
   event.respondWith(caches.open(store).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
-    if (response.ok && response.status === 200) cache.put(request, response.clone());
+    // (kept while the worker waits for it; a full store only means it is fetched again next time)
+    if (response.ok && response.status === 200) event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
     return response;
   }))));
 });
 `;
       writeFileSync(join(dist, 'sw.js'), sw);
-      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install, ${charbFiles.length} builder files and ${islandFiles.length} island files kept on first use`);
+      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install; ${lookFiles.length} outfit files, ${charbFiles.length} builder files and ${islandFiles.length} island files kept on first use`);
     },
   };
 }

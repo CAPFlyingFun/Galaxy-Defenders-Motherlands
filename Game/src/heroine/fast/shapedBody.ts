@@ -40,7 +40,14 @@ const BREAST_GROW_MORE = 'shape:breastGrowMore';
  * nothing rewritten. Heavier levels keep her shape added in once with only her four motion shapes live: every shape
  * of the full body is some 160 MB on the graphics chip, a 30 % body's about 50 MB (Anthill Airways' own measure).
  */
-export const LIVE_UP_TO = 30;
+//
+// OFF (2026-11-20, the iPhone audit): a live level carries all 43 shapes twice over (moves and turns) for its points,
+// and with her face, bust, belly, hands and arms kept sharp a "1 %" level near the camera still has about 54,000
+// points, so a LOWER detail used MORE memory than 100 % (about 57 MB of arrays and 75 MB more on the graphics chip,
+// against 13 MB at 100 %). Every level is now made the way the heavy ones are: her shape added in, only her four motion
+// shapes live, and a change of belly written into it on the CPU (a few milliseconds, as at 100 %). She looks the same.
+// The live way is kept in the code: a number here at or above 0 turns it back on for levels up to that detail.
+export const LIVE_UP_TO = -1;
 /**
  * A level's KEY: its detail, or its detail plus this for the same detail lightened WITHOUT her face, bust and belly kept
  * sharp (Joshua, 2026-11-19: sharp only with the camera within 2 m of her; fastHeroine.ts). Both may be kept at once.

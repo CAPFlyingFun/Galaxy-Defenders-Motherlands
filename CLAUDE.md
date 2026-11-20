@@ -292,6 +292,23 @@ use the game's single copy of three.js.
   100 mL an hour at rest, up to 500 more running hard; at the 15x clock about half in 15 real minutes standing, empty in
   about 20 running). THIRST from a third of the bar (400 mL short). Health: parched wears it at the full rate, starving
   at a seventh (`health.hungerShare`, 3 days against 3 weeks); neither alone takes her under 30.
+- OUTFITS CHANGE WHILE THE GAME RUNS (Joshua, 2026-11-20: "It should freeze the screen, remove the old clothing, apply
+  the new one, then unfreeze"; main.ts `changeOutfit`): Settings -> Outfit (and suit fabric, hair strands, skin depth,
+  face locks, sharp parts) no longer reload. The game freezes under a "Changing outfit" cover, waits for whatever she is
+  doing to end (lets go of a bar or door), LETS GO OF THE OLD BODY FIRST, makes the new one where she stood (facing,
+  belly, pregnancy, view, guns in hand/holster/on the table with their rounds, full pouches), then unfreezes. Everything
+  holds her through ONE stand-in (`heroine`, a Proxy onto `bodyNow`), so nothing is handed over again. Her hidden live
+  body is KEPT when the new look is on the same body (`detachLive`, `readAgain`). Checked with heap snapshots: memory
+  settles over six swaps. LEAKS FOUND AND FIXED: a closure made inside the swap kept the old body (keep loader callbacks
+  out of scopes that hold old things); the builder's head panel leaves a page 'pointerup' listener that kept every
+  closed hidden room (builderRoom.ts PAGE LISTENERS removes it; BUILDER BUG: headPanel is not disposed in its room's
+  dispose); prints' and skin-depth pictures were never disposed.
+- THE iPHONE AUDIT (ChatGPT, 2026-11-20, `GDM-iPhone-audit.md`, kept outside the repo): fixed in v0.2.89: the detail
+  slider no longer costs MORE memory lower down (`LIVE_UP_TO = -1`: no level carries all 43 shapes; same look); a
+  detail level no longer wanted is not built; only the last KEEP_LEVELS (3) levels and 100% are kept; the offline cache
+  keeps only the game's own 4.5 MB at install (outfits, fabrics, builder, island kept on first use, each in its own
+  store); the portrait cover's picture is 480 px wide. TEXTURES STAY AT MAX (Joshua: "if I can run it at max now at
+  30-70fps, why lower the quality"): tiers (256-4096, Auto) are the LAST thing to try, only if crashes remain.
 - MEMORY (Joshua, 2026-11-19: v0.2.81-83 restarted twice and closed on his iPhone a few seconds in): the LIVE detail
   levels (5% and under, all 43 body shapes each) were all kept once made; with her hands sharp too they were nearly as
   heavy as the high ones. Now any live level she has left is let go (`wear` in fastHeroine.ts); it is made again if she

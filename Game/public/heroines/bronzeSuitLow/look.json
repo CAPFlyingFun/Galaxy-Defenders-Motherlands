@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "bronzeSuitLow",
-  "bakedAt": "2026-11-20T13:49:18.463Z",
+  "bakedAt": "2026-11-20T14:22:25.142Z",
   "builderVersion": "0.9.51",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7133686387932645,
+  "barefootHeightMetres": 1.713400326117804,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -41,11 +41,11 @@
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7000058646284009,
-    "pointsTheBuilderMoved": 73395,
-    "movedMostGeometryUnits": 0.15418066311814907,
+    "crownOverTheFloorMetres": 1.7000375519529405,
+    "pointsTheBuilderMoved": 73394,
+    "movedMostGeometryUnits": 0.15421117034912324,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16321835057088216,
+    "restSkinSpread": 0.1632687042395714,
     "captureMissing": {
       "position": 0,
       "normal": 0

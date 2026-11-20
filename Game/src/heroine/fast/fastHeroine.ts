@@ -161,10 +161,13 @@ const VIEW_BALL_RADIUS = 1.5;
  *   autoLive  SMART FPS turns her detail (Joshua, 2026-11-17: "Instead of Smart FPS controlling the amount of people,
  *             have it control the details instead from a max up to 30% details down to 1%, but still auto depending
  *             on FPS"): she starts at 30 %, goes a level lighter while the frame rate is under the target and comes
- *             back a level when it has been over it for a while. At these levels all her body shapes are live.
+ *             back a level when it has been over it for a while. (Its levels once carried all her body shapes live;
+ *             since 2026-11-20 they are made like the others, which costs far less memory: shapedBody.ts LIVE_UP_TO.)
  *   auto      as much as the eye can see at her size on screen (up to 100 %), lighter only if the frame rate needs it.
  */
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
+/** How many detail levels are kept made at once besides her full 100 % (the ones she wore last). */
+const KEEP_LEVELS = 3;
 /** The heaviest level AUTO LIVE draws her at. */
 const AUTO_LIVE_TOP: Detail = 30;
 
@@ -224,6 +227,11 @@ export interface FastHeroine extends HeroineBody {
    * kicks then show on her skin. Null takes it away again.
    */
   attachLive(live: LiveBody | null): void;
+  /**
+   * Take THE LIVE BODY back out of her WITHOUT letting it go, and return it (null if she had none): for a change of
+   * outfit on the same body (main.ts `changeOutfit`), so the slow hidden room is not opened again for the new one.
+   */
+  detachLive(): LiveBody | null;
   /** The live body's cost and state, for the debug readout: milliseconds a step (smoothed), kicks showing; null if none. */
   liveInfo(): { stepMs: number; kicks: number } | null;
   /** Change the frame rate AUTO detail holds. */
@@ -390,8 +398,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
   // HER SKIN'S DEPTH (Joshua, 2026-11-19; skinTexture.ts): the builder's hybrid, her own skin picture's depth and its pore
   // and crease tile, on her bare skin
+  /** Her skin-depth pictures (kept here so `dispose` lets them go: they live only in her shader's uniforms). */
+  let skinPictures: ReturnType<typeof loadSkinPictures> | null = null;
   if (options.skinTexture !== false && !painted) {
-    const skinPictures = loadSkinPictures(options.look, options.renderer);
+    skinPictures = loadSkinPictures(options.look, options.renderer);
     for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinPictures, unitsPerMetre);
   }
   // HER SKIN'S SHINE (Joshua, 2026-11-19; skinShine.ts): dry to oily (a setting), and wet from the water
@@ -774,6 +784,8 @@ if (uHideHead > 0.5) {
   /** How tall she was last drawn, in screen pixels: written by the draw itself (below), read by AUTO the next frame. */
   let pixels = 9999;
 
+  /** The level keys she has worn, latest first (see KEEP_LEVELS in `wear`). */
+  let worn: number[] = [];
   const wear = (key: number): void => {
     const geometry = body.geometry(key);
     if (!geometry) return;
@@ -789,6 +801,15 @@ if (uHideHead > 0.5) {
     //  the high ones. Kept, Smart FPS stepping 5 -> 3 -> 2 -> 1 % held four of them, near and far, and the iPhone
     //  closed the game a few seconds in (Joshua, 2026-11-19). Coming back to one makes it again in the worker.)
     if (before !== key && body.isLive(before)) body.release(before);
+    // A FEW LEVELS KEPT, NOT ALL (the iPhone audit, 2026-11-20): Smart FPS and the camera going near and far step her
+    // through many levels (30, 20, 10, 5, 3, 2, 1 %, each sharp and plain), and each one made was kept for good, each a
+    // copy of her points with its own copy on the graphics chip. Now only the levels she wore last (KEEP_LEVELS) and
+    // her full 100 % are kept; one she comes back to is built again from its kept triangle list (quick).
+    if (before !== key) {
+      worn = worn.filter((k) => k !== key);
+      worn.unshift(key);
+      for (const old of worn.splice(KEEP_LEVELS)) if (old !== 100 && old !== key) body.release(old);
+    }
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
     showHair(detail);
     pieces.setDetail(detail);
@@ -808,9 +829,12 @@ if (uHideHead > 0.5) {
     (sharp ? levels : plainLevels).get(detail).then((index) => {
       waitingFor.delete(key);
       if (disposed) return;
+      // (built and worn only if it is still the level wanted: the player or the camera may have changed it meanwhile.
+      //  A level no longer wanted is NOT built: before, it was built anyway and kept, unused (the iPhone audit,
+      //  2026-11-20). Its list of triangles is kept by the maker, so building it later is quick.)
+      if (wantedKey !== key) return;
       body.build(key, index);
-      // (worn only if it is still the level wanted: the player or the camera may have changed it meanwhile)
-      if (wantedKey === key) wear(key);
+      wear(key);
     }).catch((error: unknown) => { waitingFor.delete(key); console.warn(`[heroine] detail ${detail}% could not be made; she keeps ${drawnDetail}%`, error); });
   };
   let wantedKey = 100;
@@ -990,6 +1014,7 @@ if (uHideHead > 0.5) {
     bellyNow: () => body.belly,
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
+    detachLive(): LiveBody | null { const was = live; live = null; liveMs = 0; return was; },
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
@@ -1228,6 +1253,7 @@ if (uHideHead > 0.5) {
       skin.onBeforeRender = () => {};
       body.dispose();
       materials.dispose();
+      skinPictures?.own.dispose(); skinPictures?.tile.dispose();
       look.dispose();
       maker.dispose();
       motion.dispose();

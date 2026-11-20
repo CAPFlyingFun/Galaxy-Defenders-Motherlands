@@ -59,6 +59,7 @@ import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine } from './outfitMaterial';
+import { addSkinTexture, loadSkinHeight } from './skinTexture';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
@@ -157,6 +158,8 @@ export interface FastHeroineOptions {
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
   readonly hairStrands?: boolean;
+  /** THE SKIN TEXTURE EXPERIMENT over her bare skin (skinTexture.ts). Default false. */
+  readonly skinTexture?: boolean;
   /** Told what is loading, for a loading screen. */
   readonly onProgress?: (stage: string) => void;
 }
@@ -343,6 +346,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   skin.geometry.computeBoundingBox();
   const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
   const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
+  // THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; skinTexture.ts): his skin height map over her bare skin
+  if (options.skinTexture && !painted) {
+    const skinHeight = loadSkinHeight(options.renderer);
+    for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinHeight, unitsPerMetre);
+  }
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;

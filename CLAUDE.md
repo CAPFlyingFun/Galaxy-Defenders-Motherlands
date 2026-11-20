@@ -206,6 +206,11 @@ use the game's single copy of three.js.
   turned down (roughness 0.9). All of it fades where locks are smaller than a pixel (no sparkle) and on cards seen
   edge-on (the parting faded into the hair, his ask). Settings -> HEROINE -> Hair strands (`gdm.hairStrands`,
   `?strands=off`). To be made permanent in the builder by its own agent if Joshua wants.
+- SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: "curious how it works with her body texture... might make her body
+  look lumpy"; `Game/src/heroine/fast/skinTexture.ts`): his skin height map from the Local Texture Lab
+  (`public/fabrics/skin-test-height.png`) as a bump over her bare skin only (where the roughness picture reads below
+  cloth), laid on from three sides, a 4 cm repeat, 0.15 mm deep (0.4 mm read as orange peel). OFF unless chosen:
+  Settings -> HEROINE -> Skin texture (experiment) (`gdm.skinTexture`, `?skin_texture=on`).
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

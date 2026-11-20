@@ -84,6 +84,8 @@ export interface HeroineSettings {
   suitKnit: 'weave' | 'mesh';
   /** HER HAIR AS STRANDS AND LOCKS (Joshua, 2026-11-19; fast/hairStrands.ts). Changing it reloads. */
   hairStrands: ShadowChoice;
+  /** THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; fast/skinTexture.ts). Off unless chosen. Changing it reloads. */
+  skinTexture: ShadowChoice;
 }
 
 
@@ -131,6 +133,7 @@ export const SETTING_KEYS = Object.freeze({
   sharpParts: 'gdm.sharpParts',
   suitKnit: 'gdm.suitKnit',
   hairStrands: 'gdm.hairStrands',
+  skinTexture: 'gdm.skinTexture',
 });
 
 function read(key: string): string | null {
@@ -202,5 +205,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     // (his woven photo unless the drawn mesh was chosen)
     suitKnit: (address.get('knit') ?? read(SETTING_KEYS.suitKnit)) === 'mesh' ? 'mesh' : 'weave',
     hairStrands: (address.get('strands') ?? read(SETTING_KEYS.hairStrands)) === 'off' ? 'off' : 'on',
+    skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'on' ? 'on' : 'off',
   };
 }

@@ -57,6 +57,9 @@ export interface HudOptions {
   onCameraStyle?(): void;
   /** Her thigh holsters: put away or draw both ('both'), or the gun of the hand picked (src/world/holsterUse.ts). */
   onHolster?(which: 'both' | 'left' | 'right'): void;
+  /** CROUCH and PRONE (Joshua, 2026-11-20: "Separate CROUCH and PRONE buttons"): crouch / stand; down / stand. */
+  onCrouch?(): void;
+  onProne?(): void;
   onDomeDebug(action: DomeDebugAction): void;
   /** THE BATHROOM BUTTON (🚽, top right, shown only when she needs to go): she goes, as Settings -> Bathroom. */
   onBathroom?(): void;
@@ -159,6 +162,10 @@ export class Hud {
   private camText = '';
   /** THE RAIL (each shown only when it has something to do): holster / draw, reload, aim mode; and the L / R pair. */
   private readonly holsterButton: HTMLElement;
+  /** CROUCH and PRONE (her stance: heroine/fast/groundPose.ts); lit while she is in it. */
+  private readonly crouchButton: HTMLElement;
+  private readonly proneButton: HTMLElement;
+  private stanceShown = '';
   private readonly reloadButton: HTMLElement;
   /** THE BATHROOM BUTTON (🚽): beside the gear, shown only from her urge. */
   private readonly bathroomButton: HTMLElement;
@@ -283,6 +290,14 @@ export class Hud {
     tapButton(this.camButton, () => options.onCameraStyle?.());
     this.aimModeButton = railButton('gd-rail-aim', 'MANUAL', '', 'Auto or manual aim and fire');
     tapButton(this.aimModeButton, () => options.onAimMode?.());
+    // CROUCH and PRONE (Joshua, 2026-11-20): always there, above FIRE, each lit while she is in its stance. PRONE says
+    // ALL 4s while Pregnancy is on (she goes down on her hands and knees instead of her belly).
+    this.crouchButton = element('button', 'gd-button gd-stance gd-crouch', this.root, 'CROUCH');
+    this.crouchButton.setAttribute('aria-label', 'Crouch or stand');
+    tapButton(this.crouchButton, () => options.onCrouch?.());
+    this.proneButton = element('button', 'gd-button gd-stance gd-prone', this.root, 'PRONE');
+    this.proneButton.setAttribute('aria-label', 'Lie down or stand');
+    tapButton(this.proneButton, () => options.onProne?.());
     // THE BATHROOM BUTTON (Joshua, 2026-11-19): a 🚽 beside the gear, top right, shown only once she feels the urge
     // (it pulses red when the urge is strong). Tapped: she squats for 5 s and is emptied, until there are toilets.
     this.bathroomButton = element('button', 'gd-button gd-bathroom', this.root, '🚽');
@@ -535,6 +550,16 @@ export class Hud {
   }
 
   /** THE RAIL's HOLSTER button: shown with this word (HOLSTER, DRAW), or hidden (null). */
+  /** Her stance for the CROUCH and PRONE buttons: the one she is asked to be in, and whether Pregnancy is on. */
+  setStance(stance: 'stand' | 'crouch' | 'prone' | 'fours', pregnant: boolean): void {
+    const key = `${stance}${pregnant}`;
+    if (key === this.stanceShown) return;
+    this.stanceShown = key;
+    this.crouchButton.classList.toggle('is-on', stance === 'crouch');
+    this.proneButton.classList.toggle('is-on', stance === 'prone' || stance === 'fours');
+    this.proneButton.textContent = pregnant ? 'ALL 4s' : 'PRONE';
+  }
+
   setHolster(label: string | null): void {
     this.holsterButton.hidden = label === null;
     if (label !== null && label !== this.holsterLabel) { (this.holsterButton.firstChild as HTMLElement).textContent = label; this.holsterLabel = label; }

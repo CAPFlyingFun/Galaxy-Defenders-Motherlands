@@ -27,11 +27,13 @@
 // ============================================================================
 
 /** The four paces and their ground speeds, metres a second (the same speeds her vitals call a walk, jog, run, sprint). */
+// (Joshua, 2026-11-20: "let the longer stride carry her about 10% faster": jog, run and sprint are 10% quicker than
+//  they were, 2.4, 3.8 and 5.5, now that each stride is longer: heroine/fast/strideShape.ts)
 export const PACES = [
   { name: 'WALK', speed: 1.1 },
-  { name: 'JOG', speed: 2.4 },
-  { name: 'RUN', speed: 3.8 },
-  { name: 'SPRINT', speed: 5.5 },
+  { name: 'JOG', speed: 2.64 },
+  { name: 'RUN', speed: 4.18 },
+  { name: 'SPRINT', speed: 6.05 },
 ] as const;
 
 /**
@@ -40,7 +42,7 @@ export const PACES = [
  * PACES to these in a straight line (`Pace.carrying`); research: walking in the third trimester measured about 19%
  * slower, and runners lose about a minute a mile each trimester.
  */
-export const PACES_FULL_TERM = [0.894, 1.565, 2.19, 3.13] as const;
+export const PACES_FULL_TERM = [0.894, 1.72, 2.41, 3.44] as const;   // (jog, run, sprint 10% over his 3.5, 4.9, 7.0 mph)
 
 /** Everything about the pace that is a choice. GAME TUNING. */
 export const PACE_TUNING = {
@@ -113,6 +115,13 @@ export class Pace {
   winded = false;
   /** Seconds left of the winded hold (she cannot move at all while this is above 0). */
   holdLeft = 0;
+  /**
+   * HER STANCE'S LIMITS (Joshua, 2026-11-20: crouching, crawling; heroine/fast/groundPose.ts), set by the game each
+   * frame: the highest pace she can be at (1: a walk only) and her top speed, metres a second (0 while she gets down or
+   * up). Standing: none.
+   */
+  levelMost = 4;
+  speedMost = Infinity;
 
   /** The name of the pace she is at (the nearest one), or '' standing. */
   get name(): string {
@@ -163,12 +172,12 @@ export class Pace {
       // (ring 2 holds)
 
       // what her stamina allows: everything until it is empty; winded (after the hold), only a walk
-      const most = this.winded ? 1 : 4;
+      const most = Math.min(this.winded ? 1 : 4, this.levelMost);
       if (this.level > most) this.level = Math.max(most, this.level - dt / t.tiredDownSeconds);
     }
 
     // her real speed follows the pace smoothly: nobody is at a sprint the instant she decides to be
-    const wanted = this.speedAt(this.level) * Math.max(0, Math.min(1, limits.speedShare));
+    const wanted = Math.min(this.speedMost, this.speedAt(this.level) * Math.max(0, Math.min(1, limits.speedShare)));
     const change = wanted - this.speed;
     const most = (change > 0 ? t.speedUp : t.slowDown) * dt;
     this.speed += Math.max(-most, Math.min(most, change));

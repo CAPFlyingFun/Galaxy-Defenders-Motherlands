@@ -248,6 +248,31 @@ use the game's single copy of three.js.
   FADE WIPES UP THE TREE (Joshua: "fade top to bottom... you can see the trunk of it first"): the trunk shows first and
   the top last; photo and 3D wipes are exact opposites at the swap. Next: ground cover (grass, small ferns) near her.
   Not yet: swimming.
+- HER STRIDE GROWS WITH HER SPEED (Joshua, 2026-11-20: "the faster you run, the longer the stride length"; "let the
+  longer stride carry her about 10% faster"; `Game/src/heroine/fast/strideShape.ts`): the game writes her legs itself
+  (the builder's writeLeg, with numbers that follow her speed, `STRIDE_ROWS`): stride 1.18 m walking, 1.95 jogging, 2.55
+  running, 3.1 sprinting (shorter with her belly), each foot down 56% of a stride walking to 23.5% sprinting (the rest is
+  FLIGHT: the stride grows in the air, her hip never reaching further than the builder's own run), knees lifting higher
+  and her feet nearer one line the faster she goes. Her feet's planting follows the same share (`plantedAt`,
+  footGround.ts). Jog, run and sprint are 10% faster: 2.64, 4.18, 6.05 m/s (full term 1.72, 2.41, 3.44), her stamina
+  and effort tables moved with them. The readout's `stride` line: her stride now and the share a foot is down.
+- CROUCH, PRONE, ALL FOURS (Joshua, 2026-11-20: "Walk while crouch, crawling on belly (however, once pregnancy is on,
+  make her crawl on all four with weapons holstered)"; his answers: separate CROUCH and PRONE buttons, all fours
+  "whenever Pregnancy is on", on her belly "aim and fire propped on her elbows while still", on all fours still she
+  "can pull out one... (keep 3 contact points to ground), but has to holster it before moving";
+  `Game/src/heroine/fast/groundPose.ts`, `STANCE`): the builder has neither, so they are the game's, written as the
+  builder writes its walk (turns from her bind pose). CROUCH: her hips drop (0.36 of her leg) with her feet kept planted
+  (footGround.ts `crouchDrop`), her back leans 24 degrees, her head kept up; walk pace only, 0.9 m/s; she aims and fires.
+  PRONE (not pregnant): her whole body tipped forward about her hips (`fit.rotation.x`) to lie along the ground (and its
+  slope), chest propped on her elbows, head up; the ARMY CRAWL, one elbow reaching as the opposite knee is drawn up,
+  0.35 m/s; aims and fires only while still. ALL FOURS (pregnant): hands and knees, her back about level, knees wider
+  round her belly, the diagonal crawl, 0.55 m/s; her guns holstered going down and before she moves; still, one may be
+  drawn (L, R or the main button draws the right). Down and up go through her crouch (1.0 s down, 1.2 s up, still while
+  she does). The camera comes down with her (cameraRig.ts `lower`). Busy at the table, a bar or a door, she stands. Her
+  body's yaw bands and her arms' keeping clear of her belly are off while she is down. NOTE: the BUILDER'S ELBOW BEND
+  (about Y) only twists this body file's forearm (its arms already hang in the bind): the game bends elbows about X.
+  The buttons sit just above FIRE (movable in Edit controls); PRONE reads ALL 4s while Pregnancy is on.
+- (The heroine lab shows no body at detail under 100 with `live=off`: use `detail=100` for test pictures.)
 - WATER TO FIX, NOTED (Joshua, 2026-11-20, screenshots on the beach): the river/lagoon water is drawn in SPLOTCHES (a
   pale flat patch sits on the turquoise), and it is too see-through: she was stopped by the sea's edge before he could
   tell she was in water. Come back after the movement work.

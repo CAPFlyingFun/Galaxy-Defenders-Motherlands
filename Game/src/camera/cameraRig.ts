@@ -147,6 +147,12 @@ export class CameraRig {
    * the flat town (ground 0 everywhere). The camera never goes under it; NaN (not loaded there) counts as her feet's.
    */
   groundAt: ((x: number, z: number) => number) | null = null;
+  /**
+   * HOW MUCH LOWER SHE IS (Joshua, 2026-11-20: crouching, on her belly, on all fours), metres, set by the game: the
+   * following camera's pivot and the side views come down with her, eased.
+   */
+  lower = 0;
+  private easedLower = 0;
   private readonly drone = new THREE.Vector3();
   private dronePlaced = false;
   /** CINEMATIC: which shot, and how long it has run. */
@@ -286,7 +292,8 @@ export class CameraRig {
     // The pivot follows a point above her head, wherever on the map she is. Only the pivot moves with her: the
     // two angles are the player's alone, so the camera keeps the side of her it was dragged to while she runs.
     const feet = heroine.root.position;
-    const pivotHeight = PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * Math.max(0, this.easedZoom);
+    this.easedLower += (this.lower - this.easedLower) * (1 - Math.exp(-3 * dt));
+    const pivotHeight = Math.max(MIN_CAMERA_HEIGHT + 0.3, PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * Math.max(0, this.easedZoom) - this.easedLower);
     if (this.pivotPlaced) {
       this.pivot.x += (feet.x - this.pivot.x) * ease;
       this.pivot.z += (feet.z - this.pivot.z) * ease;
@@ -357,9 +364,11 @@ export class CameraRig {
       const out = this.style === 'sideLeft' ? 1 : -1;
       const sideX = Math.cos(this.sideYaw) * out, sideZ = -Math.sin(this.sideYaw) * out;
       const back = STYLE.sideNear + (STYLE.sideFar - STYLE.sideNear) * zoom;
-      this.camera.position.set(feet.x + sideX * back, feet.y + STYLE.sideUp, feet.z + sideZ * back);
+      this.easedLower += (this.lower - this.easedLower) * (1 - Math.exp(-3 * dt));
+      const up = Math.max(0.25, STYLE.sideUp - this.easedLower * 0.6);
+      this.camera.position.set(feet.x + sideX * back, feet.y + up, feet.z + sideZ * back);
       this.keepAboveGround(feet.y);
-      this.shotAt.set(feet.x, feet.y + STYLE.sideUp, feet.z);
+      this.shotAt.set(feet.x, feet.y + up, feet.z);
       this.camera.lookAt(this.shotAt);
       this.look.copy(this.shotAt).sub(this.camera.position).normalize();
       return;

@@ -18,6 +18,7 @@ import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
+import { STANCE } from './heroine/fast/groundPose';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -77,6 +78,7 @@ type GameHeroine = HeroineBody & {
   liveInfo?: () => { stepMs: number; kicks: number } | null;
   /** The fast heroine only: her stride as measured from her foot bones, and her feet on the floor this frame. */
   strideInfo?: () => { walk: { stride: number }; run: { stride: number } } | null;
+  strideNow?: () => { stride: number; share: number };
   feetInfo?: () => { drop: number; held: readonly [number, number]; speed: number };
   /** The week of pregnancy her belly stands for, off her own chart (the fast heroine knows it from her look). */
   weeks?: number;
@@ -522,6 +524,16 @@ async function start(): Promise<void> {
   if (graphics.pregnant === null) graphics.pregnant = plan.lookPregnant ? 'on' : 'off';
   if (graphics.belly === null) graphics.belly = Math.round(heroine.bellyNow?.() ?? plan.start);
   const pregnantNow = (): boolean => graphics.pregnant === 'on';
+
+  // HER STANCE (Joshua, 2026-11-20: "Walk while crouch, crawling on belly (however, once pregnancy is on, make her crawl
+  // on all four with weapons holstered)"; heroine/fast/groundPose.ts). The CROUCH and PRONE buttons: CROUCH crouches or
+  // stands her up; PRONE takes her down (on her belly, or on all fours whenever Pregnancy is on) or stands her up.
+  // Down there she goes no faster than a crawl; on her belly she aims and fires only while still; on all fours her guns
+  // are holstered, and still she may draw ONE (the other hand and both knees stay down), put away again before she moves.
+  let stance: 'stand' | 'crouch' | 'down' = 'stand';
+  const stanceAsked = (): 'stand' | 'crouch' | 'prone' | 'fours' => (stance === 'down' ? (pregnantNow() ? 'fours' : 'prone') : stance);
+  /** She is on her belly or all fours (or getting there) and moving, or getting down or up: no aiming or firing. */
+  let stanceNoAim = false;
   /** Her belly and pregnancy as Settings (or the time lapse) have them, on her body, her live body and her vitals. */
   const applyPregnancy = (): void => {
     const belly = graphics.belly ?? plan.start;
@@ -871,8 +883,19 @@ async function start(): Promise<void> {
     },
     onHolster: (which) => {
       if (busyNow() || tableAfterDraw || grabAfterHolster || beltReload.busy || holsterUse.busy) return;
+      // (on all fours: ONE gun at most, the other hand stays on the ground; drawn only while she is still)
+      if (stance === 'down' && pregnantNow()) {
+        const h = heroine.hands, held = (['left', 'right'] as const).filter((hand) => h?.hasGun(hand));
+        if (held.length > 0) { holsterUse.start(held.length === 2 ? 'both' : held[0]); return; }
+        if (pace.speed > 0.05 || !heroine.stanceInfo?.().settled) return;
+        const hand = which === 'both' ? (holsterUse.holstered.right ? 'right' : 'left') : which;
+        if (holsterUse.holstered[hand]) holsterUse.start(hand);
+        return;
+      }
       holsterUse.start(which);
     },
+    onCrouch: () => { stance = stance === 'crouch' ? 'stand' : 'crouch'; },
+    onProne: () => { stance = stance === 'down' ? 'stand' : 'down'; },
   });
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
@@ -1093,6 +1116,34 @@ async function start(): Promise<void> {
     if (grabAfterHolster && !holsterUse.busy) { grabUse.start(grabAfterHolster, grabWhich); grabAfterHolster = null; }
     // (her guns are down: on to the bar)
     if (grabAfterTable && !tableUse.busy) { grabUse.start(grabAfterTable, grabWhich); grabAfterTable = null; }
+    // HER STANCE: what she is asked to be, and what it allows her (input/pace.ts `levelMost`, `speedMost`)
+    {
+      // (busy at the table, a bar or a door: she stands up for it)
+      if (busyNow() && stance !== 'stand') stance = 'stand';
+      heroine.setStance?.(stanceAsked());
+      const st = heroine.stanceInfo?.();
+      const c = Math.max(0, Math.min(1, pace.carrying));
+      const pushed = controls.moveX !== 0 || controls.moveY !== 0;
+      pace.levelMost = 4; pace.speedMost = Infinity; stanceNoAim = false;
+      if (st && !(st.asked === 'stand' && st.settled)) {
+        pace.levelMost = 1;   // (crouched or down: a walk's pace at most)
+        if (st.down > 0 && !st.settled) { pace.speedMost = 0; stanceNoAim = true; }   // (getting down or up: still)
+        else if (st.stance === 'crouch' || st.asked === 'crouch' || st.asked === 'stand') pace.speedMost = STANCE.crouchSpeed * (1 - 0.25 * c);
+        else if (st.stance === 'prone') { pace.speedMost = STANCE.proneSpeed; stanceNoAim = pushed || pace.speed > 0.05; }
+        else {
+          // ON ALL FOURS: her guns away to move (a gun in her hand is put away first, then she goes: a short wait)
+          const h = heroine.hands, holding = !!h && (h.hasGun('left') || h.hasGun('right'));
+          if (holding && pushed && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+          pace.speedMost = holding || holsterUse.busy ? 0 : STANCE.foursSpeed * (1 - 0.2 * c);
+          stanceNoAim = pushed || pace.speed > 0.05;
+        }
+      }
+      // (going down on all fours: both guns are put away first, on the way down)
+      if (st && st.asked === 'fours' && st.down < 1 && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+      hud.setStance(stanceAsked(), pregnantNow());
+      // (the camera comes down with her)
+      rig.lower = !st ? 0 : st.stance === 'prone' || st.asked === 'prone' ? 1.25 * Math.max(st.down, 0.35) : st.stance === 'fours' || st.asked === 'fours' ? 0.95 * Math.max(st.down, 0.4) : 0.45 * st.crouch;
+    }
     // (whichever is running walks her and turns her)
     const ask = tableUse.busy ? tableAsk : grabUse.busy ? grabAsk : doorAsk;
     sideStepping = false;
@@ -1349,8 +1400,8 @@ async function start(): Promise<void> {
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.
     targets.update(info);
-    if (busyNow()) {
-      // (busy at the table or a bar: no aiming)
+    if (busyNow() || stanceNoAim) {
+      // (busy at the table or a bar, or crawling: no aiming)
       targets.setAimed(-1);
       heroine.aimAt(null);
     } else if (aimedByHand()) {
@@ -1379,7 +1430,7 @@ async function start(): Promise<void> {
     if (clicks > 0 && (aimedByHand() || turn.aimed)) burst.pull();
     const autoFiring = !aimedByHand() && turn.aimed;
     // (FIRE is always on screen: in MANUAL it is how she fires; in AUTO, held, she fires at her target too)
-    const wantFire = !busyNow() && ((controls.fireHeld && (aimedByHand() || turn.aimed)) || autoFiring);
+    const wantFire = !busyNow() && !stanceNoAim && ((controls.fireHeld && (aimedByHand() || turn.aimed)) || autoFiring);
     let firedNow = false;
     burst.update(dt, wantFire,
       // (a hand fires only with its gun in it and rounds in the gun)
@@ -1464,11 +1515,11 @@ async function start(): Promise<void> {
         const liveNow = heroine.liveInfo?.();
         if (liveNow) lines.push(`live body ${liveNow.stepMs.toFixed(1)} ms` + (liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''));
         else if (liveNote) lines.push(liveNote);
-        // (her feet: her measured stride walking / running, and how fast she is really going; then which way she
+        // (her feet: her stride now, metres, with the share of it a foot is down, and how fast she is really going; then which way she
         //  faces: body North and her head, and in third person whether her auto-aim has a target she can turn to)
-        const strides = heroine.strideInfo?.(), feet = heroine.feetInfo?.();
+        const strides = heroine.strideNow?.(), feet = heroine.feetInfo?.();
         if (strides && feet) {
-          lines.push(`stride ${strides.walk.stride.toFixed(2)}/${strides.run.stride.toFixed(2)} m · ${feet.speed.toFixed(1)} m/s`);
+          lines.push(`stride ${strides.stride.toFixed(2)} m ${Math.round(strides.share * 100)}% · ${feet.speed.toFixed(1)} m/s`);
           lines.push(`north ${Math.round(turn.base * 57.3)}° · head ${Math.round(turn.head * 57.3)}°` + (rig.mode === 'third' && turn.aimed ? ' · aimed' : ''));
         }
         // (her stomach, food + water, and her bladder: Settings -> FOOD & DRINK)

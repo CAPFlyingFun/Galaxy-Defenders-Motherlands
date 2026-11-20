@@ -59,9 +59,9 @@ export const VITALS_TUNING = {
   speedToIntensity: [
     [0, ACTIVITY.rest],
     [1.1, ACTIVITY.walk],
-    [2.4, ACTIVITY.jog],
-    [3.8, ACTIVITY.run],
-    [5.5, ACTIVITY.sprint],
+    [2.64, ACTIVITY.jog],
+    [4.18, ACTIVITY.run],
+    [6.05, ACTIVITY.sprint],
   ] as ReadonlyArray<readonly [speed: number, intensity: number]>,
   /** Firing both guns is work too: this much is added to her intensity while she shoots. */
   firingIntensity: 0.1,
@@ -106,14 +106,14 @@ export const VITALS_TUNING = {
    */
   stamina: {
     /** [speed m/s (the paces in input/pace.ts), seconds, +1 refills / -1 drains] */
-    byPace: [[0, 30, +1], [1.1, 60, +1], [2.4, 120, -1], [3.8, 75, -1], [5.5, 35, -1]] as ReadonlyArray<readonly [number, number, number]>,
+    byPace: [[0, 30, +1], [1.1, 60, +1], [2.64, 120, -1], [4.18, 75, -1], [6.05, 35, -1]] as ReadonlyArray<readonly [number, number, number]>,
     /**
      * The paces' speeds at FULL TERM (input/pace.ts PACES_FULL_TERM): as she gets further along her paces are slower,
      * so each row's SPEED moves to these (VitalsInput.carrying), and a slow full-term sprint still counts as a sprint.
      * The seconds stay as above; her pregnancy tires her through `pregnant` below, as before (Joshua: "keep what was
      * there").
      */
-    speedsFullTerm: [0, 0.894, 1.565, 2.19, 3.13] as ReadonlyArray<number>,
+    speedsFullTerm: [0, 0.894, 1.72, 2.41, 3.44] as ReadonlyArray<number>,
     /** Firing drains a little too: this many seconds of firing alone would empty her. */
     firingSeconds: 240,
   },

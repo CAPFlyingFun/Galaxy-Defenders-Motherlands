@@ -31,8 +31,9 @@
 import * as THREE from 'three';
 import { HumanRig } from '@charb/view/HumanRig';
 import { measureHuman } from '@charb/actor/humanSkeleton';
-import { humanStride, poseHuman } from '@charb/actor/humanPose';
+import { poseHuman } from '@charb/actor/humanPose';
 import { walkWeight, weighWalk } from '@charb/actor/walkWeight';
+import { shapeAt, strideMetres, writeLegs, type StrideShape } from './strideShape';
 import type { BindJoint, HumanGait, HumanMeasure, JointTurn, MutableJointTurn } from '@charb/actor/humanRig';
 import {
   BELLY_MOTION, BELLY_SWING, THUMB_TO_PALM, breastBobWeight, fingerBend, restingBellySpring, sizeTiltDeg,
@@ -203,6 +204,8 @@ function findFingers(bind: readonly BindJoint[], measure: HumanMeasure): Finger[
 export class BodyMotion {
   /** The builder's names for her joints (shoulder, elbow, wrist, head...), as numbers into her skeleton's bones. */
   readonly measure: HumanMeasure;
+  /** Her bind pose's joints (the T she was made in), as the builder reads them. */
+  get bind(): readonly BindJoint[] { return this.rig.bind; }
   /** This frame's weights for her four motion shapes, in shapedBody.ts's MOTION_SHAPES order. */
   readonly weights = [0, 0, 0, 0];
   /** Her look's Bob, percent (read by the heroine, who lifts and lowers her by it: fastHeroine.ts). */
@@ -224,6 +227,11 @@ export class BodyMotion {
 
   /** Her stride as her own feet take it, walking and running (measured by `measureStrides`; null until then). */
   strides: { readonly walk: StrideTable; readonly run: StrideTable } | null = null;
+  /**
+   * HER STRIDE NOW (strideShape.ts): its length, the share of it each foot is down (the rest is flight), how high the
+   * knee lifts. Follows her speed every frame; her feet's planting goes by it (footGround.ts).
+   */
+  readonly shape: StrideShape = { stride: 1.18, share: 0.56, lift: 0.06, back: 0, narrow: 0 };
   /** The belly her strides were measured at (a bigger belly steps shorter: they are measured again when it changes). */
   private measuredBelly = -1;
 
@@ -378,9 +386,10 @@ export class BodyMotion {
       // stride's length is the walk's, the run's, or between them while one eases into the other: MEASURED FROM HER
       // OWN FOOT BONES (`measureStrides`; the builder's own figure only until that has run). Her place in the stride
       // moves on by how far she really went, so her feet stay where they land; backward when she backs up.
-      const walkStride = this.strides?.walk.stride ?? humanStride(measure, 'walk', carry) / this.unitsPerMetre;
-      const runStride = this.strides?.run.stride ?? humanStride(measure, 'run', carry) / this.unitsPerMetre;
-      const stride = walkStride + (runStride - walkStride) * run;
+      // HER STRIDE BY HER SPEED (Joshua, 2026-11-20: "the faster you run, the longer the stride length";
+      // strideShape.ts): the game writes her legs, so the stride is the one her legs take at this speed.
+      shapeAt(speed, carry, this.shape);
+      const stride = strideMetres(this.shape, measure, this.unitsPerMetre);
       const turned = this.stridePhase + distance / stride;
       this.stridePhase = turned - Math.floor(turned);
       phase = this.stridePhase;
@@ -394,6 +403,8 @@ export class BodyMotion {
       const poseAs = (stance: 'walk' | 'run'): number => {
         gait.stance = stance;
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
+        // (her legs her own: the stride at her speed, over the builder's fixed walk or run legs)
+        writeLegs(this.walkTurns, measure, bind, phase, this.shape, carry, this.unitsPerMetre);
         // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
         const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * walkEase(speed));
         this.rig.apply(weighWalk(measure, steps, weight, this.weighedTurns));
@@ -471,6 +482,7 @@ export class BodyMotion {
     this.rig.apply(poseHuman(measure, bind, gait, this.standTurns));
     const stand = read([0, 0, 0, 0]), now = [0, 0, 0, 0];
 
+    const tableShape: StrideShape = { stride: 0, share: 0, lift: 0, back: 0, narrow: 0 };
     const table = (stance: 'walk' | 'run', speed: number): StrideTable => {
       const N = STRIDE_SAMPLES;
       const along: [Float32Array, Float32Array] = [new Float32Array(N), new Float32Array(N)];
@@ -480,6 +492,7 @@ export class BodyMotion {
       for (let k = 0; k < N; k++) {
         gait.phase = k / N;
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
+        writeLegs(this.walkTurns, measure, bind, gait.phase, shapeAt(speed, belly / 100, tableShape), belly / 100, this.unitsPerMetre);
         this.rig.apply(weighWalk(measure, steps, walkWeight(gait.phase, stance, (this.settings.walkSway / 100) * walkEase(speed)), this.weighedTurns));
         read(now);
         for (let side = 0; side < 2; side++) { along[side][k] = now[side * 2]; lift[side][k] = now[side * 2 + 1] - stand[side * 2 + 1]; }
@@ -535,13 +548,24 @@ export class BodyMotion {
       };
     };
     // (her sway eases off with her speed, so each is measured at a speed of its own: a walk, a run)
-    this.strides = { walk: table('walk', WALK_EASE.fullAt), run: table('run', 3.8) };
+    this.strides = { walk: table('walk', WALK_EASE.fullAt), run: table('run', 4.18) };
     this.measuredBelly = belly;
     if (this.walkBlend === 0) this.stridePhase = this.strides.walk.startAt;
   }
 
   /** Put every bone back as the file has it (for when she is taken apart). */
   dispose(): void { this.rig.dispose(); }
+
+  /**
+   * A POSE LAID OVER THE ONE SHE HAS (groundPose.ts: lying on her belly, on all fours): the joints `turns` names take
+   * those turns, mixed in by `weight` (0 none .. 1 wholly), every other bone left as it is.
+   */
+  overlay(turns: readonly JointTurn[], weight: number): void {
+    if (weight <= 0) return;
+    if (weight < 1) this.keep();
+    this.rig.set(turns);
+    if (weight < 1) this.mixWithKept(weight);
+  }
 
   /** Remember every bone's rotation as it is now. */
   private keep(): void {

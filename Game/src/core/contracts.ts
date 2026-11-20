@@ -197,6 +197,13 @@ export interface HeroineBody {
   setSkinShine?(oily: number): void;
   /** Squat down for this many seconds, then stand up (the bathroom, until there is a toilet). */
   squatFor?(seconds: number): void;
+  /**
+   * HER STANCE (Joshua, 2026-11-20; heroine/fast/groundPose.ts): standing, crouching, on her belly, or on all fours. She
+   * gets there over a second or so (crouching first, then down; up through her crouch).
+   */
+  setStance?(stance: 'stand' | 'crouch' | 'prone' | 'fours'): void;
+  /** Where she is: the stance she is in (or on her way through), the one asked for, and whether she has got there. */
+  stanceInfo?(): { stance: 'stand' | 'crouch' | 'prone' | 'fours'; asked: 'stand' | 'crouch' | 'prone' | 'fours'; settled: boolean; crouch: number; down: number };
   /** Wet her all over at once (Settings -> TEST TOOLS -> Get wet). */
   soakSkin?(): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

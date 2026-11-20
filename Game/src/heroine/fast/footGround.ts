@@ -88,8 +88,9 @@
 //
 // Nothing here allocates while the game runs.
 // ============================================================================
+import { plantedAt } from './strideShape';
 import * as THREE from 'three';
-import { STRIDE_SAMPLES, type BodyMotion } from './bodyMotion';
+import type { BodyMotion } from './bodyMotion';
 import { turnInWorld } from './boneTurn';
 
 /** GAME TUNING for her feet on the floor. Lengths in metres, times in seconds, unless they say otherwise. */
@@ -254,6 +255,8 @@ export class FootGround {
    * (nothing known there) counts as her root's height. Set by the game on the island (fastHeroine.ts setGround).
    */
   groundAt: ((x: number, z: number) => number) | null = null;
+  /** CROUCHING (groundPose.ts): her hips this much lower, metres; her knees bend to keep her feet on the ground. */
+  crouchDrop = 0;
   /** This frame: each foot's ground, metres above (+) or below (-) her root, and how it is tipped to lie on it. */
   private readonly groundUnder: [number, number] = [0, 0];
   private readonly tilt: [THREE.Quaternion, THREE.Quaternion] = [new THREE.Quaternion(), new THREE.Quaternion()];
@@ -368,13 +371,14 @@ export class FootGround {
       this.stepFoot = -1;                                          // (walking has steps of its own)
       this.crabbing = false;
       this.stepHop = 0;
-      const table = run >= 0.5 ? strides.run : strides.walk;
-      const k = Math.min(STRIDE_SAMPLES - 1, Math.floor(motion.phase * STRIDE_SAMPLES));
+      // (each foot is down for its share of the stride from where it lands, the left at 0.25 and the right at 0.75:
+      //  the share follows her speed, so the faster she goes the more of each stride is in the air: strideShape.ts)
+      const down = motion.shape.share;
       for (let side = 0; side < 2; side++) {
-        this.planted[side] = table.planted[side][k] === 1;
+        const landsAt = side === 0 ? 0.25 : 0.75, leavesAt = fract(landsAt + down);
+        this.planted[side] = plantedAt(motion.phase, side, down);
         if (this.planted[side]) continue;
-        const length = fract(table.landsAt[side] - table.leavesAt[side]) || 1;
-        swing[side] = clamp(fract(motion.phase - table.leavesAt[side]) / length, 0, 1);
+        swing[side] = clamp(fract(motion.phase - leavesAt) / (1 - down), 0, 1);
       }
 
       // ---- how far she comes down ----
@@ -386,7 +390,8 @@ export class FootGround {
       if (run <= 0) drop = walking;
       else {
         // RUNNING: her hips ride lower, and bounce: highest between steps, lowest as each foot carries her.
-        const flight = strides.run.flightAt ?? 0.7;
+        // (the middle of the moment both feet are up: from her left foot leaving to her right foot landing)
+        const flight = fract(0.25 + down + (0.75 - 0.25 - down) / 2);
         const running = (tuning.runDrop * this.leg - 0.5 * tuning.runBob * share * Math.cos(4 * Math.PI * (motion.phase - flight))) * walk;
         drop = walking + (running - walking) * run;
       }
@@ -418,6 +423,7 @@ export class FootGround {
     // (her hips turned: her hip joints are no longer over her feet, so she comes down a little for her legs to reach)
     const turned = twist !== null && Math.abs(twist.hips) > 1e-4;
     if (turned) drop += (tuning.twistDropStanding + tuning.twistDropWalking * walk) * Math.min(1, Math.abs(twist.hips) / tuning.twistFull);
+    drop += this.crouchDrop;
     this.drop = drop;
 
     // ---- each foot: held to its spot and on the floor if it is planted, clear of the floor if it swings ----

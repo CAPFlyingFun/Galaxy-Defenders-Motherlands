@@ -52,6 +52,8 @@ import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
+import { STANCE, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
 import { buildExtraPieces } from './extraPieces';
@@ -222,6 +224,8 @@ export interface FastHeroine extends HeroineBody {
   stats(): FastHeroineStats;
   /** Change her detail: 'auto' or a fixed level. Takes effect as soon as the level is ready (at once if it was made before). */
   setDetail(detail: DetailChoice): void;
+  /** For test pages: where her main joints are now (world metres), by the builder's joint names. */
+  jointsNow(): Record<string, [number, number, number]>;
   /**
    * Attach THE LIVE BODY (liveBody.ts): the builder's whole hidden room, run each frame and never drawn. Her baby's
    * kicks then show on her skin. Null takes it away again.
@@ -255,6 +259,8 @@ export interface FastHeroine extends HeroineBody {
   keepJointsReal(on: boolean): void;
   /** Her stride as measured from her own foot bones, walking and running (bodyMotion.ts), for a readout and the tests. */
   strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null;
+  /** Her stride now (strideShape.ts): metres for two steps, and the share of it each foot is down. */
+  strideNow(): { readonly stride: number; readonly share: number };
   /**
    * Her breathing now, for a readout: how far her chest and her belly are moved out where each moves most, and how far
    * her belly stands out for her stomach (millimetres); and her trunk as measured at about navel height (its half
@@ -540,6 +546,18 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (which side is her left along X is measured from her joints, not assumed)
   const leftSign = Math.sign(bone(joints.shoulderL).getWorldPosition(new THREE.Vector3()).x - bone(joints.shoulderR).getWorldPosition(new THREE.Vector3()).x) || 1;
   const arms = { left: arm(leftSign, joints.shoulderL, joints.elbowL, joints.wristL), right: arm(-leftSign, joints.shoulderR, joints.elbowR, joints.wristR) };
+  // HER SIZES FOR CROUCHING AND CRAWLING (groundPose.ts), measured from her own bones as she stands now (metres), and
+  // the middle of her hips in her model's group (`fit`): the point her body is tipped forward about to lie down.
+  root.updateMatrixWorld(true);
+  const sizes: BodySizes = (() => {
+    const at = (i: number): THREE.Vector3 => bones[i].getWorldPosition(new THREE.Vector3());
+    const hip = at(joints.hipL), knee = at(joints.kneeL), ankle = at(joints.ankleL);
+    const shoulder = at(joints.shoulderL), elbow = at(joints.elbowL), wrist = at(joints.wristL), base = root.position.y;
+    // (her arm from shoulder to the middle of her hand: 8 cm past her wrist)
+    return { thigh: hip.distanceTo(knee), shin: knee.distanceTo(ankle), arm: shoulder.distanceTo(elbow) + elbow.distanceTo(wrist) + 0.08,
+      hipHeight: hip.y - base, shoulderHeight: shoulder.y - base };
+  })();
+  const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
   // HER SHOULDER WIDTH (shoulder joint to shoulder joint, as she stands now): her feet stand this far apart, and a crab
   // step goes this far (footGround.ts)
   ground.shoulderWidth = new THREE.Vector3().setFromMatrixPosition(arms.left.upper.matrixWorld)
@@ -889,6 +907,14 @@ if (uHideHead > 0.5) {
   let treadmill = 0;
   /** Which way each part of her faces, when the game says so (`setFacing`: its object, read each frame); null: all one way. */
   let facing: BodyFacing | null = null;
+  // HER STANCE (groundPose.ts): what the game asked for; how far crouched (0 standing .. 1) and how far down on her
+  // belly or hands and knees (0 .. 1, from her crouch), eased; and where she is in her crawl
+  let stanceAsked: Stance = 'stand';
+  let crouchW = 0, downW = 0, crawlPhase = 0;
+  let downKind: 'prone' | 'fours' = 'prone';
+  const stanceOut: MutableJointTurn[] = [];
+  const hipsTipped = new THREE.Vector3(), tipQ = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0), leanAxis = new THREE.Vector3();
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
   let target: THREE.Vector3 | null = null;
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
@@ -908,6 +934,23 @@ if (uHideHead > 0.5) {
     setPosition(x: number, z: number, y = 0): void { root.position.set(x, y, z); }, // (y: the ground under her, on the island)
     setYaw(yaw: number): void { root.rotation.set(0, yaw, 0); },
     setFacing(now: BodyFacing | null): void { facing = now; },
+    // (crouching, on her belly or on all fours: groundPose.ts; she goes there over a second or so)
+    setStance(stance: Stance): void { stanceAsked = stance; },
+    // (for test pages: where her main joints are now, world metres)
+    jointsNow(): Record<string, [number, number, number]> {
+      const out: Record<string, [number, number, number]> = {}, v = new THREE.Vector3();
+      for (const name of ['pelvis', 'spine', 'chest', 'neck', 'head', 'shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR', 'hipL', 'kneeL', 'ankleL', 'hipR', 'kneeR', 'ankleR'] as const) {
+        bones[joints[name]].getWorldPosition(v);
+        out[name] = [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
+      }
+      return out;
+    },
+    stanceInfo() {
+      const now: Stance = downW >= 1 ? downKind : downW > 0 ? (stanceAsked === 'prone' || stanceAsked === 'fours' ? stanceAsked : downKind) : crouchW >= 1 ? 'crouch' : crouchW > 0 ? (stanceAsked === 'stand' ? 'stand' : 'crouch') : 'stand';
+      // (settled: where she was asked to be, not getting down or up)
+      const settled = stanceAsked === 'stand' ? crouchW === 0 && downW === 0 : stanceAsked === 'crouch' ? crouchW === 1 && downW === 0 : downW === 1 && downKind === stanceAsked;
+      return { stance: now, asked: stanceAsked, settled, crouch: crouchW, down: downW };
+    },
     setSideSteps(level: number | null): void { sideLevel = level; },
     // (the island's ground: each foot on the ground under it, laid along its slope: footGround.ts 9)
     setGround(groundAt: ((x: number, z: number) => number) | null): void { ground.groundAt = groundAt; },
@@ -1028,6 +1071,7 @@ if (uHideHead > 0.5) {
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
+    strideNow() { return motion.shape; },
     wristInfo: () => reach.wristInfo,
     armInfo() { return { eggs: armClear.eggs, moved: armClear.moved, kneeMoved: armClear.kneeMoved }; },
     keepArmsClear(on: boolean): void { armClear.on = on; },
@@ -1116,6 +1160,20 @@ if (uHideHead > 0.5) {
 
       // Her pose (the builder's stand, walk or run, her fingers) and the weight of her belly and bust.
       // (each hand's fingers: closed round its gun, or relaxed when it holds nothing: handReach.ts eases them)
+      // HER STANCE, eased (groundPose.ts): crouching first, then down from her crouch onto her belly or hands and knees;
+      // getting up, back to her crouch first. (A different way down, say on her belly to all fours as her pregnancy is
+      // turned on, comes up to her crouch and goes down again.)
+      {
+        const wantDown = stanceAsked === 'prone' || stanceAsked === 'fours';
+        if (wantDown && (downW === 0 || downKind === stanceAsked)) {
+          crouchW = Math.min(1, crouchW + frame.dt / STANCE.crouchSeconds);
+          if (crouchW >= 1) { if (downW === 0) downKind = stanceAsked as 'prone' | 'fours'; downW = Math.min(1, downW + frame.dt / STANCE.downSeconds); }
+        } else {
+          downW = Math.max(0, downW - frame.dt / STANCE.upSeconds);
+          if (downW === 0) crouchW = stanceAsked === 'stand' ? Math.max(0, crouchW - frame.dt / STANCE.crouchSeconds) : Math.min(1, crouchW + frame.dt / STANCE.crouchSeconds);
+        }
+      }
+      const downS = smooth(downW), crouchS = smooth(crouchW);
       lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
       reach.advance(frame.dt);
       motion.grip[0] = reach.grip[0]; motion.grip[1] = reach.grip[1];
@@ -1135,18 +1193,58 @@ if (uHideHead > 0.5) {
         legTwist.upperLegs = within(wrap(facing.upperLegs - yawNow), UPPER_LEGS_TURN_MOST);
         legTwist.feet = within(wrap(facing.feet - yawNow), FEET_TURN_MOST);
       }
-      ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing ? legTwist : null, crab);
+      // (crouching: her hips lower, her knees bent to keep her feet on the ground; lying down or on all fours her feet
+      //  no longer carry her, so they are let go, to be set down afresh when she stands)
+      ground.crouchDrop = STANCE.crouchDrop * motion.legMetres * crouchS;
+      if (downW < 1) ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing && downS < 0.5 ? legTwist : null, crab);
+      else ground.letGo();
+      // CROUCHED, HER BACK LEANS FORWARD (most of it low in her back), about the line across her hips
+      if (crouchS > 0 && downS < 1) {
+        const lean = STANCE.crouchLean * (Math.PI / 180) * crouchS * (1 - downS);
+        leanAxis.set(Math.cos(yawNow), 0, -Math.sin(yawNow));   // (her left: across her forward)
+        // (a turn about her left tips her top forward)
+        turnAbout(bone(joints.spine), leanAxis, lean * 0.65);
+        turnAbout(bone(joints.chest), leanAxis, lean * 0.35);
+        // (her head kept up, looking ahead, not at the ground)
+        turnAbout(bone(joints.neck), leanAxis, -lean * 0.8);
+      }
+      // ON HER BELLY OR ON ALL FOURS (groundPose.ts): her own pose for it laid over her crouch, and her whole body
+      // tipped forward about her hips and set down to the stance's height, eased together; on a slope, along it
+      if (downS > 0) {
+        const going = Math.min(1, Math.abs(along) / Math.max(1e-4, frame.dt) / 0.15);
+        crawlPhase = (crawlPhase + along / (downKind === 'prone' ? STANCE.proneStride : STANCE.foursStride) + 1) % 1;
+        const tip = tipOf(downKind, sizes);
+        motion.overlay(stanceTurns(downKind, crawlPhase, going, body.belly / 100, tip, motion.measure, motion.bind, stanceOut), downS);
+        // (the ground's slope along the way she faces: her body lies along it)
+        let slope = 0;
+        if (ground.groundAt) {
+          const ax = Math.sin(yawNow) * 0.7, az = Math.cos(yawNow) * 0.7, x = root.position.x, z = root.position.z;
+          const ahead = ground.groundAt(x + ax, z + az), behind = ground.groundAt(x - ax, z - az);
+          if (Number.isFinite(ahead) && Number.isFinite(behind)) slope = Math.atan2(ahead - behind, 1.4);
+        }
+        const tipNow = (tip - slope) * downS;
+        fit.rotation.x = tipNow;
+        hipsTipped.copy(hipsInFit).applyQuaternion(tipQ.setFromAxisAngle(X_AXIS, tipNow));
+        const hipsY = downKind === 'prone' ? STANCE.proneHips : foursHips(sizes);
+        // (from where her crouch has her, to her hips at the stance's height, where they were across the ground)
+        fit.position.x *= 1 - downS;
+        fit.position.y += (hipsY - hipsTipped.y - fit.position.y) * downS;
+        fit.position.z = hipsInFit.z - hipsTipped.z;
+        fit.updateMatrixWorld(true);
+      } else if (fit.rotation.x !== 0) { fit.rotation.x = 0; fit.position.z = 0; }
 
       // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than
       // her shoulders (her neck and skull). Each is a turn about the upright axis, laid over her pose.
-      const bellyYaw = facing ? yawNow + legTwist.hips : yawNow;
-      const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) : 0;
-      const headTurn = facing ? within(wrap(facing.head - (bellyYaw + backTurn)), HEAD_TURN_MOST) : 0;
+      // (lying down or on all fours, none of this: her body faces the way it lies; her eyes and aim do the looking)
+      const upright = 1 - downS;
+      const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
+      const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
+      const headTurn = facing ? within(wrap(facing.head - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       // HER HEAD TIPPED UP OR DOWN (where she looks while she does something), shared between her neck and skull as the
       // turn is, about the line across her head (square to the way it faces), within HEAD_TIP_MOST
-      const tip = facing?.headPitch ?? 0;
+      const tip = (facing?.headPitch ?? 0) * (1 - downS);
       if (Math.abs(tip) > 1e-4 && !firstPerson) {
         const yaw = facing!.head;
         tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
@@ -1208,7 +1306,9 @@ if (uHideHead > 0.5) {
       }
       // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
       for (const i of [0, 1] as const) armClear.holdHand[i] = touch.shapes[i] !== null && reach.weight(i) > 0.5;
-      armClear.update(frame.dt);
+      // (lying down or on all fours her arms are on the ground ahead of her body, not crossing it: nothing to keep clear,
+      //  and its upright rules would lift her forearms off the ground)
+      if (downS < 0.5) armClear.update(frame.dt);
       joints2.update();
       // (her wrists within their limits once more: the corrections above may have turned a hand)
       reach.holdWrists();

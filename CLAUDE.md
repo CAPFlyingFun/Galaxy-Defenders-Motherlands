@@ -275,10 +275,14 @@ use the game's single copy of three.js.
 - HER HAND TO HER BELLY WHEN THE BABY KICKS (Joshua, 2026-11-20; `Game/src/heroine/fast/bellyTouch.ts`): on a new
   kick of her hidden live body (the builder's kicks: a spot, a way out, a push), a FREE hand (no gun, no job of the
   game's) goes: the nearer one, or the far one only if the way from its shoulder to just in front of the spot stays out
-  of her belly; a spot it cannot reach is left. Its palm rests 2 mm off HER OWN skin there (`skinFrame`: her trunk's
-  skin points round the spot fitted to a small curved patch, its real facing and its curve along her fingers; the
-  kick's bump counted while it lasts), her fingers and thumb close smoothly round that curve (fingerTouch.ts
-  `gapMore`), 3 s, then back; 1.5 s before another. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  of her belly; a spot it cannot reach is left. Its palm rests 2 mm off HER OWN skin there, and every finger
+  bone too (Joshua: "re-measure and fix"; `skinPatch.ts`): her trunk's skin points as they lie NOW (skinned, breathing,
+  read again every 0.3 s) measured onto a 26 x 26 cm grid of 4 mm cells laid on her skin at the spot, the kick's bump
+  added while it lasts; a ball, then a smooth fitted patch, were up to 5 mm in her or 1 cm off at the fingertips. Each
+  finger bone in turn is laid 2 mm off it by its own joint (fingerTouch.ts `layFlat`: closing where her skin falls away,
+  opening back up to 35% where it rises), the thumb the place whose FARTHEST part is nearest her; 3 s, then back; 1.5 s
+  before another. Measured with `handGaps(hand)` (test pages): palm 2 mm, finger bones 2-6 mm off her (mid-bone over a
+  hollow), none in her. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all

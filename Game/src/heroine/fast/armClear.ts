@@ -326,6 +326,14 @@ export class ArmClear {
     return direction ? out.copy(point).transformDirection(o.fromFit) : out.copy(point).applyMatrix4(o.fromFit);
   }
 
+  /** A point in the world now, where it was when she stood (her rest frame), carried by her belly's bone. */
+  worldToRest(point: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    const o = this.obstacles[0];
+    if (!o) return out.copy(point);
+    o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[o.egg.bone]);
+    return out.copy(point).applyMatrix4(o.toFit);
+  }
+
   /** A direction in the world now, as it was when she stood (her rest frame), carried by her belly's bone. */
   worldToRestDirection(direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
     const o = this.obstacles[0];

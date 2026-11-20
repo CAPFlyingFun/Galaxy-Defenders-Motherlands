@@ -24,6 +24,7 @@
 // gives that hand a job meanwhile (it is let go at once: `cancel`).
 // ============================================================================
 import * as THREE from 'three';
+import type { SkinPatch } from './skinPatch';
 
 /** GAME TUNING. */
 export const BELLY_TOUCH = {
@@ -43,6 +44,8 @@ export const BELLY_TOUCH = {
    * arrives, fingerTouch.ts), her palm over the kick's bump while it lasts.
    */
   gap: 0.002,
+  /** Her skin under the hand is read again this often while it is there, seconds (her breathing moves it). */
+  reread: 0.3,
 } as const;
 
 /** What the touch needs from her body (fastHeroine.ts gives it). */
@@ -65,18 +68,20 @@ export interface BellyTouchBody {
    * Her belly's curve under the hand, for its fingers to curl round (a ball touching her skin at the spot, as round as
    * her belly is there), kept `gap` off; null: no curve (the hand goes back to her own pose).
    */
-  setCurve(hand: 0 | 1, centre: THREE.Vector3 | null, radius: number, gap: number): void;
+  setCurve(hand: 0 | 1, centre: THREE.Vector3 | null, radius: number, gap: number, surface: ((point: THREE.Vector3) => number) | null): void;
   /**
    * HER OWN SKIN AT A SPOT (as she stood): the spot moved along `out` onto her skin's outermost points there, so her palm
    * rests 2 mm off HER skin (the builder's kicks are on the builder's skin, a test kick on her belly's egg).
    */
   ontoSkin(spot: THREE.Vector3, out: THREE.Vector3): void;
   /**
-   * HER SKIN AT A SPOT, ITSELF (as she stood): from the spot, its first-guess facing `out` and the way her fingers lie
-   * (world, now): the spot moved onto her skin's own patch there, the way that patch really faces (into `normalOut`),
-   * and how round it is along her fingers (returned: the curve's radius, metres).
+   * HER SKIN ROUND A SPOT, ITSELF (as she stood): her skin's own points fitted to a curved patch the size of her hand
+   * (skinPatch.ts), from the spot, its first-guess facing `out` and the way her fingers lie (world, now); null if too
+   * few of her points are there.
    */
-  skinFrame(spot: THREE.Vector3, out: THREE.Vector3, worldWay: THREE.Vector3, normalOut: THREE.Vector3): number;
+  skinPatch(spot: THREE.Vector3, out: THREE.Vector3, worldWay: THREE.Vector3): SkinPatch | null;
+  /** A point in the world now, where it was as she stood (her rest frame). */
+  worldToRest(point: THREE.Vector3, out: THREE.Vector3): THREE.Vector3;
   /** Give a hand this pose to reach (null: back to her own pose), or move the pose it is reaching for. */
   setJob(hand: 0 | 1, pose: THREE.Matrix4 | null): void;
   moveJob(hand: 0 | 1, pose: THREE.Matrix4): void;
@@ -86,7 +91,7 @@ export interface BellyTouchBody {
 
 const spotWorld = new THREE.Vector3(), outWorld = new THREE.Vector3(), shoulderAt = new THREE.Vector3();
 const leftWay = new THREE.Vector3(), fingers = new THREE.Vector3(), palmTo = new THREE.Vector3(), step = new THREE.Vector3();
-const centre = new THREE.Vector3();
+const centre = new THREE.Vector3(), restPoint = new THREE.Vector3();
 
 export class BellyTouch {
   /** The hand on her belly now (or on its way), or -1. */
@@ -103,8 +108,20 @@ export class BellyTouch {
   /** Which of the builder's kicks the hand is for (-1: one asked for by hand), and how far its bump stands out now. */
   private kick = -1;
   private push = 0;
-  /** Her skin's curve under this hand, metres (measured once a touch; -1 not yet). */
+  /** Her skin's curve under this hand along her fingers, metres (measured once a touch; -1 not yet). */
   private curve = -1;
+  /** Her skin under this hand, fitted once a touch (skinPatch.ts): what her fingers, thumb and palm are measured against. */
+  private patch: SkinPatch | null = null;
+  /** Seconds before her skin under the hand is read again. */
+  private reread = 0;
+  /** How far a point in the world is out of her skin under the hand (and the kick's bump), metres. */
+  private readonly surface = (point: THREE.Vector3): number => {
+    if (!this.patch) return Infinity;
+    const gap = this.patch.gap(this.body.worldToRest(point, restPoint));
+    // (the kick's bump stands her skin out under the middle of her palm: about as wide as a palm, fading off)
+    const d2 = restPoint.distanceToSquared(this.spot);
+    return gap - this.push * Math.exp(-d2 / (2 * 0.035 * 0.035));
+  };
 
   constructor(private readonly body: BellyTouchBody) {}
 
@@ -152,6 +169,8 @@ export class BellyTouch {
     // (the kick's bump under her palm, eased: her hand rides out on it and back as it goes down)
     const bump = this.kick >= 0 && kickAt && kickAt[this.kick] ? Math.max(0, kickAt[this.kick].w) : 0;
     this.push += (bump - this.push) * (1 - Math.exp(-dt / 0.15));
+    // (her skin under the hand read again now and then: she breathes)
+    if (this.patch && (this.reread -= dt) <= 0) { this.patch.refresh(); this.reread = BELLY_TOUCH.reread; }
     this.body.moveJob(hand, this.place(hand));
     if (this.body.progress(hand) >= 0.95) this.there += dt;
     if (this.there >= BELLY_TOUCH.holdSeconds || (this.there === 0 && this.timer >= BELLY_TOUCH.reachSeconds)) this.letGo();
@@ -159,7 +178,8 @@ export class BellyTouch {
 
   /** Back to her own pose, and a short rest. */
   private letGo(): void {
-    if (this.hand >= 0) { this.body.setJob(this.hand as 0 | 1, null); this.body.setCurve(this.hand as 0 | 1, null, 0, 0); }
+    if (this.hand >= 0) { this.body.setJob(this.hand as 0 | 1, null); this.body.setCurve(this.hand as 0 | 1, null, 0, 0, null); }
+    this.patch = null;
     this.hand = -1;
     this.rest = BELLY_TOUCH.restSeconds;
   }
@@ -203,14 +223,20 @@ export class BellyTouch {
     b.shoulder(hand, shoulderAt);
     fingers.copy(spotWorld).sub(shoulderAt).normalize().addScaledVector(leftWay, hand === 0 ? -0.35 : 0.35);
     fingers.addScaledVector(outWorld, -fingers.dot(outWorld)).normalize();
-    // (her skin's own patch there, measured once a touch as her hand sets off (it reads all her skin's points): the
-    //  spot onto it, its real facing for her palm, its real curve for her fingers; then all of it again from those)
+    // (her skin's own patch there, fitted once a touch as her hand sets off (it reads all her skin's points): the spot
+    //  onto it, its real facing for her palm, its real curve; then all of it again from those)
     if (this.curve < 0) {
-      this.curve = Math.max(0.05, Math.min(0.6, b.skinFrame(this.spot, this.out, fingers, this.out)));
+      this.patch = b.skinPatch(this.spot, this.out, fingers);
+      if (this.patch) {
+        this.spot.copy(this.patch.origin);
+        this.patch.facing(this.out);
+        this.curve = this.patch.curveAlong();
+      } else this.curve = 0.2;
       return this.place(hand);
     }
     const radius = this.curve;
-    b.setCurve(hand, centre.copy(spotWorld).addScaledVector(outWorld, -radius), radius, BELLY_TOUCH.gap);
+    // (a ball stands for her belly in the hand's shape, but the fingers measure the patch itself: `surface`)
+    b.setCurve(hand, centre.copy(spotWorld).addScaledVector(outWorld, -radius), radius, BELLY_TOUCH.gap, this.patch ? this.surface : null);
     spotWorld.addScaledVector(outWorld, BELLY_TOUCH.gap);
     // HER FINGERS (worked out above) carry on the line of her forearm, from her shoulder to the spot, turned a little in
     // toward her middle (her left hand's to her right): her wrist hardly bends, wherever on her belly the spot is (a

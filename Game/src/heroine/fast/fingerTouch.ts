@@ -65,6 +65,13 @@ export const TOUCH = Object.freeze({
   /** The search for the first touch: so many steps out, then halved so many times. */
   steps: 12,
   halvings: 6,
+  /**
+   * A hand laid FLAT on her belly (Joshua, 2026-11-20: "re-measure and fix"): a joint whose bone is into her skin when
+   * straight (her hand's own straight still droops a little, and her skin rises toward her fingertips on the slopes
+   * of her belly) OPENS back past straight until that bone is off it by the gap, as a real finger bends back a little
+   * on a surface (`layFlat`): at most this much (percent of a full close).
+   */
+  flatOpen: 35,
 });
 
 /** A hand's palm, measured in the hand bone's own space. */
@@ -93,6 +100,12 @@ export class FingerTouch {
    * (bellyTouch.ts) keeps 2 mm off her skin.
    */
   readonly gapMore: [number, number] = [0, 0];
+  /**
+   * THE REAL SURFACE a hand lies on, when there is one (her belly's own skin: skinPatch.ts, by bellyTouch.ts): how far a
+   * point in the world is out of it, metres. While set, it is measured instead of the hand's shape (which still says
+   * that the hand holds something, and how far round to look).
+   */
+  readonly surface: [((point: THREE.Vector3) => number) | null, ((point: THREE.Vector3) => number) | null] = [null, null];
   /**
    * HER FINGERS', THUMBS' AND PALMS' OWN THICKNESS, measured from her skin (handPads.ts; Joshua, 2026-11-20): each bone's
    * skin stands this far off its line. Null until measured: the old guesses (`PAD_FALLBACK`) serve.
@@ -188,7 +201,9 @@ export class FingerTouch {
             else if (this.thumbLaidOn[h] !== shape && reached[h] >= TOUCH.arrivedFrom) { this.layThumb(i, shape, touched); this.thumbLaidOn[h] = shape; }
           }
           else touched.fill(0);
-          for (let k = 0; k < (finger.thumb ? 0 : n); k++) {
+          // (laid flat on her: each bone in turn laid the gap off her skin)
+          if (flat && !finger.thumb) this.layFlat(i, shape, touched);
+          for (let k = 0; k < (finger.thumb || flat ? 0 : n); k++) {
             // joints k and out close together, from where they are, until the finger touches; then joint k stays
             const from = touched[k];
             const found = closeToTouch((closure) => {
@@ -211,6 +226,34 @@ export class FingerTouch {
         if (finger.thumb && shape && this.gapMore[h] > 0) this.tipThumb(i, h, this.thumbTip[h] * this.amount[h]);
         finger.bones[0].updateMatrixWorld(true);
       }
+    }
+  }
+
+  /**
+   * A FINGER LAID FLAT ON HER SKIN (her belly: Joshua, 2026-11-20, "lock in around 2mm of the belly's live skin";
+   * "re-measure and fix"): each bone in turn, from her knuckle out, is laid the gap off her skin by its own joint, the
+   * bones before it left as laid. A joint closes as far as her skin curves away under that bone, or OPENS back past
+   * straight where her skin rises toward her fingertips (at most `flatOpen`; her hand's own straight droops a little).
+   * Closing all the joints together, the tip touched first and the bones nearer her palm stood off her 5-9 mm.
+   */
+  private layFlat(i: number, shape: GripShape, touched: Float32Array): void {
+    const n = touched.length;
+    for (let k = 0; k < n; k++) {
+      // (bone k measured with joint k at `p`, and the bones past it too, their joints opened right back: joint k stops
+      //  where those can still be laid off her, or a fingertip where her skin rises was left in her at its limit)
+      const at = (p: number): number => {
+        for (let j = 0; j < n; j++) this.trying[j] = j < k ? touched[j] : j === k ? p : -TOUCH.flatOpen;
+        return this.clearance(i, this.trying, shape, k);
+      };
+      let open = -TOUCH.flatOpen, closed = 100;
+      let p: number;
+      if (at(open) <= 0) p = open;                                   // (in her even opened right back: as far back as it goes)
+      else if (at(closed) > 0) p = Math.max(0, TOUCH.missMost * 100); // (never reaches her: a relaxed curl)
+      else {
+        for (let h = 0; h < TOUCH.halvings + 3; h++) { const mid = (open + closed) / 2; if (at(mid) > 0) open = mid; else closed = mid; }
+        p = open;
+      }
+      for (let j = k; j < n; j++) touched[j] = p;
     }
   }
 
@@ -257,8 +300,10 @@ export class FingerTouch {
         finger.bones[0].updateMatrixWorld(true);
         // (from its second bone out: its first lies under the ball of her palm, which rests on her belly already, so
         //  every place would count as touching and the one standing off furthest was taken)
-        const clear = this.clearanceAsIs(i, shape, 1);
-        if (clear >= 0 && clear < bestClear) { bestClear = clear; best = percent; bestTip = tip; }
+        const clear = this.clearanceAsIs(i, shape, 1), far = this.farthest;
+        // (clear of her, and its FARTHEST part as near her as it can be: it lies along her skin, not touching at its
+        //  middle with its tip standing off; Joshua, "re-measure and fix")
+        if (clear >= 0 && far < bestClear) { bestClear = far; best = percent; bestTip = tip; }
         if (clear > leastIn) { leastIn = clear; leastInAt = percent; leastInTip = tip; }
       }
     }
@@ -295,22 +340,29 @@ export class FingerTouch {
   /** As `clearance`, with the finger's joints left exactly as they are now (already curled, a thumb also tipped). */
   private clearanceAsIs(i: number, shape: GripShape, from: number): number {
     const finger = this.motion.fingers[i];
-    let nearest = Infinity;
+    let nearest = Infinity, farthest = -Infinity;
     const bones = finger.bones, pads = this.pads?.pad[i];
     for (let k = from; k < bones.length; k++) {
       bones[k].getWorldPosition(a);
       (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
       const pad = pads?.[k] ?? (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
-      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)) - pad, this.distance(shape, b) - pad);
+      const mid = this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5), i) - pad, end = this.distance(shape, b, i) - pad;
+      nearest = Math.min(nearest, mid, end);
+      farthest = Math.max(farthest, mid, end);
     }
-    return nearest - this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
+    const more = this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
+    this.farthest = farthest - more;
+    return nearest - more;
   }
+
+  /** The farthest part of the finger last measured by `clearanceAsIs`, metres off (the gap taken off). */
+  private farthest = 0;
 
   /**
    * A finger with its joints closed so far (percent each): how far its nearest part is from the shape's surface,
    * metres. Only the part from joint `from` out is measured (the part before it already touches and stays put).
    */
-  private clearance(i: number, percents: ArrayLike<number>, shape: GripShape, from: number): number {
+  private clearance(i: number, percents: ArrayLike<number>, shape: GripShape, from: number, to = Infinity): number {
     const finger = this.motion.fingers[i];
     this.motion.curlFingerJoints(i, percents);
     finger.bones[0].updateMatrixWorld(true);
@@ -318,16 +370,19 @@ export class FingerTouch {
     // (each joint past the knuckle, the tip, and the middle of every bone, less that bone's own pad: her skin's
     //  distance, not her bone's)
     const bones = finger.bones, pads = this.pads?.pad[i];
-    for (let k = from; k < bones.length; k++) {
+    for (let k = from; k < Math.min(to, bones.length); k++) {
       bones[k].getWorldPosition(a);
       (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
       const pad = pads?.[k] ?? (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
-      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)) - pad, this.distance(shape, b) - pad);
+      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5), i) - pad, this.distance(shape, b, i) - pad);
     }
     return nearest - this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
   }
 
-  private distance(shape: GripShape, at: THREE.Vector3): number {
+  /** How far a point is from what finger `i`'s hand touches: its real surface if it has one, else its shape. */
+  private distance(shape: GripShape, at: THREE.Vector3, i = -1): number {
+    const surface = i >= 0 ? this.surface[this.ofHand[0].includes(i) ? 0 : 1] : null;
+    if (surface) return surface(at);
     point[0] = at.x; point[1] = at.y; point[2] = at.z;
     return shapeDistance(shape, point);
   }

@@ -54,6 +54,7 @@ import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
+import { SkinPatch } from './skinPatch';
 import { STANCE, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
@@ -232,6 +233,8 @@ export interface FastHeroine extends HeroineBody {
   bellyHandNow(): number;
   /** For test pages: each hand's reach this frame. */
   reachNow(): unknown;
+  /** For test pages: how far each part of a hand really is from her skin (mm). */
+  handGaps(hand: 0 | 1): unknown;
   /** For test pages: a kick on her belly, `round` radians round from her front (+ toward her left), `up` up it. */
   pokeBelly(round: number, up?: number): void;
   /**
@@ -794,7 +797,7 @@ if (uHideHead > 0.5) {
   // (her trunk's bones, for finding her belly's own skin: her hips and her back)
   const trunkBone = new Uint8Array(bones.length);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
-  const curveWay = new THREE.Vector3(), curveOut = new THREE.Vector3(), curveSide = new THREE.Vector3(), curveMid = new THREE.Vector3();
+  const curveWay = new THREE.Vector3();
   for (const b of [hipsBone, pelvisBone, ...backBones]) { const k = bones.indexOf(b); if (k >= 0) trunkBone[k] = 1; }
   // HER FINGERS', THUMBS' AND PALMS' THICKNESS, measured from her own skin (handPads.ts): every hand job lays her skin,
   // not her bones, on what it touches
@@ -812,51 +815,37 @@ if (uHideHead > 0.5) {
     insideBelly: (point, grow) => armClear.insideBelly(point, grow),
     shoulder: (hand, out) => out.setFromMatrixPosition(hand === 0 ? arms.left.upper.matrixWorld : arms.right.upper.matrixWorld),
     free: (hand): boolean => !gunIn[hand === 0 ? 'left' : 'right'] && (bellyHand.hand === hand || touch.shapes[hand] === null && !reach.hasJob(hand)),
-    // HER SKIN AT THE SPOT, ITSELF (Joshua, 2026-11-20: "lock in around 2mm of the belly's live skin"): her own trunk
-    // skin's points within 6 cm of the spot (as she stood) fitted to a small curved patch, its height over the spot's
-    // level h = c + p u + q v + A u^2 + B v^2 (u along her fingers, v across them), by least squares. Its tilt gives the
-    // way her skin really faces there (her belly's egg tilts off it on her belly's sides), and A how round it is along
-    // her fingers: her palm lies flat on her real skin and her fingers curl round its real curve. Read once a touch.
-    skinFrame: (spot, out, worldWay, normalOut) => {
+    // HER SKIN AT THE SPOT, ITSELF (Joshua, 2026-11-20: "lock in around 2mm of the belly's live skin"; "re-measure and
+    // fix"): her trunk's own skin points round the spot, as they lie NOW (skinned, breathing; CPU, a few thousand of
+    // them), each taken back to her rest frame, measured onto a grid laid on her skin there (skinPatch.ts); every
+    // finger, her thumb and her palm are measured against it. Her points near the spot are found once a touch (from
+    // her shaped points, cheap); the grid is read again from them while her hand is there (bellyTouch.ts).
+    skinPatch: (spot, out, worldWay) => {
+      const geometry = skin.geometry, pos = geometry.getAttribute('position');
+      const idx = geometry.getAttribute('skinIndex'), wt = geometry.getAttribute('skinWeight');
+      const m = meshToRest.elements, near: number[] = [];
+      for (let i = 0; i < pos.count; i++) {
+        let top = 0, most = wt.getX(i);
+        for (let j = 1; j < 4; j++) { const w = wt.getComponent(i, j); if (w > most) { most = w; top = j; } }
+        if (!trunkBone[idx.getComponent(i, top)]) continue;
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const dx = m[0] * x + m[4] * y + m[8] * z + m[12] - spot.x, dy = m[1] * x + m[5] * y + m[9] * z + m[13] - spot.y, dz = m[2] * x + m[6] * y + m[10] * z + m[14] - spot.z;
+        if (dx * dx + dy * dy + dz * dz < 0.2 * 0.2) near.push(i);
+      }
+      const at = new THREE.Vector3();
+      const patch = new SkinPatch((visit) => {
+        if (skin.geometry !== geometry) return;   // (her detail level changed: the grid keeps what it had)
+        for (const i of near) {
+          skin.getVertexPosition(i, at);
+          armClear.worldToRest(skin.localToWorld(at), at);
+          visit(at.x, at.y, at.z);
+        }
+      });
       const way = armClear.worldToRestDirection(worldWay, curveWay);
-      const n0 = curveOut.copy(out).normalize();
-      way.addScaledVector(n0, -way.dot(n0)).normalize();
-      const side = curveSide.crossVectors(n0, way);
-      const pts = body.points, m = meshToRest.elements, count = pts.length / 3;
-      // the normal equations of the fit: [1 u v u2 v2] . x = h
-      const M = new Float64Array(25), r = new Float64Array(5), row = new Float64Array(5);
-      let found = 0;
-      for (let i = 0; i < count; i++) {
-        let heaviest = 0;
-        for (let k = 1; k < 4; k++) if (holdWeight[i * 4 + k] > holdWeight[i * 4 + heaviest]) heaviest = k;
-        if (!trunkBone[holdIndex[i * 4 + heaviest]]) continue;
-        const x = pts[i * 3], y = pts[i * 3 + 1], z = pts[i * 3 + 2];
-        const px = m[0] * x + m[4] * y + m[8] * z + m[12] - spot.x, py = m[1] * x + m[5] * y + m[9] * z + m[13] - spot.y, pz = m[2] * x + m[6] * y + m[10] * z + m[14] - spot.z;
-        if (px * px + py * py + pz * pz > 0.06 * 0.06) continue;
-        const u = px * way.x + py * way.y + pz * way.z, v = px * side.x + py * side.y + pz * side.z, h = px * n0.x + py * n0.y + pz * n0.z;
-        if (h < -0.04) continue;   // (the far side of her, not this patch)
-        row[0] = 1; row[1] = u; row[2] = v; row[3] = u * u; row[4] = v * v;
-        for (let a = 0; a < 5; a++) { r[a] += row[a] * h; for (let b = 0; b < 5; b++) M[a * 5 + b] += row[a] * row[b]; }
-        found++;
-      }
-      normalOut.copy(n0);
-      if (found < 12) return armClear.bellyCurve(spot, worldWay);
-      // (Gaussian elimination with the largest pivot)
-      for (let c = 0; c < 5; c++) {
-        let best = c;
-        for (let a = c + 1; a < 5; a++) if (Math.abs(M[a * 5 + c]) > Math.abs(M[best * 5 + c])) best = a;
-        if (Math.abs(M[best * 5 + c]) < 1e-14) return armClear.bellyCurve(spot, worldWay);
-        if (best !== c) { for (let b = 0; b < 5; b++) { const t = M[c * 5 + b]; M[c * 5 + b] = M[best * 5 + b]; M[best * 5 + b] = t; } const t = r[c]; r[c] = r[best]; r[best] = t; }
-        for (let a = c + 1; a < 5; a++) { const f = M[a * 5 + c] / M[c * 5 + c]; for (let b = c; b < 5; b++) M[a * 5 + b] -= f * M[c * 5 + b]; r[a] -= f * r[c]; }
-      }
-      const fit = new Float64Array(5);
-      for (let c = 4; c >= 0; c--) { let sum = r[c]; for (let b = c + 1; b < 5; b++) sum -= M[c * 5 + b] * fit[b]; fit[c] = sum / M[c * 5 + c]; }
-      // (her skin's own facing there: tilted from the first guess by its slope each way; and the spot onto the patch)
-      normalOut.copy(n0).addScaledVector(way, -fit[1]).addScaledVector(side, -fit[2]).normalize();
-      spot.addScaledVector(n0, fit[0]);
-      const bendAlong = -2 * fit[3];
-      return bendAlong > 1e-3 ? 1 / bendAlong : 0.6;
+      return patch.layOn(spot, out, way) ? patch : null;
     },
+    // (a point in the world, how far out of that patch: the hand's own fingers and palm, as posed now)
+    worldToRest: (point, out) => armClear.worldToRest(point, out),
     // (her skin's points as shaped, in her rest frame: the outermost of those within 1.5 cm of the line through the spot
     //  along `out`, and no more than 6 cm either side of it: the spot is moved onto it. Only her TRUNK's skin: her arms
     //  hang beside her belly as she stood, and the spot went out onto her arm)
@@ -876,7 +865,8 @@ if (uHideHead > 0.5) {
       if (Number.isFinite(best)) spot.addScaledVector(out, best);
     },
     // (her fingers open a little as her hand comes, then close smoothly round her belly's curve, `gap` off her skin)
-    setCurve: (hand, centre, radius, gap) => {
+    setCurve: (hand, centre, radius, gap, surface) => {
+      touch.surface[hand] = surface;
       if (!centre) { touch.shapes[hand] = null; touch.gapMore[hand] = 0; reach.opening[hand] = false; return; }
       const shape = touch.shapes[hand];
       if (shape && shape.kind === 'sphere') { (shape.centre as unknown as number[])[0] = centre.x; (shape.centre as unknown as number[])[1] = centre.y; (shape.centre as unknown as number[])[2] = centre.z; (shape as { radius: number }).radius = radius; }
@@ -1048,6 +1038,37 @@ if (uHideHead > 0.5) {
     setStance(stance: Stance): void { stanceAsked = stance; },
     // (for test pages: the hand on her belly where the baby kicked, -1 none)
     bellyHandNow(): number { return bellyHand.hand; },
+    // (for test pages: HOW FAR EACH PART OF A HAND REALLY IS FROM HER SKIN, mm: her skin posed on the CPU as drawn now,
+    //  trunk only, near the hand; each finger bone's middle and end less its pad, the palm's middle less its flesh)
+    handGaps(hand: 0 | 1): unknown {
+      skin.updateMatrixWorld(true); skin.skeleton.update();
+      const handBone = hand === 0 ? arms.left.hand : arms.right.hand, at = handBone.getWorldPosition(new THREE.Vector3());
+      const idx = skin.geometry.getAttribute('skinIndex'), wt = skin.geometry.getAttribute('skinWeight');
+      const near: THREE.Vector3[] = [];
+      for (let i = 0; i < idx.count; i++) {
+        let top = 0, most = wt.getX(i);
+        for (let j = 1; j < 4; j++) { const w = wt.getComponent(i, j); if (w > most) { most = w; top = j; } }
+        if (!trunkBone[idx.getComponent(i, top)]) continue;
+        const v = skin.localToWorld(skin.getVertexPosition(i, new THREE.Vector3()));
+        if (v.distanceTo(at) < 0.2) near.push(v);
+      }
+      // (the real skin's nearest point; and, as a second number, what the hand itself measures: its patch)
+      const surf = touch.surface[hand];
+      const gap = (p: THREE.Vector3): number => { let d = Infinity; for (const v of near) d = Math.min(d, v.distanceTo(p)); return d; };
+      const pg = (p: THREE.Vector3): number => surf ? surf(p) : NaN;
+      const out: unknown[] = [];
+      motion.fingers.forEach((f, i) => {
+        if (f.hand !== hand) return;
+        const pads = touch.pads?.pad[i] ?? [];
+        out.push({ thumb: f.thumb, mm: f.bones.map((b, k) => {
+          const a2 = b.getWorldPosition(new THREE.Vector3()), b2 = (k + 1 < f.bones.length ? f.bones[k + 1] : f.tip).getWorldPosition(new THREE.Vector3());
+          const mid = a2.clone().add(b2).multiplyScalar(0.5), pad = pads[k] ?? 0.009;
+          return [+((gap(mid) - pad) * 1000).toFixed(1), +((gap(b2) - pad) * 1000).toFixed(1), +((pg(mid) - pad) * 1000).toFixed(1), +((pg(b2) - pad) * 1000).toFixed(1)];
+        }) });
+      });
+      const palm = touch.palmFace(hand).point;
+      return { near: near.length, palm: [+((gap(palm) - touch.palmThick(hand)) * 1000).toFixed(1), +((pg(palm) - touch.palmThick(hand)) * 1000).toFixed(1)], fingers: out };
+    },
     // (for test pages: each hand's reach this frame: how far it fell short, and its job's weight)
     reachNow(): unknown { return { short: [...reach.short], weight: [reach.weight(0), reach.weight(1)], progress: [reach.progress(0), reach.progress(1)], wrist: reach.wristInfo, guard: { ...joints2.excess }, amount: [...touch.amount], closed: touch.touched.map((t) => Array.from(t).map((v) => Math.round(v))), shape: touch.shapes.map((x) => x ? JSON.stringify(x) : null) }; },
     // (for test pages: a kick on her belly's egg, `round` radians round from her front (+ toward her left), `up` up it)

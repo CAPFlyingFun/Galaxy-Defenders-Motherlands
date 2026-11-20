@@ -24,7 +24,7 @@ import { createStandInHeroine } from './heroine/standIn';
 import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
 import { HeroineVitals } from './vitals/heroineVitals';
 import { VitalsPanel } from './vitals/vitalsPanel';
-import { loadHeroineSettings, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
+import { loadHeroineSettings, outfitLook, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
 import type { IntakeAction } from './ui/hud';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
@@ -159,7 +159,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
  * `changeOutfit`); every other one that needs a new heroine (the Body, Light or Full, the live body) still starts the
  * game again.
  */
-const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'suitKnit', 'hairStrands', 'skinTexture', 'faceLocks', 'sharpParts'];
+const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'catsuitNeck', 'suitKnit', 'hairStrands', 'skinTexture', 'faceLocks', 'sharpParts'];
 
 /** How wide the portrait cover's still picture of the game is made, pixels (it is shown far smaller). */
 const SNAPSHOT_WIDTH = 480;
@@ -347,7 +347,8 @@ async function start(): Promise<void> {
   await breathe();
   // HER OUTFIT NOW: the address's ?look= wins at the start, else the one chosen in Settings. A change in Settings
   // changes her outfit WHILE THE GAME RUNS (see `changeOutfit` below), and this follows it.
-  let outfitNow: string | null = new URLSearchParams(location.search).get('look') ?? (graphics.outfit || null);
+  // (a catsuit in the style chosen under Catsuit style: heroineSettings.ts outfitLook)
+  let outfitNow: string | null = outfitLook(new URLSearchParams(location.search).get('look') ?? graphics.outfit, graphics.catsuitNeck) || null;
   /**
    * THE HEROINE AS THE REST OF THE GAME KNOWS HER (Joshua, 2026-11-20: "when I select a new outfit, does it restart the
    * whole app? It should freeze the screen, remove the old clothing, apply the new one, then unfreeze"). Everything
@@ -739,7 +740,8 @@ async function start(): Promise<void> {
     const say = sayChanging;
     // what carries over: her outfit's look (old and new), and how many pouches hold a full clip
     const [{ lookKey, LOOKS }, { bareLook, openLiveBody }] = await Promise.all([import('./heroine/looks'), import('./heroine/fast/liveBody')]);
-    const fromLook = lookKey(outfitNow), toLook = lookKey(graphics.outfit || null);
+    const wanted = outfitLook(graphics.outfit, graphics.catsuitNeck);
+    const fromLook = lookKey(outfitNow), toLook = lookKey(wanted || null);
     const fullPouches = fullPouchesOf(gearNow());
     // 3. let go of the old body first; her hidden live body is kept if the new outfit is on the same body
     const bodyOf = (key: string): string => JSON.stringify(bareLook(LOOKS[key]).body);
@@ -752,7 +754,7 @@ async function start(): Promise<void> {
     renderer.renderLists.dispose();
     await breathe();
     // 4. the new body, as she was
-    outfitNow = graphics.outfit || null;
+    outfitNow = wanted || null;
     bodyNow = await createHeroine(renderer, scene, graphics, say, outfitNow);
     scene.add(heroine.root);
     heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));

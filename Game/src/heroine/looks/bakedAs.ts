@@ -7,12 +7,12 @@
 // Kept apart (no imports) so the baked-look loader can read it.
 // ============================================================================
 
-/** A look's name -> the look whose baked files it is drawn from. */
-export const BAKED_AS: Readonly<Record<string, string>> = {
-  /** black above the bottom of her bust and down her arms, gold below (the gold catsuit's keyhole) */
-  catsuitBlackGold: 'catsuitGold',
-  /** gold above, black below (the black catsuit's high neck) */
-  catsuitGoldBlack: 'catsuitBlack',
-  /** black above, silver below (the silver catsuit's diamond) */
-  catsuitBlackSilver: 'catsuitSilver',
-};
+/** A look's name -> the look whose baked files it is drawn from (each in the three styles: '', Low, High). */
+export const BAKED_AS: Readonly<Record<string, string>> = Object.fromEntries(['', 'Low', 'High'].flatMap((style) => [
+  /** black above the bottom of her bust and down her arms, gold below */
+  [`catsuitBlackGold${style}`, `catsuitGold${style}`],
+  /** gold above, black below */
+  [`catsuitGoldBlack${style}`, `catsuitBlack${style}`],
+  /** black above, silver below */
+  [`catsuitBlackSilver${style}`, `catsuitSilver${style}`],
+]));

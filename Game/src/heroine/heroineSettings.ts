@@ -59,6 +59,11 @@ export interface HeroineSettings {
    */
   outfit: string;
   /**
+   * THE CATSUIT'S STYLE (Joshua, 2026-11-20: "Make sure all outfits have the same style per color"): every catsuit
+   * colour comes in the same three, and this picks which: the keyhole, the low neck or the high neck (`outfitLook`).
+   */
+  catsuitNeck: CatsuitNeck;
+  /**
    * THE MAP (Joshua, 2026-11-19): the real island from Beyond Extinction (src/world/island/), or the domed town, kept as
    * a test map until its place on the island is chosen. The address's ?map= still wins. Changing it reloads the game.
    */
@@ -113,19 +118,35 @@ export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.fre
   ['Pink & black two-piece', 'blazeSuit'],
   ['Shadow Operative catsuit', 'shadowSuit'],
   ['Anime Space Heroine', 'spaceHeroine'],
-  ['Bronze catsuit (keyhole)', 'bronzeSuit'],
-  ['Bronze catsuit (low neck)', 'bronzeSuitLow'],
-  ['Bronze catsuit (high neck)', 'bronzeSuitHigh'],
-  ['Gold catsuit (keyhole)', 'catsuitGold'],
-  ['Black catsuit (high neck)', 'catsuitBlack'],
-  ['Silver catsuit (diamond)', 'catsuitSilver'],
-  ['Black & gold catsuit (keyhole)', 'catsuitBlackGold'],
-  ['Gold & black catsuit (high neck)', 'catsuitGoldBlack'],
-  ['Black & silver catsuit (diamond)', 'catsuitBlackSilver'],
+  // (the catsuits: each colour in the style chosen under Catsuit style)
+  ['Bronze catsuit', 'bronzeSuit'],
+  ['Gold catsuit', 'catsuitGold'],
+  ['Black catsuit', 'catsuitBlack'],
+  ['Silver catsuit', 'catsuitSilver'],
+  ['Black & gold catsuit', 'catsuitBlackGold'],
+  ['Gold & black catsuit', 'catsuitGoldBlack'],
+  ['Black & silver catsuit', 'catsuitBlackSilver'],
   ['Plain black catsuit (Joshua\'s export)', 'blazeCatsuit'],
   ['Gray & red suit', 'graySuit'],
   ['All pink (Joshua\'s export)', 'blazePink'],
 ] as const);
+
+/** THE CATSUIT STYLES (Settings -> HEROINE -> Catsuit style): what is shown, and the style's name. */
+export type CatsuitNeck = 'keyhole' | 'low' | 'high';
+export const CATSUIT_NECKS: readonly (readonly [string, CatsuitNeck])[] = Object.freeze([
+  ['Keyhole & turtleneck', 'keyhole'], ['Low neck', 'low'], ['High neck', 'high'],
+] as const);
+const asCatsuitNeck = (text: string | null): CatsuitNeck => (text === 'low' || text === 'high' ? text : 'keyhole');
+/** The catsuit outfits that come in the three styles (each a look of that name, the keyhole, plus `Low` and `High`). */
+const CATSUIT_FAMILIES = ['bronzeSuit', 'catsuitGold', 'catsuitBlack', 'catsuitSilver', 'catsuitBlackGold', 'catsuitGoldBlack', 'catsuitBlackSilver'];
+/**
+ * THE LOOK TO WEAR for an outfit and the catsuit style: a catsuit's look in that style (bronzeSuit + low ->
+ * bronzeSuitLow); any other outfit (or a catsuit already named in its style) as it is.
+ */
+export function outfitLook(outfit: string, neck: CatsuitNeck): string {
+  if (!CATSUIT_FAMILIES.includes(outfit)) return outfit;
+  return outfit + (neck === 'low' ? 'Low' : neck === 'high' ? 'High' : '');
+}
 
 /**
  * Where the Skin shine slider reads NATURAL, as she was (Joshua, 2026-11-19: "I would set 25 as normal"): below it drier,
@@ -150,6 +171,7 @@ export const SETTING_KEYS = Object.freeze({
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
   autoFire: 'gdm.autoFire2',
   outfit: 'gdm.outfit',
+  catsuitNeck: 'gdm.catsuitNeck',
   map: 'gdm.map',
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
@@ -224,6 +246,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
+    catsuitNeck: asCatsuitNeck(address.get('neck') ?? read(SETTING_KEYS.catsuitNeck)),
     // (the island unless the town was chosen)
     map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),

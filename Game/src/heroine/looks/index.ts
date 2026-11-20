@@ -11,7 +11,7 @@ import { SHADOW_SUIT_LOOK } from './shadowSuit';
 import { BLAZE_CATSUIT_LOOK } from './blazeCatsuit';
 import { SPACE_HEROINE_LOOK } from './spaceHeroine';
 import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
-import { BLACK_CATSUIT_LOOK, GOLD_CATSUIT_LOOK, SILVER_CATSUIT_LOOK, TWO_TONE_LOOKS } from './catsuitStyles';
+import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
@@ -34,9 +34,7 @@ export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   bronzeSuitLow: BRONZE_SUIT_LOW_LOOK,
   bronzeSuitHigh: BRONZE_SUIT_HIGH_LOOK,
   /** The same catsuit in more colours, and two tones (catsuitStyles.ts). */
-  catsuitGold: GOLD_CATSUIT_LOOK,
-  catsuitBlack: BLACK_CATSUIT_LOOK,
-  catsuitSilver: SILVER_CATSUIT_LOOK,
+  ...COLOUR_CATSUIT_LOOKS,
   ...TWO_TONE_LOOKS,
 };
 

@@ -24,22 +24,34 @@ export const CATSUIT_COLOURS = Object.freeze({
 });
 const C = CATSUIT_COLOURS;
 
-/** THE GOLD CATSUIT: shiny gold, the keyhole and turtleneck. */
-export const GOLD_CATSUIT_LOOK: HeroineLook = catsuitLook({ colour: C.gold, neck: NECKLINES.keyhole });
-/** THE BLACK CATSUIT: glossy black, the high neck. */
-export const BLACK_CATSUIT_LOOK: HeroineLook = catsuitLook({ colour: C.black, neck: NECKLINES.high });
-/** THE SILVER CATSUIT: silver, a turtleneck and the builder's diamond cutout. */
-export const SILVER_CATSUIT_LOOK: HeroineLook = catsuitLook({ colour: C.silver, neck: NECKLINES.diamond });
+/**
+ * EVERY COLOUR IN THE SAME THREE STYLES as the bronze (Joshua, 2026-11-20: "Make sure all outfits have the same style per
+ * color"): the KEYHOLE (a turtleneck and a keyhole), the LOW neck (a low wide U) and the HIGH neck (his crew). Named
+ * `catsuit<Colour>` (the keyhole), `catsuit<Colour>Low` and `catsuit<Colour>High`; Settings picks the colour under
+ * Outfit and the style under Catsuit neckline (heroineSettings.ts `outfitLook`).
+ */
+const STYLE_NECKS = { '': NECKLINES.keyhole, Low: NECKLINES.lowU, High: NECKLINES.high } as const;
+const inEveryStyle = (name: string, colour: string): Record<string, HeroineLook> =>
+  Object.fromEntries(Object.entries(STYLE_NECKS).map(([suffix, neck]) => [`${name}${suffix}`, catsuitLook({ colour, neck })]));
+
+/** THE COLOURED CATSUITS: gold, black and silver, each in the three styles. */
+export const COLOUR_CATSUIT_LOOKS: Readonly<Record<string, HeroineLook>> = {
+  ...inEveryStyle('catsuitGold', C.gold),
+  ...inEveryStyle('catsuitBlack', C.black),
+  ...inEveryStyle('catsuitSilver', C.silver),
+};
 
 /**
- * TWO TONES: each is one of the three above, baked once, with its top half recoloured by the game (gear.ts
- * `bakedAs` and `clothShine.twoTone`): the same catsuit, the same files.
- *   catsuitBlackGold    black above, gold below (the gold catsuit's keyhole)
- *   catsuitGoldBlack    gold above, black below (the black catsuit's high neck)
- *   catsuitBlackSilver  black above, silver below (the silver catsuit's diamond)
+ * TWO TONES: each is one of the colours above, baked once per style, with its top half recoloured by the game
+ * (looks/bakedAs.ts and gear.ts `clothShine.twoTone`): the same catsuit, the same files, in the same three styles.
+ *   catsuitBlackGold    black above, gold below (the gold catsuit's bakes)
+ *   catsuitGoldBlack    gold above, black below (the black catsuit's)
+ *   catsuitBlackSilver  black above, silver below (the silver catsuit's)
  */
-export const TWO_TONE_LOOKS: Readonly<Record<string, HeroineLook>> = {
-  catsuitBlackGold: GOLD_CATSUIT_LOOK,
-  catsuitGoldBlack: BLACK_CATSUIT_LOOK,
-  catsuitBlackSilver: SILVER_CATSUIT_LOOK,
-};
+export const TWO_TONE_LOOKS: Readonly<Record<string, HeroineLook>> = Object.fromEntries(
+  (['', 'Low', 'High'] as const).flatMap((suffix) => [
+    [`catsuitBlackGold${suffix}`, COLOUR_CATSUIT_LOOKS[`catsuitGold${suffix}`]],
+    [`catsuitGoldBlack${suffix}`, COLOUR_CATSUIT_LOOKS[`catsuitBlack${suffix}`]],
+    [`catsuitBlackSilver${suffix}`, COLOUR_CATSUIT_LOOKS[`catsuitSilver${suffix}`]],
+  ]),
+);

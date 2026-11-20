@@ -128,8 +128,10 @@ use the game's single copy of three.js.
   MORE COLOURS OF THE SAME CATSUIT (Joshua, 2026-11-20: "a shiny gold, black, sliver, etc, maybe even top half above
   belly/at bottom of breasts one tone, and below another"): every catsuit style is made by ONE recipe, `looks/catsuit.ts`
   (`catsuitLook({ colour, neck })`, `NECKLINES` keyhole/lowU/high/diamond, the high-neck gap filled), the bronze ones
-  too. `looks/catsuitStyles.ts`: GOLD (keyhole), BLACK (high), SILVER (the builder's diamond cutout), each baked; and
-  TWO TONES drawn by the game over one of those bakes (`looks/bakedAs.ts` `BAKED_AS`, gear's `clothShine.twoTone`,
+  too. EVERY COLOUR IN THE SAME THREE STYLES (Joshua: "Make sure all outfits have the same style per color"): keyhole
+  (the name as it is), `Low`, `High`; Settings -> Outfit picks the colour, Settings -> Catsuit style the style
+  (`gdm.catsuitNeck`, `?neck=`; heroineSettings.ts `outfitLook`; changes while playing). `looks/catsuitStyles.ts`:
+  GOLD, BLACK, SILVER, each baked in the three; and TWO TONES drawn by the game over one of those bakes (`looks/bakedAs.ts` `BAKED_AS`, gear's `clothShine.twoTone`,
   outfitMaterial.ts): the top colour wherever the suit's own colour is, above `TWO_TONE_LINE` (1.19 m up her as
   baked, the bottom of her bust) and all down her arms (her arms' bones, `setToneArms`), per pixel so the line is
   clean: black & gold, gold & black, black & silver. (Tried first: a long-sleeved top cut at her bust over the

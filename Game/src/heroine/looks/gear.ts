@@ -33,6 +33,10 @@ export interface LookGear {
   readonly pouches?: boolean;
 }
 
+/** The same gear for a catsuit's three styles: its keyhole (the name as it is), `Low` and `High` (catsuitStyles.ts). */
+const inThreeStyles = (gear: Record<string, LookGear>): Record<string, LookGear> =>
+  Object.fromEntries(Object.entries(gear).flatMap(([name, g]) => ['', 'Low', 'High'].map((style) => [name + style, g])));
+
 /** TWO TONES: where the top colour ends, metres up her from her feet as baked (the bottom of her bust; GAME TUNING). */
 const TWO_TONE_LINE = 1.19;
 
@@ -57,18 +61,21 @@ function catsuitGear(o: { boot: string; trim: string; accent: string; sole: stri
 }
 
 export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
-  /** THE GOLD CATSUIT: gold boots, a black belt with gold fittings, black guns glowing gold; a metal sheen. */
-  catsuitGold: catsuitGear({ boot: '#c8962e', trim: '#7a5414', accent: '#f0c24a', sole: '#1a1408', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.35, cloth: 0.24 }),
-  /** THE BLACK CATSUIT: black boots, a black belt with silver fittings, black guns glowing silver-blue. */
-  catsuitBlack: catsuitGear({ boot: '#16171b', trim: '#2c2e34', accent: '#9fc3ff', sole: '#08080a', belt: 0x1a1a1e, edge: 0x34363c, buckle: 0xc0c4cc, gun: 0x121316, cloth: 0.22 }),
-  /** THE SILVER CATSUIT: silver boots, a dark belt with silver fittings, dark guns glowing cyan; a metal sheen. */
-  catsuitSilver: catsuitGear({ boot: '#a9aeb6', trim: '#5c6068', accent: '#7fe8ff', sole: '#141518', belt: 0x24262c, edge: 0x4a4e56, buckle: 0xd0d4dc, gun: 0x1c1e22, metal: 0.35, cloth: 0.24 }),
-  /** BLACK AND GOLD (the gold catsuit's bake): gold boots, the lower colour; a black belt with gold fittings. */
-  catsuitBlackGold: catsuitGear({ boot: '#c8962e', trim: '#16171b', accent: '#f0c24a', sole: '#0c0b08', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.25, cloth: 0.24, twoTone: { on: '#c8962e', top: '#141519' } }),
-  /** GOLD AND BLACK (the black catsuit's bake): black boots edged gold; a black belt with gold fittings. */
-  catsuitGoldBlack: catsuitGear({ boot: '#16171b', trim: '#c8962e', accent: '#f0c24a', sole: '#08080a', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.25, cloth: 0.24, twoTone: { on: '#141519', top: '#c8962e' } }),
-  /** BLACK AND SILVER (the silver catsuit's bake): silver boots, a dark belt with silver fittings. */
-  catsuitBlackSilver: catsuitGear({ boot: '#a9aeb6', trim: '#16171b', accent: '#7fe8ff', sole: '#141518', belt: 0x1a1a1e, edge: 0x34363c, buckle: 0xd0d4dc, gun: 0x121316, metal: 0.25, cloth: 0.24, twoTone: { on: '#a9aeb6', top: '#141519' } }),
+  // THE CATSUIT COLOURS, each in its three styles (catsuitStyles.ts): the same gear for every style
+  ...inThreeStyles({
+    /** THE GOLD CATSUIT: gold boots, a black belt with gold fittings, black guns glowing gold; a metal sheen. */
+    catsuitGold: catsuitGear({ boot: '#c8962e', trim: '#7a5414', accent: '#f0c24a', sole: '#1a1408', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.35, cloth: 0.24 }),
+    /** THE BLACK CATSUIT: black boots, a black belt with silver fittings, black guns glowing silver-blue. */
+    catsuitBlack: catsuitGear({ boot: '#16171b', trim: '#2c2e34', accent: '#9fc3ff', sole: '#08080a', belt: 0x1a1a1e, edge: 0x34363c, buckle: 0xc0c4cc, gun: 0x121316, cloth: 0.22 }),
+    /** THE SILVER CATSUIT: silver boots, a dark belt with silver fittings, dark guns glowing cyan; a metal sheen. */
+    catsuitSilver: catsuitGear({ boot: '#a9aeb6', trim: '#5c6068', accent: '#7fe8ff', sole: '#141518', belt: 0x24262c, edge: 0x4a4e56, buckle: 0xd0d4dc, gun: 0x1c1e22, metal: 0.35, cloth: 0.24 }),
+    /** BLACK AND GOLD (the gold catsuit's bakes): gold boots, the lower colour; a black belt with gold fittings. */
+    catsuitBlackGold: catsuitGear({ boot: '#c8962e', trim: '#16171b', accent: '#f0c24a', sole: '#0c0b08', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.25, cloth: 0.24, twoTone: { on: '#c8962e', top: '#141519' } }),
+    /** GOLD AND BLACK (the black catsuit's bakes): black boots edged gold; a black belt with gold fittings. */
+    catsuitGoldBlack: catsuitGear({ boot: '#16171b', trim: '#c8962e', accent: '#f0c24a', sole: '#08080a', belt: 0x16140f, edge: 0x2a241a, buckle: 0xe0b040, gun: 0x18150e, metal: 0.25, cloth: 0.24, twoTone: { on: '#141519', top: '#c8962e' } }),
+    /** BLACK AND SILVER (the silver catsuit's bakes): silver boots, a dark belt with silver fittings. */
+    catsuitBlackSilver: catsuitGear({ boot: '#a9aeb6', trim: '#16171b', accent: '#7fe8ff', sole: '#141518', belt: 0x1a1a1e, edge: 0x34363c, buckle: 0xd0d4dc, gun: 0x121316, metal: 0.25, cloth: 0.24, twoTone: { on: '#a9aeb6', top: '#141519' } }),
+  }),
   /**
    * THE SHADOW OPERATIVE CATSUIT (shadowSuit.ts; look 1 of Joshua's board): a leather-brown belt SLUNG on her
    * hips -- at her sides a little over her hip joints, behind higher, at her front sagging down toward her pelvis --

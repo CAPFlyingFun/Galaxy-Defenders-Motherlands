@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { FOV_RANGE, OUTFIT_CHOICES, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
+import { FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, TABLE_RANGE, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -351,6 +351,8 @@ export class Hud {
     element('h2', 'gd-settings-part', settings, 'HEROINE');
     // (her outfit, to test each as it is made: Joshua, 2026-11-19)
     choiceRow('Outfit', 'outfit', OUTFIT_CHOICES, 'Her outfit, to try each as it is made. It changes while you play (a few seconds).');
+    // (every catsuit colour in the same three styles: Joshua, 2026-11-20)
+    choiceRow('Catsuit style', 'catsuitNeck', CATSUIT_NECKS, 'The style every catsuit is worn in: a keyhole under a turtleneck, a low neck, or a high neck. It changes while you play.');
     choiceRow('Body', 'body', [['Performance', 'performance'], ['Visual', 'visual']], 'Performance: the fast body, on the DEV Room\'s settings. Visual: the Character Builder\'s own room. Changing it reloads the game.');
     const fast = options.graphics.body === 'performance';
     // (the rows that belong to the other body are shown greyed out, so it is plain what each body offers)

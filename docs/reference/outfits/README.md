@@ -16,3 +16,7 @@ heroines' outfits. They show the look to aim for, not finished art: colours and 
 - `ccbs-fabric-colours.jpg`: the Character Builder fabric pack's sixteen colours (the suit uses its athletic knit).
 - `look2-anime-space-heroine-front.jpg` / `-back.jpg`: Look 2 (the Anime Space Heroine) up close, front and back
   (Joshua, 2026-11-19: "try and make it as close as possible").
+- `looks5-6-catsuit-styles-green-gold-and-bronze.jpg`: two more one-piece catsuit STYLES (Joshua, 2026-11-20, from
+  Wonder; to build later): a dark green catsuit with gold armour (sweetheart bust, shoulder pieces, belly panel, knee
+  guards, a diadem) and a glossy bronze one-piece. Joshua: "one piece catsuits like the back one, just different
+  variations of looks as styles, are better for the theme".

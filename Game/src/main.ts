@@ -184,6 +184,24 @@ const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
 const MANUAL_CAMERA_STYLES: readonly CameraStyle[] = ['shoulder', 'follow', 'sideLeft', 'sideRight'];
 const MANUAL_CAMERA_STYLE_KEY = 'gdm.cameraStyleManual';
 const MANUAL_AIM_HOLD = 1.2;
+/** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds, and straightens up over the hold's last so many. */
+const WINDED_IN = 0.6;
+const WINDED_OUT = 1.0;
+/**
+ * ...and in first person the view tips down this far with her, toward her feet, past her chest and belly (radians, 75
+ * degrees: Joshua, "make her head look more at her feet"), unless the player turns it.
+ */
+const WINDED_VIEW_PITCH = -75 * Math.PI / 180;
+/**
+ * HOLDING HER BELLY UP AS SHE RUNS (Joshua, 2026-11-20: "from a run and up"; "anything over 30 weeks"): on from this
+ * pace level (3 is a run: most of the way there), off again below the other (a little room, so it does not flicker), and
+ * only from this week of her pregnancy.
+ */
+const SUPPORT_ON_LEVEL = 2.75;
+const SUPPORT_OFF_LEVEL = 2.4;
+const SUPPORT_FROM_WEEK = 30;
+/** No look down at a kick while she fires, nor this long after, seconds (Joshua: never pull the view off a target). */
+const LOOK_AFTER_FIRE = 3;
 // First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
 // it tips down when she has no hands to look at (radians, about 45 degrees; with hands it looks at them).
 const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
@@ -558,6 +576,16 @@ async function start(): Promise<void> {
   let headDoing = 0;
   /** First person: how far the view is tipped down on top of the player's look, glancing at a holster (radians). */
   let fpGlance = 0;
+  // FIRST PERSON, HER OWN LOOKS LAID OVER THE PLAYER'S VIEW (Joshua, 2026-11-20): down at her hand where the baby
+  // kicked (heroine/fast/bellyTouch.ts), and down while she is bent over winded. Each frame's is taken off again
+  // before the next is laid on, so the player's own aim is never moved; turning the view gives way at once (the view
+  // stays where it is, `off`), and while it is laid on, it was not the player who moved it.
+  const herLook = { yaw: 0, pitch: 0, off: false, windedOff: false };
+  const lookSpot = new THREE.Vector3();
+  /** Holding her belly up as she runs (Joshua: "from a run and up"; "anything over 30 weeks"), with a little room each way. */
+  let supporting = false;
+  /** How far she is bent over winded now, 0..1 (set each frame from her pace's winded hold). */
+  let windedWeight = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   /** Her guns' bursts (src/world/burstFire.ts). */
   const burst = new BurstFire();
@@ -1079,7 +1107,10 @@ async function start(): Promise<void> {
     // (keeping its sign) so a small push aims finely and a full push turns quickly.
     const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;
     const stickLookY = controls.lookStickY * Math.abs(controls.lookStickY) * LOOK_STICK_SPEED * dt;
-    rig.applyLook(controls.takeLookX() + stickLookX, controls.takeLookY() - stickLookY); // stick up looks up
+    const lookX = controls.takeLookX() + stickLookX, lookY = controls.takeLookY() - stickLookY;
+    rig.applyLook(lookX, lookY); // stick up looks up
+    // (the player turned the view this frame: a look of hers laid over it gives way: see the belly glance below)
+    const looked = lookX !== 0 || lookY !== 0;
     const zoom = controls.takeZoom();
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
@@ -1143,6 +1174,24 @@ async function start(): Promise<void> {
       hud.setStance(stanceAsked(), pregnantNow());
       // (the camera comes down with her)
       rig.lower = !st ? 0 : st.stance === 'prone' || st.asked === 'prone' ? 1.25 * Math.max(st.down, 0.35) : st.stance === 'fours' || st.asked === 'fours' ? 0.95 * Math.max(st.down, 0.4) : 0.45 * st.crouch;
+    }
+    // WINDED (Joshua, 2026-11-20: "she bends her torso forward about 35 degrees, bends her knees a little bit, and places
+    // both hands... just above her knees... after that, she will stand back up to normal and ready to move again"): all
+    // through her pace's winded hold (input/pace.ts, 10 s) she is bent over, eased in over WINDED_IN and back up over the
+    // hold's last WINDED_OUT; no aiming or firing while bent over (her hands are on her knees).
+    {
+      const hold = PACE_TUNING.windedHoldSeconds, left = pace.holdLeft;
+      windedWeight = left > 0 ? Math.min(1, (hold - left) / WINDED_IN) * Math.min(1, left / WINDED_OUT) : 0;
+      heroine.setWinded?.(windedWeight);
+      if (left > 0) stanceNoAim = true;
+    }
+    // HER HANDS TO HER BELLY (heroine/fast/bellyTouch.ts): holding it up from a run (past 30 weeks); and whether she may
+    // start a look down at a kick (not while firing or just after, not running)
+    {
+      supporting = supporting ? pace.level > SUPPORT_OFF_LEVEL : pace.level >= SUPPORT_ON_LEVEL;
+      const week = pregnantNow() ? plan.weekFor(heroine.bellyNow?.() ?? graphics.belly ?? plan.start) : 0;
+      heroine.setBellySupport?.(supporting && pregnantNow() && week >= SUPPORT_FROM_WEEK);
+      heroine.setBellyLookAllowed?.(!controls.fireHeld && sinceFire > LOOK_AFTER_FIRE && pace.level < SUPPORT_ON_LEVEL);
     }
     // (whichever is running walks her and turns her)
     const ask = tableUse.busy ? tableAsk : grabUse.busy ? grabAsk : doorAsk;
@@ -1365,6 +1414,37 @@ async function start(): Promise<void> {
       rig.pitch = base + fpGlance;
       // (following a target, the view's own look is worked out from the last frame's: the glance is not a drag)
       if (busyView.on) busyView.setPitch = rig.pitch;
+    }
+    // FIRST PERSON, HER LOOK DOWN AT A KICK, AND BENT OVER WINDED (see `herLook`): laid over the player's view
+    {
+      const g = herLook;
+      const baseYaw = busyView.on ? rig.yaw : rig.yaw - g.yaw, basePitch = busyView.on ? rig.pitch : rig.pitch - g.pitch;
+      let wantYaw = 0, wantPitch = 0;
+      const w = heroine.bellyLook?.(lookSpot) ?? 0;
+      if (w <= 0) g.off = false;
+      // (firing stops her look, eased back; turning the view stops it where the view is)
+      if (w > 0 && (controls.fireHeld || (looked && rig.mode === 'first'))) { heroine.stopBellyLook?.(); if (looked) g.off = true; }
+      if (windedWeight <= 0) g.windedOff = false;
+      if (rig.mode === 'first') {
+        if (w > 0 && !g.off) {
+          heroine.eye(eyeAt);
+          const dx = lookSpot.x - eyeAt.x, dz = lookSpot.z - eyeAt.z, flat = Math.hypot(dx, dz);
+          // (a spot nearly straight below says little about which way: the view turns only as far as it says)
+          wantYaw = Math.atan2(Math.sin(Math.atan2(dx, dz) - baseYaw), Math.cos(Math.atan2(dx, dz) - baseYaw)) * w * Math.min(1, flat / 0.15);
+          wantPitch = (Math.atan2(lookSpot.y - eyeAt.y, Math.max(0.05, flat)) - basePitch) * w;
+        } else if (windedWeight > 0 && !g.windedOff) {
+          if (looked) g.windedOff = true;
+          else wantPitch = Math.min(0, WINDED_VIEW_PITCH - basePitch) * windedWeight;
+        }
+      }
+      if (looked && (g.yaw !== 0 || g.pitch !== 0)) {
+        // (the player took the view: it stays where it is, her look given up into it)
+        g.yaw = 0; g.pitch = 0;
+      } else {
+        rig.yaw = baseYaw + wantYaw; rig.pitch = basePitch + wantPitch;
+        g.yaw = wantYaw; g.pitch = wantPitch;
+      }
+      if (busyView.on) { busyView.setYaw = rig.yaw; busyView.setPitch = rig.pitch; }
     }
     // THE OVER-THE-SHOULDER CAMERA IS LOCKED TO HER HEAD (Joshua, 2026-11-18): it sits behind her right shoulder and
     // looks where her head looks, turning and tipping with it. Up and down: where the player aims (aimed by hand),

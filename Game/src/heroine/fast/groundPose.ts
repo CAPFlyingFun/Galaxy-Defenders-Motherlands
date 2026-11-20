@@ -40,6 +40,32 @@ const DEG = Math.PI / 180;
 
 export type Stance = 'stand' | 'crouch' | 'prone' | 'fours';
 
+/**
+ * WINDED (Joshua, 2026-11-20: "when she is winded, she bends her torso forward about 35 degrees, bends her knees a little
+ * bit, and places both hands (free or holding something small like a gun) just above her knees"; fastHeroine.ts): the
+ * pose she holds while out of breath (input/pace.ts `windedHoldSeconds`, 10 s), then she stands up and can go again.
+ * GAME TUNING, to tune by eye.
+ */
+export const WINDED = {
+  /** How far she bends forward, degrees (most of it at her hips, the rest up her back: lowerBody.ts, as any bend). */
+  lean: 35,
+  /** ...and at most, leaning in a little more if her hands still fall short of her knees, degrees. */
+  leanMost: 45,
+  /** How far her hips come down, a share of her leg's length (her knees bend to keep her feet on the ground). */
+  drop: 0.2,
+  /** Where her palms rest: this far up her thigh from her knee, metres, and on its front. */
+  aboveKnee: 0.2,
+  /** How far in toward her middle her fingers point down her thighs (0 straight down them). */
+  fingersIn: 0.45,
+  /**
+   * Her head tipped down this much further than her bent back has it, degrees (Joshua: "look more at her feet which would
+   * naturally make her look at her chest/belly").
+   */
+  headDown: 50,
+  /** Her thigh's front, from its bone, just above her knee, metres (her palm rests on it). */
+  thighFront: 0.06,
+} as const;
+
 /** Everything about her stances that is a choice. GAME TUNING, to tune by eye. */
 export const STANCE = {
   /** Crouching: how far her hips drop, as a share of her leg, and how far her back leans forward (degrees). */

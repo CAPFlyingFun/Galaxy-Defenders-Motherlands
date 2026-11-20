@@ -59,7 +59,8 @@ export const PACE_TUNING = {
   //  sprint. She keeps her pace right down to empty, then stops at once, as letting go of the stick does.)
   /**
    * OUT OF STAMINA (Joshua, 2026-11-17: "as soon as you run out of stamina, the max speed is walk... after a 5s hold
-   * which will prevent any walking"): at empty she stands winded this long, seconds, the MOVE stick doing nothing
+   * which will prevent any walking"; RAISED TO 10 s, 2026-11-20, bent over with her hands on her knees: main.ts
+   * WINDED): at empty she stands winded this long, seconds, the MOVE stick doing nothing
    * (looking round, the camera and everything else still work); then she can only walk until her BREATHING is back
    * down to `windedUntilBreaths` a minute (Joshua: "I would raise based on the breathing rate"). 25 is the top of
    * the range a fit adult's breathing is back to a few minutes after hard exercise (15-25 a minute; light exercise is
@@ -67,7 +68,7 @@ export const PACE_TUNING = {
    * at least `windedUntil` (so she cannot run straight out again; a body that gives no breathing rate goes by this
    * alone).
    */
-  windedHoldSeconds: 5,
+  windedHoldSeconds: 10,
   windedUntilBreaths: 25,
   windedUntil: 0.15,
   /** How quickly her real speed follows the pace she is set to, metres a second each second (speeding up, slowing down). */

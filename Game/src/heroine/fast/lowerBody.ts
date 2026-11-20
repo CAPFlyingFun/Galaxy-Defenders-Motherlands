@@ -296,6 +296,20 @@ export class LowerBody {
     this.leanInFading = true;
   }
 
+  /**
+   * BENT OVER ON PURPOSE (WINDED, fastHeroine.ts; Joshua, 2026-11-20: "she bends her torso forward about 35 degrees,
+   * bends her knees a little bit"): instead of `aimAt` for a frame. Her hips lowered `drop` metres (her knees bend, her
+   * feet stay), bent forward `hinge` radians (most of it at her hips, the rest up her back, as any bend), leaning in up
+   * to `most` if her hands still fall short of where they reach (her knees).
+   */
+  bendOver(drop: number, hinge: number, most: number): void {
+    this.wantDown = true;
+    this.wantMode = 'low';
+    this.wantDrop = drop; this.wantHinge = hinge; this.wantBack = 0; this.wantHingeMost = most;
+    this.lastTargetY = NaN;
+    this.leanInFading = false;
+  }
+
   /** Move the easing on, and lay the lowering over her pose as it is now (the bones' world matrices up to date). */
   /**
    * Her hips back where her pose had them (if nothing else has moved them since this did). Called at the START of

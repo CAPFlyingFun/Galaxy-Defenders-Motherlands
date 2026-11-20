@@ -55,7 +55,7 @@ import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
-import { STANCE, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import { STANCE, WINDED, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
@@ -122,6 +122,8 @@ const BACK_TURN_SHARES = [0.8, 0.1, 0.1];
 const HEAD_TURN_SHARES = [0.4, 0.6];
 /** The most her head tips up or down (radians, 45 degrees); she looks further with her eyes and her bend. */
 const HEAD_TIP_MOST = Math.PI / 4;
+/** Looking down at her own belly where the baby kicked (bellyTouch.ts), her head and neck bend down this far at most. */
+const LOOK_TIP_MOST = (65 * Math.PI) / 180;
 /**
  * Guards (the game's rule keeps well within these): the most her hips, her upper legs and her feet are turned from
  * the way her root faces, and the most her shoulders are turned from her belly and her head from her shoulders.
@@ -235,8 +237,13 @@ export interface FastHeroine extends HeroineBody {
   reachNow(): unknown;
   /** For test pages: how far each part of a hand really is from her skin (mm). */
   handGaps(hand: 0 | 1): unknown;
-  /** For test pages: a kick on her belly, `round` radians round from her front (+ toward her left), `up` up it. */
-  pokeBelly(round: number, up?: number): void;
+  /**
+   * For test pages: a kick on her belly, `round` radians round from her front (+ toward her left), `up` up it; it
+   * always calls a hand, at once; `look`: she looks down at it; `both`: both hands (null: by chance).
+   */
+  pokeBelly(round: number, up?: number, look?: boolean, both?: boolean | null): void;
+  /** For test pages: which hand holds her belly up as she runs (-1 none), and each hand's belly touch. */
+  bellyHoldsNow(): { support: number; holds: [boolean, boolean] };
   /**
    * Attach THE LIVE BODY (liveBody.ts): the builder's whole hidden room, run each frame and never drawn. Her baby's
    * kicks then show on her skin. Null takes it away again.
@@ -814,7 +821,27 @@ if (uHideHead > 0.5) {
     restToWorld: (point, out, direction) => armClear.restToWorld(point, out, direction),
     insideBelly: (point, grow) => armClear.insideBelly(point, grow),
     shoulder: (hand, out) => out.setFromMatrixPosition(hand === 0 ? arms.left.upper.matrixWorld : arms.right.upper.matrixWorld),
-    free: (hand): boolean => !gunIn[hand === 0 ? 'left' : 'right'] && (bellyHand.hand === hand || touch.shapes[hand] === null && !reach.hasJob(hand)),
+    free: (hand): boolean => !gunIn[hand === 0 ? 'left' : 'right'] && !windedJob[hand] && (bellyHand.holds(hand) || touch.shapes[hand] === null && !reach.hasJob(hand)),
+    // (a spot on her belly's egg, as she stood: `round` round from her front, `up` up it; the way out of it there)
+    onBelly: (round, up, spot, out) => {
+      const e = armClear.eggs[0];
+      if (!e) return false;
+      const d = v1.set(Math.sin(round), up, Math.cos(round)).normalize();
+      spot.set(e.cx + e.rx * d.x, e.cy + e.ry * d.y, e.cz + e.rz * d.z);
+      out.set(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize();
+      return true;
+    },
+    // (the place opposite a spot round her belly's middle: turned about the line straight out of its front)
+    opposite: (spot, turn, outSpot, outOut) => {
+      const e = armClear.eggs[0];
+      if (!e) return false;
+      const ux = (spot.x - e.cx) / e.rx, uy = (spot.y - e.cy) / e.ry, uz = (spot.z - e.cz) / e.rz;
+      const c = Math.cos(turn), sn = Math.sin(turn);
+      const d = v1.set(ux * c - uy * sn, ux * sn + uy * c, uz).normalize();
+      outSpot.set(e.cx + e.rx * d.x, e.cy + e.ry * d.y, e.cz + e.rz * d.z);
+      outOut.set(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize();
+      return true;
+    },
     // HER SKIN AT THE SPOT, ITSELF (Joshua, 2026-11-20: "lock in around 2mm of the belly's live skin"; "re-measure and
     // fix"): her trunk's own skin points round the spot, as they lie NOW (skinned, breathing; CPU, a few thousand of
     // them), each taken back to her rest frame, measured onto a grid laid on her skin there (skinPatch.ts); every
@@ -875,6 +902,7 @@ if (uHideHead > 0.5) {
       reach.opening[hand] = true;
     },
     left: (out) => out.set(1, 0, 0).applyQuaternion(root.quaternion),
+    forward: (out) => out.set(0, 0, 1).applyQuaternion(root.quaternion),
     flatPose: (hand, at, palmTo, fingers, out) => touch.flatPose(hand, at, palmTo, fingers, out),
     // (her body does not get down to it: it is her own belly)
     setJob: (hand, pose) => { reach.setJob(hand, pose); stayUp[hand] = pose !== null; },
@@ -1011,6 +1039,43 @@ if (uHideHead > 0.5) {
   // belly or hands and knees (0 .. 1, from her crouch), eased; and where she is in her crawl
   let stanceAsked: Stance = 'stand';
   let crouchW = 0, downW = 0, crawlPhase = 0;
+  // WINDED (groundPose.ts WINDED; Joshua, 2026-11-20): how far she is bent over, hands on her knees, as the game asks
+  // (`setWinded`, eased by the game), smoothed; last frame's (straightening up: her hands come off her knees); and which
+  // hands are on her knees
+  let windedW = 0, windedS = 0, windedWas = 0, windedRising = false;
+  const windedJob: [boolean, boolean] = [false, false];
+  const windedPose: [THREE.Matrix4, THREE.Matrix4] = [new THREE.Matrix4(), new THREE.Matrix4()];
+  const kneeAt = new THREE.Vector3(), hipAt = new THREE.Vector3(), thighWay = new THREE.Vector3(), thighFront = new THREE.Vector3();
+  const inWay = new THREE.Vector3(), palmOnKnee = new THREE.Vector3(), palmToKnee = new THREE.Vector3(), fingersDown = new THREE.Vector3();
+  /**
+   * HER HANDS ON HER KNEES WHILE SHE IS WINDED (Joshua: "places both hands (free or holding something small like a gun)
+   * just above her knees"): each palm on the front of its own thigh, `WINDED.aboveKnee` up from the knee, fingers down
+   * the thigh and a little in; a hand busy with something of the game's is left to it. As she straightens up (the game
+   * easing her out), her hands come off first.
+   */
+  const windedHands = (): void => {
+    const want = windedS > 0.05 && windedRising;
+    for (const i of [0, 1] as const) {
+      if (!want) { if (windedJob[i]) { reach.setJob(i, null); windedJob[i] = false; stayUp[i] = false; } continue; }
+      if (!windedJob[i] && reach.hasJob(i) && !bellyHand.holds(i)) continue;
+      bones[i === 0 ? joints.hipL : joints.hipR].getWorldPosition(hipAt);
+      bones[i === 0 ? joints.kneeL : joints.kneeR].getWorldPosition(kneeAt);
+      thighWay.copy(kneeAt).sub(hipAt).normalize();
+      // (the front of her thigh: her forward, square to her thigh)
+      thighFront.set(0, 0, 1).applyQuaternion(root.quaternion);
+      thighFront.addScaledVector(thighWay, -thighFront.dot(thighWay)).normalize();
+      palmOnKnee.copy(kneeAt).addScaledVector(thighWay, -WINDED.aboveKnee).addScaledVector(thighFront, WINDED.thighFront);
+      palmToKnee.copy(thighFront).negate();
+      // (toward her middle: her left leg's is to her right)
+      inWay.set(1, 0, 0).applyQuaternion(root.quaternion).multiplyScalar(i === 0 ? -1 : 1);
+      fingersDown.copy(thighWay).addScaledVector(inWay, WINDED.fingersIn);
+      fingersDown.addScaledVector(thighFront, -fingersDown.dot(thighFront)).normalize();
+      touch.flatPose(i, palmOnKnee, palmToKnee, fingersDown, windedPose[i]);
+      if (!windedJob[i]) { bellyHand.cancel(i); reach.setJob(i, windedPose[i]); stayUp[i] = true; windedJob[i] = true; }
+      else reach.moveJob(i, windedPose[i]);
+    }
+  };
+  const lookSpot = new THREE.Vector3(), skullAt = new THREE.Vector3();
   let downKind: 'prone' | 'fours' = 'prone';
   const stanceOut: MutableJointTurn[] = [];
   const hipsTipped = new THREE.Vector3(), tipQ = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0), leanAxis = new THREE.Vector3();
@@ -1073,13 +1138,21 @@ if (uHideHead > 0.5) {
     // (for test pages: each hand's reach this frame: how far it fell short, and its job's weight)
     reachNow(): unknown { return { short: [...reach.short], weight: [reach.weight(0), reach.weight(1)], progress: [reach.progress(0), reach.progress(1)], wrist: reach.wristInfo, guard: { ...joints2.excess }, amount: [...touch.amount], closed: touch.touched.map((t) => Array.from(t).map((v) => Math.round(v))), shape: touch.shapes.map((x) => x ? JSON.stringify(x) : null) }; },
     // (for test pages: a kick on her belly's egg, `round` radians round from her front (+ toward her left), `up` up it)
-    pokeBelly(round: number, up = 0): void {
+    pokeBelly(round: number, up = 0, look = false, both: boolean | null = false): void {
       const e = armClear.eggs[0];
       if (!e) return;
       const d = new THREE.Vector3(Math.sin(round), up, Math.cos(round)).normalize();
       const spot = new THREE.Vector3(e.cx + e.rx * d.x, e.cy + e.ry * d.y, e.cz + e.rz * d.z);
-      bellyHand.poke(spot, new THREE.Vector3(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize());
+      bellyHand.poke(spot, new THREE.Vector3(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize(), look, both);
     },
+    bellyHoldsNow() { return { support: bellyHand.supporting, holds: [bellyHand.holds(0), bellyHand.holds(1)] as [boolean, boolean] }; },
+    // HER HANDS TO HER BELLY (bellyTouch.ts): holding it up as she runs, and her look down at a kick (the game's say)
+    setBellySupport(on: boolean): void { bellyHand.setSupport(on); },
+    setBellyLookAllowed(ok: boolean): void { bellyHand.lookAllowed = ok; },
+    bellyLook(out: THREE.Vector3): number { return bellyHand.look(out); },
+    stopBellyLook(): void { bellyHand.stopLook(); },
+    // WINDED (groundPose.ts WINDED): bent over, hands on her knees, by this much (0..1; the game eases it)
+    setWinded(weight: number): void { windedW = Math.max(0, Math.min(1, weight)); },
     // (for test pages: where her main joints are now, world metres)
     jointsNow(): Record<string, [number, number, number]> {
       const out: Record<string, [number, number, number]> = {}, v = new THREE.Vector3();
@@ -1318,6 +1391,9 @@ if (uHideHead > 0.5) {
         }
       }
       const downS = smooth(downW), crouchS = smooth(crouchW);
+      windedS = downS > 0 ? 0 : smooth(windedW);
+      windedRising = windedW > 0 && windedW >= windedWas - 1e-6;
+      windedWas = windedW;
       lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
       reach.advance(frame.dt);
       motion.grip[0] = reach.grip[0]; motion.grip[1] = reach.grip[1];
@@ -1352,6 +1428,7 @@ if (uHideHead > 0.5) {
         // (her head kept up, looking ahead, not at the ground)
         turnAbout(bone(joints.neck), leanAxis, -lean * 0.8);
       }
+
       // ON HER BELLY OR ON ALL FOURS (groundPose.ts): her own pose for it laid over her crouch, and her whole body
       // tipped forward about her hips and set down to the stance's height, eased together; on a slope, along it
       if (downS > 0) {
@@ -1383,16 +1460,34 @@ if (uHideHead > 0.5) {
       const upright = 1 - downS;
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
       const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
-      const headTurn = facing ? within(wrap(facing.head - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
+      // SHE LOOKS DOWN AT HER HAND WHERE THE BABY KICKED (bellyTouch.ts `look`; Joshua, 2026-11-20), over where she was
+      // looking: her head turned and tipped toward the spot by as much as the look is on (third person: in first person
+      // the view does it, main.ts)
+      let headYaw = facing ? facing.head : yawNow, headTip = facing?.headPitch ?? 0;
+      const looking = !firstPerson ? bellyHand.look(lookSpot) * upright : 0;
+      if (looking > 0) {
+        skull.updateWorldMatrix(true, false);
+        skull.getWorldPosition(skullAt);
+        const dx = lookSpot.x - skullAt.x, dz = lookSpot.z - skullAt.z, flat = Math.hypot(dx, dz);
+        // (a spot nearly straight below her head says little about which way: her head turns only as far as it says)
+        headYaw += wrap(Math.atan2(dx, dz) - headYaw) * looking * Math.min(1, flat / 0.15);
+        headTip += (Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)) - headTip) * looking;
+      }
+      // WINDED, SHE LOOKS DOWN AT HER FEET (Joshua, 2026-11-20: "make her head look more at her feet which would
+      // naturally make her look at her chest/belly"): her head tipped down WINDED.headDown more than her bent back has it
+      if (windedS > 0) headTip += (-WINDED.headDown * (Math.PI / 180) - headTip) * windedS;
+      const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       // HER HEAD TIPPED UP OR DOWN (where she looks while she does something), shared between her neck and skull as the
       // turn is, about the line across her head (square to the way it faces), within HEAD_TIP_MOST
-      const tip = (facing?.headPitch ?? 0) * (1 - downS);
+      const tip = headTip * (1 - downS);
       if (Math.abs(tip) > 1e-4 && !firstPerson) {
-        const yaw = facing!.head;
+        const yaw = headYaw;
         tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
-        const angle = Math.max(-HEAD_TIP_MOST, Math.min(HEAD_TIP_MOST, tip));
+        // (looking down at her belly her neck bends further than it does otherwise: LOOK_TIP_MOST)
+        const most = HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * Math.max(looking, windedS);
+        const angle = Math.max(-most, Math.min(most, tip));
         for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, angle * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       }
 
@@ -1405,7 +1500,10 @@ if (uHideHead > 0.5) {
         // (SQUATTING ON PURPOSE: the bathroom, until there is a toilet: a point just above the floor in front of her,
         //  which is what makes lowerBody.ts choose its squat)
         if (squatLeft > 0) { squatLeft -= frame.dt; root.localToWorld(reachPoint.set(0, SQUAT_POINT.up, SQUAT_POINT.ahead)); count = 1; }
-        lower.aimAt(count > 0 ? (squatLeft > 0 ? reachPoint : reachPoint.multiplyScalar(1 / count)) : null, armClear.eggs[0] ?? null, body.belly);
+        // (WINDED: bent over, her knees a little bent, her hands going to her knees: groundPose.ts WINDED; her body
+        //  bends as it does to reach for anything, and leans in a little more if her hands still fall short)
+        if (windedRising && windedS > 0) lower.bendOver(WINDED.drop * motion.legMetres, WINDED.lean * (Math.PI / 180), WINDED.leanMost * (Math.PI / 180));
+        else lower.aimAt(count > 0 ? (squatLeft > 0 ? reachPoint : reachPoint.multiplyScalar(1 / count)) : null, armClear.eggs[0] ?? null, body.belly);
         lower.apply(frame.dt, body.belly);
         // HER BELLY KEPT OFF THE TABLE (Joshua: "so it doesn't matter the belly size"): its point nearest the table's
         // face; if that is closer than KEEP_GAP (and her belly is low enough to meet the table, not above its top),
@@ -1434,7 +1532,9 @@ if (uHideHead > 0.5) {
       // everything that poses her, so these correct all of it.
       // A KICK: a free hand to her belly (bellyTouch.ts), before her hands are laid on their jobs. Not while she is down.
       root.updateMatrixWorld(true);
-      bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0);
+      // (and her hands on her knees while she is winded, instead)
+      windedHands();
+      bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0 && windedS === 0);
       // Her hands on their jobs (handReach.ts), over the aim. A hand that cannot get there makes her lean in.
       reach.apply();
       lower.stillShort(Math.max(reach.short[0], reach.short[1]), frame.dt);
@@ -1453,7 +1553,7 @@ if (uHideHead > 0.5) {
       }
       // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
       // (and a hand laid on her belly where the baby kicked stays there: her elbow keeps clear instead)
-      for (const i of [0, 1] as const) armClear.holdHand[i] = (touch.shapes[i] !== null || bellyHand.hand === i) && reach.weight(i) > 0.5;
+      for (const i of [0, 1] as const) armClear.holdHand[i] = (touch.shapes[i] !== null || bellyHand.holds(i)) && reach.weight(i) > 0.5;
       // (lying down or on all fours her arms are on the ground ahead of her body, not crossing it: nothing to keep clear,
       //  and its upright rules would lift her forearms off the ground)
       if (downS < 0.5) armClear.update(frame.dt);

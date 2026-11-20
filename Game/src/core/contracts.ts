@@ -204,6 +204,25 @@ export interface HeroineBody {
   setStance?(stance: 'stand' | 'crouch' | 'prone' | 'fours'): void;
   /** Where she is: the stance she is in (or on her way through), the one asked for, and whether she has got there. */
   stanceInfo?(): { stance: 'stand' | 'crouch' | 'prone' | 'fours'; asked: 'stand' | 'crouch' | 'prone' | 'fours'; settled: boolean; crouch: number; down: number };
+  /**
+   * HER HANDS TO HER BELLY (Joshua, 2026-11-20; heroine/fast/bellyTouch.ts): hold it up with a free hand (the game: from
+   * a run, past 30 weeks), or not.
+   */
+  setBellySupport?(on: boolean): void;
+  /** Whether she may start a look down at her hand where the baby kicked (not while she fires or runs). */
+  setBellyLookAllowed?(ok: boolean): void;
+  /**
+   * Her look down at her hand where the baby kicked: how far it is on (0 none .. 1 right at it), and the spot (world) in
+   * `out`. First person, the view does the looking (main.ts).
+   */
+  bellyLook?(out: THREE.Vector3): number;
+  /** The player turned the view or fired: her look down stops (eased off) and her hands let go. */
+  stopBellyLook?(): void;
+  /**
+   * WINDED (Joshua, 2026-11-20): bent over, hands just above her knees, by this much (0 standing .. 1 right over); the
+   * game eases it in and out.
+   */
+  setWinded?(weight: number): void;
   /** Wet her all over at once (Settings -> TEST TOOLS -> Get wet). */
   soakSkin?(): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

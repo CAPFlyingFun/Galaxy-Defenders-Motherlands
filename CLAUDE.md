@@ -287,7 +287,20 @@ use the game's single copy of three.js.
   index finger's (`thumbApart`), and takes the place whose outside edge lies nearest along her skin (its tip still
   lifts about a centimetre over her belly's curve: a straight thumb cannot wrap); 3 s, then back; 1.5 s
   before another. Measured with `handGaps(hand)` (test pages): palm 2 mm, finger bones 2-6 mm off her (mid-bone over a
-  hollow), none in her. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  hollow), none in her.
+  WHEN, AND WHICH HANDS (Joshua, 2026-11-20, bellyTouch.ts `BELLY_TOUCH`): 35% of kicks call a hand, 3-7 s after the
+  kick; it rests 3-7 s; on 40% of touches she LOOKS, 2-3 s after her hand lands (1 s down, 0.5 s, 1 s up) and her hands
+  let go as her head comes back up. First person the view does the look (main.ts `herLook`, laid over the player's view,
+  taken off again each frame); turning the view stops it where it is, firing eases it back; no look while firing, 3 s
+  after, or from a run. With both hands free, 1 in 3 touches put the other hand opposite round her belly (180 degrees
+  +-25). HOLDING HER BELLY UP (Joshua: "from a run and up", "anything over 30 weeks"): a free hand under its low curve
+  toward its own side, fingers forward and in, as far under as her arm reaches (`startSupport` searches the egg),
+  until she slows below a jog-and-a-half (main.ts SUPPORT_*); the other hand keeps its gun and fires.
+  WINDED (Joshua, 2026-11-20; groundPose.ts `WINDED`, input/pace.ts `windedHoldSeconds` now 10): bent over 35 degrees
+  (lowerBody.ts `bendOver`: most at her hips, leaning in to 45 if her hands fall short), hips down 0.2 of her leg, both
+  palms (guns and all) on her thighs 20 cm above her knees (her arms are too short for lower), her head down 50 more at
+  her feet ("look more at her feet"); eased in 0.6 s, back up over the hold's last 1 s; no aiming or firing; first
+  person the view tips down to 75 degrees unless turned. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all

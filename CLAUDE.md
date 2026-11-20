@@ -272,6 +272,19 @@ use the game's single copy of three.js.
   body's yaw bands and her arms' keeping clear of her belly are off while she is down. NOTE: the BUILDER'S ELBOW BEND
   (about Y) only twists this body file's forearm (its arms already hang in the bind): the game bends elbows about X.
   The buttons sit just above FIRE (movable in Edit controls); PRONE reads ALL 4s while Pregnancy is on.
+- HER HAND TO HER BELLY WHEN THE BABY KICKS (Joshua, 2026-11-20; `Game/src/heroine/fast/bellyTouch.ts`): on a new
+  kick of her hidden live body (the builder's kicks: a spot, a way out, a push), a FREE hand (no gun, no job of the
+  game's) goes: the nearer one, or the far one only if the way from its shoulder to just in front of the spot stays out
+  of her belly; a spot it cannot reach is left. Its palm rests 2 mm off HER OWN skin there (`skinFrame`: her trunk's
+  skin points round the spot fitted to a small curved patch, its real facing and its curve along her fingers; the
+  kick's bump counted while it lasts), her fingers and thumb close smoothly round that curve (fingerTouch.ts
+  `gapMore`), 3 s, then back; 1.5 s before another. Not while she is down. Test pages: `pokeBelly(round, up)`.
+  HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all
+  future hand related tasks"; `Game/src/heroine/fast/handPads.ts`): each finger and thumb bone's flesh on its touching
+  side, and her palm's, MEASURED from her own skin when she is made (fingers straightened, the pad side square to each
+  bone in the plane her fingers curl in; her two hands averaged as a pair); fingerTouch.ts uses them for every hand job
+  (poles, door, clips, belly) instead of one guess. Blaze: finger bones 7-11 / 6-8 / 5.5-7.5 mm, thumb 16 / 15, palm 15.
+  Logged as "[hand pads]" in the console.
 - (The heroine lab shows no body at detail under 100 with `live=off`: use `detail=100` for test pictures.)
 - WATER TO FIX, NOTED (Joshua, 2026-11-20, screenshots on the beach): the river/lagoon water is drawn in SPLOTCHES (a
   pale flat patch sits on the turquoise), and it is too see-through: she was stopped by the sea's edge before he could

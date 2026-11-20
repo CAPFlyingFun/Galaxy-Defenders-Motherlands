@@ -28,6 +28,7 @@
 import * as THREE from 'three';
 import { closeToTouch, shapeDistance, type GripShape } from '@charb/actor/handGrip';
 import type { BodyMotion } from './bodyMotion';
+import { PAD_FALLBACK, type HandPads } from './handPads';
 
 /** GAME TUNING (metres, seconds). */
 export const TOUCH = Object.freeze({
@@ -85,6 +86,29 @@ export class FingerTouch {
   /** What each hand holds now [left, right], or null. */
   readonly shapes: [GripShape | null, GripShape | null] = [null, null];
   /**
+   * More room left between each hand's fingers and what they touch, metres (0: they rest on it). Her hand on her belly
+   * (bellyTouch.ts) keeps 2 mm off her skin.
+   */
+  readonly gapMore: [number, number] = [0, 0];
+  /**
+   * HER FINGERS', THUMBS' AND PALMS' OWN THICKNESS, measured from her skin (handPads.ts; Joshua, 2026-11-20): each bone's
+   * skin stands this far off its line. Null until measured: the old guesses (`PAD_FALLBACK`) serve.
+   */
+  pads: HandPads | null = null;
+  /** A hand's palm flesh: from the middle of the palm to its skin, metres. */
+  palmThick(hand: 0 | 1): number { return this.pads?.palm[hand] ?? PAD_FALLBACK.palm; }
+  /** A hand's palm, for measuring: its middle, the way it faces and the line across it, in the world as she is now. */
+  palmFace(hand: 0 | 1): { point: THREE.Vector3; out: THREE.Vector3; across: THREE.Vector3 } {
+    const frame = this.palm(hand), bone = this.hands[hand];
+    bone.updateWorldMatrix(true, false);
+    const point = frame.point.clone().applyMatrix4(bone.matrixWorld);
+    // (turned by the bone's turn alone, as the palm's directions were made: its world matrix also scales)
+    const turn = bone.getWorldQuaternion(new THREE.Quaternion());
+    const out = new THREE.Vector3().setFromMatrixColumn(frame.basis, 2).applyQuaternion(turn).normalize();
+    const across = new THREE.Vector3().setFromMatrixColumn(frame.basis, 1).applyQuaternion(turn).normalize();
+    return { point, out, across };
+  }
+  /**
    * Whether each hand KEEPS HOLD of its shape while it moves (a clip she carries): its fingers stay closed on it, and
    * do not open on the way as they do while the hand goes to take something.
    */
@@ -92,7 +116,7 @@ export class FingerTouch {
   /** How far each hand's fingers are closed onto its shape, 0 (its own grip) .. 1 (touching): eased. */
   readonly amount: [number, number] = [0, 0];
   /** Each finger's joints' closures where they last touched, percent, from the knuckle out (kept while a hand lets go). */
-  private readonly touched: Float32Array[];
+  readonly touched: Float32Array[];
   /** Scratch: one finger's joints' closures, percent. */
   private readonly trying = new Float32Array(8);
   private readonly palms: (PalmFrame | null)[] = [null, null];
@@ -130,7 +154,7 @@ export class FingerTouch {
     // the palm's middle laid on the bar's surface (the hand bone is where it must be for that)
     this.hands[hand].matrixWorld.decompose(handT, handQ, handS);
     offset.copy(palm.point).multiply(handS).applyQuaternion(q);
-    handT.copy(at).addScaledVector(p, -(radius + TOUCH.palmThick)).sub(offset);
+    handT.copy(at).addScaledVector(p, -(radius + this.palmThick(hand))).sub(offset);
     return out.compose(handT, q, handS);
   }
 
@@ -152,9 +176,12 @@ export class FingerTouch {
         // HOW FAR EACH JOINT CLOSES BEFORE IT TOUCHES (while she holds the bar; letting go, it opens from there)
         const touched = this.touched[i], n = touched.length;
         if (shape) {
-          if (finger.thumb) this.restThumb(i, shape, touched);
+          // (a hand laid flat on something, her belly, `gapMore`: her thumb lies along it as her fingers do, closing
+          //  until it is off it by the same; round a bar it opens out and comes back to rest on the bar)
+          const flat = this.gapMore[h] > 0;
+          if (finger.thumb && !flat) this.restThumb(i, shape, touched);
           else touched.fill(0);
-          for (let k = 0; k < (finger.thumb ? 0 : n); k++) {
+          for (let k = 0; k < (finger.thumb && !flat ? 0 : n); k++) {
             // joints k and out close together, from where they are, until the finger touches; then joint k stays
             const from = touched[k];
             const found = closeToTouch((closure) => {
@@ -207,14 +234,16 @@ export class FingerTouch {
     this.motion.curlFingerJoints(i, percents);
     finger.bones[0].updateMatrixWorld(true);
     let nearest = Infinity;
-    // (each joint past the knuckle, the tip, and the middle of every bone)
-    const bones = finger.bones;
+    // (each joint past the knuckle, the tip, and the middle of every bone, less that bone's own pad: her skin's
+    //  distance, not her bone's)
+    const bones = finger.bones, pads = this.pads?.pad[i];
     for (let k = from; k < bones.length; k++) {
       bones[k].getWorldPosition(a);
       (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
-      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)), this.distance(shape, b));
+      const pad = pads?.[k] ?? (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
+      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)) - pad, this.distance(shape, b) - pad);
     }
-    return nearest - (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
+    return nearest - this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
   }
 
   private distance(shape: GripShape, at: THREE.Vector3): number {
@@ -244,7 +273,7 @@ export class FingerTouch {
     q.setFromRotationMatrix(rotation);
     this.hands[hand].matrixWorld.decompose(handT, handQ, handS);
     offset.copy(palm.point).multiply(handS).applyQuaternion(q);
-    handT.copy(at).addScaledVector(p, -TOUCH.palmThick).sub(offset);
+    handT.copy(at).addScaledVector(p, -this.palmThick(hand)).sub(offset);
     return out.compose(handT, q, handS);
   }
 

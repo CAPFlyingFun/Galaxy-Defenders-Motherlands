@@ -326,6 +326,35 @@ export class ArmClear {
     return direction ? out.copy(point).transformDirection(o.fromFit) : out.copy(point).applyMatrix4(o.fromFit);
   }
 
+  /** A direction in the world now, as it was when she stood (her rest frame), carried by her belly's bone. */
+  worldToRestDirection(direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    const o = this.obstacles[0];
+    if (!o) return out.copy(direction);
+    o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[o.egg.bone]);
+    return out.copy(direction).transformDirection(o.toFit);
+  }
+
+  /**
+   * HOW ROUND HER BELLY IS AT A SPOT (as she stood) ALONG A WAY ACROSS IT (`worldWay`: a direction in the world now,
+   * her fingers'), metres: the radius of its egg's curve there, that way. A hand laid on it curls its fingers round a
+   * ball this big (bellyTouch.ts). Her belly curves tighter top to bottom on its side than across its front, and a ball
+   * as big as her whole belly left her fingertips standing off her side.
+   */
+  bellyCurve(spot: THREE.Vector3, worldWay: THREE.Vector3): number {
+    const o = this.obstacles[0];
+    if (!o) return 0.2;
+    const e = o.egg;
+    // (the way across, in the egg's own frame: the world now, back to her as she stood)
+    o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[e.bone]);
+    const t = from.copy(worldWay).transformDirection(o.toFit);
+    // (an egg x^2/rx^2 + ... = 1: its slope there g = (x/rx^2, ...); along a way t square to it, it curves by
+    //  (tx^2/rx^2 + ...) / |g|: its radius is the other way up)
+    const x = spot.x - e.cx, y = spot.y - e.cy, z = spot.z - e.cz;
+    const g = Math.hypot(x / (e.rx * e.rx), y / (e.ry * e.ry), z / (e.rz * e.rz));
+    const bend = (t.x / e.rx) ** 2 + (t.y / e.ry) ** 2 + (t.z / e.rz) ** 2;
+    return bend > 1e-9 ? g / bend : 0.2;
+  }
+
   /** Whether a point in the world is inside her belly's egg grown by `grow` metres all round (false with no belly). */
   insideBelly(point: THREE.Vector3, grow = 0): boolean {
     const o = this.obstacles[0];

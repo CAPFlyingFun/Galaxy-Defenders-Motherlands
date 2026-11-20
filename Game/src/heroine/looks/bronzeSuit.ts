@@ -8,8 +8,17 @@
 // Built on HIS OWN CATSUIT EXPORT (his Blaze, her braid and face, as Look 1:
 // shadowSuit.ts `EXPORT_BODY`), all three paint layers by code:
 //
-// TWO VERSIONS (Joshua's ask): `bronzeSuit`, the keyhole over her chest with a
-// band up her neck; `bronzeSuitLow`, a low sweetheart line and her neck bare.
+// THREE VERSIONS (Joshua, 2026-11-20: "Here is two I did with high and low
+// neckline although I like the cutout as well so we have 3 now"):
+//   `bronzeSuit`      the KEYHOLE over her chest and a band up her neck, all
+//                     painted by code (a template cannot have a hole);
+//   `bronzeSuitLow`   a LOW SWEETHEART painted by code, her neck bare (his own
+//                     low neck, the template's at 0.7, is kept for later);
+//   `bronzeSuitHigh`  HIS HIGH NECK: "Blaze - copper HN", its neck at 0.94.
+// His two are the builder's own template, so their edges are SMOOTH: the
+// builder draws a template's edges finely, where a shape painted by code can
+// only be as fine as her skin's points ("the edgings look rough"). The seams
+// and the cups are painted over all three by code.
 //
 //   Paint layer 1, THE CATSUIT: her from her ankles to her
 //     wrists and up her neck in a high band, in a GLOSSY BRONZE, but bare over
@@ -33,10 +42,11 @@ import { EXPORT_BODY } from './shadowSuit';
 export const BRONZE_SUIT_COLOURS = Object.freeze({
   /** the catsuit: a warm copper bronze */
   bronze: '#84461f',
-  /** the seams: the same, darker */
-  seam: '#3c1f0c',
-  /** the cups: lighter, catching the light */
-  cups: '#9a5428',
+  /** the seams: only a little darker than the suit, so they read as a crease, not a black line (Joshua, 2026-11-20: "I
+   *  see black or dark lines to the side of the belly"; was #3c1f0c) */
+  seam: '#6c3817',
+  /** the cups: only a little lighter, blended in rather than a patch (was #9a5428) */
+  cups: '#8d4b22',
 });
 
 /** A colour as the builder saves one: its smooth Flat family's White (colour 0) dyed with a tint. */
@@ -90,19 +100,22 @@ const UNDER_BUST = through([[0, 0.6], [12, 0.56], [30, 0.53], [52, 0.55]]);
 const UNDER_BUST_TO = 52;
 
 /** How wide a seam is: its half width (leg lengths, about 2.5 mm each side). */
-const SEAM = 0.0032;
+const SEAM = 0.0045;
+/** How softly a seam and the cups fade at their edges: their distances scaled down, so the builder eases them over more of her skin. */
+const SOFT = 0.45;
 
 interface Measured { suit: number; neckEdge: number; band: number; seams: number; cups: number }
 
 /** One point, measured once for all three layers (leg lengths: how far inside each shape; minus outside). */
-function measure(surface: PaintSurface, v: number, place: LegPlace, out: Measured, low: boolean): Measured {
+function measure(surface: PaintSurface, v: number, place: LegPlace, out: Measured, low: boolean, cupsTop = 1): Measured {
   out.suit = -1; out.neckEdge = -1; out.band = -1; out.seams = -1; out.cups = -1;
   // (her TRUNK first: the top of her chest by her collarbones is also counted as her shoulders, and measured as an arm
   //  it was always covered, whatever the neckline said)
   if (surface.trunkPlace(v, place)) {
     const turn = Math.abs(place.turn), r = Math.max(0.05, place.radius);
     // the neckline: below it the suit; above it her chest is bare
-    const below = ((low ? NECKLINE_LOW : NECKLINE)(turn) - place.along) * 0.8;
+    // (its edge eased over twice the distance: drawn through her skin's points, a sharp edge showed their steps)
+    const below = ((low ? NECKLINE_LOW : NECKLINE)(turn) - place.along) * 0.4;
     out.suit = Math.min(1, below);
     out.neckEdge = below;
     // the seams: down each side, and under her bust
@@ -111,7 +124,7 @@ function measure(surface: PaintSurface, v: number, place: LegPlace, out: Measure
     const under = turn <= UNDER_BUST_TO ? Math.abs(place.along - UNDER_BUST(turn)) : Math.hypot(place.along - UNDER_BUST(UNDER_BUST_TO), (turn - UNDER_BUST_TO) * RADIANS * r);
     out.seams = SEAM - Math.min(side, under);
     // the cups: between the underside of her bust and the neckline, in front of the side seams
-    out.cups = Math.min((place.along - UNDER_BUST(Math.min(turn, UNDER_BUST_TO))) * 0.8, below, (SIDE_SEAM(0.55) - turn) * RADIANS * r);
+    out.cups = Math.min((place.along - UNDER_BUST(Math.min(turn, UNDER_BUST_TO))) * 0.8, below, (cupsTop - place.along) * 0.8, (SIDE_SEAM(0.55) - turn) * RADIANS * r);
     return out;
   }
   if (surface.armPlace(v, place)) { out.suit = (SUIT_ENDS.wrist - place.along) * 0.6; return out; }
@@ -126,10 +139,10 @@ function measure(surface: PaintSurface, v: number, place: LegPlace, out: Measure
   return out;
 }
 
-const painter = (pick: (m: Measured) => number, low: boolean): MaskPainter => (surface) => {
+const painter = (pick: (m: Measured) => number, low: boolean, cupsTop = 1): MaskPainter => (surface) => {
   const inside = new Float32Array(surface.count);
   const place: LegPlace = { along: 0, turn: 0, radius: 0 }, m: Measured = { suit: 0, neckEdge: 0, band: 0, seams: 0, cups: 0 };
-  for (let v = 0; v < surface.count; v++) inside[v] = pick(measure(surface, v, place, m, low));
+  for (let v = 0; v < surface.count; v++) inside[v] = pick(measure(surface, v, place, m, low, cupsTop));
   return inside;
 };
 
@@ -137,9 +150,21 @@ const painter = (pick: (m: Measured) => number, low: boolean): MaskPainter => (s
  *  the neck band's top edge; the brighter cups, a seam's width inside their edges. */
 const painters = (low: boolean): MaskPainter[] => [
   painter((m) => m.suit, low),
-  painter((m) => Math.max(Math.min(m.seams, m.suit), SEAM * 1.2 - Math.abs(m.neckEdge - SEAM * 1.2), m.band > -0.02 ? SEAM - Math.abs(m.band - SEAM) : -1), low),
-  painter((m) => m.cups - SEAM * 2.5, low),
+  ...(SEAMS_AND_CUPS ? [
+    painter((m) => SOFT * Math.max(Math.min(m.seams, m.suit), SEAM * 1.2 - Math.abs(m.neckEdge - SEAM * 1.2), m.band > -0.02 ? SEAM - Math.abs(m.band - SEAM) : -1), low),
+    painter((m) => SOFT * (m.cups - SEAM * 2.5), low),
+  ] : [NOTHING, NOTHING]),
 ];
+
+/**
+ * THE SEAMS AND THE LIGHTER CUPS (Joshua, 2026-11-20: "I like yours better until the other Agent fixes the problem with
+ * the outfit... fix the paint lines along the belly and try and blend it all better"): painted by code, a shape's edge
+ * can only be as fine as her skin's points, so they are BLENDED: colours close to the suit's, edges eased (`SOFT`).
+ * False leaves them off.
+ */
+const SEAMS_AND_CUPS = true;
+/** A paint layer left bare. */
+const NOTHING: MaskPainter = (surface) => new Float32Array(surface.count).fill(-1);
 
 // ------------------------------------------------------------------ the look
 
@@ -169,5 +194,48 @@ export const BRONZE_SUIT_LOOK: HeroineLook = {
   onlyNamedPieces: true,
 };
 
-/** VERSION B: the same suit with the low sweetheart neckline and no neck band (`NECKLINE_LOW`). */
+// ------------------------------------------------------------------ Joshua's two, on the builder's template
+
+/** His exports' suit: the builder's Full bodysuit, from her ankles to her wrists ("Blaze - copper LN" / "HN"). */
+const templateSuit = (neckFront: number) => ({
+  choice: pick(C.bronze),
+  detail: DETAIL,
+  template: {
+    id: 'bodysuitFull',
+    params: {
+      riseFront: 1, riseSide: 1, riseBack: 1, riseFrontWidth: 1, legStart: 0, legEnd: 1, feet: false, hemFront: -1, hemBack: -1,
+      neckFront, neckBack: 0.97, sleeve: 1, topFront: null, topBack: null, topSide: null, strap: 0, strapIn: 0, armhole: null,
+      neckStyle: 'crew', legCut: null, length: null,
+    },
+  },
+  mask: '',
+});
+
+/**
+ * The seams and the cups painted over his template (its own top edge is the builder's: the seams' neckline line is
+ * left out, and the cups stop at `cupsTop` up her trunk, under his low neckline).
+ */
+const overTemplate = (cupsTop: number): (MaskPainter | null)[] => SEAMS_AND_CUPS ? [
+  null,
+  painter((m) => SOFT * Math.min(m.seams, m.suit), false, cupsTop),
+  painter((m) => SOFT * (m.cups - SEAM * 2.5), false, cupsTop),
+] : [null, NOTHING, NOTHING];
+
+const templateLook = (neckFront: number, cupsTop: number): HeroineLook => ({
+  ...BRONZE_SUIT_LOOK,
+  clothes: {
+    ...(BRONZE_SUIT_LOOK.clothes as object),
+    layers: [templateSuit(neckFront), { choice: pick(C.seam), detail: DETAIL, template: null, mask: '' }, { choice: pick(C.cups), detail: DETAIL, template: null, mask: '' }],
+  },
+  maskPainters: overTemplate(cupsTop),
+  // (his template leaves her cleavage open for the builder's cleavage piece; the game leaves that piece out)
+  noCleavageBridge: true,
+});
+
+/**
+ * THE LOW SWEETHEART, painted by code (`NECKLINE_LOW`; Joshua, 2026-11-20: "I like yours better until the other Agent
+ * fixes the problem"). His own low neck, the template's at 0.7, is kept to come back to (`templateLook(0.7, 0.7)`).
+ */
 export const BRONZE_SUIT_LOW_LOOK: HeroineLook = { ...BRONZE_SUIT_LOOK, maskPainters: painters(true) };
+/** HIS HIGH NECK ("Blaze - copper HN"): the template's neck at 0.94 in front. */
+export const BRONZE_SUIT_HIGH_LOOK: HeroineLook = templateLook(0.94, 0.86);

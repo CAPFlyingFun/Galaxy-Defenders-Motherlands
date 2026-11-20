@@ -113,6 +113,12 @@ export const PERFORATED_MESH: KnitTile = Object.freeze({ file: 'fabrics/perforat
 export const NAVY_SPARKLE = Object.freeze({ file: 'fabrics/navy-sparkle-tile.png' });
 /** JOSHUA'S GOLD GLITTER picture for Look 2's gold (2026-11-20: "Here is a texture for the gold"), made to repeat the same way. */
 export const GOLD_GLITTER = Object.freeze({ file: 'fabrics/gold-glitter-tile.png' });
+/**
+ * JOSHUA'S PEBBLE PICTURE for the bronze catsuit (2026-11-20: "found this texture but looks more muddy then bronze"):
+ * only its GRAIN is kept, as a gentle shading (12%) of the suit's own bronze and as depth, so it reads as a pebbled
+ * metallic leather, not brown mud (public/fabrics/bronze-pebble-tile.png).
+ */
+export const BRONZE_PEBBLE = Object.freeze({ file: 'fabrics/bronze-pebble-tile.png' });
 /** JOSHUA'S WHITE TECH picture for Look 2's white (2026-11-20: "looks kind of sci-fi techy"), made to repeat, its middle the suit's white. */
 export const WHITE_TECH = Object.freeze({ file: 'fabrics/white-tech-tile.png' });
 export const WOVEN_MESH: KnitTile = Object.freeze({

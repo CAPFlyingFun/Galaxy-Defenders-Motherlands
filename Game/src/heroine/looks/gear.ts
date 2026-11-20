@@ -10,7 +10,7 @@
 import type { SuitGearStyle } from '../fast/suitGear';
 import type { BELT_COLOURS } from '../fast/beltGear';
 import type { GunColours } from '../guns';
-import { GOLD_GLITTER, NAVY_SPARKLE, WHITE_TECH, PERFORATED_MESH, type ClothShine } from '../fast/outfitMaterial';
+import { BRONZE_PEBBLE, GOLD_GLITTER, NAVY_SPARKLE, WHITE_TECH, PERFORATED_MESH, type ClothShine } from '../fast/outfitMaterial';
 
 export interface LookGear {
   /** The belt, straps, holsters and pouches (any left out keep beltGear.ts's own). */
@@ -71,7 +71,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
   bronzeSuit: {
     belt: { belt: 0x3a2416, edge: 0x6a4228, buckle: 0xc07a40, accent: 0xc07a40, strap: 0x2e1c10, holster: 0x2a1a0e, plate: 0x4a2812 },
     beltLine: [-0.06, 0.035, 0.1],
-    clothShine: { cloth: 0.3, trim: 0.16 },
+    // (Joshua's pebble picture's grain over the bronze: 12 cm a repeat, 0.3 mm deep)
+    clothShine: { cloth: 0.3, trim: 0.16, prints: [{ ...BRONZE_PEBBLE, on: '#84461f', metres: 0.12, depth: 0.0003 }] },
     gun: { metal: 0x2a1a0e, glow: 0xc07a40 },
     pieces: {
       plate: '#8a5028', trim: '#4a2812', accent: '#c07a40', sole: '#1e120a', glow: '',
@@ -83,7 +84,21 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
   bronzeSuitLow: {
     belt: { belt: 0x3a2416, edge: 0x6a4228, buckle: 0xc07a40, accent: 0xc07a40, strap: 0x2e1c10, holster: 0x2a1a0e, plate: 0x4a2812 },
     beltLine: [-0.06, 0.035, 0.1],
-    clothShine: { cloth: 0.3, trim: 0.16 },
+    // (Joshua's pebble picture's grain over the bronze: 12 cm a repeat, 0.3 mm deep)
+    clothShine: { cloth: 0.3, trim: 0.16, prints: [{ ...BRONZE_PEBBLE, on: '#84461f', metres: 0.12, depth: 0.0003 }] },
+    gun: { metal: 0x2a1a0e, glow: 0xc07a40 },
+    pieces: {
+      plate: '#8a5028', trim: '#4a2812', accent: '#c07a40', sole: '#1e120a', glow: '',
+      boots: true, cuffs: false, shoulders: false,
+      // (KNEE-HIGH and flat: Joshua, 2026-11-20, "knee high flat-footed boots")
+      bootTop: 0.03,
+    },
+  },  // (his high neck: the same gear)
+  bronzeSuitHigh: {
+    belt: { belt: 0x3a2416, edge: 0x6a4228, buckle: 0xc07a40, accent: 0xc07a40, strap: 0x2e1c10, holster: 0x2a1a0e, plate: 0x4a2812 },
+    beltLine: [-0.06, 0.035, 0.1],
+    // (Joshua's pebble picture's grain over the bronze: 12 cm a repeat, 0.3 mm deep)
+    clothShine: { cloth: 0.3, trim: 0.16, prints: [{ ...BRONZE_PEBBLE, on: '#84461f', metres: 0.12, depth: 0.0003 }] },
     gun: { metal: 0x2a1a0e, glow: 0xc07a40 },
     pieces: {
       plate: '#8a5028', trim: '#4a2812', accent: '#c07a40', sole: '#1e120a', glow: '',

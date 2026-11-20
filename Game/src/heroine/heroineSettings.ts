@@ -115,6 +115,7 @@ export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.fre
   ['Anime Space Heroine', 'spaceHeroine'],
   ['Bronze catsuit (keyhole)', 'bronzeSuit'],
   ['Bronze catsuit (low neck)', 'bronzeSuitLow'],
+  ['Bronze catsuit (high neck)', 'bronzeSuitHigh'],
   ['Plain black catsuit (Joshua\'s export)', 'blazeCatsuit'],
   ['Gray & red suit', 'graySuit'],
   ['All pink (Joshua\'s export)', 'blazePink'],

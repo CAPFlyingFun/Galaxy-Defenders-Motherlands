@@ -112,8 +112,13 @@ use the game's single copy of three.js.
   his texture pictures and a few 3D pieces. THE BRONZE CATSUIT (`looks/bronzeSuit.ts`), all three layers by code (trunk
   measured FIRST: the top of her chest by her collarbones also counts as her shoulders), very glossy (cloth 0.3, trim
   0.16), dark seams down her sides and under her bust, lighter cups, flat KNEE-HIGH bronze boots (`bootTop` 0.03; his
-  ask), in TWO necklines (his ask): `bronzeSuit` a keyhole over her chest and a band up her neck; `bronzeSuitLow` a low
-  sweetheart line, her upper chest and neck bare ("can always add a collar piece after"). Next: the green and gold.
+  ask), in THREE necklines: `bronzeSuit` a keyhole over her chest and a band up her neck; `bronzeSuitLow` a low
+  sweetheart line, her neck bare (both painted by code; Joshua liked them better than his template versions "until the
+  other Agent fixes" the catsuit's edges); `bronzeSuitHigh` HIS high neck (his export, the builder's Full bodysuit at
+  0.94). Seams and cups BLENDED (colours close to the suit's, edges eased: `SOFT`; his "dark lines to the side of the
+  belly"). His pebble picture's GRAIN only, over the bronze (12 cm, 0.3 mm; "looks more muddy then bronze"). THE
+  BUILDER'S AGENT is giving the catsuit drawn edges and a neckline from a low V/U up to a mid-neck turtleneck (Joshua
+  asked it 2026-11-20): copy that builder in when he says, then rebake. Next: the green and gold.
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
   `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
   CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted

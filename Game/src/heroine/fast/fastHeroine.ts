@@ -58,7 +58,7 @@ import { buildBeltGear, type BeltGear } from './beltGear';
 import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
-import { FINE_FROM_DETAIL, makeSkinMaterials } from './outfitMaterial';
+import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine } from './outfitMaterial';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
@@ -153,6 +153,8 @@ export interface FastHeroineOptions {
   readonly targetFps?: TargetFps;
   /** Her face, bust and belly kept as fine as at 100% at every level (detailLevels.ts `sharpParts`). Default true. */
   readonly sharpParts?: boolean;
+  /** The catsuit's knit in place of her look's own (outfitMaterial.ts SUIT_KNITS), for looks that wear a live knit. */
+  readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Told what is loading, for a loading screen. */
   readonly onProgress?: (stage: string) => void;
 }
@@ -230,6 +232,11 @@ function floats(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttrib
 }
 
 // ------------------------------------------------------------------ the factory
+
+/** Her look's cloth shine, with the knit chosen in Settings in place of its own (only where the look wears a knit). */
+function withKnit(shine: ClothShine | undefined, knit: ClothShine['knit']): ClothShine | undefined {
+  return shine?.knit && knit ? { ...shine, knit } : shine;
+}
 
 export async function createFastHeroine(options: FastHeroineOptions): Promise<FastHeroine> {
   const began = performance.now();
@@ -333,7 +340,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (her skin model's own units to a metre, for the live knit's size: her height in the model is about 1.68 m)
   skin.geometry.computeBoundingBox();
   const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
-  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, LOOK_GEAR[look.manifest.look]?.clothShine, unitsPerMetre);
+  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;

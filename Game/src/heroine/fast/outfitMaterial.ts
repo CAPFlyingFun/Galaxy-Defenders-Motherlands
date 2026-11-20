@@ -82,6 +82,19 @@ export const ATHLETIC_KNIT: KnitTile = Object.freeze({ file: 'fabrics/athletic-d
  * shows through the holes"), drawn by scripts/make_mesh_tile.py (which prints its middle brightness).
  */
 export const PERFORATED_MESH: KnitTile = Object.freeze({ file: 'fabrics/perforated-mesh-tile.png', middle: 122.3 });
+/**
+ * JOSHUA'S WOVEN MESH PHOTO (2026-11-19: "Are you able to apply this texture to her fabric?"), made to tile by
+ * scripts/make_weave_tile.py (light flattened, edges cross-faded thread on thread, glints softened; it prints the
+ * middle brightness). About 40 threads to the picture.
+ */
+export const WOVEN_MESH: KnitTile = Object.freeze({ file: 'fabrics/woven-mesh-tile.png', middle: 68.8 });
+/** Which knit the catsuit wears (Settings -> HEROINE -> Suit fabric): the picture and the size it is drawn at. */
+export const SUIT_KNITS = Object.freeze({
+  // (his photo: a picture repeat of 15 cm, so a thread about every 4 mm; finer than 3x it blurred to plain black)
+  weave: { ...WOVEN_MESH, stitch: 3, strength: 1 },
+  // (the perforated mesh drawn by code, at Joshua's 1.5x)
+  mesh: { ...PERFORATED_MESH, stitch: 1.5, strength: 1 },
+});
 
 /** A live knit's repeat at stitch 1, metres (the builder's athletic knit: 5 cm). */
 const KNIT = Object.freeze({ tileMetres: 0.05 });

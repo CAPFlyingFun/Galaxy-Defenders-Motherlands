@@ -126,6 +126,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         detail: settings.detail,
         targetFps: settings.targetFps,
         sharpParts: settings.sharpParts !== 'off',
+        suitKnit: settings.suitKnit,
         onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
       });
     } catch (error) {

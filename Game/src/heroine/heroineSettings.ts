@@ -77,6 +77,11 @@ export interface HeroineSettings {
    * the rest of her is lightened, these never are. Changing it reloads the game.
    */
   sharpParts: ShadowChoice;
+  /**
+   * THE CATSUIT'S FABRIC (Joshua, 2026-11-19): 'weave' his woven mesh photo, 'mesh' the perforated mesh drawn by code
+   * (fast/outfitMaterial.ts SUIT_KNITS). Only looks that wear a live knit (Look 1) show it. Changing it reloads.
+   */
+  suitKnit: 'weave' | 'mesh';
 }
 
 
@@ -122,6 +127,7 @@ export const SETTING_KEYS = Object.freeze({
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
   sharpParts: 'gdm.sharpParts',
+  suitKnit: 'gdm.suitKnit',
 });
 
 function read(key: string): string | null {
@@ -190,5 +196,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',
     sharpParts: (address.get('sharp_parts') ?? read(SETTING_KEYS.sharpParts)) === 'off' ? 'off' : 'on',
+    // (his woven photo unless the drawn mesh was chosen)
+    suitKnit: (address.get('knit') ?? read(SETTING_KEYS.suitKnit)) === 'mesh' ? 'mesh' : 'weave',
   };
 }

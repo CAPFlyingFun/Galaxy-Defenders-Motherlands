@@ -81,8 +81,14 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   "probably should set at 0% by default"). The room opens on the FEMALE BASE MODEL: her approved body at 0%, not
   pregnant, in the room's first outfit, with no character named (`sarahLook.ts` `lookOpenedOn`, `PREGNANCY_OPENING`).
   MODEL is not shown while there is one model to choose (`sarahLabTool.ts` `SARAH_LAB_MODELS_OFF_MENU`, `modelsOnMenu`;
-  `MODEL_NAMES` is what a model is called on screen): the bodies hers was built from stay in the list for a saved look
-  made on one and for a probe (`?probe=cloth` steps to them), and are not fetched ahead (`NOT_AHEAD`). Names in the code
+  `MODEL_NAMES` is what a model is called on screen). THE BODIES HERS WAS BUILT FROM ARE GONE (Joshua, 2026-11-19:
+  "delete all the other female models we aren't using so in the end should be x1 (skeleton, male, female) model with the
+  skeleton being used in both"): v1, v2, v2-arms, the first `sarah.glb`, the non-pregnant Meshy female and Meshy's male
+  original are out of the site and the archive (git has them); a save made on one opens on her body. What stays: her
+  approved archive `sarah-v2-body.glb` (byte for byte, below), the room's body made from it with its parts (its shape
+  files, its light skin, its KTX2 pilot for a phone), her bare skeleton (`sarah-skeleton.glb`, the ONE skeleton, from
+  `meshy-female-skeleton.glb`), the story's bake, and THE MALE BASE MODEL's file, `male-base-touched.glb` (his touched
+  one, "2", chosen over Meshy's original). Names in the code
   and of files stay as they are (`sarahlab/`, `sarah-v2-body.glb`): it is what the room SHOWS that is generic.
   - A probe (`?probe=`), the story's bake (`?bake=story`) and `?look=sarah` still open on Sarah as he set her
     (`SARAH_LOOK`: 73%, pregnant, her red spandex tee): what was measured in the room was measured on her, and the
@@ -1848,6 +1854,67 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   glass or just past it turned her instead. Each button now answers 9 px above and below its box (52 px), and the stage
   leaves a touch on a pill's glass alone. MEASURED in the room: every button's own box is its own at all 25 points
   tried, and a real touch 2 px above LIGHT/DARK and 6 px below it both change the theme.
+
+## The male base model
+
+- **On the menu beside her, FEMALE and MALE** (Joshua, 2026-11-19: "Can we work on the male character now?... load the same
+  skeleton, redraw the organs for a male, size the skeleton to fit the male model, get the sliders to work… minus the
+  breasts"; of the two male files, "go with 2"). `public/models/male-base.glb`, made from `assets-archive/models/male-base-touched.glb`
+  by `node scripts/male/maleSideLock.mjs` (the archive is not changed). `sarahLabTool.ts` `MALE_BASE_MODEL`, `isMaleModel`;
+  the Body tab's FEMALE / MALE (`SARAH_LAB_ACTION.baseModel`); MODEL stays, hidden, for a probe. On screen: "Male Base Model".
+- **HIS BONES ARE NAMED ONE ON FROM HERS** (MEASURED: his spine has one bone more -- Bone_001, Bone_005, Bone_004, Bone_003,
+  Bone_002 to hers Bone_001, Bone_004, Bone_003, Bone_002 -- and every bone after it is one further on). The room finds his
+  bones BY ROLE (`measureHuman`); what knew her bones by name is mapped (`maleRig.ts` `hisBone`, `herBone`; her arms' bones
+  for her breath, `armShareOf`, by role now).
+- **HIS ARMPITS AND SIDES** (a fault of his file: in T-POSE his back and sides stood in flaps up to his arms; Meshy gave his arm
+  bones up to 0.79 of his side down to 14 cm under his armpit). `scripts/male/maleArmWeights.mjs` (her armpit script with his
+  own arm numbers: thicker upper arm, `ARM_RADIUS_M` 0.075) and her side lock (`SIDE_LOCK`), his weights as 32-bit numbers.
+  `tests/maleBase.test.ts`.
+- **HIS BELLY** (`maleBelly.ts`; his: "maybe a max 100%", then "200% will be just doubled the size"): one smooth field in
+  space on his rest shape, between the BOTTOM of his pubic bone and his breastbone's tip as the skeleton laid in him has them
+  (his: "it should sit below the ribs"). An EGG (his: "more of an egg / oval shape, bottom a little bigger then the top";
+  "blend all around the belly into the surrounding skin"): from his side fullest at 0.42 of the way up, soft at both ends
+  (`bellyEgg`); from his front an oval a third narrower at his ribs than at his pubic bone, eased into his sides; its bottom
+  edge a U along his groin. 6.75 cm forward at 100% (his drawn curve's 13.5 at 200%), the belly slider's %, to 200.
+  Moves none of what his arms carry, and all of the skin low on his belly that his file half gives his thighs ("It's still
+  squished at the bottom"). Taken off his own side photograph and then his drawing over the chart of it (neither kept): his
+  profile is nearest her belly at 40% in shape and 45% in size. GAME TUNING: `MALE_BELLY`.
+- **HIS NAVEL**: an innie as modelled; NAVEL · INNIE / HALF OUT / OUTIE (`maleOutie`) pushes its floor out to his skin and 4 mm
+  past (an adult outie is mostly a small umbilical hernia: Cleveland Clinic). NOT YET KEPT IN A SAVE.
+- **THE ONE SKELETON IN HIM** (her `sarah-skeleton.glb`, laid by `skeletonInV2.ts` through `bodyName`), HIS RIB CAGE SIZED TO
+  HIM (`trunkShape`, `MALE_TRUNK_SHAPE_OF`): MEASURED with hers as laid, his breastbone 5 to 8 cm behind his skin and her ribs
+  2.5 to 4.5 cm inside his sides; deepened 1.35 from the back of the ribs and widened 1.07 over his chest, his breastbone is 1 to
+  3 cm under his skin. Her pelvis stays (NOT YET a male pelvis).
+- A fault found switching models, fixed: three's `compileAsync` threw in a timer when a body was let go under it
+  (`compileSafely`).
+- **HIS SKIN'S FINE RELIEF** (Joshua, 2026-11-19, of his Local Texture Lab, `tools/`: "add better depth and detail"; of
+  Galaxy Defender's skin made with it: "use the HTML directly to redo it… and also test on the male model"). That skin's
+  maps (512 px) were made from a body's whole skin picture cut up by the lab's seamless blend -- pieces of a face, nipples, a
+  navel -- and its height is those pieces' edges: not used. `scripts/skinDetail.mjs` makes a 1024 px seamless height map by
+  the lab's own procedural maths and a pore layer (`public/models/skins/skin-detail-1024.png`); `skinDetail.ts` lays it
+  TRIPLANAR on his rest place (his atlas's islands are every size), 6 cm a tile, 0.4 mm deep, as a bump over his normal map,
+  its pits a little darker (`SKIN_DETAIL`: GAME TUNING; the probe's `skinDetail({ depthM, tileM, cavity })`). MEASURED in the
+  room: front, close and back, on and off. HERS TOO (Joshua, 2026-11-19: "How does it look on the female model?"): laid on her
+  rest place as her skin's program carries it (`vFabricPos`, `vFabricNrm`: nothing added to her vertex stage, which has
+  every attribute a phone gives it), her skin's program put on her for it (`ensureSkinFabric`), and NONE OF IT UNDER HER
+  PAINT (`fabricMatte`). MEASURED in the room: the painted bike shorts and crop tee at 100%, her side and her belly, on and off.
+- **THE HYBRID, AS IT IS NOW** (Joshua, 2026-11-19: "Can you do a hybrid of yours and theirs, push, and then I can have it
+  grab the latest update and grab your work to apply" -- "theirs" Galaxy Defender's agent's): two depths on bare skin, as
+  one bump of the drawn normal (`skinDetail.ts`), none under paint:
+  1. EACH BODY'S OWN SKIN PICTURE'S DEPTH, 0.5 mm (`SKIN_DETAIL.ownDepthM`): `node scripts/skinHeight.mjs --in <its EVEN
+     skin> --out <height png>` -- the lab's Convert mode at its own defaults (`LAB_CONVERT`), its SEAMLESS blend OFF (it
+     tears an atlas into patches), read at the body's UVs where its colour is (`sarah-v2-skin-height-2048.png`,
+     `male-base-skin-height-2048.png`). Make it again whenever a body's skin picture changes;
+  2. THE TILE, 0.3 mm (`depthM`; 0.4 alone): `scripts/skinDetail.mjs`'s seamless pores and creases, triplanar on the rest
+     place, 6 cm a tile, its pits 18% darker (`cavity`).
+  FOR ANOTHER GAME (TRADDOMIUM, Galaxy Defender, the Godot rebuild): take the two scripts, the tile, and these numbers; a
+  body's own height map is made from ITS OWN skin picture (its own UV layout), never borrowed from another body's.
+  PICTURED in the room: plain, its own picture alone, the tile alone, both -- her bare belly and her face.
+- His organs (a prostate, no womb or ovaries), the pregnancy controls hidden for him, and his EVEN skin are done.
+- NOT DONE: BUILD and the other body shapes on him; his squat (his thighs bunch at his groin); his own pelvis bone; clothes;
+  his head's parts; RECLINE floats (her bed is not drawn either); his NAVEL setting kept in a save.
+- After anything changes him: `tests/maleBase.test.ts`, `tests/maleBelly.test.ts`, `tests/sarahBase.test.ts`; then the room:
+  MALE, his belly at 0, 100 and 200% from his side and front, T-POSE from his back, X-RAY from his side.
 
 ## Verification
 

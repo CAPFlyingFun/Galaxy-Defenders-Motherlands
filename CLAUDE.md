@@ -147,8 +147,9 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.49 (copied 2026-11-19 from its approved `main` 1344d7a: the hybrid pregnancy curve, kicks, exact
-  belly %; Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
+- THE BUILDER, v0.9.51 (copied 2026-11-19 from its approved `main` 74ff232: skin depth, its hybrid of each body's own skin
+  picture's depth and a pore and crease tile; before that v0.9.49, the hybrid pregnancy curve, kicks, exact belly %;
+  Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.
@@ -220,13 +221,15 @@ use the game's single copy of three.js.
   out of her cheek and rests on it. (A try at testing each point against her skin on the CPU found them all clear: the
   CPU's skin is not where the drawn one is, so the move is measured by eye.) Settings -> HEROINE -> Locks by her face (`gdm.faceLocks`,
   `?face_locks=on` for the builder's own place).
-- SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab at 512, then
-  "a higher quality version" from the one in the repo; `Game/src/heroine/fast/skinTexture.ts`): each look's own baked
-  skin picture turned into a 4096 HEIGHT MAP (the same size as her colour picture; Joshua: "keep it 4K") by the lab's own recipe (`scripts/make_skin_height.py` ->
-  `public/heroines/<look>/skinHeight.webp`; her game body's picture layout is not the builder's skin file's, so it is
-  made per look), read at the same picture position as her colour, as a 0.5 mm bump on her bare skin only. Subtle: her
-  skin picture is smooth. OFF unless chosen: Settings -> HEROINE -> Skin texture (experiment) (`gdm.skinTexture`,
-  `?skin_texture=on`). Re-run the script for a look after re-baking it.
+- HER SKIN'S DEPTH, THE BUILDER'S HYBRID (Joshua, 2026-11-19, relayed from the builder's agent; Char_B/CLAUDE.md "THE
+  HYBRID, AS IT IS NOW"; `Game/src/heroine/fast/skinTexture.ts`): two depths on her BARE skin only (where the roughness
+  picture reads below cloth), one bump: (1) her own skin picture's depth, 0.5 mm: each look's own baked picture turned
+  into a 4096 height map by the lab's Convert recipe, edge blending off (`scripts/make_skin_height.py`, the same maths as
+  the builder's `scripts/skinHeight.mjs`; her game body's layout is not the builder's skin file's, so made per look ->
+  `public/heroines/<look>/skinHeight.webp`; re-run after re-baking a look), read where her colour is; (2) the builder's
+  pore and crease tile, 0.3 mm (`charb/models/skins/skin-detail-1024.png`, in `charb-files.json`), triplanar on where her
+  skin was as baked (`knitRest`), 6 cm a tile, pits 18% darker. The builder's numbers; keep them unless Joshua changes
+  them. ON by default: Settings -> HEROINE -> Skin depth (`gdm.skinDepth`, `?skin_texture=off`).
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

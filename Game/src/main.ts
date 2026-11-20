@@ -128,7 +128,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         sharpParts: settings.sharpParts !== 'off',
         suitKnit: settings.suitKnit,
         hairStrands: settings.hairStrands !== 'off',
-        skinTexture: settings.skinTexture === 'on',
+        skinTexture: settings.skinTexture !== 'off',
         faceLocks: settings.faceLocks === 'on',
         onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
       });

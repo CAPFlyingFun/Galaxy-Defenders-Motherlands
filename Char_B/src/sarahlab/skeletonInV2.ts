@@ -61,6 +61,14 @@ export interface LimbFit {
    * her neck): her spine and ribs a little shorter, as her trunk is in v2.
    */
   readonly trunk?: { readonly raise: number; readonly rigidTo: number; readonly to: number; readonly skip: ReadonlySet<string> };
+  /**
+   * HIS RIB CAGE SIZED TO HIM (the male base model's: one skeleton, hers, "adjust to fit for the male" -- Joshua, 2026-11-19).
+   * Her trunk's pieces (as `trunk`, but `skip`) scaled across (x) and front to back (z) about `pivot` (rest metres) by
+   * `scale`, wholly from `from[1]` to `to[0]` of height and eased to nothing over `from` and `to`.
+   */
+  readonly trunkShape?: { readonly pivot: readonly [number, number, number]; readonly scale: readonly [number, number]; readonly from: readonly [number, number]; readonly to: readonly [number, number]; readonly skip: ReadonlySet<string> };
+  /** the body's bone for one of the skeleton's, when the body's rig names its bones otherwise (the male base model's: maleRig.ts) */
+  readonly bodyName?: (skeletonName: string) => string;
 }
 
 /**
@@ -131,7 +139,8 @@ export class SkeletonInV2 {
     const restN = new THREE.Matrix3().getNormalMatrix(skeletonToRest);
     // its bones by name onto v2's (the skeleton's Jaw onto v2's head: the bone its own Jaw hangs from)
     const theirs = skeletonMesh.skeleton.bones, ours = body.skeleton.bones, byName = new Map(ours.map((b, k) => [b.name, k]));
-    const map = theirs.map((b) => byName.get(b.name) ?? byName.get(b.parent?.name ?? '') ?? 0);
+    const bodyName = fit?.bodyName ?? ((x: string) => x);
+    const map = theirs.map((b) => byName.get(bodyName(b.name)) ?? byName.get(bodyName(b.parent?.name ?? '')) ?? 0);
     const si = src.getAttribute('skinIndex'), sw = src.getAttribute('skinWeight');
     const n = pos.count, I = new Uint16Array(n * 4), W = new Float32Array(n * 4);
     this.owner = new Array(n);
@@ -182,6 +191,11 @@ export class SkeletonInV2 {
       else if (fit?.trunk && !fit.trunk.skip.has(this.owner[i])) {
         const T = fit.trunk, share = v.y <= T.rigidTo ? 1 : v.y >= T.to ? 0 : (T.to - v.y) / Math.max(1e-6, T.to - T.rigidTo);
         v.y += T.raise * share;
+      }
+      if (!part && fit?.trunkShape && !fit.trunkShape.skip.has(this.owner[i])) {
+        const S = fit.trunkShape, e = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        const k = e(S.from[0], S.from[1], v.y) * (1 - e(S.to[0], S.to[1], v.y));
+        if (k > 0) { v.x = S.pivot[0] + (v.x - S.pivot[0]) * (1 + (S.scale[0] - 1) * k); v.z = S.pivot[2] + (v.z - S.pivot[2]) * (1 + (S.scale[1] - 1) * k); d.x /= 1 + (S.scale[0] - 1) * k; d.z /= 1 + (S.scale[1] - 1) * k; }
       }
       v.toArray(R, i * 3);
       if (nrm) d.applyMatrix3(toBodyN).normalize().toArray(N, i * 3);

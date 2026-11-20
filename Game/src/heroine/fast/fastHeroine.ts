@@ -60,7 +60,7 @@ import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine } from './outfitMaterial';
-import { addSkinTexture, loadSkinHeight } from './skinTexture';
+import { addSkinTexture, loadSkinPictures } from './skinTexture';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
@@ -167,7 +167,7 @@ export interface FastHeroineOptions {
   readonly hairStrands?: boolean;
   /** Leave the small loose locks by her face where the file has them, on her cheeks (fastHair.ts liftFaceLocks). Default false: lifted out of her cheeks. */
   readonly faceLocks?: boolean;
-  /** THE SKIN TEXTURE EXPERIMENT over her bare skin (skinTexture.ts). Default false. */
+  /** Her skin's depth, the builder's hybrid, on her bare skin (skinTexture.ts). Default true. */
   readonly skinTexture?: boolean;
   /** Told what is loading, for a loading screen. */
   readonly onProgress?: (stage: string) => void;
@@ -362,10 +362,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   skin.geometry.computeBoundingBox();
   const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
   const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
-  // THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; skinTexture.ts): her own skin picture as depth, on her bare skin
-  if (options.skinTexture && !painted) {
-    const skinHeight = loadSkinHeight(options.look, options.renderer);
-    for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinHeight);
+  // HER SKIN'S DEPTH (Joshua, 2026-11-19; skinTexture.ts): the builder's hybrid, her own skin picture's depth and its pore
+  // and crease tile, on her bare skin
+  if (options.skinTexture !== false && !painted) {
+    const skinPictures = loadSkinPictures(options.look, options.renderer);
+    for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinPictures, unitsPerMetre);
   }
   skin.material = materials.fine;
   skin.castShadow = false;

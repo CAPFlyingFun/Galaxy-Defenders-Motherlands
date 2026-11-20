@@ -19,16 +19,12 @@ import type { SkirtSettings } from './skirt/skirtDraft';
 
 export const SARAH_LAB_SCENE_ID = 'lab:sarah';
 export const SARAH_LAB_TOOL_ID = 'lab.sarah';
-/** The lab's first model, v1, and the only place its path is written. */
-export const SARAH_BASE_MODEL = 'models/sarah-base.glb';
-/** Sarah v2 (Joshua, 2026-10-13): the newer master, arms down, outie navel modelled, five fingers rigged. */
-export const SARAH_V2_MODEL = 'models/sarah-v2.glb';
-/**
- * Sarah v2 with her armpits repaired for raised arms (Joshua, 2026-10-15), a separate
- * file so the approved v2 stays the reference: `scripts/sarahV2ArmWeights.mjs` rebuilds
- * her armpit weights along her skin and adds the raised-arm shapes armRaiseL/R.
+/*
+ * THE BODIES HERS WAS BUILT FROM ARE GONE (Joshua, 2026-11-19, of the models: "delete all the other female models we aren't
+ * using so in the end should be x1 (skeleton, male, female) model"): v1 (`sarah-base.glb`), v2 (`sarah-v2.glb`), v2-arms
+ * (`sarah-v2-arms.glb`) and the TRADDOMIUM-era `sarah.glb` were taken out of the site with every test that read them (git
+ * has them, before v0.9.50). Her approved archive (`assets-archive/models/sarah-v2-body.glb`) stays, byte for byte.
  */
-export const SARAH_V2_ARMS_MODEL = 'models/sarah-v2-arms.glb';
 /**
  * The approved v2-arms body with its BODY-SHAPE FIELDS (`scripts/sarahV2Shape.mjs`, Joshua,
  * 2026-10-15): the same geometry and every approved shape, plus one field per body control,
@@ -53,6 +49,12 @@ export const SARAH_V2_HAIR_MODEL = 'models/sarah-v2-hair.glb';
  * only, so nothing on it is flesh.
  */
 export const SARAH_SKELETON_MODEL = 'models/sarah-skeleton.glb';
+/**
+ * THE MALE BASE MODEL (Joshua, 2026-11-19: "Can we work on the male character now?"; of the two male files, "go with 2"):
+ * `assets-archive/models/male-base-touched.glb`, copied as it is. Meshy's rig, 69 bones -- one more than hers, so every
+ * bone after it is named one further on: the room finds his bones BY ROLE (`measureHuman`), never by her names.
+ */
+export const MALE_BASE_MODEL = 'models/male-base.glb';
 /** A model rigged with its arms level (v1 and the skeleton): T-POSE is its bind, and ARMS has nothing to raise. */
 export function levelArmsModel(modelId: string): boolean {
   return modelId === 'v1' || modelId === 'skeleton';
@@ -84,11 +86,9 @@ export function sarahModelPath(entry: { readonly id: string; readonly path: stri
  * "add an option to switch between both models to compare"). v2 has no clothes yet.
  */
 export const SARAH_LAB_MODELS = Object.freeze([
-  Object.freeze({ id: 'v1', path: SARAH_BASE_MODEL }),
-  Object.freeze({ id: 'v2', path: SARAH_V2_MODEL }),
-  Object.freeze({ id: 'v2-arms', path: SARAH_V2_ARMS_MODEL }),
   Object.freeze({ id: 'v2-body', path: SARAH_V2_BODY_MODEL }),
   Object.freeze({ id: 'skeleton', path: SARAH_SKELETON_MODEL }),
+  Object.freeze({ id: 'male-base', path: MALE_BASE_MODEL }),
 ]);
 
 /**
@@ -110,11 +110,13 @@ export const SARAH_LAB_DEFAULT_MODEL = SARAH_LAB_MODELS.findIndex((m) => m.id ==
  * v1, v2 and v2-arms, which it was built from, stay in the list for a saved look made on one and for a probe, and are
  * no longer stepped to; with one model to choose from the room shows no MODEL button (`modelsOnMenu`).
  */
-export const SARAH_LAB_MODELS_OFF_MENU: ReadonlySet<string> = new Set(['skeleton', 'v1', 'v2', 'v2-arms']);
+export const SARAH_LAB_MODELS_OFF_MENU: ReadonlySet<string> = new Set(['skeleton']);
 /** How many models MODEL can step between: the room shows the button only when there is a choice. */
 export const modelsOnMenu = (): number => SARAH_LAB_MODELS.filter((m) => !SARAH_LAB_MODELS_OFF_MENU.has(m.id)).length;
 /** What a model is called on screen. Her approved body is the FEMALE BASE MODEL; the others go by their ids (a probe's). */
-export const MODEL_NAMES: Readonly<Record<string, string>> = Object.freeze({ 'v2-body': 'Female Base Model' });
+export const MODEL_NAMES: Readonly<Record<string, string>> = Object.freeze({ 'v2-body': 'Female Base Model', 'male-base': 'Male Base Model' });
+/** Which base model is male (Joshua, 2026-11-13: "once we add in the Male model, can just add two buttons (Male/Female)"). */
+export const isMaleModel = (id: string): boolean => id === 'male-base';
 export const modelName = (id: string): string => MODEL_NAMES[id] ?? id;
 /** The model MODEL steps to from `index`: the next one on the menu (`all`: the next one, on it or not). */
 export function nextModel(index: number, all = false): number {
@@ -198,6 +200,10 @@ export const SARAH_LAB_ACTION = Object.freeze({
   birth: 'sarahlab:birth-',
   outfit: 'sarahlab:outfit',
   model: 'sarahlab:model',
+  /** `${baseModel}female` / `${baseModel}male`: the FEMALE and MALE buttons */
+  baseModel: 'sarahlab:base:',
+  /** HIS NAVEL: innie, half out, outie (the male base model's) */
+  maleNavel: 'sarahlab:male-navel',
   refine: 'sarahlab:refine',
   bellyCurve: 'sarahlab:belly-curve',
   armSide: 'sarahlab:armside',
@@ -1329,7 +1335,7 @@ export function statusLine(loaded: boolean, failed: boolean, garments: readonly 
   const g = garments.length ? `${garments.length} garment${garments.length === 1 ? '' : 's'}` : 'no clothes in this file yet';
   const rest = `${hasBelly ? 'belly slider' : 'no belly slider'} · ${g}`;
   if (called) return named ? `${called} · ${rest}` : rest;
-  return `${m.id === 'v1' ? 'base model' : `model ${m.id}`} · ${rest}`;
+  return `model ${m.id} · ${rest}`;
 }
 
 // ------------------------------------------------------------ the bump's weight

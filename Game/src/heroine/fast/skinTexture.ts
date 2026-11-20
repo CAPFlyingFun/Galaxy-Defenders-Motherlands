@@ -1,48 +1,79 @@
 // ============================================================================
-// skinTexture.ts -- AN EXPERIMENT: her own skin picture turned into DEPTH.
+// skinTexture.ts -- HER SKIN'S DEPTH: the Character Builder's "hybrid".
 //
 // Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab
-// (docs/tools/Local_Texture_Lab.html) at 512 to see "how it works with her
-// body texture", then asked for a higher quality version from the picture in
-// the repo. Her game body has its own picture layout, so each look gets a
-// HEIGHT MAP made from its own baked skin picture, at 4096 x 4096 (as big as her colour picture), by the lab's
-// own recipe (scripts/make_skin_height.py writes heroines/<look>/skinHeight.webp).
+// (docs/tools/Local_Texture_Lab.html) to see "how it works with her body
+// texture"; the builder's own agent then made pores and creases with the same
+// lab's maths, and Joshua asked for a hybrid of the two. As the builder has it
+// (Char_B/CLAUDE.md "THE HYBRID, AS IT IS NOW"; Char_B/src/sarahlab/skinDetail.ts),
+// two depths on her BARE skin only (none under her painted clothes), added
+// together into one tilt of her surface's direction (a "bump"):
 //
-// It is read at the SAME picture position as her colour, so every crease and
-// shade of her skin picture lines up with its depth, and it tilts the light
-// pixel by pixel (a bump): the light catches what is raised. Nothing moves.
-// Only where the roughness picture says SKIN (not her suit, not its trim).
-// Off unless chosen: Settings -> HEROINE -> Skin texture (experiment).
+//   1. HER OWN SKIN PICTURE'S DEPTH, 0.5 mm: each look's own baked skin
+//      picture turned into a 4096 height map by the lab's recipe (Convert mode,
+//      its defaults, edge blending off: scripts/make_skin_height.py, the same
+//      maths as the builder's scripts/skinHeight.mjs) -> heroines/<look>/
+//      skinHeight.webp, read at the same picture position as her colour.
+//   2. THE PORE AND CREASE TILE, 0.3 mm: the builder's own tile
+//      (Char_B public/models/skins/skin-detail-1024.png, made by its
+//      scripts/skinDetail.mjs), laid on from three sides by where her skin WAS
+//      as baked (so it stays put on her and stretches with her), 6 cm a tile,
+//      its pits 18 % darker.
+//
+// Nothing moves: only the light changes, so it costs almost nothing. Settings
+// -> HEROINE -> Skin depth turns it off.
 // ============================================================================
 import * as THREE from 'three';
 import { bakedLookFolder } from './bakedLook';
 
-/** The experiment's numbers. */
+/** The builder's numbers (Char_B skinDetail.ts SKIN_DETAIL): kept as they are unless Joshua changes them. */
 export const SKIN_TEXTURE = Object.freeze({
-  /** How deep white is above black in the height map, metres (0.5 mm: 0.3 hardly showed, 0.8 speckled her suit's edges). */
-  depth: 0.0005,
+  /** metres one pore tile spans (its 40 x 40 pores 1.5 mm apart) */
+  tileMetres: 0.06,
+  /** the pore tile's depth, metres, highest to lowest */
+  tileDepth: 0.0003,
+  /** the depth of her own skin picture, metres, white above black */
+  ownDepth: 0.0005,
+  /** how much darker the tile's pits are (0 none) */
+  cavity: 0.18,
 });
+
+/** The builder's pore and crease tile (served from its folder: Game/charb-files.json lists it). */
+const PORE_TILE = 'charb/models/skins/skin-detail-1024.png';
 
 /** Where the roughness picture reads as cloth (outfitMaterial.ts CLOTH_FROM): below this it is her skin. */
 const SKIN_BELOW = 0.58;
 
-/** Load a look's skin height map (read as plain numbers; her picture's layout, not repeating). */
-export function loadSkinHeight(look: string, renderer: THREE.WebGLRenderer): THREE.Texture {
-  const t = new THREE.TextureLoader().load(bakedLookFolder(look) + 'skinHeight.webp', (loaded) => { loaded.needsUpdate = true; });
-  t.colorSpace = THREE.NoColorSpace;
-  t.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
-  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  return t;
+/** Her skin's two pictures for one look: her own skin's height (her picture's layout) and the pore tile (repeating). */
+export interface SkinPictures { readonly own: THREE.Texture; readonly tile: THREE.Texture }
+
+/** Load a look's skin height map and the pore tile (both read as plain numbers, not colours). */
+export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): SkinPictures {
+  const loader = new THREE.TextureLoader();
+  const sharp = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  const own = loader.load(bakedLookFolder(look) + 'skinHeight.webp', (t) => { t.needsUpdate = true; });
+  own.colorSpace = THREE.NoColorSpace;
+  own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
+  own.anisotropy = sharp;
+  const tile = loader.load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
+  tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
+  tile.colorSpace = THREE.NoColorSpace;
+  tile.anisotropy = sharp;
+  return { own, tile };
 }
 
 /**
- * Add the skin depth to one of her skin materials. Chained after anything already patched in (her suit's knit and
- * shine), with its own cache key.
+ * Add her skin's depth to one of her skin materials. Chained after anything already patched in (her suit's knit and
+ * shine), with its own cache key. `unitsPerMetre`: her model's own units in a metre (the tile is laid on in those).
  */
-export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: THREE.Texture): void {
+export function addSkinTexture(material: THREE.MeshStandardMaterial, pictures: SkinPictures, unitsPerMetre: number): void {
   const uniforms = {
-    skinHeightMap: { value: heightMap },
-    skinDepth: { value: SKIN_TEXTURE.depth },
+    skinOwnMap: { value: pictures.own },
+    skinTileMap: { value: pictures.tile },
+    skinTile: { value: SKIN_TEXTURE.tileMetres * unitsPerMetre },
+    skinTileDepth: { value: SKIN_TEXTURE.tileDepth },
+    skinOwnDepth: { value: SKIN_TEXTURE.ownDepth },
+    skinCavity: { value: SKIN_TEXTURE.cavity },
   };
   // (DEV only: test pages set the numbers by hand)
   if (import.meta.env.DEV) {
@@ -53,19 +84,38 @@ export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: 
   material.onBeforeCompile = function (shader, renderer) {
     previous.call(this, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
+    // WHERE HER SKIN WAS AS BAKED (shapedBody.ts `knitRest`, on every level of her) and its direction: the tile is laid
+    // on by these. (The suit's knit may have declared the same point already: declared once only.)
+    const restDeclared = shader.vertexShader.includes('attribute vec3 knitRest;');
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${restDeclared ? '' : 'attribute vec3 knitRest;\n'}varying vec3 vSkinRest;\nvarying vec3 vSkinRestN;`)
+      .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvSkinRest = knitRest;\nvSkinRestN = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D skinHeightMap;\nuniform float skinDepth;')
+      .replace('#include <common>', `#include <common>
+varying vec3 vSkinRest;
+varying vec3 vSkinRestN;
+uniform sampler2D skinOwnMap, skinTileMap;
+uniform float skinTile, skinTileDepth, skinOwnDepth, skinCavity;
+// the pore tile's height here (0..1), from three sides, each weighted by how squarely her skin faces it (sharpened, as
+// the builder's, so the three blend over only a narrow band)
+float skinTileHeight() {
+  vec3 w = pow(abs(normalize(vSkinRestN)), vec3(4.0));
+  w /= max(1e-5, w.x + w.y + w.z);
+  vec3 p = vSkinRest / skinTile;
+  return texture2D(skinTileMap, p.zy).r * w.x + texture2D(skinTileMap, p.xz).r * w.y + texture2D(skinTileMap, p.xy).r * w.z;
+}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #ifdef USE_MAP
   {
-    // only on her skin: where the roughness picture reads below cloth
+    // only on her bare skin: where the roughness picture reads below cloth
 #ifdef USE_ROUGHNESSMAP
-    float skinHere = 1.0 - smoothstep(${(SKIN_BELOW - 0.04).toFixed(3)}, ${SKIN_BELOW.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g);
+    float skinBare = 1.0 - smoothstep(${(SKIN_BELOW - 0.04).toFixed(3)}, ${SKIN_BELOW.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g);
 #else
-    float skinHere = 1.0;
+    float skinBare = 1.0;
 #endif
-    // the height, at the same picture position as her colour, in metres
-    float skinHeight = skinDepth * skinHere * texture2D(skinHeightMap, vMapUv).r;
+    // the two depths, in metres: the pore tile, and her own skin picture where her colour is
+    float skinPores = skinTileHeight();
+    float skinHeight = skinBare * (skinTileDepth * skinPores + skinOwnDepth * texture2D(skinOwnMap, vMapUv).r);
     // the bump (Morten Mikkelsen's, as three.js's own), with each pixel step made 1 long so it never divides by nearly 0
     vec3 skinSX = dFdx(-vViewPosition), skinSY = dFdy(-vViewPosition);
     float skinLX = max(length(skinSX), 1e-7), skinLY = max(length(skinSY), 1e-7);
@@ -73,9 +123,11 @@ export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: 
     float skinDet = dot(skinSX / skinLX, skinR1) * faceDirection;
     vec3 skinBumped = abs(skinDet) * normal - sign(skinDet) * (dFdx(skinHeight) / skinLX * skinR1 + dFdy(skinHeight) / skinLY * skinR2);
     if (abs(skinDet) > 0.02 && dot(skinBumped, skinBumped) > 1e-6) normal = normalize(skinBumped);
+    // the pores' pits a little darker (only the pits: the skin's own colour stays as it was on average)
+    diffuseColor.rgb *= 1.0 - skinCavity * skinBare * clamp((0.42 - skinPores) * 3.0, 0.0, 1.0);
   }
 #endif`);
   };
-  material.customProgramCacheKey = function () { return `${cacheKey.call(this)}|gdm-skin-height-v2`; };
+  material.customProgramCacheKey = function () { return `${cacheKey.call(this)}|gdm-skin-hybrid-v1`; };
   material.needsUpdate = true;
 }

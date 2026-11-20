@@ -60,7 +60,10 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
     const hand = ease((xr - 0.125) / 0.015) * ease((0.57 - yr) / 0.02) * ease((yr - 0.38) / 0.02);     // out at her sides, below her wrists
     // (between her legs, where her thighs meet her hips: a tight fold that tears first when it is lightened)
     const groin = ease((0.075 - xr) / 0.02) * ease((yr - 0.43) / 0.02) * ease((0.53 - yr) / 0.02);
-    weight[v] = 1 + 2 * Math.max(head, hand, groin);
+    // HER ARMS, from her shoulders down to her wrists, out at her sides (Joshua, 2026-11-20, at 25%: "her arm is flat
+    // like a pancake"): a round limb seen from the side, lightened, lost its roundness first and was left a flat strip
+    const arm = ease((xr - 0.105) / 0.015) * ease((0.82 - yr) / 0.02) * ease((yr - 0.55) / 0.02);
+    weight[v] = 1 + 2 * Math.max(head, hand, groin, arm);
   }
   // Her own shapes say where her belly, bust and navel are: full importance where a shape moves a point at least
   // `full` of the most it moves any point, fading smoothly to none.
@@ -82,7 +85,7 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
 }
 
 /**
- * HER FACE, HANDS, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
+ * HER FACE, HANDS, ARMS, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
  * details even when at 1%... at 1% her face and belly looks bad... a compromise of speed and quality"): the points of
  * her head above her neck, and those her belly, bust and navel shapes move by at least `share` of the most they move
  * any point. The lightening never takes these away (detailWorker.ts), at any level; the rest of her is lightened.
@@ -98,6 +101,10 @@ export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMo
     // HER HANDS (Joshua, 2026-11-19, of her fingers round a bar at 1%: "the hands look weird holding the pole... are the
     // hands included?"): out at her sides below her wrists, as `skinImportance` finds them
     if (xr > 0.13 && yr > 0.38 && yr < 0.57) lock[v] = 1;
+    // HER ARMS, from her shoulders down to her wrists (Joshua, 2026-11-20, near the camera at 25%: "her arm is flat like
+    // a pancake"; measured: her left upper arm lightened to a flat strip, round again at 100% and with these locked;
+    // giving them more weight in the lightening was not enough)
+    if (xr > 0.105 && yr >= 0.57 && yr < 0.82) lock[v] = 1;
   }
   for (const name of ['belly', 'breastGrow', 'navelIn', 'navelOut', 'navelFlat']) {
     const moves = shape(name);

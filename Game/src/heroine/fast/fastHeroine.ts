@@ -731,7 +731,10 @@ if (uHideHead > 0.5) {
    */
   let roomFor = '';
   const holsterRoom = (): void => {
-    const sides = (['left', 'right'] as const).filter((hand) => guns[hand].object.parent === gear.holsterBone(hand) && reach.weight(handIndex(hand)) <= 0 && !reach.hasJob(handIndex(hand)));
+    // (only where a holster is drawn: Look 2 has none on her left, and keeping clear of the room a gun there would take,
+    //  stowed out of sight, pulled her empty left hand forward across her thigh and her forearm in flat: Joshua,
+    //  2026-11-20, "her arm is flat like a pancake")
+    const sides = (['left', 'right'] as const).filter((hand) => holstered.includes(hand) && guns[hand].object.parent === gear.holsterBone(hand) && reach.weight(handIndex(hand)) <= 0 && !reach.hasJob(handIndex(hand)));
     const key = sides.join(',');
     if (key === roomFor) return;
     roomFor = key;

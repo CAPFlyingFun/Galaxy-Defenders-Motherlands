@@ -62,6 +62,16 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     gun: { metal: 0x141518, glow: 0xff0000 },
   },
   /**
+   * THE ANIME SPACE HEROINE (spaceHeroine.ts; look 2 of Joshua's board): a brown leather belt with gold buckle and
+   * edges; the holster navy; her guns dark with gold. Her leotard a smooth satin sheen. (Her 3D pieces come next.)
+   */
+  spaceHeroine: {
+    belt: { belt: 0x6a4a34, edge: 0xc9a35e, buckle: 0xd8b46a, accent: 0xc9a35e, strap: 0x3a2a20, holster: 0x1c2445, plate: 0x1c2445 },
+    beltLine: [-0.06, 0.035, 0.1],
+    clothShine: { cloth: 0.5, trim: 0.42 },
+    gun: { metal: 0x23283a, glow: 0xd8b46a },
+  },
+  /**
    * THE GRAY AND RED SUIT (graySuit.ts; Joshua's outfit design 2): a gray belt with silver edges and a glowing pale
    * blue accent where it was pink, holsters and pouches in dark gray; tall flat combat boots, wrist cuffs and shoulder
    * plates in the suit's light gray, darker gray and red, with glowing pale blue strips.

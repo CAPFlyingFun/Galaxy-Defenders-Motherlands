@@ -14,3 +14,5 @@ heroines' outfits. They show the look to aim for, not finished art: colours and 
 
 - `look1-shadow-operative-closeup.jpg`: Look 1 up close (Joshua, 2026-11-19): the collar up her neck, the stripes, the belt.
 - `ccbs-fabric-colours.jpg`: the Character Builder fabric pack's sixteen colours (the suit uses its athletic knit).
+- `look2-anime-space-heroine-front.jpg` / `-back.jpg`: Look 2 (the Anime Space Heroine) up close, front and back
+  (Joshua, 2026-11-19: "try and make it as close as possible").

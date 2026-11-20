@@ -112,6 +112,7 @@ export const ZOOM_START_DEFAULT = 0.17;
 export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.freeze([
   ['Pink & black two-piece', 'blazeSuit'],
   ['Shadow Operative catsuit', 'shadowSuit'],
+  ['Anime Space Heroine', 'spaceHeroine'],
   ['Plain black catsuit (Joshua\'s export)', 'blazeCatsuit'],
   ['Gray & red suit', 'graySuit'],
   ['All pink (Joshua\'s export)', 'blazePink'],

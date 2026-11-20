@@ -33,7 +33,7 @@ import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
 
 /** What the dome test buttons can ask for. */
-export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all';
+export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -362,7 +362,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird' | 'tableHeight'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -430,6 +430,9 @@ export class Hud {
       element('small', 'gd-note', settings, 'Plays her pregnancy from week 12 to week 42 at a day a second (a week every 7 s; 3 min 44 s), and stops at 42. Close Settings to watch; tap the week at the top of the screen to stop.');
     }
 
+    // ---- Settings: her skin's shine (Joshua, 2026-11-19: "dry skin a little darker, more oily or wet skin ... the shine")
+    sliderRow('Skin shine', 'skinShine', 0, 100, 1, (v) => (v < 40 ? 'dry' : v > 60 ? 'oily' : 'natural') + ` ${v}`);
+    element('small', 'gd-note', settings, 'How shiny her bare skin is: dry (matte, a little darker) to oily (glossy). Water makes her wet up to where it came: shiny at once, for 2 minutes, then drying over 30 s (Get wet in TEST TOOLS to try it).');
     element('h2', 'gd-settings-part', settings, 'CAMERA');
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
@@ -446,6 +449,7 @@ export class Hud {
     tool('Hit dome -25', 'hit');
     tool('Shatter', 'shatter');
     tool('Repair all', 'repair-all');
+    tool('Get wet', 'wet');
 
     this.setView('third');
   }

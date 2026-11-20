@@ -61,6 +61,7 @@ import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine } from './outfitMaterial';
 import { addSkinTexture, loadSkinPictures } from './skinTexture';
+import { addSkinShine, shineUniforms, SkinWetness } from './skinShine';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
@@ -368,6 +369,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     const skinPictures = loadSkinPictures(options.look, options.renderer);
     for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinPictures, unitsPerMetre);
   }
+  // HER SKIN'S SHINE (Joshua, 2026-11-19; skinShine.ts): dry to oily (a setting), and wet from the water
+  const shine = shineUniforms(unitsPerMetre);
+  const wetness = new SkinWetness();
+  /** Her feet in her model's own height (the bottom of her baked shape): the water line is measured up from here. */
+  const feetInModel = box.min.y;
+  let waterDepth = 0;
+  if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
   skin.castShadow = false;
   skin.receiveShadow = false;
@@ -923,6 +931,9 @@ if (uHideHead > 0.5) {
     // (her hidden live body follows her belly and her pregnancy, so the kicks come from a womb her size: liveBody.ts)
     setBelly(percent: number): void { bellyWanted = Math.max(0, Math.min(200, Math.round(percent))); live?.setBelly(bellyWanted); },
     setPregnant(on: boolean): void { live?.setPregnant(on); },
+    setWaterDepth(metres: number): void { waterDepth = Math.max(0, metres); },
+    setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
+    soakSkin(): void { wetness.soak(); },
     bellyNow: () => body.belly,
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
@@ -949,6 +960,10 @@ if (uHideHead > 0.5) {
 
     update(frame: FrameInfo): void {
       if (disposed) return;
+      // how wet she is now, and up to where (her model's own height)
+      wetness.step(frame.dt, waterDepth);
+      shine.skinWet.value = wetness.amount;
+      shine.skinWetLine.value = wetness.line > 0 ? feetInModel + wetness.line * unitsPerMetre : -1e6;
       const now = performance.now();
       const frameMs = now - lastUpdateAt;
       lastUpdateAt = now;

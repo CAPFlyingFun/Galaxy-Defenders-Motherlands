@@ -230,6 +230,15 @@ use the game's single copy of three.js.
   pore and crease tile, 0.3 mm (`charb/models/skins/skin-detail-1024.png`, in `charb-files.json`), triplanar on where her
   skin was as baked (`knitRest`), 6 cm a tile, pits 18% darker. The builder's numbers; keep them unless Joshua changes
   them. ON by default: Settings -> HEROINE -> Skin depth (`gdm.skinDepth`, `?skin_texture=off`).
+- HER SKIN'S SHINE, DRY TO OILY, AND WET FROM THE WATER (Joshua, 2026-11-19: "dry skin a little darker, more oily or wet
+  skin could naturally have the shine... stepping in the water would turn her skin more shiny for about 2 minutes and
+  then fade over 30s... getting wet would be instant"; `Game/src/heroine/fast/skinShine.ts`, bare skin only): Settings
+  -> HEROINE -> Skin shine 0 dry (rougher +0.18, 5% darker) .. 50 natural .. 100 oily (smoother -0.25) (`gdm.skinShine`,
+  `?shine=`, live). WET: roughness 0.12 and 12% darker, only below the WATER LINE (the deepest the water came up her this
+  time, measured from her feet in her model's own height, plus 5 cm of splash, a 6 cm soft edge); main.ts tells her the
+  water's depth at her feet each frame (a river or lake's surface, or the sea's, `island.seaLevel`, above the ground);
+  `SkinWetness`: wet at once, fully wet 120 s after leaving the water, then dry over 30 s. Settings -> TEST TOOLS -> Get wet
+  soaks her all over (for the town map).
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

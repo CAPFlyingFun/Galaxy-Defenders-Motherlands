@@ -70,6 +70,8 @@ export interface IslandWorld {
   standAt(x: number, z: number): number;
   /** The surface of a river or lake at a place, metres (null where there is none). */
   waterAt(x: number, z: number): number | null;
+  /** The sea's surface, metres (the game's height, as the ground's). */
+  readonly seaLevel: number;
   /** Wait until the tiles round (x, z) are all loaded, telling `say` how far along it is. */
   ready(x: number, z: number, say: (done: number, of: number) => void): Promise<void>;
   /** Every frame: tiles follow her, the sea follows the camera. */
@@ -167,6 +169,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
     walls: new IslandWalls(groundAt, standAt),
     standAt,
     waterAt,
+    seaLevel: WATER_Y,
     arrivalFacing: ARRIVAL_FACING,
     groundAt,
     async ready(x, z, say) {

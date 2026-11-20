@@ -88,6 +88,8 @@ export interface HeroineSettings {
   skinTexture: ShadowChoice;
   /** The small loose locks by her face: 'off' eased off her cheeks (Joshua, 2026-11-19), 'on' as the file has them. Reloads. */
   faceLocks: ShadowChoice;
+  /** HER SKIN'S SHINE, 0 dry .. 50 natural .. 100 oily (Joshua, 2026-11-19; fast/skinShine.ts). Takes hold at once. */
+  skinShine: number;
 }
 
 
@@ -138,6 +140,7 @@ export const SETTING_KEYS = Object.freeze({
   // (a new name: on for everyone once, now that it is the builder's hybrid and not an experiment)
   skinTexture: 'gdm.skinDepth',
   faceLocks: 'gdm.faceLocks',
+  skinShine: 'gdm.skinShine',
 });
 
 function read(key: string): string | null {
@@ -211,5 +214,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     hairStrands: (address.get('strands') ?? read(SETTING_KEYS.hairStrands)) === 'off' ? 'off' : 'on',
     skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'off' ? 'off' : 'on',
     faceLocks: (address.get('face_locks') ?? read(SETTING_KEYS.faceLocks)) === 'on' ? 'on' : 'off',
+    skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? 50,
   };
 }

@@ -334,6 +334,8 @@ async function start(): Promise<void> {
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
   await breathe();
   const heroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text));
+  // (her skin's shine as chosen in Settings: 0 dry .. 50 natural .. 100 oily)
+  heroine.setSkinShine?.((graphics.skinShine - 50) / 50);
   await breathe();
   scene.add(heroine.root);
   // Real shadows on or off (Settings): the renderer's shadow pictures, the key light's, and every part of her casting.
@@ -575,6 +577,7 @@ async function start(): Promise<void> {
   const sectionInView = () => dome.sectionAtPoint(rig.aimPointOnBall(DOME_RADIUS, aim));
 
   const domeDebug = (action: DomeDebugAction) => {
+    if (action === 'wet') { heroine.soakSkin?.(); return; }
     if (action === 'hit') sectionInView().damage(25);
     else if (action === 'shatter') sectionInView().damage(SECTION_MAX_HP);
     else dome.repairAll();
@@ -654,6 +657,7 @@ async function start(): Promise<void> {
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();
+      else if (key === 'skinShine') heroine.setSkinShine?.((graphics.skinShine - 50) / 50);
       else restart();
     },
     onToggleView: toggleView,
@@ -1019,6 +1023,13 @@ async function start(): Promise<void> {
     shadowFloor.position.x = motion.x;
     shadowFloor.position.z = motion.z;
     heroine.setPosition(motion.x, motion.z, feetY);
+    // HOW DEEP THE WATER IS AT HER FEET (her skin gets wet up to there: heroine/fast/skinShine.ts): a river or lake's
+    // surface, or the sea's, above the ground under her
+    if (island) {
+      const ground = island.groundAt(motion.x, motion.z);
+      const surface = Math.max(island.waterAt(motion.x, motion.z) ?? -Infinity, island.seaLevel);
+      heroine.setWaterDepth?.(Number.isFinite(ground) ? surface - ground : 0);
+    }
     // (a body that turns its parts apart was handed `turn` once, where it was made, and reads it each frame; one
     //  that cannot faces one way, all of it: where she looks, or the way she goes)
     heroine.setYaw(heroine.setFacing || rig.mode !== 'first' ? turn.base : turn.head);

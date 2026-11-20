@@ -82,7 +82,7 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
 }
 
 /**
- * HER FACE, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
+ * HER FACE, HANDS, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
  * details even when at 1%... at 1% her face and belly looks bad... a compromise of speed and quality"): the points of
  * her head above her neck, and those her belly, bust and navel shapes move by at least `share` of the most they move
  * any point. The lightening never takes these away (detailWorker.ts), at any level; the rest of her is lightened.
@@ -90,9 +90,15 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
  */
 export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMoves, share = 0.12): Uint8Array {
   const n = points.length / 3;
-  const H = box.max.y - box.min.y;
+  const H = box.max.y - box.min.y, cx = (box.min.x + box.max.x) / 2;
   const lock = new Uint8Array(n);
-  for (let v = 0; v < n; v++) if ((points[v * 3 + 1] - box.min.y) / H > 0.875) lock[v] = 1; // her head, above her neck
+  for (let v = 0; v < n; v++) {
+    const xr = Math.abs(points[v * 3] - cx) / H, yr = (points[v * 3 + 1] - box.min.y) / H;
+    if (yr > 0.875) lock[v] = 1; // her head, above her neck
+    // HER HANDS (Joshua, 2026-11-19, of her fingers round a bar at 1%: "the hands look weird holding the pole... are the
+    // hands included?"): out at her sides below her wrists, as `skinImportance` finds them
+    if (xr > 0.13 && yr > 0.38 && yr < 0.57) lock[v] = 1;
+  }
   for (const name of ['belly', 'breastGrow', 'navelIn', 'navelOut', 'navelFlat']) {
     const moves = shape(name);
     if (!moves) continue;

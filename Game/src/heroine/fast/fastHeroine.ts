@@ -97,6 +97,12 @@ const EYE_ABOVE = 0.051;
  * alone 9.8 cm (3.9") forward and 20 cm (8") lower.
  */
 const EYE_NECK_SHARE = 0.5;
+/**
+ * THE CAMERA RAISED ABOVE HER EYES (Joshua, 2026-11-19: "raise it up about 0.1 meters, part of the lens is cutting
+ * into her chest"): at her real eyes, looking down, her bust came inside the camera's nearest 6 cm and was cut away.
+ * Straight up, metres, whichever way she looks.
+ */
+const EYE_LIFT = 0.10;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
@@ -948,7 +954,7 @@ if (uHideHead > 0.5) {
       const [ea, eu] = turn(EYE_AHEAD, EYE_ABOVE, pitch);
       // (sideways, the skull keeps its own place beside the line she faces along)
       const side = (eyeSkull.x - eyeNeck.x) * fz - (eyeSkull.z - eyeNeck.z) * fx;
-      out.set(eyeNeck.x + fx * (sa + ea) + fz * side, eyeNeck.y + su + eu, eyeNeck.z + fz * (sa + ea) - fx * side);
+      out.set(eyeNeck.x + fx * (sa + ea) + fz * side, eyeNeck.y + su + eu + EYE_LIFT, eyeNeck.z + fz * (sa + ea) - fx * side);
       return out;
     },
 

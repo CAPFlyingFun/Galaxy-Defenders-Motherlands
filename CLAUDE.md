@@ -28,6 +28,8 @@ use the game's single copy of three.js.
   eyeballs is 7.5 cm ahead of and 5.1 cm above the base of her skull (1.595 m standing); the camera's tilt is half her
   neck bending at its base, half her head nodding, so 70 degrees down brings her eyes 6.4 cm (2.5") forward and 13.7 cm
   (5.4") lower (Joshua's own guess for himself: 6" forward, 4" lower). Before, the eye sat 2 cm in front of her face.
+  RAISED 10 cm (Joshua, 2026-11-19: "part of the lens is cutting into her chest"; `EYE_LIFT`): straight up from there,
+  so her bust stays outside the camera's nearest 6 cm looking down.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.

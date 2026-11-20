@@ -44,7 +44,12 @@ use the game's single copy of three.js.
   FOUR moves only, nothing between: walk ahead, walk back, and the CRAB STEP left or right (`footGround.ts` 8: the lead
   foot steps out a shoulder width, her body catches up, the trailing foot comes in a shoulder width behind it; at most
   1.0 m/s, 0.8 at full term; a metre sideways costs 1.25 times the stamina). Jogging or faster there are no side
-  steps: the stick moves her ahead, back, left or right of the camera and her body turns to run that way. (A shuffle
+  steps: the stick moves her ahead, back, left or right of the camera and her body turns to run that way.
+  TURNING ON THE SPOT IS STEPPED (Joshua, 2026-11-20: "she looks like she is marching in place but her body rotates";
+  `footGround.ts` 10): standing, a planted foot keeps facing the way it landed while her body turns over it; at 15
+  degrees of turn the foot on the side she turns to steps OUT and a little BACK, toes turned out 15 degrees; at 40
+  (his number) the other foot comes in under its shoulder, square to her; and again while she turns (L, R, L, R). No
+  tidy step on the spot while she turns; a turn that stops is squared up after 1 s still. (A shuffle
   and a skip are built in `footGround.ts` but not used.) She stands with her feet her shoulder width apart (measured
   from her own bones). Holding a door, her facing is held too (the same four moves).
 - Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real
@@ -109,16 +114,17 @@ use the game's single copy of three.js.
 - CATSUIT STYLES ARE THE THEME (Joshua, 2026-11-20: "one piece catsuits like the back one, just different variations of
   looks as styles are better for the theme"; references `docs/reference/outfits/looks5-6-catsuit-styles-*.jpg`, a green
   and gold armoured one and a glossy bronze/brown one): each built on his catsuit export, colours, painted panels,
-  his texture pictures and a few 3D pieces. THE BRONZE CATSUIT (`looks/bronzeSuit.ts`), all three layers by code (trunk
-  measured FIRST: the top of her chest by her collarbones also counts as her shoulders), very glossy (cloth 0.3, trim
-  0.16), dark seams down her sides and under her bust, lighter cups, flat KNEE-HIGH bronze boots (`bootTop` 0.03; his
-  ask), in THREE necklines: `bronzeSuit` a keyhole over her chest and a band up her neck; `bronzeSuitLow` a low
-  sweetheart line, her neck bare (both painted by code; Joshua liked them better than his template versions "until the
-  other Agent fixes" the catsuit's edges); `bronzeSuitHigh` HIS high neck (his export, the builder's Full bodysuit at
-  0.94). Seams and cups BLENDED (colours close to the suit's, edges eased: `SOFT`; his "dark lines to the side of the
-  belly"). His pebble picture's GRAIN only, over the bronze (12 cm, 0.3 mm; "looks more muddy then bronze"). THE
-  BUILDER'S AGENT is giving the catsuit drawn edges and a neckline from a low V/U up to a mid-neck turtleneck (Joshua
-  asked it 2026-11-20): copy that builder in when he says, then rebake. Next: the green and gold.
+  his texture pictures and a few 3D pieces. THE BRONZE CATSUIT (`looks/bronzeSuit.ts`), since 2026-11-20 ALL ON THE BUILDER'S
+  OWN DRAWN CATSUIT (v0.9.60: smooth edges; `BRONZE_NECKLINES`): `bronzeSuit` a turtleneck (1.06) with a KEYHOLE cutout
+  over the top of her cleavage; `bronzeSuitLow` a low wide U (0.7); `bronzeSuitHigh` his high crew (0.94). Nothing
+  painted by code any more: the painted keyhole, sweetheart, seams, cups and trim strips had rough, wandering edges (a
+  painted shape is only as fine as her skin's points). Very glossy (cloth 0.3, trim 0.16), flat KNEE-HIGH bronze boots
+  (`bootTop` 0.03; his ask), his pebble picture's GRAIN only over the bronze (12 cm, 0.3 mm; "looks more muddy then
+  bronze"). Under the high neck the builder leaves her cleavage to its cleavage piece, and in the game her skin showed
+  through it: the gap is FILLED in the same bronze on paint layer 2 (`FILL_CLEAVAGE`) and the piece left out. Joshua is
+  having ChatGPT redraw outfits 2-4 (Look 2's renders: `docs/reference/outfits/look2-anime-space-heroine-chatgpt-*`:
+  bare sides at her waist and an open back with a white heart yoke, which the builder cannot cut yet); next: the green
+  and gold.
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
   `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
   CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted
@@ -182,9 +188,10 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.51 (copied 2026-11-19 from its approved `main` 74ff232: skin depth, its hybrid of each body's own skin
-  picture's depth and a pore and crease tile; before that v0.9.49, the hybrid pregnancy curve, kicks, exact belly %;
-  Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
+- THE BUILDER, v0.9.60 (copied 2026-11-20 from its approved `main` bae4157: the catsuit DRAWN, smooth edges; its
+  neckline from a low U/V to a turtleneck, neck shape and width; a CHEST CUTOUT, oval, diamond or keyhole; its room now
+  disposes its head panel, the 350 MB leak; before that v0.9.51, skin depth's hybrid; v0.9.49, the hybrid pregnancy
+  curve, kicks, exact belly %; Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.

@@ -109,8 +109,8 @@ export interface BuilderRoom {
  * after the room closed, and through it the whole closed room: about 350 MB each time a hidden live body was let go.
  * The panel is made a while after the room opens, so the page's addEventListener is watched once, for good, and every
  * finger-lifted listener put on the page goes on the newest open room's list (the game has one room open at a time and
- * never listens for these on the page itself); the room takes them off when it closes. (Builder's side to fix too:
- * dispose headPanel with the others.)
+ * never listens for these on the page itself); the room takes them off when it closes. (The builder fixed it on its
+ * side in v0.9.60, its room now disposes its head panel; this stays as a safety net for any panel that forgets.)
  */
 type PageListener = [string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined];
 let roomListeners: PageListener[] | null = null;

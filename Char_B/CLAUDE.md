@@ -1056,6 +1056,50 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
 - After anything changes it: `tests/topCut.test.ts`, `tests/topDetails.test.ts`, `tests/bottomCut.test.ts`; after the
   bottom's curves change, run the design script (it writes both fields); then the room, standing, apart and reclined.
 
+## The catsuit, and a one-piece's neckline to a turtleneck
+
+- **THE CATSUIT IS DRAWN** (Joshua, 2026-11-20, sharing two of his characters in it: "look at the catsuit's edges (neck,
+  arms, feet) and neckline"). The full bodysuit (`bodysuitFull`, `top: 'catsuit'`, `topCut.isCatsuit`) is a drawn top
+  with NO HEM (`hasNoHem`: its hem told far under the floor, as a one-piece's) -- its neck opening and its sleeves drawn
+  as a tee's -- and its legs end in a DRAWN BOTTOM'S RINGS (`fabricPanel` `catsuitLegs`: `lowSpec` with no waistband), a
+  cuff at each, at its LEG LENGTH (offered: a catsuit to a capri). In the shader a layer with a cut and a `low` beside it
+  is there where the cut has it and, on her leg's skin, inside its rings (`fabricMaterial.ts`, the low line's
+  `fe = min(fe, mix(1, flg, fabricLegShare))`). Its paint a value a vertex is laid as it always was (what reads it).
+  As a one-piece's, its cut is the ONE cut worn at a time (the topmost).
+- **NECKLINE · LOW → TURTLENECK, NECK WIDTH, NECK SHAPE** (Joshua, the same morning: "Can we make the neckline adjustable
+  from a low V-U, to up a mid-neck turtleneck?"; "do the same for the swimsuit and leotard… Make the length adjustable,
+  but also the width of the neckline and shape like some of our other outfits"). On the catsuit, the leotard and the
+  swimsuit (`takesTurtleneck`), in place of NECKLINE: `topCut.NECK_RANGE` -- the neckline from 0.6 of her trunk up past
+  the base of her neck (1) to 1.1, where from 1 its rim is a COLLAR level round her neck (`collarAt`, `TopCutSpec.collarY`)
+  up to 5 cm over her neck joint (MEASURED on her body file down her front's middle: her neck's front 6 to 7.5 cm ahead
+  of her neck joint from 3 cm under it to 6 over it, the underside of her chin from 6.5 cm over it -- so the collar is
+  on her neck, never her chin); NECK WIDTH 0.6 to 1.6 of the shape's own width (`neckWide`; a swimsuit's straps' inner
+  edges, never past 1.2 cm inside their outer); NECK SHAPE chips CREW · U · V · SCOOP · SQUARE (each at its tee's own
+  depth, `DRAWN_NECK`) and TURTLENECK (`neckShape`, over the template's style or the outline's own). A swimsuit taken
+  past the base of her neck wears the mock neck's collar front and back: a sleeveless turtleneck. All GAME TUNING.
+  A look saved before keeps its numbers (`neckShape`, `neckWide` absent: the style it had, its own width).
+- **A NECKLINE UNDER A CREW'S HAS NO CLEAVAGE BRIDGE** (`fabricPanel.ts` `LOW_NECK_NO_BRIDGE`, 0.9 of her trunk: the V,
+  U, scoop and square tees and every low one have none; a crew, 0.966, keeps its). MEASURED 2026-11-20 in the room, a
+  low V and a low U (0.7) at her 10% and 73% bellies: from her three-quarter a notch in the far side of the rim at the
+  sheet's top, gone with the sheet left off; then (Joshua, of the V and U tees at 0.78: "from the side view… I see a
+  spike in the paint") the same spike at the V's point and the U's foot. Pictured without it: the V, U, scoop and square
+  tees at 10, 73, 150 and 200% from her front and three-quarter, clean.
+  TRIED AND TAKEN OUT the same morning: the sheet folded down to a little over the neckline's lowest point (its top rows
+  stood across the opening as the garment), and seen only up to there (her skin behind it was cut in steps).
+  Pictured after: the low V and U from her front and three-quarter, clean; the V and U tees as they were.
+- **A CHEST CUTOUT** (Joshua, 2026-11-20, of another game's bronze catsuit cut out over her chest: "can add as a new style
+  with a cutout which is adjustable"). `topCut.CHEST_CUTOUT`: a hole in her FRONT's drawing alone (`cutOut`, after the
+  neck opening or the collar is drawn), so its edge is drawn and banded as the neck opening's is; OVAL, DIAMOND or
+  KEYHOLE (a round hole with a slit up through the neckline), CUTOUT WIDTH, HEIGHT and DROP under her neck joint in cm
+  (`CoverageParams.cutout`, `heldCutout`'s stops); its chips CHEST CUTOUT · NONE OVAL DIAMOND KEYHOLE beside NECK SHAPE on
+  the catsuit, the leotard and the swimsuit; a piece with one has no cleavage bridge. A new style, `catsuitCutout`
+  ("Catsuit, chest cutout": a diamond 9 by 8 cm, 13 cm under her neck joint, at the top of her cleavage -- her breasts'
+  tops 11 cm under it, MEASURED on her body file). GAME TUNING. PICTURED in the room (light skin, 1x, his copper) at her
+  10% and 73% bellies from her front and three-quarter: each shape, a keyhole under the turtleneck, a big diamond, an oval
+  on the swimsuit -- clean, each with its band. Its per-vertex paint has no hole (what reads it: a save, a brush).
+- `tests/topCut.test.ts` (its last describe); after anything changes them, the room: the catsuit at each shape, low and
+  wide, at the collar's top from her front, side and back; the swimsuit and the leotard at a shape and a collar.
+
 ## The under-belly waistband (a hoop)
 
 - **One plane on her as she stands** (Joshua, 2026-11-15, of the edging still uneven after a day on her rest skin: "Try
@@ -1274,6 +1318,16 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   side falls bunch seen from her front, and under about 40% of its LENGTH its hem is a row of thin strands; a few
   wisps stand off her shoulder on the wavy ponytail and the long hair; no fringe or parting of its own to choose yet;
   RANDOMIZE leaves her head as it is; a head's look is not in the story's bake.
+- **HER STRANDS' DEPTH** (Joshua, 2026-11-19, of his Local Texture Lab: "add better depth and detail on like the hair so it
+  doesn't look so flat"): `node scripts/hair/height.mjs` takes the strand atlas through the lab's Convert mode (`--large 15
+  --detail 100 --contrast 160`: its fine detail, not its broad form), evens it DOWN each strand (24 px: along a strand it drew
+  rungs across her hair), and draws its normal map by the lab's `normalCanvas` (`hair-height-1024.png`,
+  `hair-normal-1024.png`, every style's). The room wears it as her hair's NORMAL MAP (`hairMaterial.setHairDepth`,
+  `HAIR_DEPTH`: strength 1, grooves 12% darker; the probe's `hairDepth({ strength, groove })`). TRIED FIRST, AND WHY NOT: the
+  height's slope across the screen (as her skin's tile): strands thinner than a pixel drew a woven checker. And a FAULT FOUND
+  AND FIXED on the way: three builds a normal map's frame with a back face's normal turned round, and her hair gives the
+  normal back (`HAIR_NORMAL_LINE`) but not the frame -- a lock by her face went brown (`HAIR_TBN_LINE`). MEASURED in the room:
+  the ponytail from her three-quarter and her back at 0, 1 and 2. Run the script again after `texture.mjs` paints the atlas.
 - After anything changes her head: `tests/headLook.test.ts`, `tests/headPanel.test.ts`, `tests/faceShapes.test.ts`,
   `tests/faceShapeFields.test.ts`, `tests/faceLook.test.ts`, `tests/faceRig.test.ts`, `tests/hairStyles.test.ts`,
   `tests/hairColours.test.ts`, `tests/characterSaves.test.ts`; then the room: her head from her front and her side in
@@ -1641,6 +1695,30 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   `pointFoot`, `DESCENT.footOff` (61: the straight body's own, MEASURED on `sarah-baby-straight.glb`): turned at its ankle
   as its legs straighten. MEASURED in the room: 105 and 111 at 0:62, 68 by crowning, 61 from 0:88 until it is born.
   NOT TOUCHED: lifted onto her its feet go back to its curl's and past (122 to 147 degrees with its stretch).
+- **ITS HEAD COMES OUT OF THE MIDDLE OF HER OPENING, AS HER OPENING IS** (Joshua, 2026-11-19: "the opening, opened a little
+  late and the baby's head appeared to be off centered at first… The head poked through the skin at a few spots"; then, of
+  her opening drawn wide and off its middle round the head: "Don't move the opening to proportions that is unrealistic to
+  fit the baby's head, that doesn't happen and looks weird…. Just shift the head in the right place"). `SarahLabScene.ts`
+  `BIRTH_STRAIGHT`: over the last 10 cm of her canal its head's way (and its body's, `birthAlong`) is brought onto the
+  straight line out of her opening's OWN middle, square to it (`vulvaMesh.ts` `mouthRest`: as her bones carry it, before it
+  is drawn round anything), all of it from 4.5 cm before her opening, and on out along that line; and her opening widens to
+  its own round shape as a sphere 1.25 times its head's meets it (the head as drawn reaches further forward than its 4.3 cm
+  sphere). MEASURED in the room, RECLINE at her 73%, before: from 1:10 to 1:17 its hair stood through her skin under and
+  beside her opening, shut at 2 cm, and from 1:20 it sat high in her opening with a crescent of her open beside it. After:
+  nothing through her skin at 1:10, 1:14 and 1:16; her opening widening from 1:16; the head in its middle from 1:17; born
+  with its cord at 1:40 as before; SQUAT the same from her front. TRIED AND TAKEN OUT the same night: her rim following the
+  head sooner (0.5 of its way down) and her perineum bulging sooner -- the head stood out further.
+  THEN (2026-11-20, his marks on those pictures: "the first 4 frames, I see the head poking through the skin at the bottom,
+  the next 6 frames, the center of the head is slightly off center to the top and there is a gap at the bottom"): it comes
+  to her opening 4 degrees in from her front (`tiltDeg`) and is let down 1.2 cm toward her perineum (`drop`) from 7.5 to
+  4.5 cm before her opening (`dropFrom`, `dropFull`) AND ONLY AS HER OPENING OPENS round it (`openFrom` 0.3 to `openFull`
+  0.8: let down while she is nearly shut between pushes, it stood through her skin under her opening at 1:14). And her
+  opening's middle (`mouthRest`) is read on her rim BEFORE the round that draws it round the head (`iter === 0`): read
+  after, it was the middle of a rim already drawn round the head, which the head was then steered to -- MEASURED, the
+  head 2.4 cm across her one moment and 2.1 the other way the next; now 0.0 at every moment. MEASURED in the room,
+  RECLINE at 73%, the head's middle in her opening's frame (the `birth` probe's `headInMouth`): across 0.0 from 1:06 to
+  1:22; toward her perineum 0.8 to 1.0 cm from 1:17 on. Pictured at 1:12, 1:14, 1:16, 1:17 to 1:20: nothing through her
+  skin, the head filling her opening (the pink seen past it from her side is her opening's inner wall).
 - After anything changes the birth, her canal, her legs' poses or its poses: `tests/birthBegins.test.ts`,
   `tests/legsOpen.test.ts`, `tests/babyFeet.test.ts`, `tests/babyAlong.test.ts`, `tests/herOwnSkeleton.test.ts`,
   `tests/birthSequence.test.ts`; then the birth read in the room (the `birth` and `legSpread` probes).
@@ -1910,8 +1988,41 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   FOR ANOTHER GAME (TRADDOMIUM, Galaxy Defender, the Godot rebuild): take the two scripts, the tile, and these numbers; a
   body's own height map is made from ITS OWN skin picture (its own UV layout), never borrowed from another body's.
   PICTURED in the room: plain, its own picture alone, the tile alone, both -- her bare belly and her face.
+  HALF OF IT ON A FACE (`SKIN_DETAIL.face` 0.5, eased in between 0.83 and 0.87 of the body's height in its rest place --
+  BIOLOGICAL SHAPE: the base of the neck to the chin): close on her face both depths read as orange peel (pictured
+  2026-11-19, Joshua: "Haha, yeah…"). MEASURED in the room after: her face and his close, her belly as it was.
+- **HER ROUGHNESS EVEN, AND HER OPENING'S AREA GIVEN THE RELIEF** (Joshua, 2026-11-19: "the pelvis wasn't the same texture
+  and looks weird like wearing a bikini seeing different textures around that area"). Her file's roughness map was baked
+  with a bikini on her: MEASURED at her vertices, from her navel to her crotch 127.5 of 255, her thighs 97.7 (her colour
+  map has the same tan line, which EVEN took out; her normal map is flat there as everywhere). `node scripts/evenSkin.mjs
+  --rough public/models/skins/sarah-v2-skin-rough-2048.webp` evens it as her colour is (her skin 106.5, her details'
+  steps kept), worn with every skin but ORIGINAL (`skinChoices.ts` `SKIN_EVEN_ROUGHNESS`, `applyRoughness`; the probe's
+  `evenRough(on)`). And her opening's area and her skin drawn behind it (`vulvaMesh.ts`), which are her material without
+  her skin's program, take the relief too (`setSkinDetail`). PICTURED in the room: before, her belly glossy over a matte
+  groin; after, one sheen. `tests/skinDetail.test.ts`.
 - His organs (a prostate, no womb or ovaries), the pregnancy controls hidden for him, and his EVEN skin are done.
-- NOT DONE: BUILD and the other body shapes on him; his squat (his thighs bunch at his groin); his own pelvis bone; clothes;
+- **HIS BUILD** (Joshua, 2026-11-19: "get the sliders to work… minus the breasts"): HEIGHT & PROPORTIONS work on him as on her
+  (`prepareBuildRig` on his rest, his bones by role, his geometry's units told by his rest frame: `metresPerUnitOf` --
+  taken as his geometry's height over 1.70 m first, his height read 1.56 m; now 1.70). WALK is his too. BELLY SHAPE and
+  BREAST SHAPE are not shown for him (`shapeBoxes`: her bump's and her breasts' controls, which move nothing on him).
+  MEASURED in the room: his height at 0, +20 and -20 cm with shoulders, waist, hips, upper arms and head moved with it;
+  walking and squatting with a build on.
+- HIS SQUAT, TRIED AND NOT TAKEN (2026-11-19): his groin's skin is his thighs' -- MEASURED on his file, in the band from 44
+  to 54% of his height within 20 cm of his middle his two thighs carry 7,728 of its weight and his body's bones 968, and
+  down his midline one point is his left thigh's and the next his right's. Each thigh's share solved smooth along his skin
+  round each hip joint (a harmonic solve, held at his region's edge, down each thigh, and on his midline at nothing and
+  then at half of what the two carry): standing and walking as before, and in SQUAT the seam down his crotch from his
+  front, three-quarter and below the same as without it (held at nothing, a web between his thighs). The seam is the
+  fold of his skin between thighs spread past 100 degrees, a SHAPE his weights can not undo: it wants a pose's own field
+  as hers has (`hipTurn.ts`, her groin's normals), laid for him.
+- **HIS GROIN SMOOTHED IN SQUAT** (`SarahLabScene.ts` `MALE_GROIN`, `keepMaleSquat`; the probe's `maleGroin(on)`): as her knees
+  are (`birthNormals.ts` with a band: it needs no birth area of hers now), his posed skin round the point 7 cm under the middle
+  of his hip joints is smoothed where it stands -- 150 passes, 0.7 of the way, all within 8 cm, none past 17 -- and laid as a
+  shape field while he squats (worked out again when his shape changes). PICTURED in the room from his front, three-quarter
+  and below, off and on (60 passes within 7 cm tried first: the pinch gone, a line left down his middle): one surface from
+  thigh to thigh. LEFT: a soft line of shade down his middle; a white streak along his lower belly's left side from below,
+  there without it too.
+- NOT DONE: his own pelvis bone; clothes;
   his head's parts; RECLINE floats (her bed is not drawn either); his NAVEL setting kept in a save.
 - After anything changes him: `tests/maleBase.test.ts`, `tests/maleBelly.test.ts`, `tests/sarahBase.test.ts`; then the room:
   MALE, his belly at 0, 100 and 200% from his side and front, T-POSE from his back, X-RAY from his side.

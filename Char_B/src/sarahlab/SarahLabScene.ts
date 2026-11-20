@@ -28,7 +28,7 @@ import { SkinPose } from './skinPose';
 import { SkinContact, spreadTriangles } from './skinContact';
 import { JointLimits, type JointAngles } from '../actor/jointLimits';
 import { rangeDeg, type RangeLevel } from '../data/jointRange';
-import { DEFAULT_SKIN, EVEN_SKIN_COLOUR, SKIN_BRUSH_CM, SKIN_CHOICES, SKIN_ORIGINAL_IMAGE, SKIN_SWATCHES, SKIN_TEXTURE_CM, hexRgb, nextSkin, skinBrushLine, skinLine, skinNote, skinStrengthLine, skinTextureLine, type SkinId } from './skinChoices';
+import { DEFAULT_SKIN, EVEN_SKIN_COLOUR, SKIN_BRUSH_CM, SKIN_CHOICES, SKIN_EVEN_ROUGHNESS, SKIN_ORIGINAL_IMAGE, SKIN_SWATCHES, SKIN_TEXTURE_CM, hexRgb, nextSkin, skinBrushLine, skinLine, skinNote, skinStrengthLine, skinTextureLine, type SkinId } from './skinChoices';
 import { SkinPainter, standingSourceOf, tilePattern, type SkinImage, type SkinPattern, type SkinStrokeSettings } from './skinPaint';
 import { ACTIVITY, ACTIVITIES, breathFlare, chestShare, diaphragmRise, restingVitals, stepVitals, type Activity, type VitalsNow } from '../actor/vitals';
 import { breathAt, breathVolumes, layBreathTable } from './breathSkin';
@@ -52,7 +52,7 @@ import { cutEdgeOn, setCutEdge } from './garment/cutEdge';
 import { GARMENT_DEFAULTS, GARMENT_RECORD_VERSION, clampGarmentSettings, tailorKey, withConstruction, type GarmentRecord, type GarmentSettings } from './garment/settings';
 import { GarmentPanel } from './garmentPanel';
 import { FaceMotion } from './faceMotion';
-import { patchHairMaterial, setHairColour } from './hairMaterial';
+import { HAIR_DEPTH, HAIR_HEIGHT_MAP, HAIR_NORMAL_MAP, patchHairMaterial, prepareHairMap, setHairColour, setHairDepth } from './hairMaterial';
 import { HAIR_LENGTH_MORPH, HAIR_STYLE_NONE, hairStyle } from './hairStyles';
 import { browFromHair } from './hairColours';
 import { HAIR_STYLE_FIRST, HEAD_DEFAULT, normaliseHead, type HeadLook } from './headLook';
@@ -325,6 +325,24 @@ const SEAT_HELD = Object.freeze({ from: 0.9, release: 0.8 });
  * the middle of her canal (`settle`: its neck's joint lies beside her canal's line, where its tucked head has it); and
  * how far behind the middle of its head the way its head points is read from (`headSpan`: about where its neck is). */
 const BIRTH_ALONG = Object.freeze({ inside: 0.01, outside: 0.02, settle: 0.05, headSpan: 0.06 });
+/**
+ * ITS HEAD COMES OUT OF THE MIDDLE OF HER OPENING (Joshua, 2026-11-19: "the opening, opened a little late and the baby's
+ * head appeared to be off centered at first… The head poked through the skin at a few spots"; of her opening drawn wide
+ * round it: "Don't move the opening to proportions that is unrealistic to fit the baby's head… Just shift the head in the
+ * right place"). It rode her canal's own middle line, which comes to her opening at a slant and off its middle: MEASURED in
+ * the room, RECLINE at her 73%, from 1:10 to 1:17 its hair stood through her skin under her opening, and as it crowned it
+ * sat high in her opening, a crescent of her open beside it. So over the last `from` (metres) of her canal its way is
+ * brought onto the straight line out of her opening's own middle, square to it (`VulvaPatch.mouthRest`: as her bones carry
+ * it, before it is drawn round anything), all of it from `full` before her opening, and on out along that line; and her
+ * opening widens (to its own round shape, as before) as a sphere `reach` times its head's meets it. His marks on those
+ * pictures: at 1:14 and 1:16 its head still through her skin at the BOTTOM of her opening; from 1:17 to 1:20 its middle a
+ * little high, a gap at the bottom of her opening. So inside her its line comes to her opening `tiltDeg` from square,
+ * from her front (under her pubic bone), clear of her perineum; and as its head's middle comes from `dropFrom` to
+ * `dropFull` (metres) of her opening, its line is let down `drop` under her opening's own middle, toward her perineum
+ * (MEASURED, the same frames: let down 1 cm the gap was there still, 2 cm all the way and its head stood through her skin
+ * under her opening at 1:14 again and the gap was at the top at 1:20). GAME TUNING.
+ */
+const BIRTH_STRAIGHT = Object.freeze({ from: 0.13, full: 0.06, reach: 1.25, drop: 0.012, dropFrom: 0.075, dropFull: 0.045, openFrom: 0.3, openFull: 0.8, tiltDeg: 4 });
 const BIRTH_HEAD = Object.freeze({ radius: 0.0475, atLength: 0.51, lift: [0, 0.008, 0.007] as const, tangentSpan: 0.0125, bodyBehind: 0.1, pastMouth: 0.6, centreEase: 0.35 });
 /**
  * THE AFTERBIRTH, drawn (GAME TUNING; its timing is birthSequence.ts AFTERBIRTH): the placenta folded soft as it comes down
@@ -352,6 +370,16 @@ import { hisBone, herBone } from './maleRig';
 import { MALE_BELLY, maleBellyField, maleOutieField, vertexNormals } from './maleBelly';
 /** His belly's and his navel's shape fields (the male base model's: maleBelly.ts). */
 const MALE_BELLY_FIELD = 'shape:maleBelly', MALE_OUTIE_FIELD = 'shape:maleOutie';
+/**
+ * HIS GROIN IN SQUAT (Joshua, 2026-11-19: "his thighs bunch at his groin"). His weights were solved smooth across his groin
+ * and changed nothing to see (CLAUDE.md, "The male base model"): the seam is his skin's FOLD between thighs spread past 100
+ * degrees. So, as her knees are (birthNormals.ts, a band round a centre): in SQUAT his skin round the point between his hip
+ * joints, under them, is smoothed where it stands posed -- `passes` times, `lambda` of the way to its neighbours' middle,
+ * all of it within `near` metres, none past `far` -- and its normals laid as the smoothed surface's, as a shape field.
+ * GAME TUNING.
+ */
+const MALE_GROIN_FIELD = 'shape:maleGroin';
+export const MALE_GROIN = Object.freeze({ below: 0.07, near: 0.08, far: 0.17, passes: 150, lambda: 0.7 });
 /** His skin made even (`node scripts/evenSkin.mjs --body public/models/male-base.glb --out <this>`). */
 const MALE_EVEN_SKIN = 'models/skins/male-base-skin-even-2048.webp';
 /**
@@ -800,6 +828,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
    * belly's mass swinging them with her. Fetched the first time it is asked for.
    */
   let babyFrame: { bone: THREE.Bone; matrix: THREE.Matrix4; meshToRest: THREE.Matrix4 } | null = null;
+  /** her skin's fine relief, to lay on her opening's area as on her (skinDetail.ts, vulvaMesh.ts `setSkinDetail`) */
+  let herSkinDetail: ((m: THREE.MeshStandardMaterial) => void) | null = null;
   /** her vulva, rebuilt finer from her own skin to be able to open (vulvaMesh.ts) */
   let vulva: VulvaPatch | null = null;
   /** her skin her vulva's area may take (a probe's, to try another): how far in from each leg opening on her torso's side
@@ -1386,6 +1416,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     bonesBuilt = STALE_BUILD; layBuildBones(currentBuild());
   }
   let buildBox: HTMLElement | null = null;
+  /** the Body tab's shape sections by group (his has no breasts and no pregnancy: those two are not shown for him) */
+  const shapeBoxes: Partial<Record<'build' | 'belly' | 'breasts' | 'walk', HTMLElement>> = {};
   let babyNote: HTMLElement | null = null;
   // her crease under her breasts, untangled where her summed shapes fold it (bodyCrease.ts); the spring's shapes move
   // every frame and are not part of what it was worked out for
@@ -1598,6 +1630,18 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
    * head's look's; another style's file is fetched, and the one before stays on her until it is in.
    */
   let hairMeshes: THREE.SkinnedMesh[] = [];
+  let hairMaps: Promise<[THREE.Texture | null, THREE.Texture | null]> | null = null, hairStrength: number = HAIR_DEPTH.strength, hairGroove: number = HAIR_DEPTH.groove;
+  /** her strands' depth on whatever hair she wears (hairMaterial.ts `setHairDepth`) */
+  function deepenHair(worn: THREE.Mesh[]): void {
+    hairMaps ??= Promise.all([assets.loadTexture(HAIR_NORMAL_MAP), assets.loadTexture(HAIR_HEIGHT_MAP)]);
+    void hairMaps.then(([n, h]) => {
+      if (!n || !h || disposed || hairMeshes !== worn) return;
+      for (const m of worn) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        const map = (mat as THREE.MeshStandardMaterial).map ?? null;
+        if (map) setHairDepth(mat, prepareHairMap(n, map), prepareHairMap(h, map), hairStrength, hairGroove);
+      }
+    });
+  }
   /** The style whose file `hairMeshes` came from (null: none on her), and whether one is on its way. */
   let hairWorn: string | null = null, hairLoading = false;
   let hairOn = true, hairRequest = 0;
@@ -1626,6 +1670,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       hairMeshes = attachRecoveredMeshes(root, b.mesh, 'sarahHair');
       hairWorn = style.id;
       for (const m of hairMeshes) { m.castShadow = b.mesh.castShadow; m.receiveShadow = b.mesh.receiveShadow; for (const mat of Array.isArray(m.material) ? m.material : [m.material]) patchHairMaterial(mat); }
+      // her strands' depth: one pair of maps for every style, fetched once
+      deepenHair(hairMeshes);
       layHair();
       // her hair takes her build too (its weights on her neck and head), and the shape of her face: it lies on her skin
       for (const m of hairMeshes) shaped.push({ mesh: m, fields: liftShapeFields(m) ?? baseShapeFields(m) });
@@ -1796,6 +1842,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     }
     const b = bodyOf();
     if (b && skinFetched && b.material.map === skinFetched.texture && skinId === skinFetched.id) applySkin(true);
+    // (her even roughness is fetched, not her file's: fetched again if it was dropped)
+    if (roughEven && pictureLost(roughEven.image)) { roughEven.dispose(); roughEven = null; applyRoughness(roughWanted); }
   }
   /** The brush's copy goes; her material gets back the map it was copied from. */
   function dropPainter(): void {
@@ -1825,6 +1873,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       if (own && t !== own) own.dispose();
       skinWorn = id; skinState = 'ready';
       if (id !== 'upload') { try { localStore()?.setItem(SKIN_KEY, id); } catch { /* a private window: the choice is not kept */ } }
+      // (and her roughness even under any skin but her file's own: SKIN_EVEN_ROUGHNESS)
+      applyRoughness(id !== 'original');
       // (her doors' outsides take her skin's tone: the skin she wears now)
       applyOpening();
       refresh();
@@ -1844,6 +1894,25 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       freeFetched(texture);
       skinFetched = { id: choice.id, texture };
     });
+  }
+  /** Her even roughness (skinChoices.ts `SKIN_EVEN_ROUGHNESS`), fetched once; her file's own put back for ORIGINAL. */
+  let roughEven: THREE.Texture | null = null, roughLoading = false, roughWanted = false;
+  function applyRoughness(even: boolean): void {
+    roughWanted = even;
+    const b = bodyOf(); if (!b) return;
+    const own = (b.material.userData.ownRough ??= b.material.roughnessMap) as THREE.Texture | null;
+    if (!own) return; // (a body with no roughness map of its own has nothing to even)
+    const want = even ? roughEven : own;
+    if (want && b.material.roughnessMap !== want) { b.material.roughnessMap = want; b.material.needsUpdate = true; }
+    if (even && !roughEven && !roughLoading) {
+      roughLoading = true;
+      void assets.loadTexture(SKIN_EVEN_ROUGHNESS).then((t) => {
+        roughLoading = false;
+        if (!t || disposed) { t?.dispose(); return; }
+        t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.wrapS = own.wrapS; t.wrapT = own.wrapT; t.channel = own.channel; t.needsUpdate = true;
+        roughEven = t; if (roughWanted) applyRoughness(true);
+      });
+    }
   }
   /** A picture from the phone becomes UPLOAD, and she wears it. */
   async function uploadSkin(file: File): Promise<void> {
@@ -2272,6 +2341,10 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // her proportions are measured on her approved v2 body: on another, the section and its lock are not shown at all
     if (buildBox) buildBox.style.display = buildRig ? '' : 'none';
     if (buttons['groupLock-build']) buttons['groupLock-build'].style.display = buildRig ? '' : 'none';
+    // HIS SECTIONS (Joshua, 2026-11-19: "get the sliders to work… minus the breasts"): BREAST SHAPE and BELLY SHAPE are hers --
+    // her bump's morphs, her breasts' fields, her babies -- and move nothing on him (his belly is the belly slider's field)
+    { const his = isMaleModel(SARAH_LAB_MODELS[modelIndex].id);
+      for (const g of ['belly', 'breasts'] as const) { const box = shapeBoxes[g], b = buttons[`groupLock-${g}`]; if (box) box.style.display = his ? 'none' : ''; if (b) b.style.display = his ? 'none' : ''; } }
     for (const r of rangeRows) {
       r.row.style.display = rangesShown ? 'flex' : 'none';
       const rule = ruleFor(randomRules, r.spec);
@@ -2543,6 +2616,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // (100% his own belly, 200% twice it: Joshua, 2026-11-19, "200% will be just doubled the size")
     out[MALE_BELLY_FIELD] = Math.min(2, Math.max(0, b / 100));
     out[MALE_OUTIE_FIELD] = maleOutie;
+    out[MALE_GROIN_FIELD] = 1; // (laid only while he squats: keepMaleSquat)
     // her birth area, shaped the same at every size (birthArea.ts)
     // (its folds fuller only while nothing is worn over them: a fitted bottom is a few millimetres off her skin)
     out[BIRTH_CLEFT_FIELD] = birthAreaShown ? 1 : 0;
@@ -3772,6 +3846,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     for (const [group, title] of [['build', 'HEIGHT & PROPORTIONS'], ['belly', 'BELLY SHAPE'], ['breasts', 'BREAST SHAPE'], ['walk', 'WALK']] as const) {
       const box = document.createElement('details');
       box.dataset.tab = 'body';
+      shapeBoxes[group] = box;
       box.style.cssText = 'border-top:1px solid rgba(255,255,255,0.12);padding-top:6px';
       const head = document.createElement('summary');
       head.textContent = title;
@@ -6843,6 +6918,29 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
    * Her mesh's points to her rest metres, at her bind: the skin's bind (her file keeps its scale and offset in the skin's
    * inverse binds, the same for every bone) and the mesh's place in her model.
    */
+  /** His groin smoothed while he squats (MALE_GROIN), worked out again when his shape or his pose changes. */
+  let maleGroin: BirthNormals | null = null, maleGroinMesh: THREE.SkinnedMesh | null = null, maleGroinFor = '';
+  /** on (Joshua, 2026-11-19, of its before and after: "Good to switch his squat fix on"); the probe's `maleGroin(false)` takes it off */
+  let maleGroinOn = true;
+  function keepMaleSquat(): void {
+    if (!maleGroin || !maleGroinMesh || !model) return;
+    const sb = shaped.find((x) => x.mesh === maleGroinMesh); if (!sb) return;
+    const want = maleGroinOn && pose === 'squat';
+    const shapeKey = sb.fields.last.split('|').filter((k) => !k.startsWith(MALE_GROIN_FIELD)).join('|');
+    const sig = want ? `${pose}|${shapeKey}` : '';
+    if (sig === maleGroinFor) return;
+    maleGroinFor = sig;
+    const bare = new Map(sb.fields.fields); bare.delete(MALE_GROIN_FIELD);
+    sb.fields = { ...sb.fields, fields: bare, last: '' };
+    applyLook();
+    if (!want) return;
+    model.updateMatrixWorld(true); maleGroinMesh.skeleton.update();
+    const g = maleGroinMesh.geometry, P = (g.getAttribute('position') as THREE.BufferAttribute).array as Float32Array, N = (g.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+    const map = new Map(bare); map.set(MALE_GROIN_FIELD, maleGroin.compute(P, N));
+    sb.fields = { ...sb.fields, fields: map, last: '' };
+    applyLook();
+    maleGroinFor = `${pose}|${sb.fields.last.split('|').filter((k) => !k.startsWith(MALE_GROIN_FIELD)).join('|')}`;
+  }
   /**
    * Room between her thighs as she is posed (birthRoom.ts): worked out again whenever what she is posed as, or her shape,
    * changes -- read off her bones as they are this frame -- and laid on her as a shape field.
@@ -6955,8 +7053,23 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     lay(MALE_BELLY_FIELD, maleBellyField(rest, trunk));
     if (Number.isFinite(front)) lay(MALE_OUTIE_FIELD, maleOutieField(rest, front));
     hasBelly = true;
+    // his groin's smoothing in SQUAT, round the point between his hip joints, under them (MALE_GROIN)
+    try {
+      const sk = mesh.skeleton, at = (k: number) => new THREE.Vector3().setFromMatrixPosition(sk.boneInverses[k].clone().invert()).applyMatrix4(toRest);
+      const centre = at(j.hipL).add(at(j.hipR)).multiplyScalar(0.5); centre.y -= MALE_GROIN.below;
+      maleGroin = createBirthNormals(mesh, toRest, idx.array, [], undefined, undefined, undefined, { centres: [centre], near: MALE_GROIN.near, far: MALE_GROIN.far, passes: MALE_GROIN.passes, lambda: MALE_GROIN.lambda });
+      maleGroinMesh = mesh; maleGroinFor = '';
+    } catch (error) { console.error('[sarahlab] his groin could not be smoothed', error); maleGroin = null; }
   }
 
+  /**
+   * Metres in one unit of a mesh's geometry, by its rest frame (`restOfMesh`, in metres). His was taken as his geometry's
+   * height over 1.70 m at first: MEASURED in the room his BUILD then read his height 1.56 m.
+   */
+  function metresPerUnitOf(mesh: THREE.SkinnedMesh, root: THREE.Object3D): number {
+    root.updateMatrixWorld(true);
+    return new THREE.Vector3().setFromMatrixColumn(restOfMesh(mesh, root), 1).length();
+  }
   function restOfMesh(mesh: THREE.SkinnedMesh, root: THREE.Object3D): THREE.Matrix4 {
     const sk = mesh.skeleton, bone = sk.bones[0];
     const skin = new THREE.Matrix4().copy(mesh.bindMatrixInverse).multiply(bone.matrixWorld).multiply(sk.boneInverses[0]).multiply(mesh.bindMatrix);
@@ -7768,7 +7881,10 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // her opening: as wide as the head is where her opening is (a sphere's slice), its neck and shoulders after it, and
     // closing once all of it is out; the skin round it bulging as the head comes near and while it crowns
     const x = L - d;
-    let across = Math.abs(x) < R ? 2 * Math.sqrt(R * R - x * x) : 0;
+    // (timed by a sphere BIRTH_STRAIGHT.reach its own, never wider than the head: the head as drawn reaches further
+    // forward of its middle than the sphere does, and at 1:17 its hair stood through her skin round her opening, shut)
+    const Ro = R * BIRTH_STRAIGHT.reach;
+    let across = Math.abs(x) < Ro ? Math.min(2 * R, 2 * Math.sqrt(Ro * Ro - x * x)) : 0;
     if (x <= -R) across = 2 * R * 0.9;
     // (and as its feet leave her, down to part open, easing back from there once it is born)
     let open = across > 0 ? Math.min(1, (across + 0.006) / 0.1) : 0;
@@ -7840,6 +7956,32 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
    * birth has it (straight on out, tilted, swung, lifted) -- eased from one to the other over `BIRTH_ALONG` at her opening.
    * `k`: how far it is made long (none of this while it is curled in her womb).
    */
+  /** her opening's own middle and its way out, in her baby's holder (BIRTH_STRAIGHT), or null */
+  function birthMouthLine(): { at: THREE.Vector3; out: THREE.Vector3; inward: THREE.Vector3; down: THREE.Vector3 } | null {
+    const mr = vulva?.mouthRest(); if (!mr || !babyHolder) return null;
+    babyHolder.updateMatrixWorld(true);
+    const inv = babyHolder.matrixWorld.clone().invert(), out = mr.out.clone().transformDirection(inv), up = mr.up ? mr.up.clone().transformDirection(inv) : null;
+    const at = babyHolder.worldToLocal(mr.centre.clone());
+    // (let down toward her perineum as its head meets her opening, and in from it `tiltDeg` toward her front: BIRTH_STRAIGHT;
+    // her holder is in metres)
+    // (and only as her opening opens round it, `openFrom` to `openFull` of the way: let down while she is still nearly shut --
+    // between pushes, its head sinking back -- it came out through her skin under her opening, MEASURED 2026-11-20 at 1:14)
+    const o = vulva?.drawnOpen ?? 0, t = Math.min(1, Math.max(0, (o - BIRTH_STRAIGHT.openFrom) / (BIRTH_STRAIGHT.openFull - BIRTH_STRAIGHT.openFrom)));
+    const down = up ? up.clone().multiplyScalar(-BIRTH_STRAIGHT.drop * t * t * (3 - 2 * t)) : new THREE.Vector3();
+    const a = (BIRTH_STRAIGHT.tiltDeg * Math.PI) / 180, inward = out.clone().multiplyScalar(-Math.cos(a));
+    if (up) inward.addScaledVector(up, Math.sin(a));
+    return { at, out, inward: inward.normalize(), down };
+  }
+  /** a place `dd` down her canal (`end` its length) brought onto that line as BIRTH_STRAIGHT has it */
+  function straightened(dd: number, end: number, mouth: { at: THREE.Vector3; out: THREE.Vector3; inward: THREE.Vector3; down: THREE.Vector3 }, out: THREE.Vector3): THREE.Vector3 {
+    const ease = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const w = ease(end - BIRTH_STRAIGHT.from, end - BIRTH_STRAIGHT.full, dd);
+    if (w <= 0) return out;
+    // (out of her straight on; in her, coming to it from her front; let down as the head meets her opening -- `dd` is where
+    // the head's own middle is for the head, and each joint behind it lets down as it comes there)
+    const at = mouth.at.clone().addScaledVector(mouth.down, ease(end - BIRTH_STRAIGHT.dropFrom, end - BIRTH_STRAIGHT.dropFull, dd));
+    return out.lerp(dd >= end ? at.addScaledVector(mouth.out, dd - end) : at.addScaledVector(mouth.inward, end - dd), w);
+  }
   function birthAlong(r: THREE.Object3D, i: number, m: BirthMoment, bones: ReadonlyMap<string, THREE.Bone>, k: number): void {
     birthAlongOff.delete(r);
     const c = alongCanal() && k > 0 && babyHolder && babyCurl && birthHeadModel ? canalHere() : null, neck = bones.get(BABY_BONES.neck);
@@ -7849,12 +7991,12 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // (where its head's middle is down her canal, and how far behind that its neck's joint is, along its length)
     const long = babyCurl.long.clone().applyQuaternion(r.getWorldQuaternion(new THREE.Quaternion())).normalize();
     const behind = Math.max(0, birthHeadModel.clone().applyMatrix4(r.matrixWorld).sub(neck.getWorldPosition(new THREE.Vector3())).dot(long)) / perMetre;
-    const d = Math.max(0, headDownOf(m, end, r.scale.x)) - behind, way = new THREE.Vector3();
+    const d = Math.max(0, headDownOf(m, end, r.scale.x)) - behind, way = new THREE.Vector3(), mouth = birthMouthLine();
     const moved = poseAlong(bones, {
       perMetre, settle: BIRTH_ALONG.settle,
       at: (s, out) => {
         const dd = d - s;
-        if (dd > end && line) out.copy(line.at).addScaledVector(line.way, dd - end); else canalAt(c, dd, out, way);
+        if (dd > end && line) out.copy(line.at).addScaledVector(line.way, dd - end); else { canalAt(c, dd, out, way); if (mouth) straightened(dd, end, mouth, out); }
         return babyHolder!.localToWorld(out);
       },
       share: (s) => { const t = Math.min(1, Math.max(0, (d - s - (end - BIRTH_ALONG.inside)) / (BIRTH_ALONG.inside + BIRTH_ALONG.outside))); return k * (1 - t * t * (3 - 2 * t)); },
@@ -7872,13 +8014,16 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     // (each point's distance down, measured on her canal as it is now and stretched to the length the birth began with)
     const pts = birthPath.points.map((p) => babyHolder!.worldToLocal(p.clone())), n = pts.length, k0 = L / Math.max(1e-6, birthPath.down[n - 1]), down = birthPath.down.map((x) => x * k0);
     // the point d down her canal, and the way on (past her opening, straight on out the way it leaves her)
-    const at = (dd: number, out: THREE.Vector3) => {
+    const onPath = (dd: number, out: THREE.Vector3) => {
       // (above the top of her cervix, on up the way her canal comes from)
       if (dd < 0) return out.copy(pts[0]).sub(pts[1]).normalize().multiplyScalar(-dd).add(pts[0]);
       let k = 0; while (k < n - 2 && down[k + 1] < dd) k++;
       const f = Math.min(1, Math.max(0, (dd - down[k]) / Math.max(1e-6, down[k + 1] - down[k])));
       return out.copy(pts[k]).lerp(pts[k + 1], f);
     };
+    // (over the last of her canal, onto the line out of her opening's own middle: BIRTH_STRAIGHT)
+    const mouth = birthMouthLine(), endAt = down[n - 1];
+    const at = (dd: number, out: THREE.Vector3) => { onPath(dd, out); return mouth ? straightened(dd, endAt, mouth, out) : out; };
     // (the way along, over a span either side: its rings at the mouth are too close together to say it alone; past her
     // opening, the way the last 2.5 cm of her canal points)
     const end = down[n - 1], span = BIRTH_HEAD.tangentSpan;
@@ -8539,7 +8684,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     thorax?.dispose(); thorax = null; abdomen?.dispose(); abdomen = null; organs?.dispose(); organs = null; v2OrganBones = null; v2Womb = null; organsGrowWomb = false; abdomenFailed = false; thoraxFailed = false;
     skeletonV2?.dispose(); skeletonV2 = null; skeletonV2Request++; relaySkeletonV2 = null;
     // (and v2's opening with her: it is laid again when a v2 body comes; kept, it stood in for her skeleton's in a birth)
-    vulva?.dispose(); vulva = null; remakeVulva = null;
+    vulva?.dispose(); vulva = null; remakeVulva = null; herSkinDetail = null; maleGroin = null; maleGroinMesh = null;
     bottomShell?.dispose(); bottomShell = null; bottomShellTried = false; briefTies = null;
     clothBrief?.dispose(); clothBrief = null; clothBriefTried = false; briefData = null; clothBriefPose = '';
     paintedEdge?.dispose(); paintedEdge = null;
@@ -8658,6 +8803,14 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       if (!recovered && outfit >= 5) outfit = 0;
       // THE MALE BASE MODEL's belly and navel (maleBelly.ts): two fields laid on his rest shape, his belly slider's
       if (isMaleModel(SARAH_LAB_MODELS[modelIndex].id)) { try { layMaleBelly(loadedModel); } catch (error) { console.error('[sarahlab] his belly could not be laid; he is as modelled', error); } }
+      // HIS BUILD (Joshua, 2026-11-19: "get the sliders to work… minus the breasts"): measured on his rest as hers is on hers,
+      // his bones found by role (measureHuman), his geometry's units told by his rest frame (`metresPerUnitOf`)
+      if (isMaleModel(SARAH_LAB_MODELS[modelIndex].id) && measure) {
+        const m = findSkinnedMesh(loadedModel), s = m ? shaped.find((x) => x.mesh === m) : undefined;
+        if (m && s) {
+          try { buildRig = prepareBuildRig(m, s.fields.basePos, measure.joints, metresPerUnitOf(m, loadedModel)); } catch (error) { console.error('[sarahlab] his build could not be measured; BUILD is off', error); buildRig = null; }
+        }
+      }
       // HIS SKIN EVEN as hers is (scripts/evenSkin.mjs on his file: one skin colour, his own details kept -- Meshy's colour
       // picture had dark slits where its islands meet, seen on his chest and arms)
       if (isMaleModel(SARAH_LAB_MODELS[modelIndex].id)) {
@@ -8667,9 +8820,9 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
         if (sm && mat) void assets.loadTexture(SKIN_DETAIL_MAP).then((t) => {
           if (!t || disposed || model !== loadedModel) { t?.dispose(); return; }
           sm.geometry.computeBoundingBox(); sm.updateWorldMatrix(true, false);
-          const box = sm.geometry.boundingBox!, restH = box.max.y - box.min.y, scale = sm.getWorldScale(new THREE.Vector3()).y;
+          const box = sm.geometry.boundingBox!, scale = sm.getWorldScale(new THREE.Vector3()).y;
           // (his rest frame stands him 1.70 m tall: MEASURED)
-          const u = skinDetailUniforms(prepareSkinDetailMap(t), restH / 1.7, (restH * scale) / 1.7);
+          const perM = 1 / metresPerUnitOf(sm, loadedModel), u = skinDetailUniforms(prepareSkinDetailMap(t), perM, perM * scale, SKIN_DETAIL, { min: box.min.y, max: box.max.y });
           patchSkinDetail(mat, u);
           void assets.loadTexture(MALE_OWN_HEIGHT).then((o) => { if (!o || disposed) { o?.dispose(); return; } wearOwnHeight(u, o, mat.map); });
         });
@@ -8682,8 +8835,11 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           ensureSkinFabric(b.mesh, b.material, { layers: PAINT_LAYER_COUNT, rest });
           // (her rest place is in her bind units, `bindScale` of them to the metre: MEASURED 1.11142)
           const perM = rig && rig.bindScale > 0 ? rig.bindScale : 1.11142, scale = b.mesh.getWorldScale(new THREE.Vector3()).y;
-          const u = skinDetailUniforms(prepareSkinDetailMap(t), perM, perM * scale);
+          b.mesh.geometry.computeBoundingBox(); const hb = b.mesh.geometry.boundingBox!;
+          const u = skinDetailUniforms(prepareSkinDetailMap(t), perM, perM * scale, SKIN_DETAIL, { min: hb.min.y, max: hb.max.y });
           patchSkinDetail(b.material, u);
+          // (and her opening's area, drawn in place of her skin there, bare: vulvaMesh.ts `setSkinDetail`)
+          herSkinDetail = (m) => patchSkinDetail(m, u); vulva?.setSkinDetail(herSkinDetail);
           // (her own skin picture's depth beside it: the hybrid)
           void assets.loadTexture(SKIN_OWN_HEIGHT).then((o) => { if (!o || disposed) { o?.dispose(); return; } wearOwnHeight(u, o, b.material.map); });
         });
@@ -9021,7 +9177,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
               vulva?.dispose();
               if (vulvaArea.under && !under) under = birthGapUnderMask(fieldsV.basePos, fieldsV.baseNrm!, frame.meshToRest);
               const u = vulvaArea.under ? under : null, legSkin = bw ? (i: number) => (!!u && u[i] === 1) || bw.legDistance(i) > -vulvaArea.band : undefined;
-              try { vulva = createVulvaPatch(bmV, fieldsV.basePos, frame.meshToRest, measure?.joints.pelvis, measure ? [measure.joints.hipL, measure.joints.hipR, measure.joints.kneeL, measure.joints.kneeR] : [], legSkin); vulva?.setOpen(birthOpenPct / 100); vulva?.setBulge(birthBulgePct / 100); balloonWombKey = ''; layBalloonWomb(); } catch (error) { console.error('[sarahlab] her vulva could not be rebuilt; her own skin is drawn', error); vulva = null; }
+              try { vulva = createVulvaPatch(bmV, fieldsV.basePos, frame.meshToRest, measure?.joints.pelvis, measure ? [measure.joints.hipL, measure.joints.hipR, measure.joints.kneeL, measure.joints.kneeR] : [], legSkin); vulva?.setOpen(birthOpenPct / 100); vulva?.setBulge(birthBulgePct / 100); if (herSkinDetail) vulva?.setSkinDetail(herSkinDetail); balloonWombKey = ''; layBalloonWomb(); } catch (error) { console.error('[sarahlab] her vulva could not be rebuilt; her own skin is drawn', error); vulva = null; }
               applyOpening();
             };
             remakeVulva();
@@ -9138,6 +9294,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       settleBelly(dt);
       naturalOpening(dt);
       keepBirthRoom();
+      keepMaleSquat();
       // VULVA DETAIL through clothes, as the fabric panel has it now (nothing is done unless it changed)
       vulva?.setDressedLips(vulvaKeepNow());
       vulva?.sync();
@@ -10062,6 +10219,13 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           else if (cmd?.run !== undefined) { if (beginBirth(null, true)) birthRunning = cmd.run; }
           const r0 = babyRoots()[0], headW = r0 && birthHeadModel ? headMiddle(r0) : null, pts = birthPath?.points;
           const along = headW && pts && pts.length > 1 ? (() => { const mouth = pts[pts.length - 1], t = mouth.clone().sub(pts[pts.length - 2]).normalize(); return +((headW.clone().sub(mouth).dot(t)) / M * 100).toFixed(1); })() : null;
+          // (its head's middle in her opening's own frame, as her bones carry it: along its way out, toward her front, across)
+          const headInMouth = (() => {
+            const mr = vulva?.mouthRest?.(); if (!headW || !mr) return null;
+            const d = headW.clone().sub(mr.centre), up = mr.up ? mr.up.clone().sub(mr.out.clone().multiplyScalar(mr.up.dot(mr.out))).normalize() : null;
+            const across = up ? new THREE.Vector3().crossVectors(mr.out, up).normalize() : null, cmOf = (x: number) => +(x / M * 100).toFixed(2);
+            return { out: cmOf(d.dot(mr.out)), up: up ? cmOf(d.dot(up)) : null, across: across ? cmOf(d.dot(across)) : null };
+          })();
           const offAxis = headW && pts ? +((Math.min(...pts.map((p) => p.distanceTo(headW)))) / M * 100).toFixed(1) : null;
           // (and its body: how far each joint of its back and legs that is in her canal lies from her canal's middle line --
           // one stiff length cut the corner of a canal that turns, by centimetres)
@@ -10091,7 +10255,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
             babyHolder.updateMatrixWorld(true); const held = babyHolder.localToWorld(birthRestAt.clone());
             return { restMatchCm: +(Math.sqrt(bd) * 100).toFixed(1), drawnVsHeldCm: +(drawn.distanceTo(held) / M * 100).toFixed(1), d: drawn.clone().sub(held).divideScalar(M / 100).toArray().map((x) => +x.toFixed(1)) };
           })() } : null;
-          return { rest: rp, headPastMouthCm: along, headFromPathCm: offAxis, bodyOffPathCm: bodyOff && bodyOff.length ? Math.max(...bodyOff.map((x) => x[1])) : null, bodyInCanal: bodyOff, headR: r0 ? +(headRadiusOf(r0.scale.x) * 100).toFixed(2) : null, open: vulva?.drawnOpen, clock: birthClock, running: birthRunning, pace: birthPace, now: birthNow, path: birthPath ? { length: +birthPath.length.toFixed(4), points: birthPath.points.length } : null, head: birthHeadModel?.toArray().map((x) => +x.toFixed(3)) ?? null, line: birthLine(birthNow),
+          return { rest: rp, headInMouth, headPastMouthCm: along, headFromPathCm: offAxis, bodyOffPathCm: bodyOff && bodyOff.length ? Math.max(...bodyOff.map((x) => x[1])) : null, bodyInCanal: bodyOff, headR: r0 ? +(headRadiusOf(r0.scale.x) * 100).toFixed(2) : null, open: vulva?.drawnOpen, clock: birthClock, running: birthRunning, pace: birthPace, now: birthNow, path: birthPath ? { length: +birthPath.length.toFixed(4), points: birthPath.points.length } : null, head: birthHeadModel?.toArray().map((x) => +x.toFixed(3)) ?? null, line: birthLine(birthNow),
             // (ITS BODY AGAINST THE WAY IT COMES: each joint of its back and legs against her canal's middle line carried on
             // -- up from its top the way her canal comes from, and out of its mouth the way it leaves her -- as `[joint,
             // 'womb' | 'canal' | 'out', centimetres off that line]`. `bodyInCanal` above measures against her canal alone,
@@ -10831,7 +10995,12 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           return { size: a.itemSize, count: a.count, data: btoa(s) };
         },
         // (a probe's) the male base model's normal map off or back on, to tell what of a mark is his normal map's
-        skinDetail: (patch: { depthM?: number; tileM?: number; cavity?: number; ownM?: number }) => { const sm = model ? findSkinnedMesh(model) : null, m = sm && (Array.isArray(sm.material) ? sm.material[0] : sm.material) as THREE.MeshStandardMaterial, u = m?.userData.skinDetail; if (!u) return null; u.__k ??= u.skinDetailDepth.value / SKIN_DETAIL.depthM; u.__kt ??= u.skinDetailTile.value / SKIN_DETAIL.tileM; u.__depthM ??= SKIN_DETAIL.depthM; u.__tileM ??= SKIN_DETAIL.tileM; const k = u.__k, kt = u.__kt; if (patch.depthM != null) { u.skinDetailDepth.value = patch.depthM * k; u.__depthM = patch.depthM; } if (patch.tileM != null) { u.skinDetailTile.value = patch.tileM * kt; u.__tileM = patch.tileM; } if (patch.cavity != null) u.skinDetailCavity.value = patch.cavity; u.__ownM ??= SKIN_DETAIL.ownDepthM; if (patch.ownM != null) { u.skinOwnDepth.value = patch.ownM * k; u.__ownM = patch.ownM; } return { ownM: u.__ownM, ownLoaded: !!u.skinOwnMap.value, depthM: u.__depthM, tileM: u.__tileM, cavity: u.skinDetailCavity.value }; },
+        skinDetail: (patch: { depthM?: number; tileM?: number; cavity?: number; ownM?: number }) => { const sm = model ? findSkinnedMesh(model) : null, m = sm && (Array.isArray(sm.material) ? sm.material[0] : sm.material) as THREE.MeshStandardMaterial, u = m?.userData.skinDetail; if (!u) return null; u.__k ??= u.skinDetailDepth.value / SKIN_DETAIL.depthM; u.__kt ??= u.skinDetailTile.value / SKIN_DETAIL.tileM; u.__depthM ??= SKIN_DETAIL.depthM; u.__tileM ??= SKIN_DETAIL.tileM; const k = u.__k, kt = u.__kt; if (patch.depthM != null) { u.skinDetailDepth.value = patch.depthM * k; u.__depthM = patch.depthM; } if (patch.tileM != null) { u.skinDetailTile.value = patch.tileM * kt; u.__tileM = patch.tileM; } if (patch.cavity != null) u.skinDetailCavity.value = patch.cavity; u.__ownM ??= SKIN_DETAIL.ownDepthM; if (patch.ownM != null) { u.skinOwnDepth.value = patch.ownM * k; u.__ownM = patch.ownM; } const vm = vulva?.mesh.material as THREE.Material | undefined; return { ownM: u.__ownM, ownLoaded: !!u.skinOwnMap.value, depthM: u.__depthM, tileM: u.__tileM, cavity: u.skinDetailCavity.value, area: vulva ? { given: !!herSkinDetail, key: vm?.customProgramCacheKey?.() ?? null, laid: !!vm?.userData.skinDetail, dressed: vulva.dressed, visible: vulva.mesh.visible, programs: (ctx.renderer.gl.info.programs ?? []).filter((q) => /vulvaPatch/.test((q as unknown as { cacheKey: string }).cacheKey)).map((q) => { const gl = ctx.renderer.gl.getContext(), vs = gl.getShaderSource((q as unknown as { vertexShader: WebGLShader }).vertexShader) ?? '', fs = gl.getShaderSource((q as unknown as { fragmentShader: WebGLShader }).fragmentShader) ?? ''; return { vSet: (vs.match(/vSkinRest = [^;]*;/g) ?? []), fUse: (fs.match(/skinDetailBend\(/g) ?? []).length, mainAt: vs.indexOf('void main()'), setAt: vs.indexOf('vSkinRest = ') }; }) } : null }; },
+        // (a probe's) her even roughness off or on, to picture what it changes
+        evenRough: (on: boolean) => { applyRoughness(on); return { on, loaded: !!roughEven }; },
+        // (a probe's) his groin's smoothing in SQUAT off or on
+        maleGroin: (on?: boolean) => { if (on !== undefined && on !== maleGroinOn) { maleGroinOn = on; maleGroinFor = '-'; } return { on: maleGroinOn, laid: !!maleGroin, watched: maleGroin?.watched ?? 0, folded: maleGroin?.folded ?? null }; },
+        hairDepth: (patch: { strength?: number; groove?: number }) => { if (patch.strength != null) hairStrength = patch.strength; if (patch.groove != null) hairGroove = patch.groove; deepenHair(hairMeshes); return { strength: hairStrength, groove: hairGroove, meshes: hairMeshes.length }; },
         maleNormalMap: (on: boolean) => { const sm = model ? findSkinnedMesh(model) : null, m = sm && (Array.isArray(sm.material) ? sm.material[0] : sm.material) as THREE.MeshStandardMaterial; if (!m) return null; m.userData.ownNormal ??= m.normalMap; m.normalMap = on ? m.userData.ownNormal : null; m.needsUpdate = true; return !!m.normalMap; },
         bodyPoints: (kind: 'local' | 'rest' | 'posed' | 'shaped' | 'slip') => {
           const b = bodyOf()?.mesh ?? (isMaleModel(SARAH_LAB_MODELS[modelIndex].id) ? herSkinned() : null); if (!b) return null;
@@ -11434,6 +11603,9 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       skirtRoom?.dispose(); skirtRoom = null;
       garmentPanel?.dispose(); garmentPanel = null;
       skirtPanel?.dispose(); skirtPanel = null;
+      // (her head's panel holds the page's pointerup / pointercancel while a slider is held: let go, or the closed room
+      // stays in memory through it -- a fault another game's agent found, 2026-11-20)
+      headPanel?.dispose(); headPanel = null;
       hud?.remove();
       hud = null;
       thorax?.dispose(); thorax = null; abdomen?.dispose(); abdomen = null; organs?.dispose(); organs = null;

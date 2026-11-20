@@ -1,8 +1,10 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `74ff232`
-(2026-11-19, v0.9.51: skin depth, a hybrid of each body's own skin picture's depth and a pore and crease tile).
-Before that: `1344d7a` (2026-11-19, v0.9.49: "EXACT belly %, typed or picked from a list"; since v0.9.45 also the
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `bae4157`
+(2026-11-20, v0.9.60: a chest cutout, oval, diamond or keyhole, on the catsuit, leotard and swimsuit; the room lets its
+head panel go on dispose; since v0.9.59 the catsuit's drawn edges and an adjustable neckline, low V/U up to a
+turtleneck). Before that: `74ff232` (2026-11-19, v0.9.51: skin depth, a hybrid of each body's own skin
+picture's depth and a pore and crease tile), `1344d7a` (2026-11-19, v0.9.49: "EXACT belly %, typed or picked from a list"; since v0.9.45 also the
 hybrid pregnancy curve and baby kicks), `e1c226a` (2026-11-19, v0.9.45), `764f7c7` (2026-11-16, v0.9.40).
 
 Since v0.9.40 the builder needs one more library, `fflate` (its export zip): the game installs it and points the

@@ -57,6 +57,22 @@
 //      reached from its hip, where that now is, to its foot, with its thigh and
 //      its shin each turned to face the way its band does.
 //
+//  10. TURNING ON THE SPOT, A STEP AT A TIME (Joshua, 2026-11-20: "whenever
+//      she is tracking an object, she looks like she is marching in place but
+//      her body rotates"; "for a Left turn: Left foot out to the side and back
+//      a little with a left outward rotation. If the angle is more than 40°,
+//      the right foot will move up and back towards the body with a left twist
+//      and so on… right would be the opposite"). Standing, her planted feet
+//      KEEP FACING THE WAY THEY LANDED while her body turns over them (no more
+//      pivoting along with her), and a turn is stepped, not marched:
+//        - once she has turned `turnStepAt` from the way her feet were set,
+//          the foot on the side she turns to (her left, turning left) steps OUT
+//          to its side and a little BACK, its toes turned out the way she turns;
+//        - once she has turned `turnTrailAt` (40 degrees), her other foot comes
+//          up and in, under its shoulder, turned to her new way ("a twist");
+//        - and again, for as long as she keeps turning.
+//      A turn that stops short of 40 degrees leaves her feet as they are; she
+//      squares them up after standing still for `turnSettle`.
 //   9. UNEVEN GROUND (Joshua, 2026-11-19, the island: "making sure her feet
 //      actually walk and snap to the ground"). With `groundAt` set (the
 //      island's drawn ground: src/world/island/), each foot stands on the
@@ -147,6 +163,25 @@ export const FOOT_GROUND = {
   skipHop: 0.06,
   /** Standing, a planted foot may be held this far from its home before it slips (crab steps hold feet well out). */
   standLockMost: 0.6,
+  /**
+   * TURNING ON THE SPOT (see 10 above; radians unless they say otherwise). Her lead foot steps once she has turned
+   * `turnStepAt` (about 15 degrees) from the way her feet were set; her other foot once she has turned `turnTrailAt`
+   * (Joshua's 40 degrees). The lead foot lands `turnOut` metres out to its side and `turnBack` back, its toes
+   * `toeOut` further round than her body; the other comes in `trailBack` back of its home, square to her. A turn step
+   * takes `turnSeconds`. A planted foot's own way is held up to `faceMost` from her body's (an ankle turns only so
+   * far; past it the foot turns with her). Turning slower than `turnStill` a second counts as standing still, and after
+   * `turnSettle` seconds of that a foot left out of place is squared up.
+   */
+  turnStepAt: (15 * Math.PI) / 180,
+  turnTrailAt: (40 * Math.PI) / 180,
+  turnOut: 0.04,
+  turnBack: 0.06,
+  trailBack: 0.02,
+  toeOut: (15 * Math.PI) / 180,
+  turnSeconds: 0.32,
+  faceMost: (55 * Math.PI) / 180,
+  turnStill: (3 * Math.PI) / 180,
+  turnSettle: 1.0,
 } as const;
 
 /**
@@ -178,6 +213,8 @@ export interface LegTwist {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** An angle brought into -PI..PI (radians). */
+const wrapAngle = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 /** 0 below `from`, 1 above `to`, an S-shaped ease between. */
 const ease = (from: number, to: number, v: number) => { const t = clamp((v - from) / (to - from), 0, 1); return t * t * (3 - 2 * t); };
 const fract = (v: number) => v - Math.floor(v);
@@ -248,6 +285,21 @@ export class FootGround {
   readonly poseWidth: number;
   /** Seconds since she last moved or turned. */
   private stillFor = 0;
+  /**
+   * TURNING ON THE SPOT (see 10 above). `footFace`: the way each foot faces over the ground (world yaw, radians),
+   * held while it is planted; `faceFrom`/`faceTo` the stepping foot's, as it leaves and as it lands. `squareYaw`: the
+   * way her body faced when her feet were last set square to her. `turnStage`: 0 her feet square, 1 her lead foot has
+   * stepped (`turnLead`), 2 her other foot is stepping in. `lastYaw` and `turnQuiet`: her body's way last frame, and
+   * how long she has turned slower than `turnStill`.
+   */
+  private readonly footFace: [number, number] = [NaN, NaN];
+  private faceFrom = 0;
+  private faceTo = 0;
+  private squareYaw = NaN;
+  private turnStage: 0 | 1 | 2 = 0;
+  private turnLead = 0;
+  private lastYaw = NaN;
+  private turnQuiet = 0;
 
   private readonly legs: readonly [LegBones, LegBones];
   private readonly feet: readonly [Foot, Foot] = [
@@ -347,6 +399,7 @@ export class FootGround {
           // (landed: held to where it came down)
           const f = feet[this.stepFoot];
           f.locked = true; f.lockX = this.stepTo[0]; f.lockZ = this.stepTo[1];
+          this.footFace[this.stepFoot] = this.faceTo;   // (and keeps facing the way it landed)
           this.stepFoot = -1;
           this.crabbing = false;
           this.stepHop = 0;
@@ -369,6 +422,20 @@ export class FootGround {
 
     // ---- each foot: held to its spot and on the floor if it is planted, clear of the floor if it swings ----
     const yaw = root.rotation.y, aheadX = Math.sin(yaw), aheadZ = Math.cos(yaw);
+    // TURNING ON THE SPOT (see 10 above): how fast she is turning, and how far from the way her feet were set
+    if (!Number.isFinite(this.lastYaw)) this.lastYaw = yaw;
+    const turnRate = dt > 0 ? Math.abs(wrapAngle(yaw - this.lastYaw)) / dt : 0;
+    this.lastYaw = yaw;
+    this.turnQuiet = turnRate < tuning.turnStill ? this.turnQuiet + dt : 0;
+    // (walking or going sideways her feet go with her walk: they face her way, and she counts as square)
+    const feetFree = walking || this.crabbing || !!(crab && crab.speed >= tuning.crabFrom);
+    if (feetFree || !Number.isFinite(this.squareYaw)) {
+      this.squareYaw = yaw;
+      this.turnStage = 0;
+      if (this.stepFoot < 0 || walking) { this.footFace[0] = yaw; this.footFace[1] = yaw; }
+    }
+    for (let side = 0; side < 2; side++) if (!Number.isFinite(this.footFace[side])) this.footFace[side] = yaw;
+    const turnedBy = wrapAngle(yaw - this.squareYaw);   // (+: she has turned to her left)
     // (she is about to be moved sideways by her sway: toward her left, which is across her forward)
     const shiftX = motion.sway * aheadZ, shiftZ = -motion.sway * aheadX;
     const fade = Math.exp(-dt / tuning.release);
@@ -416,11 +483,48 @@ export class FootGround {
           this.crabNext = 'lead';
         }
       } else {
-        // A STEP ON THE SPOT: the foot held furthest from its home goes first, set down at home
         this.crabNext = 'lead';
-        const far = this.held[0] >= this.held[1] ? 0 : 1;
-        const limit = this.stillFor >= tuning.stepSettle ? tuning.settleOffset : tuning.stepOffset;
-        if (this.held[far] > limit) this.beginStep(far, 0, 0, tuning.stepSeconds, tuning.stepHeight, true);
+        // her left is across her forward (x = cos(yaw), z = -sin(yaw)); `out` is +1 for her left foot, -1 her right
+        const outOf = (side: number): number => (side === 0 ? 1 : -1);
+        if (this.turnStage === 1 && turnedBy * outOf(this.turnLead) < 0) this.turnStage = 0;   // (she turned back the other way)
+        if (this.turnStage === 2) {
+          // HER OTHER FOOT HAS COME IN: her feet are set to her new way
+          this.turnStage = 0;
+          this.squareYaw = yaw;
+        } else if (this.turnStage === 0 && Math.abs(turnedBy) >= tuning.turnStepAt) {
+          // A TURN BEGINS: the foot on the side she turns to steps out to its side and a little back, toes turned out
+          const lead = turnedBy > 0 ? 0 : 1, out = outOf(lead);
+          this.beginStep(lead, -aheadX * tuning.turnBack + leftX * out * tuning.turnOut, -aheadZ * tuning.turnBack + leftZ * out * tuning.turnOut, tuning.turnSeconds, tuning.stepHeight, true);
+          this.faceTo = yaw + out * tuning.toeOut;
+          this.turnLead = lead;
+          this.turnStage = 1;
+        } else if (this.turnStage === 1 && Math.abs(turnedBy) >= tuning.turnTrailAt) {
+          // PAST 40 DEGREES: her other foot comes up and in, under its shoulder, turned to her new way
+          const trail = 1 - this.turnLead;
+          this.beginStep(trail, -aheadX * tuning.trailBack, -aheadZ * tuning.trailBack, tuning.turnSeconds, tuning.stepHeight, true);
+          this.faceTo = yaw;
+          this.turnStage = 2;
+        } else if (this.turnQuiet >= tuning.stepSettle && (this.turnStage === 0 && Math.abs(turnedBy) < tuning.turnStepAt * 0.5 || this.turnQuiet >= tuning.turnSettle)) {
+          // A STEP ON THE SPOT (she is not turning, and her feet are square or the turn is long over): the foot held
+          // furthest from its home goes first, set down at home and square to her. (Never while she turns: it stepped
+          // in between her turn steps, so she marched again.)
+          const far = this.held[0] >= this.held[1] ? 0 : 1;
+          const facing = Math.max(Math.abs(wrapAngle(this.footFace[0] - yaw)), Math.abs(wrapAngle(this.footFace[1] - yaw)));
+          const limit = this.stillFor >= tuning.stepSettle ? tuning.settleOffset : tuning.stepOffset;
+          // (a foot turned away from her by more than her settle step counts too: it is squared up)
+          const turnedFoot = Math.abs(wrapAngle(this.footFace[0] - yaw)) >= Math.abs(wrapAngle(this.footFace[1] - yaw)) ? 0 : 1;
+          if (this.held[far] > limit) {
+            this.beginStep(far, 0, 0, tuning.stepSeconds, tuning.stepHeight, true);
+            this.faceTo = yaw;
+          } else if (this.turnQuiet >= tuning.turnSettle && facing > tuning.turnStill * 2) {
+            this.beginStep(turnedFoot, 0, 0, tuning.stepSeconds, tuning.stepHeight, true);
+            this.faceTo = yaw;
+          }
+          if (this.turnQuiet >= tuning.turnSettle && this.held[0] <= limit && this.held[1] <= limit && facing <= tuning.turnStill * 2) {
+            this.squareYaw = yaw;
+            this.turnStage = 0;
+          }
+        }
       }
       this.planted[0] = this.stepFoot !== 0;
       this.planted[1] = this.stepFoot !== 1;
@@ -441,6 +545,8 @@ export class FootGround {
         // STEPPING (standing): carried from where it left to where it lands, smoothly, lifted on the way
         const t = clamp(this.stepClock, 0, 1), smooth = t * t * (3 - 2 * t);
         foot.locked = false;
+        // (turned from the way it faced to the way it will land as it goes)
+        this.footFace[side] = this.faceFrom + wrapAngle(this.faceTo - this.faceFrom) * smooth;
         foot.offX = this.stepFrom[0] + (this.stepTo[0] - this.stepFrom[0]) * smooth - poseX;
         foot.offZ = this.stepFrom[1] + (this.stepTo[1] - this.stepFrom[1]) * smooth - poseZ;
       } else if (this.planted[side]) {
@@ -482,15 +588,26 @@ export class FootGround {
     const thighYaw = yaw + (turned ? twist.upperLegs : 0);
     for (let side = 0; side < 2; side++) {
       const foot = feet[side];
-      if (!turned && !this.tilted[side] && spread <= tuning.least && foot.raise <= tuning.least && this.held[side] <= tuning.least) continue;
+      // TURNING ON THE SPOT: how much further round this foot faces than her body (held to where it landed, as far
+      // as her ankle turns; walking, none)
+      let held = feetFree ? 0 : clamp(wrapAngle(this.footFace[side] - yaw), -tuning.faceMost, tuning.faceMost);
+      if (feetFree) this.footFace[side] = yaw;
+      else if (Math.abs(wrapAngle(this.footFace[side] - yaw)) > tuning.faceMost) this.footFace[side] = yaw + held;   // (past it, it turns with her)
+      if (Math.abs(held) < 1e-4) held = 0;
+      if (!turned && !this.tilted[side] && spread <= tuning.least && foot.raise <= tuning.least && this.held[side] <= tuning.least && held === 0) continue;
       goal.set(foot.homeX + foot.offX, foot.ankle.y + Math.max(0, foot.raise), foot.homeZ + foot.offZ);
       if (turned) {
         // her knee stands off the way her upper legs face; her foot lies as her pose had it, pivoted to its band
         bend.copy(foot.knee).applyAxisAngle(UPRIGHT, twist.upperLegs);
-        footQ.setFromAxisAngle(UPRIGHT, twist.feet).multiply(foot.lie);
+        footQ.setFromAxisAngle(UPRIGHT, twist.feet + held).multiply(foot.lie);
         if (this.tilted[side]) footQ.premultiply(this.tilt[side]); // (laid along its slope)
         this.reach(legs[side], goal, bend, Math.sin(thighYaw), Math.cos(thighYaw), footQ, twist.upperLegs - twist.hips, twist.feet - twist.upperLegs);
-      } else this.reach(legs[side], goal, bend.copy(foot.knee), aheadX, aheadZ, this.tilted[side] ? footQ.copy(this.tilt[side]).multiply(foot.lie) : foot.lie, 0, 0);
+      } else {
+        footQ.setFromAxisAngle(UPRIGHT, held).multiply(foot.lie);
+        if (this.tilted[side]) footQ.premultiply(this.tilt[side]); // (laid along its slope)
+        // (a foot turned on its own: its shin turns half of it, its thigh a quarter, as a leg does)
+        this.reach(legs[side], goal, bend.copy(foot.knee).applyAxisAngle(UPRIGHT, held * 0.25), aheadX, aheadZ, footQ, held * 0.25, held * 0.25);
+      }
     }
 
     // ---- and she is set down: lowered, and moved over the foot she stands on ----
@@ -547,6 +664,8 @@ export class FootGround {
     this.stepTo[0] = (fromHome ? f.homeX : atX) + aheadX;
     this.stepTo[1] = (fromHome ? f.homeZ : atZ) + aheadZ;
     this.stepFoot = side;
+    this.faceFrom = this.footFace[side];
+    this.faceTo = this.root.rotation.y;   // (square to her, unless the caller says otherwise)
     this.stepClock = 0;
     this.stepSeconds = seconds;
     this.stepHigh = high;

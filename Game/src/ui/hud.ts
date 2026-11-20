@@ -35,7 +35,7 @@ import { DETAILS } from '../heroine/fast/detailLevels';
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
 /** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
-export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'bathroom';
+export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'mustGo' | 'bathroom';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -58,6 +58,8 @@ export interface HudOptions {
   /** Her thigh holsters: put away or draw both ('both'), or the gun of the hand picked (src/world/holsterUse.ts). */
   onHolster?(which: 'both' | 'left' | 'right'): void;
   onDomeDebug(action: DomeDebugAction): void;
+  /** THE BATHROOM BUTTON (🚽, top right, shown only when she needs to go): she goes, as Settings -> Bathroom. */
+  onBathroom?(): void;
   /** A button in Settings -> FOOD & DRINK. */
   onIntake?(action: IntakeAction): void;
   /**
@@ -155,6 +157,8 @@ export class Hud {
   /** THE RAIL (each shown only when it has something to do): holster / draw, reload, aim mode; and the L / R pair. */
   private readonly holsterButton: HTMLElement;
   private readonly reloadButton: HTMLElement;
+  /** THE BATHROOM BUTTON (🚽): beside the gear, shown only from her urge. */
+  private readonly bathroomButton: HTMLElement;
   private readonly aimModeButton: HTMLElement;
   private readonly handsBox: HTMLElement;
   private readonly handButtons: Record<'left' | 'right', HTMLElement>;
@@ -276,6 +280,12 @@ export class Hud {
     tapButton(this.camButton, () => options.onCameraStyle?.());
     this.aimModeButton = railButton('gd-rail-aim', 'MANUAL', '', 'Auto or manual aim and fire');
     tapButton(this.aimModeButton, () => options.onAimMode?.());
+    // THE BATHROOM BUTTON (Joshua, 2026-11-19): a 🚽 beside the gear, top right, shown only once she feels the urge
+    // (it pulses red when the urge is strong). Tapped: she squats for 5 s and is emptied, until there are toilets.
+    this.bathroomButton = element('button', 'gd-button gd-bathroom', this.root, '🚽');
+    this.bathroomButton.setAttribute('aria-label', 'Go to the bathroom');
+    this.bathroomButton.hidden = true;
+    tapButton(this.bathroomButton, () => options.onBathroom?.());
     // L and R: the hand the next action is for (tapped again: both). Beside the top of the rail.
     this.handsBox = element('div', 'gd-hands', this.root);
     const pick = (hand: 'left' | 'right'): HTMLElement => {
@@ -457,6 +467,8 @@ export class Hud {
     intakeRow([['Snack bar 150 mL', 'snack'], ['Small meal 400 mL', 'smallMeal'], ['Full meal 700 mL', 'fullMeal']]);
     intakeRow([['Sip 100 mL', 'sip'], ['Bottle 500 mL', 'bottle'], ['Canteen 1 L', 'canteen']]);
     intakeRow([['Make hungry', 'hungry'], ['Make thirsty', 'thirsty'], ['Bathroom', 'bathroom']]);
+    // (to test THE BATHROOM BAR and the 🚽 button: her bladder to the urge, 350 mL, or a strong urge, 520 mL)
+    intakeRow([['Need to go', 'needToGo'], ['Must go now', 'mustGo']]);
     element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 5 s and her bladder is emptied (until there is a toilet). The full readout shows her stomach and bladder.');
     choiceRow('Body clock', 'bodyClock', [['1x (real time)', 1], ['6x (1 h = 6 h)', 6], ['15x (as it was)', 15], ['60x (fast test)', 60]], 'How fast her stomach empties and her bladder fills: game hours for each real hour.');
     element('h2', 'gd-settings-part', settings, 'TEST TOOLS');
@@ -489,6 +501,12 @@ export class Hud {
     this.holsterButton.hidden = label === null;
     if (label !== null && label !== this.holsterLabel) { (this.holsterButton.firstChild as HTMLElement).textContent = label; this.holsterLabel = label; }
     this.showHands();
+  }
+
+  /** THE BATHROOM BUTTON: hidden (null), shown at her urge (1), shown pulsing when it is strong (2). */
+  setBathroom(urge: 0 | 1 | 2 | null): void {
+    this.bathroomButton.hidden = !urge;
+    this.bathroomButton.classList.toggle('is-strong', urge === 2);
   }
 
   /** THE RAIL's RELOAD button: shown when a reload would do something (at the table, or from her belt). */

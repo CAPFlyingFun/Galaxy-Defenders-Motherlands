@@ -596,6 +596,8 @@ async function start(): Promise<void> {
   const intake = (action: IntakeAction) => {
     if (action === 'hungry') { vitals.setFoodBar(0.25); return; }
     if (action === 'thirsty') { vitals.setWaterBar(0.25); return; }
+    if (action === 'needToGo') { vitals.setBladder(350); return; }
+    if (action === 'mustGo') { vitals.setBladder(520); return; }
     if (action === 'bathroom') { bathroomLeft = BATHROOM_SECONDS; heroine.squatFor?.(BATHROOM_SECONDS); return; }
     const portion = INTAKE[action];
     eating.food += portion.food;
@@ -703,6 +705,7 @@ async function start(): Promise<void> {
     },
     onDomeDebug: domeDebug,
     onIntake: intake,
+    onBathroom: () => { if (bathroomLeft <= 0) intake('bathroom'); },
     // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
     onPrompt: (which) => {
       if (promptIs === 'table') useTable(which);
@@ -1248,6 +1251,8 @@ async function start(): Promise<void> {
     limits = reading;
     heroine.setVitals?.(reading);
     vitalsPanel.show(reading);
+    // (the 🚽 button: from her urge, hidden while she is already going)
+    hud.setBathroom(bathroomLeft > 0 ? null : reading.bathroomUrge);
     hud.setPace(pace.name, pace.ring);
     // THE TIME LAPSE (Settings -> PREGNANCY): a day a second of play, her belly off her chart, to her delivery week
     if (plan.lapseWeek !== null) {

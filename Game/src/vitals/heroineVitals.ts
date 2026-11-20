@@ -28,7 +28,8 @@
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
 import { ACTIVITY, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
-import { ABDOMEN_PLACE, STOMACH } from '@charb/actor/abdominalOrgans';
+import { ABDOMEN_PLACE, RECTUM, STOMACH } from '@charb/actor/abdominalOrgans';
+import { BLADDER } from '@charb/actor/pelvicOrgans';
 import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
 
 /** Her food bar (0..1) from the food in her stomach, millilitres (VITALS_TUNING.foodBar). */
@@ -202,6 +203,23 @@ export interface VitalsReading {
   readonly bellyExtra: number;
   /** the share of her full speed she can manage now, `slowest` .. 1 */
   readonly speedShare: number;
+  /**
+   * THE BATHROOM BAR (Joshua, 2026-11-19: "add a bathroom stat to watch"): how full she is, 0 empty .. 1 can hold no
+   * more: her bladder (the builder's 600 mL) or her rectum (300 mL), whichever is fuller.
+   */
+  readonly bathroom: number;
+  /** her need to go: 0 none, 1 the urge (bladder 300 mL, rectum 150 mL), 2 strong (bladder 500 mL, rectum 240 mL) */
+  readonly bathroomUrge: 0 | 1 | 2;
+}
+
+/** The bathroom bar and her urge, from what is in her bladder and rectum (the builder's thresholds). */
+export function bathroomOf(bladderMl: number, rectumMl: number): { fill: number; urge: 0 | 1 | 2 } {
+  const fill = clamp(Math.max(bladderMl / BLADDER.mostMl, rectumMl / RECTUM.mostMl), 0, 1);
+  // (the bladder's urge starts at 300 mL and is at its strongest by 500; the rectum's at 150, strongest by 1.6 times
+  //  that, as the builder's gutNeeds reads them)
+  const strong = bladderMl >= BLADDER.urgeMl[1] || rectumMl >= RECTUM.urgeMl * 1.6;
+  const urge = strong ? 2 : bladderMl >= BLADDER.urgeMl[0] || rectumMl >= RECTUM.urgeMl ? 1 : 0;
+  return { fill, urge };
 }
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -388,6 +406,12 @@ export class HeroineVitals {
     this.needs = this.gameNeeds();
   }
 
+  /** Her bladder set to `ml` millilitres (to test the bathroom bar: Settings -> FOOD & DRINK -> Need to go / Must go now). */
+  setBladder(ml: number): void {
+    this.gut = { ...this.gut, bladderMl: clamp(ml, 0, BLADDER.mostMl) };
+    this.needs = this.gameNeeds();
+  }
+
   /** She uses the bathroom: her bladder emptied (and her rectum, if she needed to go). */
   relieve(): void {
     this.gut = { ...this.gut, bladderMl: 0, rectumMl: 0 };
@@ -445,6 +469,8 @@ export class HeroineVitals {
       stomach,
       bellyExtra: stomach * tuning.bellyWhenFull,
       speedShare,
+      bathroom: bathroomOf(this.gut.bladderMl, this.gut.rectumMl).fill,
+      bathroomUrge: bathroomOf(this.gut.bladderMl, this.gut.rectumMl).urge,
     };
   }
 }

@@ -1,6 +1,6 @@
 // ============================================================================
 // vitalsPanel.ts -- the heroine's vitals on screen: a small card with her heart
-// rate, breathing, and bars for health, stamina, food and water.
+// rate, breathing, and bars for health, stamina, food, water and the bathroom.
 //
 // It only DRAWS. It is handed a reading (see heroineVitals.ts) and shows it, so
 // the same card works in the test page now and in the game's HUD later.
@@ -23,7 +23,12 @@ const STYLE = `
 .gd-vitals-bars { display: grid; grid-template-columns: auto 74px; gap: 3px 6px; align-items: center; }
 .gd-vitals-bars span { opacity: .8; font-size: 9px; }
 .gd-vitals-bar { height: 6px; border-radius: 3px; background: #ffffff1f; overflow: hidden; }
-.gd-vitals-bar div { height: 100%; width: 100%; border-radius: 3px; transform-origin: left center; }
+.gd-vitals-bar div { height: 100%; width: 100%; border-radius: 3px; transform-origin: left center; transition: background .4s; }
+/* THE BATHROOM BAR's urge: amber at the urge, red and pulsing when it is strong */
+.gd-vitals-bars span.is-urge { color: #ffc24a; opacity: 1; }
+.gd-vitals-bars span.is-strong { color: #ff5a5a; opacity: 1; animation: gd-vitals-pulse 1s ease-in-out infinite; }
+.gd-vitals-bar.is-strong { animation: gd-vitals-pulse 1s ease-in-out infinite; }
+@keyframes gd-vitals-pulse { 50% { opacity: .45; } }
 `;
 
 /** One bar: its label and its colour. */
@@ -32,7 +37,13 @@ const BARS = [
   { key: 'stamina', label: 'STAMINA', colour: '#ffd23f' },
   { key: 'food', label: 'FOOD', colour: '#ff9f43' },
   { key: 'water', label: 'WATER', colour: '#3fb6ff' },
+  // (Joshua, 2026-11-19: "add a bathroom stat to watch". It fills as her bladder or rectum fills; its colour is her
+  //  urge, see URGE_COLOURS)
+  { key: 'bathroom', label: 'BATHROOM', colour: '#9aa6b8' },
 ] as const;
+
+/** The bathroom bar's colour at each urge: none (a quiet grey), the urge (amber), strong (red). */
+const URGE_COLOURS = ['#9aa6b8', '#ffc24a', '#ff5a5a'] as const;
 
 export class VitalsPanel {
   /** The card. Put it wherever it should sit: `parent.appendChild(panel.element)`. */
@@ -41,6 +52,9 @@ export class VitalsPanel {
   private readonly rate: HTMLElement;
   private readonly breath: HTMLElement;
   private readonly fills = new Map<string, HTMLDivElement>();
+  /** The bathroom bar's label and track, which change with her urge. */
+  private bathroomLabel!: HTMLElement;
+  private bathroomTrack!: HTMLElement;
   /** What was last written, so the page is only touched when a number really changes (cheaper on a phone). */
   private last = new Map<string, string>();
 
@@ -66,7 +80,7 @@ export class VitalsPanel {
     this.breath = document.createElement('div');
     this.breath.className = 'gd-vitals-breath';
 
-    // The four bars.
+    // The five bars.
     const bars = document.createElement('div');
     bars.className = 'gd-vitals-bars';
     for (const bar of BARS) {
@@ -79,6 +93,7 @@ export class VitalsPanel {
       track.appendChild(fill);
       bars.append(label, track);
       this.fills.set(bar.key, fill);
+      if (bar.key === 'bathroom') { this.bathroomLabel = label; this.bathroomTrack = track; }
     }
     this.element.append(heartBox, this.breath, bars);
   }
@@ -101,11 +116,20 @@ export class VitalsPanel {
       stamina: reading.stamina,
       food: reading.food,
       water: reading.water,
+      bathroom: reading.bathroom,
     };
     for (const [key, share] of Object.entries(shares)) {
       const fill = this.fills.get(key)!;
       // (scaleX instead of width: the browser can do it without laying the page out again)
       this.set(key, Math.max(0, Math.min(1, share)).toFixed(3), (v) => (fill.style.transform = `scaleX(${v})`));
     }
+    // Her urge: the bathroom bar's colour, and its label and bar pulse when it is strong.
+    this.set('urge', String(reading.bathroomUrge), (v) => {
+      const urge = Number(v) as 0 | 1 | 2;
+      this.fills.get('bathroom')!.style.background = URGE_COLOURS[urge];
+      this.bathroomLabel.classList.toggle('is-urge', urge === 1);
+      this.bathroomLabel.classList.toggle('is-strong', urge === 2);
+      this.bathroomTrack.classList.toggle('is-strong', urge === 2);
+    });
   }
 }

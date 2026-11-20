@@ -52,6 +52,7 @@ const CONTROLS = [
   { id: 'railCam', selector: '.gd-rail-cam', label: 'CAM (camera style)' },
   { id: 'railAim', selector: '.gd-rail-aim', label: 'AUTO / MANUAL' },
   { id: 'hands', selector: '.gd-hands', label: 'L / R hand' },
+  { id: 'bathroom', selector: '.gd-bathroom', label: 'Bathroom (🚽)' },
   { id: 'prompt', selector: '.gd-prompt', label: 'Prompt (grab, put down...)' },
   { id: 'ammo', selector: '.gd-ammo', label: 'Rounds' },
   { id: 'vitals', selector: '.gd-top-slot', label: 'Vitals card' },

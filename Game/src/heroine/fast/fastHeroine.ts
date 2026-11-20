@@ -274,7 +274,8 @@ function floats(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttrib
 
 /** Her look's cloth shine, with the knit chosen in Settings in place of its own (only where the look wears a knit). */
 function withKnit(shine: ClothShine | undefined, knit: ClothShine['knit']): ClothShine | undefined {
-  return shine?.knit && knit ? { ...shine, knit } : shine;
+  // (a look whose knit is laid on one colour of its own, as Look 2's navy, keeps its own picture: the setting is the catsuit's)
+  return shine?.knit && knit && !shine.knitOn ? { ...shine, knit } : shine;
 }
 
 export async function createFastHeroine(options: FastHeroineOptions): Promise<FastHeroine> {
@@ -703,7 +704,11 @@ if (uHideHead > 0.5) {
     colours: LOOK_GEAR[look.manifest.look]?.belt,
     gunColours,
     line: LOOK_GEAR[look.manifest.look]?.beltLine,
+    holsters: LOOK_GEAR[look.manifest.look]?.holsters,
+    pouches: LOOK_GEAR[look.manifest.look]?.pouches,
   });
+  /** The thighs with a holster drawn (an outfit may have one: looks/gear.ts); a gun put away on the other is stowed out of sight. */
+  const holstered = LOOK_GEAR[look.manifest.look]?.holsters ?? (['left', 'right'] as const);
   // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist
   // cuffs and shoulder plates, each a shell shaped round her own skin on one bone. Made now, while she stands.
   const piecesStyle = LOOK_GEAR[look.manifest.look]?.pieces;
@@ -714,6 +719,7 @@ if (uHideHead > 0.5) {
       left: { thigh: bones[joints.hipL], shin: bones[joints.kneeL], foot: bones[joints.ankleL] },
       right: { thigh: bones[joints.hipR], shin: bones[joints.kneeR], foot: bones[joints.ankleR] },
     },
+    neck: { neck: neckBone, skull },
   }, piecesStyle) : null;
   const handIndex = (hand: Hand): 0 | 1 => (hand === 'left' ? 0 : 1);
   /** Each hand's reach is to something within reach as she stands (her own holster): her body does not get down to it. */
@@ -1155,6 +1161,13 @@ if (uHideHead > 0.5) {
       joints2.update();
       // (a holstered gun is kept clear of too, by the hand that is not reaching for it: see holsterRoom)
       holsterRoom();
+      // (Look 2's hip panels swing with her thighs, now that she is posed: suitGear.ts)
+      suit?.update(frame.dt);
+      // (a gun put away where the outfit has no holster is stowed, out of sight, until it is drawn again)
+      for (const hand of ['left', 'right'] as const) {
+        if (holstered.includes(hand)) continue;
+        guns[hand].object.visible = guns[hand].object.parent !== gear.holsterBone(hand);
+      }
       // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
       for (const i of [0, 1] as const) armClear.holdHand[i] = touch.shapes[i] !== null && reach.weight(i) > 0.5;
       armClear.update(frame.dt);

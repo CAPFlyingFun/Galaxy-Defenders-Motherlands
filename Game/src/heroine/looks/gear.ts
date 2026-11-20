@@ -10,7 +10,7 @@
 import type { SuitGearStyle } from '../fast/suitGear';
 import type { BELT_COLOURS } from '../fast/beltGear';
 import type { GunColours } from '../guns';
-import { PERFORATED_MESH, type ClothShine } from '../fast/outfitMaterial';
+import { GOLD_GLITTER, NAVY_SPARKLE, WHITE_TECH, PERFORATED_MESH, type ClothShine } from '../fast/outfitMaterial';
 
 export interface LookGear {
   /** The belt, straps, holsters and pouches (any left out keep beltGear.ts's own). */
@@ -28,6 +28,9 @@ export interface LookGear {
   readonly gun?: GunColours;
   /** The fitted pieces, if any. */
   readonly pieces?: SuitGearStyle;
+  /** Which thighs carry a holster (left out: both), and whether she has clip pouches (left out: yes). beltGear.ts. */
+  readonly holsters?: readonly ('left' | 'right')[];
+  readonly pouches?: boolean;
 }
 
 export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
@@ -68,8 +71,17 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
   spaceHeroine: {
     belt: { belt: 0x6a4a34, edge: 0xc9a35e, buckle: 0xd8b46a, accent: 0xc9a35e, strap: 0x3a2a20, holster: 0x1c2445, plate: 0x1c2445 },
     beltLine: [-0.06, 0.035, 0.1],
-    clothShine: { cloth: 0.5, trim: 0.42 },
+    // (Joshua's pictures laid on in their own colours: his navy over the navy, a 10 cm repeat; his gold glitter over the
+    //  gold, a 4 cm repeat, so its glints are fine on the thin piping; his white tech pattern over the white, 14 cm. Depth, Joshua: "add some depth to the blue and gold": 0.4 and 0.3 mm)
+    clothShine: { cloth: 0.5, trim: 0.42, prints: [{ ...NAVY_SPARKLE, on: '#1c2445', metres: 0.1, depth: 0.0004 }, { ...GOLD_GLITTER, on: '#c59b60', metres: 0.04, depth: 0.0003 }, { ...WHITE_TECH, on: '#efeef3', metres: 0.14 }] },
     gun: { metal: 0x23283a, glow: 0xd8b46a },
+    // (Joshua, 2026-11-19: "Go for one holster": on her right thigh, as in his picture; no clip pouches)
+    holsters: ['right'], pouches: false,
+    // (her pieces, Look 2's set: plate = its white, trim = its navy, accent = its gold, sole navy)
+    pieces: {
+      plate: '#eeeef2', trim: '#1c2445', accent: '#c9a35e', sole: '#1c2445', glow: '',
+      boots: true, cuffs: true, shoulders: true, design: 'anime', knees: true, collar: true, gloves: true, hipPanelLining: '#b3202a',
+    },
   },
   /**
    * THE GRAY AND RED SUIT (graySuit.ts; Joshua's outfit design 2): a gray belt with silver edges and a glowing pale

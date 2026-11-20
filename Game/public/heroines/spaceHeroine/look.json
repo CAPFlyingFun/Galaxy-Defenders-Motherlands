@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "spaceHeroine",
-  "bakedAt": "2026-11-20T05:58:06.576Z",
+  "bakedAt": "2026-11-20T06:16:24.023Z",
   "builderVersion": "0.9.51",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7134932714305189,
+  "barefootHeightMetres": 1.7134627257793762,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -41,11 +41,11 @@
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7001304972656552,
-    "pointsTheBuilderMoved": 73390,
-    "movedMostGeometryUnits": 0.15437685185460032,
+    "crownOverTheFloorMetres": 1.7000999516145126,
+    "pointsTheBuilderMoved": 73393,
+    "movedMostGeometryUnits": 0.15434086223809043,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16339184491224937,
+    "restSkinSpread": 0.16335546913083757,
     "captureMissing": {
       "position": 0,
       "normal": 0

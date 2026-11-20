@@ -152,6 +152,14 @@ export interface BeltGearSource {
   readonly colours?: Partial<Record<keyof typeof BELT_COLOURS, number>>;
   /** The outfit's gun colours, for the clips in her pouches (looks/gear.ts `gun`); left out: the first guns'. */
   readonly gunColours?: GunColours;
+  /**
+   * Which thighs carry a holster (looks/gear.ts `holsters`; Joshua, 2026-11-19, Look 2: "Go for one holster"). Left
+   * out: both. A thigh without one has no holster, straps or drop strap drawn; a gun put away on that side is stowed
+   * out of sight (fastHeroine.ts).
+   */
+  readonly holsters?: readonly Hand[];
+  /** False: no clip pouches (and so no reloading from the belt, only at the table). Left out: the six pouches. */
+  readonly pouches?: boolean;
 }
 
 export interface BeltGear {
@@ -779,6 +787,9 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     bone.add(mesh);
     holsterMeshes.push(mesh);
     holsterSeat[hand].copy(toBone).multiply(holsterRest[hand]);
+    // (an outfit with no holster on this thigh: its seat is kept, so the game's holstering still works, but nothing of
+    //  it is drawn and no straps are made)
+    if (src.holsters && !src.holsters.includes(hand)) { mesh.visible = false; continue; }
 
     // THE THIGH STRAPS: round her thigh at two heights down the holster.
     const legAll = middle.filter((v) => share(v, (k) => k === thigh[hand]) > 0.5);
@@ -1043,7 +1054,9 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     for (let i = 0; i < Math.min(pouchCount, Math.max(0, Math.round(n))); i++) full[fillOrder[i]] = true;
     showClips();
   };
-  setClips(pouchCount);
+  setClips(src.pouches === false ? 0 : pouchCount);
+  // (an outfit with no pouches: none drawn, none ever filled, so she reloads only at the table)
+  if (src.pouches === false) { pouchMesh.visible = false; clipMesh.visible = false; }
 
   const where = (k: number): number => lineAt((k / 360) * Math.PI * 2).y;
   return {
@@ -1053,7 +1066,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     holsterEgg: (hand) => holsterEggs[hand],
     pouches: pouchCount,
     get clips() { return full.filter(Boolean).length; },
-    setClips,
+    setClips: (n: number) => setClips(src.pouches === false ? 0 : n),
     pouchFull: (i) => full[i] ?? false,
     pouchState: (i) => (full[i] ? 'full' : stowed[i] ? 'empty' : 'none'),
     pouchBone: () => carrier,

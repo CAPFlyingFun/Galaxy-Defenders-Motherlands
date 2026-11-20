@@ -21,10 +21,10 @@
 //   Paint layer 2, THE GOLD PIPING (`paintPiping`, by code): the white parts a
 //     little bigger, so a thin gold line shows round each.
 //
-//   Paint layer 3, THE WHITE (`paintWhite`, by code): her bodice above her
-//     bust's underside, except the navy panel that runs up between her breasts
-//     to a point; her upper back. Painted only on her trunk, so it never goes
-//     past the leotard's own edges.
+//   Paint layer 3, THE WHITE (`paintWhite`, by code; `whiteAt` has its
+//     shapes): the cups over her breasts with a navy V between them, a band down
+//     each side of the navy front, her hips, a yoke on her upper back. Painted
+//     only on her trunk, so it never goes past the leotard's own edges.
 //
 // THE WINDOWS at her waist are not in it: a template can only be painted over,
 // never cut, so skin cannot show through the leotard. (Painting the whole
@@ -85,31 +85,49 @@ const RADIANS = Math.PI / 180;
 // ------------------------------------------------------------------ the white (on her trunk: `along` 0 at her hip
 // joints, 1 at the base of her neck; her waist is about 0.33 and her bust's underside about 0.55, measured on her)
 
-/** Where the white starts, by how far round her (degrees, 0 her front, 180 her back): under her bust in front, lower behind. */
-const WHITE_FROM = through([[0, 0.5], [60, 0.49], [100, 0.43], [130, 0.33], [180, 0.3]]);
-/** How far below the base of her neck the white stops (the leotard's own neckline is there, edged gold). */
-const WHITE_TO = 0.925;   // (Joshua's neckline is at 0.95 in front: the white stays a little under it)
-
-/** How far round her the white reaches: from her front's middle (degrees), and from her back's middle. */
-const WHITE_SIDE = Object.freeze({ front: 72, back: 58 });
-
 /**
- * THE NAVY PANEL up her front between the white: its half width round her (degrees) at each height, from under her
- * bust narrowing to a point between her breasts.
+ * THE WHITE, from Joshua's enhanced picture of Look 2 (2026-11-20). Each shape's measures are on her trunk: `along` up
+ * it (her waist about 0.33, her bust's underside about 0.55, the base of her neck 1), `turn` round it in degrees (0 her
+ * front's middle, 90 her side, 180 her back's middle; both sides alike).
+ *
+ *   THE CUPS: white over her breasts, from under them up toward her collarbones, round to the sides of her chest
+ *     (navy beyond, under her arms), with a narrow navy V down the middle from her collar to her breastbone.
+ *   THE SIDE BANDS: a white band down each side of the navy front panel, from under her bust curving out to her hip.
+ *   THE HIPS: white over her hips beside the navy brief, from the bands down toward the leg openings.
+ *   THE YOKE: white over her upper back, tapering to a point toward her waist.
  */
-const PANEL_HALF = through([[0.4, 30], [0.52, 30], [0.6, 20], [0.68, 0]]);
-const PANEL_TOP = 0.68;
+const CUPS = Object.freeze({ top: 0.88, out: 50 });
+/** The cups' lower edge by how far round her (degrees): high in the middle, where the navy rises between her breasts. */
+const CUPS_BOTTOM = through([[0, 0.64], [14, 0.6], [28, 0.53], [50, 0.5]]);
+/** The navy V between the cups: its half width (degrees) at each height, from her collar down to its point. */
+const V_HALF = through([[0.62, 4], [0.7, 9], [0.8, 11], [0.9, 14]]);
+/** The side bands' middle (degrees round her) at each height, and their half width (leg lengths, about 2.3 cm). */
+const BAND_PATH = through([[0.52, 40], [0.4, 36], [0.28, 38], [0.16, 46], [0.04, 56]]);
+const BAND_HALF = 0.03;
+const BAND_SPAN = Object.freeze({ from: 0.04, to: 0.54 });
+/** The hips: below this height (trunk), from this far round to this far (degrees). */
+const HIPS = Object.freeze({ top: 0.08, from: 46, to: 118, bottom: -0.05 });
+/** The yoke: half width round her back (degrees) at each height, down to its point. */
+const YOKE_HALF = through([[0.36, 0], [0.5, 22], [0.7, 38], [0.92, 42]]);
+const YOKE_TIP = 0.37;
+/** The white stops a little under the leotard's own neckline (Joshua's: 0.95 in front). */
+const WHITE_TO = 0.925;
 
 /** How far inside the white a trunk point is (leg lengths; minus outside). */
 function whiteAt(place: LegPlace): number {
-  const turn = Math.abs(place.turn);
-  const r = Math.max(0.05, place.radius);
-  // outside the panel: how far round past its edge (at and above its point, nothing of it)
-  const pastPanel = place.along >= PANEL_TOP ? 1 : (turn - PANEL_HALF(place.along)) * RADIANS * r;
-  // (round her sides it stops short of her armpits, in a clean line: navy there, as his picture's sides are; behind,
-  //  a white yoke down the middle of her back)
-  const front = (WHITE_SIDE.front - turn) * RADIANS * r, back = (WHITE_SIDE.back - (180 - turn)) * RADIANS * r;
-  return Math.min((place.along - WHITE_FROM(turn)) * 0.8, (WHITE_TO - place.along) * 0.8, pastPanel, Math.max(front, back));
+  const turn = Math.abs(place.turn), r = Math.max(0.05, place.radius), along = place.along;
+  const round = (deg: number) => deg * RADIANS * r;   // degrees round her as a distance on her skin
+  const top = (WHITE_TO - along) * 0.8;
+  // the cups: between their bottom and top, inside `out` from her front, outside the navy V
+  const cups = Math.min((along - CUPS_BOTTOM(turn)) * 0.8, (CUPS.top - along) * 0.8, round(CUPS.out - turn), round(turn - V_HALF(along)));
+  // the side bands
+  const at = Math.min(BAND_SPAN.to, Math.max(BAND_SPAN.from, along));
+  const bands = BAND_HALF - Math.hypot(round(turn - BAND_PATH(at)), along - at);
+  // the hips
+  const hips = Math.min((HIPS.top - along) * 0.8, (along - HIPS.bottom) * 0.8, round(turn - HIPS.from), round(HIPS.to - turn));
+  // the yoke behind
+  const yoke = Math.min(top, (along - YOKE_TIP) * 0.8, round(YOKE_HALF(along) - (180 - turn)));
+  return Math.max(cups, bands, hips, yoke);
 }
 
 /** THE GOLD PIPING round the white: how much bigger the gold is than the white (leg lengths, about 5 mm). */

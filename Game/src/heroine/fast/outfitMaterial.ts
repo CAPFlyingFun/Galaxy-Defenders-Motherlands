@@ -71,6 +71,20 @@ export interface ClothShine {
    * 1 is the knit at its own size, a 5 cm repeat. Left out: none (the knit is only what the bake painted).
    */
   readonly knit?: KnitTile & { readonly stitch: number; readonly strength: number };
+  /**
+   * WHICH CLOTH THE LIVE KNIT COVERS: left out, the suit's grays (the catsuit); a colour (as '#rrggbb'), only the cloth
+   * baked in that colour, which it REPLACES with the knit picture's own colours (Joshua, 2026-11-20, Look 2: "add this
+   * for the navy blue texture" -- his navy picture on her navy, the white and gold left smooth).
+   */
+  readonly knitOn?: string;
+  /**
+   * PICTURES LAID ON ONE COLOUR EACH, in their own colours (Joshua, 2026-11-20, Look 2: his navy picture, then "Here is a
+   * texture for the gold"): wherever her cloth was baked in `on`, the picture `file` (in public/) shows instead,
+   * repeating every `metres`, laid on from three sides (with `depth`, metres, its light parts stand out that far: Joshua,
+   * 2026-11-20, "add some depth to the blue and gold textures") as the live knit is, so it stretches with her. Up to three
+   * (his navy, gold and white: "We could do this for the white... looks kind of sci-fi techy").
+   */
+  readonly prints?: readonly { readonly file: string; readonly on: string; readonly metres: number; readonly depth?: number }[];
 }
 
 /**
@@ -91,6 +105,16 @@ export const PERFORATED_MESH: KnitTile = Object.freeze({ file: 'fabrics/perforat
  * scripts/make_weave_tile.py (light flattened, edges cross-faded thread on thread, glints softened; it prints the
  * middle brightness). About 40 threads to the picture.
  */
+/**
+ * JOSHUA'S NAVY PICTURE for Look 2 (2026-11-20: "Can you add this for the navy blue texture?"): a deep royal blue
+ * knit with fine ribs and a few glints, cross-faded at its edges so it repeats (public/fabrics/navy-sparkle-tile.png).
+ * Laid on in its own colours over the navy (ClothShine `knitOn`).
+ */
+export const NAVY_SPARKLE = Object.freeze({ file: 'fabrics/navy-sparkle-tile.png' });
+/** JOSHUA'S GOLD GLITTER picture for Look 2's gold (2026-11-20: "Here is a texture for the gold"), made to repeat the same way. */
+export const GOLD_GLITTER = Object.freeze({ file: 'fabrics/gold-glitter-tile.png' });
+/** JOSHUA'S WHITE TECH picture for Look 2's white (2026-11-20: "looks kind of sci-fi techy"), made to repeat, its middle the suit's white. */
+export const WHITE_TECH = Object.freeze({ file: 'fabrics/white-tech-tile.png' });
 export const WOVEN_MESH: KnitTile = Object.freeze({
   file: 'fabrics/woven-mesh-tile.png', middle: 68.7,
   // (its HEIGHT, made by Joshua in his Local Texture Lab, docs/tools/Local_Texture_Lab.html, from the tile above: the
@@ -115,6 +139,7 @@ const KNIT = Object.freeze({ tileMetres: 0.05 });
  */
 export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook, renderer: THREE.WebGLRenderer, shine?: ClothShine, unitsPerMetre = 1): SkinMaterials {
   // THE LIVE KNIT's swatch and its numbers, shared by both materials (so the slider moves them together)
+  const knitColour = shine?.knitOn ? new THREE.Color(shine.knitOn) : null;   // (in the working colours: as her colour is read)
   const knitUniforms = shine?.knit ? {
     knitMap: { value: new THREE.TextureLoader().load(import.meta.env.BASE_URL + shine.knit.file, (t) => { t.needsUpdate = true; }) },
     knitTile: { value: KNIT.tileMetres * shine.knit.stitch * unitsPerMetre },
@@ -130,13 +155,26 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   if (knitUniforms) {
     const t = knitUniforms.knitMap.value;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.NoColorSpace;   // (read as plain numbers: how light each part of a stitch is)
+    // (read as plain numbers, how light each part of a stitch is; or, laid on in its own colours, as the colours it shows)
+    t.colorSpace = knitColour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     const h = knitUniforms.knitHeightMap.value;
     h.wrapS = h.wrapT = THREE.RepeatWrapping;
     h.colorSpace = THREE.NoColorSpace;
     h.anisotropy = t.anisotropy;
   }
+  // THE PRINTS (ClothShine `prints`): each picture, its repeat and the colour it covers
+  const prints = (shine?.prints ?? []).slice(0, 3).map((p) => {
+    const map = new THREE.TextureLoader().load(import.meta.env.BASE_URL + p.file, (t) => { t.needsUpdate = true; });
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    return { map, tile: p.metres * unitsPerMetre, on: new THREE.Color(p.on), depth: p.depth ?? 0 };
+  });
+  const printUniforms: Record<string, { value: unknown }> = {};
+  prints.forEach((p, i) => { printUniforms[`printMap${i}`] = { value: p.map }; printUniforms[`printTile${i}`] = { value: p.tile }; });
+  /** Where her skin was as baked, and which way it faced: the knit and the prints are laid on by these. */
+  const laidOn = !!knitUniforms || prints.length > 0;
   // (DEV only: test pages set the knit's numbers by hand)
   if (import.meta.env.DEV && knitUniforms) (window as unknown as { __knit?: unknown }).__knit = knitUniforms;
   const from = fileMaterial as THREE.MeshStandardMaterial;
@@ -160,7 +198,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.knit)) {
+    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.knit || prints.length)) {
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
       const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
       if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
@@ -172,7 +210,10 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         'float knitRoughness = texture2D(roughnessMap, vRoughnessMapUv).g;',
         `float knitHere = smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, knitRoughness) * (1.0 - smoothstep(${(TRIM_FROM - 0.04).toFixed(3)}, ${TRIM_FROM.toFixed(3)}, knitRoughness));`,
         'float knitColourful = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)) - min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));',
-        'float knitGray = (1.0 - smoothstep(0.02, 0.06, knitColourful)) * knitHere;',
+        knitColour
+          // (a look's own colour instead: wherever her cloth, knit or smooth, was baked in that colour)
+          ? `float knitGray = (1.0 - smoothstep(0.012, 0.03, distance(diffuseColor.rgb, vec3(${knitColour.r.toFixed(5)}, ${knitColour.g.toFixed(5)}, ${knitColour.b.toFixed(5)})))) * smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, knitRoughness);`
+          : 'float knitGray = (1.0 - smoothstep(0.02, 0.06, knitColourful)) * knitHere;',
       ];
       if (shine.darken !== undefined) knitSuit.push(`diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitGray);`);
       if (knitUniforms) knitSuit.push(
@@ -193,12 +234,40 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         // away), their depth fades out, as on her hair; the picture's own smaller copies keep its colour calm there
         'float knitFine = 1.0 - smoothstep(0.012, 0.03, length(fwidth(knitAt)));',
         'float knitLight = texture2D(knitMap, knitAt.zy).r * knitSide.x + texture2D(knitMap, knitAt.xz).r * knitSide.y + texture2D(knitMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z;',
-        'float knitRatio = pow(max(knitLight / knitMiddle, 0.0), 1.0 + 0.7 * knitOpen);',
-        'diffuseColor.rgb *= mix(1.0, knitRatio, knitGray * knitStrength);',
+        ...(knitColour
+          // (its own colours, the three sides blended, in place of the baked colour)
+          ? ['vec3 knitShown = texture2D(knitMap, knitAt.zy).rgb * knitSide.x + texture2D(knitMap, knitAt.xz).rgb * knitSide.y + texture2D(knitMap, vec2(knitAt.x, -knitAt.y)).rgb * knitSide.z;',
+             'diffuseColor.rgb = mix(diffuseColor.rgb, knitShown, knitGray * knitStrength);']
+          : ['float knitRatio = pow(max(knitLight / knitMiddle, 0.0), 1.0 + 0.7 * knitOpen);',
+             'diffuseColor.rgb *= mix(1.0, knitRatio, knitGray * knitStrength);']),
         // ITS HEIGHT, the same three ways, in metres (its depth times how raised each spot is): read again below,
         // where the light's directions are worked out
         'float knitHeight = knitDepth * knitGray * knitFine * (1.0 - 0.3 * knitOpen) * (texture2D(knitHeightMap, knitAt.zy).r * knitSide.x + texture2D(knitHeightMap, knitAt.xz).r * knitSide.y + texture2D(knitHeightMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z);',
       );
+      // THE PRINTS: each in its own colours where her cloth was baked in its colour (`prints`)
+      if (prints.length) {
+        knitSuit.push('float printCloth = smoothstep(' + (CLOTH_FROM - 0.04).toFixed(3) + ', ' + CLOTH_FROM.toFixed(3) + ', texture2D(roughnessMap, vRoughnessMapUv).g);',
+          'vec3 printSide = abs(normalize(vKnitNormal)); printSide /= (printSide.x + printSide.y + printSide.z);');
+        prints.forEach((p, i) => knitSuit.push(
+          `float printHere${i} = (1.0 - smoothstep(0.03, 0.07, distance(diffuseColor.rgb, vec3(${p.on.r.toFixed(5)}, ${p.on.g.toFixed(5)}, ${p.on.b.toFixed(5)})))) * printCloth;`,
+          `vec3 printAt${i} = vKnitRest / printTile${i};`,
+          `vec3 printShown${i} = texture2D(printMap${i}, printAt${i}.zy).rgb * printSide.x + texture2D(printMap${i}, printAt${i}.xz).rgb * printSide.y + texture2D(printMap${i}, vec2(printAt${i}.x, -printAt${i}.y)).rgb * printSide.z;`,
+          `diffuseColor.rgb = mix(diffuseColor.rgb, printShown${i}, printHere${i});`));
+        // (their depth: each picture's lightness as a height, where it is shown, faded out where its grains are finer
+        //  than a pixel, as the knit's is)
+        knitSuit.push('float printHeight = 0.0;');
+        prints.forEach((p, i) => { if (p.depth > 0) knitSuit.push(
+          `printHeight += ${p.depth.toFixed(6)} * printHere${i} * (1.0 - smoothstep(0.012, 0.03, length(fwidth(printAt${i})))) * dot(printShown${i}, vec3(0.3, 0.59, 0.11));`); });
+      }
+      // (the prints' depth, as the knit's below)
+      const printBump = prints.some((p) => p.depth > 0) ? [
+        'vec3 printSigmaX = dFdx(-vViewPosition), printSigmaY = dFdy(-vViewPosition);',
+        'float printLX = max(length(printSigmaX), 1e-7), printLY = max(length(printSigmaY), 1e-7);',
+        'vec3 printR1 = cross(printSigmaY / printLY, normal), printR2 = cross(normal, printSigmaX / printLX);',
+        'float printDet = dot(printSigmaX / printLX, printR1) * faceDirection;',
+        'vec3 printBumped = abs(printDet) * normal - sign(printDet) * (dFdx(printHeight) / printLX * printR1 + dFdy(printHeight) / printLY * printR2);',
+        'if (abs(printDet) > 0.02 && dot(printBumped, printBumped) > 1e-6) normal = normalize(printBumped);',
+      ] : [];
       // THE THREADS' DEPTH (a "bump"): how fast the height changes from this pixel to the next, across and down the
       // screen, tilts her surface's direction the way a real raised thread would (Morten Mikkelsen's method, which
       // three.js's own bump maps use). Nothing is moved: only the light changes, so it costs almost nothing.
@@ -213,23 +282,26 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         'if (abs(knitDet) > 0.02 && dot(knitBumped, knitBumped) > 1e-6) normal = normalize(knitBumped);',
       ] : [];
       material.onBeforeCompile = (shader) => {
-        if (knitUniforms) {
-          Object.assign(shader.uniforms, knitUniforms);
+        Object.assign(shader.uniforms, printUniforms);
+        if (laidOn) {
+          if (knitUniforms) Object.assign(shader.uniforms, knitUniforms);
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
           //  shape's morphs, so it stretches round her belly as cloth would)
           shader.vertexShader = shader.vertexShader
             .replace('#include <common>', '#include <common>\nattribute vec3 knitRest;\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;')
             .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitRest = knitRest;\nvKnitNormal = objectNormal;');
           shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
-            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;');
+            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;' +
+            (knitUniforms ? '\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;' : '') +
+            prints.map((_, i) => `\nuniform sampler2D printMap${i};\nuniform float printTile${i};`).join(''));
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
-          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + knitBump.join('\n'))
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + knitBump.join('\n') + '\n' + printBump.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}-v2`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}-${shine.knitOn ?? ''}-${(shine.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-v5`;
     }
     return material;
   };

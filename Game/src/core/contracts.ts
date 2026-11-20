@@ -179,7 +179,8 @@ export interface HeroineBody {
   /** Where a shot leaves a gun, in world space. */
   muzzle(hand: Hand, out: THREE.Vector3): THREE.Vector3;
   /** Where the first-person camera sits, in world space: at her head bone, pushed forward so looking down shows her belly. */
-  eye(out: THREE.Vector3): THREE.Vector3;
+  /** Where her eyes are, world space; `pitch` (radians, + up) tilts her head and neck to look up or down. */
+  eye(out: THREE.Vector3, pitch?: number): THREE.Vector3;
   /** First person hides her head (and hair) so the camera is not inside it; her body stays drawn. */
   setFirstPerson(on: boolean): void;
   /** The live knit's stitch size, for an outfit that has one (looks/gear.ts `knit`): for test pages; the game uses the look's. */

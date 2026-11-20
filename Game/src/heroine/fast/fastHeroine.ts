@@ -81,10 +81,22 @@ import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 
 // ------------------------------------------------------------------ tuning (the same numbers as builderHeroine.ts)
 
-/** The first-person eye: this share of the way from the base of her skull to the top of her head... */
-const EYE_UP = 0.42;
-/** ...and this far in front of it (metres): clear of her face, so looking down shows her bust and belly. */
-const EYE_FORWARD = 0.10;
+/**
+ * HER EYES, MEASURED ON HER (Joshua, 2026-11-19: "measure at the eye balls... if the head is on the body, you tilt the
+ * head down 70 degrees, how far forward of an offset is there?... I'd measure from the actual head and then place the
+ * camera accordingly"). Read off her skin standing level: her corneas 0.3 cm ahead of her body's line at 1.595 m, so
+ * the middle of her eyeballs (1.2 cm further back) sits this far AHEAD of and ABOVE the base of her skull (the joint her
+ * head nods on, 1.544 m), metres. The first-person camera is there, not in front of her face as before.
+ */
+const EYE_AHEAD = 0.075;
+const EYE_ABOVE = 0.051;
+/**
+ * LOOKING DOWN (or up) is not her head alone: her neck bends too. This share of the camera's tilt is her neck bending
+ * at its base, the rest her head nodding on her skull. Tilted down 70 degrees her eyes then come 6.4 cm (2.5") forward
+ * and 13.7 cm (5.4") lower; her head alone would bring them no further forward and 10.4 cm (4.1") lower, her neck
+ * alone 9.8 cm (3.9") forward and 20 cm (8") lower.
+ */
+const EYE_NECK_SHARE = 0.5;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
@@ -509,6 +521,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // carries her skull, face and hair is its parent.
   const crown = bone(joints.head);
   const skull = crown.parent && (crown.parent as THREE.Bone).isBone && crown.parent !== bone(joints.neck) ? (crown.parent as THREE.Bone) : crown;
+  // (the base of her neck, for the first-person eye's look down: `eye`)
+  const neckBone = bone(joints.neck);
+  const eyeSkull = new THREE.Vector3(), eyeNeck = new THREE.Vector3();
   // HER BACK, for turning her shoulders further than her belly: every bone from her lower spine up to her chest (the
   // bone her arms and neck hang from), found by walking down from her chest. Her neck up to her skull, for her head.
   // And the bone that is turned for her hips: the one her legs and her spine both hang from, or the bone above it
@@ -901,17 +916,28 @@ if (uHideHead > 0.5) {
       return out.copy(gun.tip).applyMatrix4(gun.object.matrixWorld);
     },
 
-    eye(out: THREE.Vector3): THREE.Vector3 {
-      // From the base of her skull part of the way up to the top of her head. Her skull bone may be shrunk to
-      // nothing (first person), so its place is worked out with its true size: parent x (position, rotation, size 1).
+    eye(out: THREE.Vector3, pitch = 0): THREE.Vector3 {
+      // The base of her skull (the joint her head nods on). Her skull bone may be shrunk to nothing (first person), so
+      // its place is worked out with its true size: parent x (position, rotation, size 1).
       skull.parent?.updateWorldMatrix(true, false);
       skullPlace.compose(skull.position, skull.quaternion, one);
       if (skull.parent) skullPlace.premultiply(skull.parent.matrixWorld);
-      out.copy(crown.position).multiplyScalar(EYE_UP).applyMatrix4(skullPlace);
-      // ...then forward, the way her head faces
+      eyeSkull.setFromMatrixPosition(skullPlace);
+      eyeNeck.setFromMatrixPosition(neckBone.matrixWorld);
+      // Her eyes from there, the way her head faces, as measured; then turned by the look down (or up): the neck's share
+      // swings her whole head about the base of her neck, the rest nods it about the base of her skull. Each turn is in
+      // the upright plane she faces along: (ahead, up) -> (ahead cos a - up sin a, ahead sin a + up cos a), a > 0 up.
       const yaw = facing?.head ?? root.rotation.y;
-      out.x += Math.sin(yaw) * EYE_FORWARD;
-      out.z += Math.cos(yaw) * EYE_FORWARD;
+      const fx = Math.sin(yaw), fz = Math.cos(yaw);
+      const turn = (ahead: number, up: number, a: number): [number, number] => [ahead * Math.cos(a) - up * Math.sin(a), ahead * Math.sin(a) + up * Math.cos(a)];
+      // the skull from the neck (ahead, up), swung by the neck's share
+      const skullAhead = (eyeSkull.x - eyeNeck.x) * fx + (eyeSkull.z - eyeNeck.z) * fz, skullUp = eyeSkull.y - eyeNeck.y;
+      const [sa, su] = turn(skullAhead, skullUp, pitch * EYE_NECK_SHARE);
+      // the eyes from the skull, swung by the whole tilt (the neck's share and the nod)
+      const [ea, eu] = turn(EYE_AHEAD, EYE_ABOVE, pitch);
+      // (sideways, the skull keeps its own place beside the line she faces along)
+      const side = (eyeSkull.x - eyeNeck.x) * fz - (eyeSkull.z - eyeNeck.z) * fx;
+      out.set(eyeNeck.x + fx * (sa + ea) + fz * side, eyeNeck.y + su + eu, eyeNeck.z + fz * (sa + ea) - fx * side);
       return out;
     },
 

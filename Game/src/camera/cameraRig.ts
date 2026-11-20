@@ -262,7 +262,8 @@ export class CameraRig {
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */
   update(dt: number, heroine: HeroineBody): void {
     if (this.mode === 'first') {
-      heroine.eye(this.camera.position);
+      // (her eyes as her head and neck would carry them looking this far up or down: fastHeroine.ts `eye`)
+      heroine.eye(this.camera.position, this.pitch);
       this.setLook(this.yaw, this.pitch);
       return;
     }

@@ -88,7 +88,7 @@ export interface HeroineSettings {
   skinTexture: ShadowChoice;
   /** The small loose locks by her face: 'off' eased off her cheeks (Joshua, 2026-11-19), 'on' as the file has them. Reloads. */
   faceLocks: ShadowChoice;
-  /** HER SKIN'S SHINE, 0 dry .. 50 natural .. 100 oily (Joshua, 2026-11-19; fast/skinShine.ts). Takes hold at once. */
+  /** HER SKIN'S SHINE, 0 dry .. 25 natural (Joshua's pick, the default) .. 100 oily (fast/skinShine.ts). Takes hold at once. */
   skinShine: number;
 }
 
@@ -114,6 +114,14 @@ export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.fre
   ['Gray & red suit', 'graySuit'],
   ['All pink (Joshua\'s export)', 'blazePink'],
 ] as const);
+
+/**
+ * Where the Skin shine slider reads NATURAL, as she was (Joshua, 2026-11-19: "I would set 25 as normal"): below it drier,
+ * above it oilier; it is where the slider starts.
+ */
+export const SKIN_SHINE_NATURAL = 25;
+/** The slider (0..100) as her skin's shine for the shader: -1 dry .. 0 natural .. +1 oily. */
+export const skinOilyOf = (v: number): number => (v < SKIN_SHINE_NATURAL ? (v - SKIN_SHINE_NATURAL) / SKIN_SHINE_NATURAL : (v - SKIN_SHINE_NATURAL) / (100 - SKIN_SHINE_NATURAL));
 
 export const SETTING_KEYS = Object.freeze({
   body: 'gdm.body',
@@ -214,6 +222,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     hairStrands: (address.get('strands') ?? read(SETTING_KEYS.hairStrands)) === 'off' ? 'off' : 'on',
     skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'off' ? 'off' : 'on',
     faceLocks: (address.get('face_locks') ?? read(SETTING_KEYS.faceLocks)) === 'on' ? 'on' : 'off',
-    skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? 50,
+    skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
   };
 }

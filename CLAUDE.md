@@ -233,8 +233,8 @@ use the game's single copy of three.js.
 - HER SKIN'S SHINE, DRY TO OILY, AND WET FROM THE WATER (Joshua, 2026-11-19: "dry skin a little darker, more oily or wet
   skin could naturally have the shine... stepping in the water would turn her skin more shiny for about 2 minutes and
   then fade over 30s... getting wet would be instant"; `Game/src/heroine/fast/skinShine.ts`, bare skin only): Settings
-  -> HEROINE -> Skin shine 0 dry (rougher +0.18, 5% darker) .. 50 natural .. 100 oily (smoother -0.25) (`gdm.skinShine`,
-  `?shine=`, live). WET: roughness 0.12 and 12% darker, only below the WATER LINE (the deepest the water came up her this
+  -> HEROINE -> Skin shine 0 dry (rougher +0.18, 5% darker) .. 25 NATURAL, the default (Joshua: "I would set 25 as
+  normal"; `SKIN_SHINE_NATURAL`) .. 100 oily (smoother -0.25) (`gdm.skinShine`, `?shine=`, live). WET: roughness 0.12 and 12% darker, only below the WATER LINE (the deepest the water came up her this
   time, measured from her feet in her model's own height, plus 5 cm of splash, a 6 cm soft edge); main.ts tells her the
   water's depth at her feet each frame (a river or lake's surface, or the sea's, `island.seaLevel`, above the ground);
   `SkinWetness`: wet at once, fully wet 120 s after leaving the water, then dry over 30 s. Settings -> TEST TOOLS -> Get wet

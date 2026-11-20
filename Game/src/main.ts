@@ -24,7 +24,7 @@ import { createStandInHeroine } from './heroine/standIn';
 import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
 import { HeroineVitals } from './vitals/heroineVitals';
 import { VitalsPanel } from './vitals/vitalsPanel';
-import { loadHeroineSettings, saveSetting, type HeroineSettings } from './heroine/heroineSettings';
+import { loadHeroineSettings, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
@@ -334,8 +334,8 @@ async function start(): Promise<void> {
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
   await breathe();
   const heroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text));
-  // (her skin's shine as chosen in Settings: 0 dry .. 50 natural .. 100 oily)
-  heroine.setSkinShine?.((graphics.skinShine - 50) / 50);
+  // (her skin's shine as chosen in Settings: 0 dry .. 25 natural .. 100 oily)
+  heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
   await breathe();
   scene.add(heroine.root);
   // Real shadows on or off (Settings): the renderer's shadow pictures, the key light's, and every part of her casting.
@@ -657,7 +657,7 @@ async function start(): Promise<void> {
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();
-      else if (key === 'skinShine') heroine.setSkinShine?.((graphics.skinShine - 50) / 50);
+      else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
       else restart();
     },
     onToggleView: toggleView,

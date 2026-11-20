@@ -431,7 +431,7 @@ export class Hud {
     }
 
     // ---- Settings: her skin's shine (Joshua, 2026-11-19: "dry skin a little darker, more oily or wet skin ... the shine")
-    sliderRow('Skin shine', 'skinShine', 0, 100, 1, (v) => (v < 40 ? 'dry' : v > 60 ? 'oily' : 'natural') + ` ${v}`);
+    sliderRow('Skin shine', 'skinShine', 0, 100, 1, (v) => (v < 15 ? 'dry' : v > 40 ? 'oily' : 'natural') + ` ${v}`);
     element('small', 'gd-note', settings, 'How shiny her bare skin is: dry (matte, a little darker) to oily (glossy). Water makes her wet up to where it came: shiny at once, for 2 minutes, then drying over 30 s (Get wet in TEST TOOLS to try it).');
     element('h2', 'gd-settings-part', settings, 'CAMERA');
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);

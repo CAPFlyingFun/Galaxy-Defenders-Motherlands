@@ -315,6 +315,29 @@ export class ArmClear {
   }
 
   /**
+   * A POINT OF HER BELLY AS SHE STOOD (her rest frame: metres, floor at 0, facing +z) WHERE IT IS NOW in the world,
+   * carried by the bone that carries her belly (the baby's kicks are given that way: bellyTouch.ts). `direction`: carry
+   * a direction instead of a point. Without a belly egg, by her root as she stood.
+   */
+  restToWorld(point: THREE.Vector3, out: THREE.Vector3, direction = false): THREE.Vector3 {
+    const o = this.obstacles[0];
+    if (!o) return out.copy(point);
+    o.fromFit.copy(this.standing[o.egg.bone]).invert().premultiply(o.carrier.matrixWorld);
+    return direction ? out.copy(point).transformDirection(o.fromFit) : out.copy(point).applyMatrix4(o.fromFit);
+  }
+
+  /** Whether a point in the world is inside her belly's egg grown by `grow` metres all round (false with no belly). */
+  insideBelly(point: THREE.Vector3, grow = 0): boolean {
+    const o = this.obstacles[0];
+    if (!o) return false;
+    const egg = o.egg;
+    o.toFit.copy(o.carrier.matrixWorld).invert().premultiply(this.standing[egg.bone]);
+    from.copy(point).applyMatrix4(o.toFit);
+    const x = (from.x - egg.cx) / (egg.rx + grow), y = (from.y - egg.cy) / (egg.ry + grow), z = (from.z - egg.cz) / (egg.rz + grow);
+    return x * x + y * y + z * z < 1;
+  }
+
+  /**
    * One frame, after her pose, her turns and her aim are on her bones (and their world matrices are up to date):
    * each arm is moved out of her belly and her breasts if it is in them.
    */

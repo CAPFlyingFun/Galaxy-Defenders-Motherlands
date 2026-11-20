@@ -228,6 +228,26 @@ export class FingerTouch {
   /** The middle of a hand's palm where a bar lies across it, in the hand bone's own space. */
   palmPoint(hand: 0 | 1, out: THREE.Vector3): THREE.Vector3 { return out.copy(this.palm(hand).point); }
 
+  /**
+   * A HAND LAID FLAT ON A SURFACE (her belly where the baby kicks: bellyTouch.ts): the pose her hand bone must have for
+   * the middle of her palm to rest on `at`, her palm facing `palmTo` (into the surface), her fingers pointing along
+   * `fingers` as near as the surface lets them.
+   */
+  flatPose(hand: 0 | 1, at: THREE.Vector3, palmTo: THREE.Vector3, fingers: THREE.Vector3, out: THREE.Matrix4): THREE.Matrix4 {
+    const palm = this.palm(hand);
+    // (the palm's own basis: x along the fingers, y across the hand, z out of the palm, with x = y cross z)
+    p.copy(palmTo).normalize();
+    a.copy(fingers).addScaledVector(p, -fingers.dot(p)).normalize();
+    c.crossVectors(p, a);
+    world.makeBasis(a, c, p);
+    rotation.copy(palm.basis).transpose().premultiply(world);
+    q.setFromRotationMatrix(rotation);
+    this.hands[hand].matrixWorld.decompose(handT, handQ, handS);
+    offset.copy(palm.point).multiply(handS).applyQuaternion(q);
+    handT.copy(at).addScaledVector(p, -TOUCH.palmThick).sub(offset);
+    return out.compose(handT, q, handS);
+  }
+
   /** A hand's palm, measured from her finger bones the first time it is asked for (it does not change). */
   private palm(h: 0 | 1): PalmFrame {
     const known = this.palms[h];

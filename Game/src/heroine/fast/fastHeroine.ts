@@ -52,6 +52,7 @@ import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
+import { BellyTouch } from './bellyTouch';
 import { STANCE, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
@@ -226,6 +227,10 @@ export interface FastHeroine extends HeroineBody {
   setDetail(detail: DetailChoice): void;
   /** For test pages: where her main joints are now (world metres), by the builder's joint names. */
   jointsNow(): Record<string, [number, number, number]>;
+  /** For test pages: the hand on her belly where the baby kicked (0 left, 1 right), -1 none. */
+  bellyHandNow(): number;
+  /** For test pages: a kick on her belly, `round` radians round from her front (+ toward her left), `up` up it. */
+  pokeBelly(round: number, up?: number): void;
   /**
    * Attach THE LIVE BODY (liveBody.ts): the builder's whole hidden room, run each frame and never drawn. Her baby's
    * kicks then show on her skin. Null takes it away again.
@@ -781,6 +786,20 @@ if (uHideHead > 0.5) {
   /** Whether each hand holds its gun (its fingers may close on other things too: a clip). */
   const gunIn: Record<Hand, boolean> = { left: true, right: true };
   const gunSeen = new THREE.Matrix4();
+  // HER HAND TO HER BELLY WHEN THE BABY KICKS (bellyTouch.ts; Joshua, 2026-11-20): a free hand's palm laid on the spot
+  // for 3 s. A hand is free with no gun in it, holding nothing, and no job of the game's.
+  const bellyHand: BellyTouch = new BellyTouch({
+    restToWorld: (point, out, direction) => armClear.restToWorld(point, out, direction),
+    insideBelly: (point, grow) => armClear.insideBelly(point, grow),
+    shoulder: (hand, out) => out.setFromMatrixPosition(hand === 0 ? arms.left.upper.matrixWorld : arms.right.upper.matrixWorld),
+    free: (hand): boolean => !gunIn[hand === 0 ? 'left' : 'right'] && touch.shapes[hand] === null && (!reach.hasJob(hand) || bellyHand.hand === hand),
+    left: (out) => out.set(1, 0, 0).applyQuaternion(root.quaternion),
+    flatPose: (hand, at, palmTo, fingers, out) => touch.flatPose(hand, at, palmTo, fingers, out),
+    // (her body does not get down to it: it is her own belly)
+    setJob: (hand, pose) => { reach.setJob(hand, pose); stayUp[hand] = pose !== null; },
+    moveJob: (hand, pose) => reach.moveJob(hand, pose),
+    progress: (hand) => reach.progress(hand),
+  });
 
   // ---- 9. never drawn when she is out of the camera's view --------------------------------------------------------
   // three.js tests a skinned mesh against the view with a ball it would otherwise work out by posing every one of her
@@ -936,6 +955,16 @@ if (uHideHead > 0.5) {
     setFacing(now: BodyFacing | null): void { facing = now; },
     // (crouching, on her belly or on all fours: groundPose.ts; she goes there over a second or so)
     setStance(stance: Stance): void { stanceAsked = stance; },
+    // (for test pages: the hand on her belly where the baby kicked, -1 none)
+    bellyHandNow(): number { return bellyHand.hand; },
+    // (for test pages: a kick on her belly's egg, `round` radians round from her front (+ toward her left), `up` up it)
+    pokeBelly(round: number, up = 0): void {
+      const e = armClear.eggs[0];
+      if (!e) return;
+      const d = new THREE.Vector3(Math.sin(round), up, Math.cos(round)).normalize();
+      const spot = new THREE.Vector3(e.cx + e.rx * d.x, e.cy + e.ry * d.y, e.cz + e.rz * d.z);
+      bellyHand.poke(spot, new THREE.Vector3(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize());
+    },
     // (for test pages: where her main joints are now, world metres)
     jointsNow(): Record<string, [number, number, number]> {
       const out: Record<string, [number, number, number]> = {}, v = new THREE.Vector3();
@@ -968,7 +997,7 @@ if (uHideHead > 0.5) {
     hands: {
       hasGun: (hand) => gunIn[hand],
       handPoseForGun: (hand, gunWorld, out) => out.copy(gunWorld).multiply(gunSeen.copy(seat[hand]).invert()),
-      reach: (hand, pose, limit, up = false) => { reach.setJob(handIndex(hand), pose, limit); if (pose) stayUp[handIndex(hand)] = up; },
+      reach: (hand, pose, limit, up = false) => { bellyHand.cancel(handIndex(hand)); reach.setJob(handIndex(hand), pose, limit); if (pose) stayUp[handIndex(hand)] = up; },
       reached: (hand) => reach.progress(handIndex(hand)),
       moveReach: (hand, pose) => reach.moveJob(handIndex(hand), pose),
       holster: (hand) => ({ bone: gear.holsterBone(hand), seat: gear.holsterSeat(hand, new THREE.Matrix4()) }),
@@ -1288,6 +1317,9 @@ if (uHideHead > 0.5) {
       // Her joints within their real ranges (jointGuard.ts), then her arms kept clear of her belly and her breasts
       // (armClear.ts), then her joints checked once more (so keeping clear never bends one past its limit). After
       // everything that poses her, so these correct all of it.
+      // A KICK: a free hand to her belly (bellyTouch.ts), before her hands are laid on their jobs. Not while she is down.
+      root.updateMatrixWorld(true);
+      bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0);
       // Her hands on their jobs (handReach.ts), over the aim. A hand that cannot get there makes her lean in.
       reach.apply();
       lower.stillShort(Math.max(reach.short[0], reach.short[1]), frame.dt);
@@ -1305,7 +1337,8 @@ if (uHideHead > 0.5) {
         guns[hand].object.visible = guns[hand].object.parent !== gear.holsterBone(hand);
       }
       // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
-      for (const i of [0, 1] as const) armClear.holdHand[i] = touch.shapes[i] !== null && reach.weight(i) > 0.5;
+      // (and a hand laid on her belly where the baby kicked stays there: her elbow keeps clear instead)
+      for (const i of [0, 1] as const) armClear.holdHand[i] = (touch.shapes[i] !== null || bellyHand.hand === i) && reach.weight(i) > 0.5;
       // (lying down or on all fours her arms are on the ground ahead of her body, not crossing it: nothing to keep clear,
       //  and its upright rules would lift her forearms off the ground)
       if (downS < 0.5) armClear.update(frame.dt);

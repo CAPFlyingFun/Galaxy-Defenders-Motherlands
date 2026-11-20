@@ -145,7 +145,7 @@ export function stanceTurns(
       const offset = side === 0 ? 0 : 0.5;
       const swing = wave(offset) * move, lift = liftOf(offset);
       arm(put, bind, side === 0 ? j.shoulderL : j.shoulderR, side === 0 ? j.elbowL : j.elbowR, side === 0 ? j.wristL : j.wristR, xSign,
-        tip + 12 * DEG * swing, (4 + 26 * lift) * DEG, 0);
+        tip + 12 * DEG * swing, (4 + 26 * lift) * DEG, 0, 1 - 0.5 * lift);
     }
     for (const side of [0, 1] as const) {
       const s = side === 0 ? left : -left, offset = side === 0 ? 0.5 : 0;
@@ -202,7 +202,7 @@ const about = (x: number, y: number, z: number, angle: number): number[] => {
  * One arm: lowered from her T as the builder's standing arm is, then swung FORWARD by `forward` radians at the
  * shoulder, its elbow bent `elbow` (and taken out of the bind's kink), its wrist turned in a little.
  */
-function arm(put: Put, bind: readonly BindJoint[], shoulder: number, elbow: number, wrist: number, xSign: number, forward: number, elbowBend: number, wristIn: number): void {
+function arm(put: Put, bind: readonly BindJoint[], shoulder: number, elbow: number, wrist: number, xSign: number, forward: number, elbowBend: number, wristIn: number, flat = 0): void {
   const s = bind[shoulder], e = bind[elbow], w = bind[wrist];
   const droop = Math.atan2(s.y - e.y, Math.abs(e.x - s.x));
   const kink = droop - Math.atan2(e.y - w.y, Math.abs(w.x - e.x));
@@ -211,7 +211,12 @@ function arm(put: Put, bind: readonly BindJoint[], shoulder: number, elbow: numb
   // the other way. (Not the builder's bend about Y: that assumes an arm straight out in a T, and her body file's arms
   // already hang nearly down, so a turn about Y only twisted her forearm about itself.)
   putXZ(put, elbow, -elbowBend, -xSign * kink);
-  put(wrist, 0, 0, 1, -xSign * wristIn);
+  if (flat <= 0) { put(wrist, 0, 0, 1, -xSign * wristIn); return; }
+  // PALM FLAT ON THE GROUND (Joshua, 2026-11-20: "is her hands flat on the ground while crawling?"): her hand turned
+  // palm-back about its own length (as a forearm does to put a palm down), then bent back at the wrist so her fingers
+  // point ahead: with her arm straight down under her shoulder, her palm lies flat, fingers forward. `flat` 0..1.
+  const q = mul(about(1, 0, 0, -90 * DEG * flat), about(0, 1, 0, -90 * DEG * xSign * flat));
+  quat(put, wrist, q[0], q[1], q[2], q[3]);
 }
 
 /**

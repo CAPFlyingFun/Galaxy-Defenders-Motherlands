@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { closeToTouch, shapeDistance, type GripShape } from '@charb/actor/handGrip';
 import type { BodyMotion } from './bodyMotion';
-import { PAD_FALLBACK, type HandPads } from './handPads';
+import { PAD_FALLBACK, thumbOutside, type HandPads } from './handPads';
 
 /** GAME TUNING (metres, seconds). */
 export const TOUCH = Object.freeze({
@@ -65,6 +65,8 @@ export const TOUCH = Object.freeze({
   /** The search for the first touch: so many steps out, then halved so many times. */
   steps: 12,
   halvings: 6,
+  /** A thumb laid flat on her belly keeps its skin this far off her index finger's, metres (spread, not over them). */
+  thumbApart: 0.008,
   /**
    * A hand laid FLAT on her belly (Joshua, 2026-11-20: "re-measure and fix"): a joint whose bone is into her skin when
    * straight (her hand's own straight still droops a little, and her skin rises toward her fingertips on the slopes
@@ -73,6 +75,18 @@ export const TOUCH = Object.freeze({
    */
   flatOpen: 35,
 });
+
+const outsideAlong = new THREE.Vector3(), outsideWay = new THREE.Vector3(), outsidePoint = new THREE.Vector3();
+
+/** How far a point is from the segment a-b, metres. */
+function segmentDistance(p: THREE.Vector3, a0: THREE.Vector3, b0: THREE.Vector3): number {
+  const abx = b0.x - a0.x, aby = b0.y - a0.y, abz = b0.z - a0.z;
+  const len2 = abx * abx + aby * aby + abz * abz;
+  let t = len2 > 0 ? ((p.x - a0.x) * abx + (p.y - a0.y) * aby + (p.z - a0.z) * abz) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const dx = a0.x + abx * t - p.x, dy = a0.y + aby * t - p.y, dz = a0.z + abz * t - p.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
 
 /** A hand's palm, measured in the hand bone's own space. */
 interface PalmFrame {
@@ -284,32 +298,106 @@ export class FingerTouch {
    * hand's gap off it (from its second bone out); if every place cuts in, the one that cuts in least.
    */
   private layThumb(i: number, shape: GripShape, out: Float32Array): void {
-    // TWO WAYS TOGETHER: its curl (which only folds it across the palm, so on a curved belly it was either inside or
-    // standing off) and its base TIPPED toward the palm's side or away (`tipThumb`), as a thumb drops to rest on what
-    // the hand lies on: each pair tried, the one nearest the surface but still the gap off it kept.
-    const h = this.ofHand[0].includes(i) ? 0 : 1, finger = this.motion.fingers[i];
-    const curls = 24, tips = 12, least = -TOUCH.thumbOpen;
-    let best = 0, bestTip = 0, bestClear = Infinity, leastIn = -Infinity, leastInAt = 0, leastInTip = 0;
+    // THREE WAYS TOGETHER, each set tried: (1) its BASE opened out from her palm (its first joint only: opening every
+    // joint bent its tip back like a hook standing off her, Joshua 2026-11-20), (2) its two outer joints, straight or
+    // a little curled, and (3) its base TIPPED toward the way her palm faces or away (`tipThumb`), as a thumb drops to
+    // rest on what the hand lies on.
+    // SPREAD, AWAY FROM HER FINGERS (Joshua, 2026-11-20: "her thumb is overlapping her other fingers... needs to rotate
+    // away from the fingers"; "don't even see the thumb"): its skin kept `thumbApart` off her index finger's (as her
+    // fingers lie now); of those, the one clear of her whose FARTHEST part is nearest her: it lies along her skin.
+    const h = this.ofHand[0].includes(i) ? 0 : 1, finger = this.motion.fingers[i], n = out.length;
+    const index = this.indexOf(h, i);
+    const bases = 12, outers = 5, tips = 14;
+    let best = [0, 0, 0], bestFar = Infinity, leastIn = [0, 0, 0], leastInClear = -Infinity, most = [0, 0, 0], mostApart = -Infinity;
     for (let t = 0; t <= tips; t++) {
-      const tip = (-50 + 100 * t / tips) * Math.PI / 180;
-      for (let s = 0; s <= curls; s++) {
-        const percent = least + (100 - least) * s / curls;
-        this.trying.fill(percent, 0, out.length);
-        this.motion.curlFingerJoints(i, this.trying);
-        this.tipThumb(i, h, tip);
-        finger.bones[0].updateMatrixWorld(true);
-        // (from its second bone out: its first lies under the ball of her palm, which rests on her belly already, so
-        //  every place would count as touching and the one standing off furthest was taken)
-        const clear = this.clearanceAsIs(i, shape, 1), far = this.farthest;
-        // (clear of her, and its FARTHEST part as near her as it can be: it lies along her skin, not touching at its
-        //  middle with its tip standing off; Joshua, "re-measure and fix")
-        if (clear >= 0 && far < bestClear) { bestClear = far; best = percent; bestTip = tip; }
-        if (clear > leastIn) { leastIn = clear; leastInAt = percent; leastInTip = tip; }
+      const tip = (-70 + 140 * t / tips) * Math.PI / 180;
+      for (let s = 0; s <= bases; s++) {
+        const base = -TOUCH.thumbOpen * s / bases;
+        for (let o = 0; o <= outers; o++) {
+          const outer = -10 + 50 * o / outers;
+          this.trying.fill(outer, 0, n);
+          this.trying[0] = base;
+          this.motion.curlFingerJoints(i, this.trying);
+          this.tipThumb(i, h, tip);
+          finger.bones[0].updateMatrixWorld(true);
+          const apart = index >= 0 ? this.apart(i, index) : Infinity;
+          if (apart > mostApart) { mostApart = apart; most = [base, outer, tip]; }
+          // (from its second bone out: its first lies under the ball of her palm, which rests on her belly already)
+          const clear = this.outsideAsIs(i, shape, index), far = this.farthest;
+          if (apart < TOUCH.thumbApart) continue;
+          if (clear >= 0 && far < bestFar) { bestFar = far; best = [base, outer, tip]; }
+          if (clear > leastInClear) { leastInClear = clear; leastIn = [base, outer, tip]; }
+        }
       }
     }
-    const found = Number.isFinite(bestClear);
-    out.fill(found ? best : leastInAt);
-    this.thumbTip[h] = found ? bestTip : leastInTip;
+    // (none clear of her and apart from her fingers: the least far in of those apart; none apart: the most apart)
+    const pick = Number.isFinite(bestFar) ? best : Number.isFinite(leastInClear) ? leastIn : most;
+    out.fill(pick[1]);
+    out[0] = pick[0];
+    this.thumbTip[h] = pick[2];
+  }
+
+  /**
+   * A THUMB LAID ON ITS OUTSIDE (Joshua, 2026-11-20: "find the outside side of the thumb and that will be placed
+   * against the belly"), as posed now, from its second bone out: returns how far its nearest part is off the surface
+   * with no side of it nearer than its outside's flesh (each point on its bone's line, less its outside pad: a thumb
+   * whose outside does not face the surface still keeps that much off it), and leaves in `farthest` how far its
+   * OUTSIDE skin is off the surface at its farthest (the point on its outside edge: least when that edge lies along
+   * the surface). Both less the job's gap.
+   */
+  private outsideAsIs(i: number, shape: GripShape, index: number): number {
+    const finger = this.motion.fingers[i], bones = finger.bones, side = this.pads?.side[i];
+    const knuckle = index >= 0 ? this.motion.fingers[index].bones[0].getWorldPosition(new THREE.Vector3()) : null;
+    let nearest = Infinity, farthest = -Infinity;
+    for (let k = 1; k < bones.length; k++) {
+      bones[k].getWorldPosition(a);
+      (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
+      const pad = side?.[k] ?? PAD_FALLBACK.thumbSide;
+      const along = outsideAlong.copy(b).sub(a).normalize();
+      if (knuckle) thumbOutside(a, along, knuckle, outsideWay); else outsideWay.set(0, 0, 0);
+      for (const p of [c.copy(a).add(b).multiplyScalar(0.5), b]) {
+        nearest = Math.min(nearest, this.distance(shape, p, i) - pad);
+        farthest = Math.max(farthest, this.distance(shape, outsidePoint.copy(p).addScaledVector(outsideWay, pad), i));
+      }
+    }
+    const more = this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
+    this.farthest = farthest - more;
+    return nearest - more;
+  }
+
+  /** The finger of hand `h` nearest its thumb `thumb` at the knuckle (her index finger), or -1. */
+  private indexOf(h: 0 | 1, thumb: number): number {
+    const t = this.motion.fingers[thumb].bones[0].getWorldPosition(a);
+    let best = -1, nearest = Infinity;
+    for (const j of this.ofHand[h]) {
+      const f = this.motion.fingers[j];
+      if (f.thumb) continue;
+      const d = f.bones[0].getWorldPosition(b).distanceTo(t);
+      if (d < nearest) { nearest = d; best = j; }
+    }
+    return best;
+  }
+
+  /** How far the thumb's skin is from its index finger's skin, metres (from the thumb's second bone out; as posed now). */
+  private apart(thumb: number, index: number): number {
+    const t = this.motion.fingers[thumb], f = this.motion.fingers[index];
+    const tp = this.pads?.pad[thumb], fp = this.pads?.pad[index];
+    let nearest = Infinity;
+    for (let k = 1; k < t.bones.length; k++) {
+      t.bones[k].getWorldPosition(a);
+      (k + 1 < t.bones.length ? t.bones[k + 1] : t.tip).getWorldPosition(b);
+      const tPad = tp?.[k] ?? TOUCH.thumbPad;
+      for (const p of [c.copy(a).add(b).multiplyScalar(0.5).clone(), b.clone()]) {
+        for (let m = 0; m < f.bones.length; m++) {
+          f.bones[m].getWorldPosition(a);
+          (m + 1 < f.bones.length ? f.bones[m + 1] : f.tip).getWorldPosition(c);
+          const fPad = fp?.[m] ?? TOUCH.pad;
+          nearest = Math.min(nearest, segmentDistance(p, a, c) - tPad - fPad);
+        }
+        t.bones[k].getWorldPosition(a);
+      }
+    }
+    return nearest;
   }
 
   /** Each hand's thumb tipped at its base for lying on a surface, radians (`layThumb`), and the shape it was laid on. */

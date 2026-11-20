@@ -280,7 +280,12 @@ use the game's single copy of three.js.
   read again every 0.3 s) measured onto a 26 x 26 cm grid of 4 mm cells laid on her skin at the spot, the kick's bump
   added while it lasts; a ball, then a smooth fitted patch, were up to 5 mm in her or 1 cm off at the fingertips. Each
   finger bone in turn is laid 2 mm off it by its own joint (fingerTouch.ts `layFlat`: closing where her skin falls away,
-  opening back up to 35% where it rises), the thumb the place whose FARTHEST part is nearest her; 3 s, then back; 1.5 s
+  opening back up to 35% where it rises), HER THUMB RESTS ON ITS OUTSIDE EDGE, SPREAD AWAY FROM HER FINGERS (Joshua: "find the
+  outside side of the thumb and that will be placed against the belly"; "needs to rotate away from the fingers"):
+  `handPads.ts` measures each thumb bone's flesh on the side away from the index finger (Blaze 14.4 / 7.9 / 9 mm);
+  `layThumb` tries its base opened out, its outer joints and a tip at its base together, keeps its skin 8 mm off the
+  index finger's (`thumbApart`), and takes the place whose outside edge lies nearest along her skin (its tip still
+  lifts about a centimetre over her belly's curve: a straight thumb cannot wrap); 3 s, then back; 1.5 s
   before another. Measured with `handGaps(hand)` (test pages): palm 2 mm, finger bones 2-6 mm off her (mid-bone over a
   hollow), none in her. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together

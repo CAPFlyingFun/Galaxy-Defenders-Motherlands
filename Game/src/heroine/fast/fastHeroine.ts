@@ -806,7 +806,7 @@ if (uHideHead > 0.5) {
       skin, fingers: motion.fingers, hands: [arms.left.hand as THREE.Bone, arms.right.hand as THREE.Bone], palmOf: (hand) => touch.palmFace(hand),
       straighten: () => { motion.fingers.forEach((_, i) => motion.curlFinger(i, 0)); root.updateMatrixWorld(true); },
     });
-    console.info('[hand pads]', JSON.stringify({ palm: touch.pads.palm.map((v) => +(v * 1000).toFixed(1)), fingers: touch.pads.pad.map((f, i) => ({ hand: motion.fingers[i].hand, thumb: motion.fingers[i].thumb, mm: f.map((v) => +(v * 1000).toFixed(1)) })) }));
+    console.info('[hand pads]', JSON.stringify({ palm: touch.pads.palm.map((v) => +(v * 1000).toFixed(1)), fingers: touch.pads.pad.map((f, i) => ({ hand: motion.fingers[i].hand, thumb: motion.fingers[i].thumb, mm: f.map((v) => +(v * 1000).toFixed(1)), outside: touch.pads?.side[i]?.map((v) => +(v * 1000).toFixed(1)) })) }));
   } catch (error) { console.warn('Her hands\' thickness could not be measured; the usual sizes serve.', error); }
   const bellyHand: BellyTouch = new BellyTouch({
     // (how far a hand reaches: its upper arm and forearm, nearly straight)
@@ -1059,7 +1059,8 @@ if (uHideHead > 0.5) {
       const out: unknown[] = [];
       motion.fingers.forEach((f, i) => {
         if (f.hand !== hand) return;
-        const pads = touch.pads?.pad[i] ?? [];
+        // (a thumb laid flat rests on its OUTSIDE: measured with that side's flesh)
+        const pads = (f.thumb ? touch.pads?.side[i] : touch.pads?.pad[i]) ?? [];
         out.push({ thumb: f.thumb, mm: f.bones.map((b, k) => {
           const a2 = b.getWorldPosition(new THREE.Vector3()), b2 = (k + 1 < f.bones.length ? f.bones[k + 1] : f.tip).getWorldPosition(new THREE.Vector3());
           const mid = a2.clone().add(b2).multiplyScalar(0.5), pad = pads[k] ?? 0.009;

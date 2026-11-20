@@ -155,6 +155,8 @@ export interface FastHeroineOptions {
   readonly sharpParts?: boolean;
   /** The catsuit's knit in place of her look's own (outfitMaterial.ts SUIT_KNITS), for looks that wear a live knit. */
   readonly suitKnit?: keyof typeof SUIT_KNITS;
+  /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
+  readonly hairStrands?: boolean;
   /** Told what is loading, for a loading screen. */
   readonly onProgress?: (stage: string) => void;
 }
@@ -361,7 +363,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let hair: FastHair | null = null;
   if (look.manifest.hair) {
     say('hair');
-    hair = await loadFastHair(look.manifest.hair, skin);
+    hair = await loadFastHair(look.manifest.hair, skin, options.hairStrands !== false);
   }
 
   // ---- 7. her skeleton and how she moves ---------------------------------------------------------------------------

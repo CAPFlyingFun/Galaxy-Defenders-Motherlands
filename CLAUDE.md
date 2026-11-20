@@ -199,6 +199,13 @@ use the game's single copy of three.js.
   bust and navel shapes move her) are LOCKED, so the lightening never takes them away; the rest of her is lightened.
   At 1% she is then about 58,000 triangles (8,000 without, 233,000 at 100%). Settings -> HEROINE -> Sharp face, bust &
   belly (`gdm.sharpParts`, `?sharp_parts=off`) turns it off; changing it reloads.
+- HER HAIR AS STRANDS AND LOCKS (Joshua, 2026-11-19: "add lines in it, add depth to look better than a shiny hat";
+  `Game/src/heroine/fast/hairStrands.ts`, chained after the builder's own hair patches, game only): locks a few mm wide
+  across the strands (the hair picture's U; strands run down its V) with darker grooves, 0.8 mm of bump depth, and hair's
+  own BANDED shine (Kajiya-Kay, from the strand's direction worked out per pixel) in fine streaks, the plain round shine
+  turned down (roughness 0.9). All of it fades where locks are smaller than a pixel (no sparkle) and on cards seen
+  edge-on (the parting faded into the hair, his ask). Settings -> HEROINE -> Hair strands (`gdm.hairStrands`,
+  `?strands=off`). To be made permanent in the builder by its own agent if Joshua wants.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

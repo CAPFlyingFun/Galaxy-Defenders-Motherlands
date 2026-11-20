@@ -82,6 +82,8 @@ export interface HeroineSettings {
    * (fast/outfitMaterial.ts SUIT_KNITS). Only looks that wear a live knit (Look 1) show it. Changing it reloads.
    */
   suitKnit: 'weave' | 'mesh';
+  /** HER HAIR AS STRANDS AND LOCKS (Joshua, 2026-11-19; fast/hairStrands.ts). Changing it reloads. */
+  hairStrands: ShadowChoice;
 }
 
 
@@ -128,6 +130,7 @@ export const SETTING_KEYS = Object.freeze({
   bellyUnlocked: 'gdm.bellyUnlocked',
   sharpParts: 'gdm.sharpParts',
   suitKnit: 'gdm.suitKnit',
+  hairStrands: 'gdm.hairStrands',
 });
 
 function read(key: string): string | null {
@@ -198,5 +201,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     sharpParts: (address.get('sharp_parts') ?? read(SETTING_KEYS.sharpParts)) === 'off' ? 'off' : 'on',
     // (his woven photo unless the drawn mesh was chosen)
     suitKnit: (address.get('knit') ?? read(SETTING_KEYS.suitKnit)) === 'mesh' ? 'mesh' : 'weave',
+    hairStrands: (address.get('strands') ?? read(SETTING_KEYS.hairStrands)) === 'off' ? 'off' : 'on',
   };
 }

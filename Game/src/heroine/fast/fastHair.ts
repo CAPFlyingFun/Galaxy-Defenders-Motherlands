@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { HAIR_LENGTH_MORPH, hairStyle } from '@charb/sarahlab/hairStyles';
 import { patchHairMaterial, setHairColour } from '@charb/sarahlab/hairMaterial';
 import { loadHairFile } from './bodyFile';
+import { addHairStrands } from './hairStrands';
 
 /** What the baked look says about her hair. */
 export interface HairChoice { readonly style: string; readonly colour: string | null; readonly length: number }
@@ -58,8 +59,11 @@ function hangOnBody(hair: THREE.SkinnedMesh, body: THREE.SkinnedMesh): void {
   own.dispose();
 }
 
-/** Load her hairstyle (full and light), colour it, and hang it on her body. */
-export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh): Promise<FastHair> {
+/**
+ * Load her hairstyle (full and light), colour it, and hang it on her body.
+ * @param strands  draw it as strands and locks with hair's own shine (hairStrands.ts; Settings -> HEROINE -> Hair strands)
+ */
+export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, strands = true): Promise<FastHair> {
   const style = hairStyle(choice.style);
   if (!style) throw new Error(`[heroine] the Character Builder has no hairstyle called "${choice.style}"`);
   const [fullFile, lightFile] = await Promise.all([
@@ -72,6 +76,8 @@ export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh):
     // the builder's two patches: each lock lit as one round thing from both sides; its strands drawn in her colour
     patchHairMaterial(material);
     setHairColour(material, choice.colour);
+    // the game's own: strands, locks and hair's banded shine instead of a shiny hat (Joshua, 2026-11-19)
+    if (strands) addHairStrands(material);
     // her hair's own shape: how long it is (the file is modelled at its longest; weight 1 is its shortest)
     const at = mesh.morphTargetDictionary?.[HAIR_LENGTH_MORPH];
     if (at !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[at] = 1 - choice.length;

@@ -348,10 +348,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   skin.geometry.computeBoundingBox();
   const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
   const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
-  // THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; skinTexture.ts): his skin height map over her bare skin
+  // THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; skinTexture.ts): her own skin picture as depth, on her bare skin
   if (options.skinTexture && !painted) {
-    const skinHeight = loadSkinHeight(options.renderer);
-    for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinHeight, unitsPerMetre);
+    const skinHeight = loadSkinHeight(options.look, options.renderer);
+    for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinHeight);
   }
   skin.material = materials.fine;
   skin.castShadow = false;

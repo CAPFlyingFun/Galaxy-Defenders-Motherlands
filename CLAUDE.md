@@ -211,11 +211,13 @@ use the game's single copy of three.js.
   already): the small pieces of the hair file lying in front of her ears are moved out sideways (5% of their length at
   the top to 18% at the tip) and 12% back toward her ear. Settings -> HEROINE -> Locks by her face (`gdm.faceLocks`,
   `?face_locks=on` for the builder's own place).
-- SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: "curious how it works with her body texture... might make her body
-  look lumpy"; `Game/src/heroine/fast/skinTexture.ts`): his skin height map from the Local Texture Lab
-  (`public/fabrics/skin-test-height.png`) as a bump over her bare skin only (where the roughness picture reads below
-  cloth), laid on from three sides, a 4 cm repeat, 0.15 mm deep (0.4 mm read as orange peel). OFF unless chosen:
-  Settings -> HEROINE -> Skin texture (experiment) (`gdm.skinTexture`, `?skin_texture=on`).
+- SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab at 512, then
+  "a higher quality version" from the one in the repo; `Game/src/heroine/fast/skinTexture.ts`): each look's own baked
+  skin picture turned into a 2048 HEIGHT MAP by the lab's own recipe (`scripts/make_skin_height.py` ->
+  `public/heroines/<look>/skinHeight.webp`; her game body's picture layout is not the builder's skin file's, so it is
+  made per look), read at the same picture position as her colour, as a 0.5 mm bump on her bare skin only. Subtle: her
+  skin picture is smooth. OFF unless chosen: Settings -> HEROINE -> Skin texture (experiment) (`gdm.skinTexture`,
+  `?skin_texture=on`). Re-run the script for a look after re-baking it.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

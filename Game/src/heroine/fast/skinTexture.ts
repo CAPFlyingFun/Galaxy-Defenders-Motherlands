@@ -1,39 +1,47 @@
 // ============================================================================
-// skinTexture.ts -- AN EXPERIMENT: a fine texture of real skin over her bare skin.
+// skinTexture.ts -- AN EXPERIMENT: her own skin picture turned into DEPTH.
 //
-// Joshua, 2026-11-19 (sending a height map from his Local Texture Lab,
-// docs/tools/Local_Texture_Lab.html): "I'm curious how it works with her body
-// texture... it might make her body look lumpy or something else, haha, but
-// just wanted to experiment with it."
+// Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab
+// (docs/tools/Local_Texture_Lab.html) at 512 to see "how it works with her
+// body texture", then asked for a higher quality version from the picture in
+// the repo. Her game body has its own picture layout, so each look gets a
+// HEIGHT MAP made from its own baked skin picture, at 2048 x 2048, by the lab's
+// own recipe (scripts/make_skin_height.py writes heroines/<look>/skinHeight.webp).
 //
-// His height map is laid on her from three sides (like the suit's knit, so it
-// needs no seams on her skin's picture) and tilts the light pixel by pixel (a
-// bump): the light catches the little ridges of the skin, nothing moves. Only
-// where the skin's roughness picture says SKIN (not her suit, not its trim).
+// It is read at the SAME picture position as her colour, so every crease and
+// shade of her skin picture lines up with its depth, and it tilts the light
+// pixel by pixel (a bump): the light catches what is raised. Nothing moves.
+// Only where the roughness picture says SKIN (not her suit, not its trim).
 // Off unless chosen: Settings -> HEROINE -> Skin texture (experiment).
 // ============================================================================
 import * as THREE from 'three';
+import { bakedLookFolder } from './bakedLook';
 
-/** The experiment's picture and sizes. */
+/** The experiment's numbers. */
 export const SKIN_TEXTURE = Object.freeze({
-  file: 'fabrics/skin-test-height.png',
-  /** How much of her the picture covers before it repeats, metres. */
-  tileMetres: 0.04,
-  /** How deep its ridges are, metres (0.15 mm). */
-  depth: 0.00015,
+  /** How deep white is above black in the height map, metres (0.5 mm: 0.3 hardly showed, 0.8 speckled her suit's edges). */
+  depth: 0.0005,
 });
 
 /** Where the roughness picture reads as cloth (outfitMaterial.ts CLOTH_FROM): below this it is her skin. */
 const SKIN_BELOW = 0.58;
 
+/** Load a look's skin height map (read as plain numbers; her picture's layout, not repeating). */
+export function loadSkinHeight(look: string, renderer: THREE.WebGLRenderer): THREE.Texture {
+  const t = new THREE.TextureLoader().load(bakedLookFolder(look) + 'skinHeight.webp', (loaded) => { loaded.needsUpdate = true; });
+  t.colorSpace = THREE.NoColorSpace;
+  t.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
+  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+
 /**
- * Add the skin texture to one of her skin materials. Chained after anything already patched in (her suit's knit and
- * shine), with its own cache key. `unitsPerMetre`: her model's own units in a metre.
+ * Add the skin depth to one of her skin materials. Chained after anything already patched in (her suit's knit and
+ * shine), with its own cache key.
  */
-export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: THREE.Texture, unitsPerMetre: number): void {
+export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: THREE.Texture): void {
   const uniforms = {
     skinHeightMap: { value: heightMap },
-    skinTile: { value: SKIN_TEXTURE.tileMetres * unitsPerMetre },
     skinDepth: { value: SKIN_TEXTURE.depth },
   };
   // (DEV only: test pages set the numbers by hand)
@@ -45,13 +53,10 @@ export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: 
   material.onBeforeCompile = function (shader, renderer) {
     previous.call(this, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
-    // (where the point is on her before her bones move it, after her shapes: the texture stays put on her skin)
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNormal;')
-      .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvSkinPos = transformed;\nvSkinNormal = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vSkinPos;\nvarying vec3 vSkinNormal;\nuniform sampler2D skinHeightMap;\nuniform float skinTile;\nuniform float skinDepth;')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D skinHeightMap;\nuniform float skinDepth;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+#ifdef USE_MAP
   {
     // only on her skin: where the roughness picture reads below cloth
 #ifdef USE_ROUGHNESSMAP
@@ -59,11 +64,8 @@ export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: 
 #else
     float skinHere = 1.0;
 #endif
-    // the height, from three sides, each weighted by how much her skin faces it
-    vec3 skinSide = abs(normalize(vSkinNormal)); skinSide /= (skinSide.x + skinSide.y + skinSide.z);
-    vec3 skinAt = vSkinPos / skinTile;
-    float skinHeight = skinDepth * skinHere * (texture2D(skinHeightMap, skinAt.zy).r * skinSide.x
-      + texture2D(skinHeightMap, skinAt.xz).r * skinSide.y + texture2D(skinHeightMap, vec2(skinAt.x, -skinAt.y)).r * skinSide.z);
+    // the height, at the same picture position as her colour, in metres
+    float skinHeight = skinDepth * skinHere * texture2D(skinHeightMap, vMapUv).r;
     // the bump (Morten Mikkelsen's, as three.js's own), with each pixel step made 1 long so it never divides by nearly 0
     vec3 skinSX = dFdx(-vViewPosition), skinSY = dFdy(-vViewPosition);
     float skinLX = max(length(skinSX), 1e-7), skinLY = max(length(skinSY), 1e-7);
@@ -71,17 +73,9 @@ export function addSkinTexture(material: THREE.MeshStandardMaterial, heightMap: 
     float skinDet = dot(skinSX / skinLX, skinR1) * faceDirection;
     vec3 skinBumped = abs(skinDet) * normal - sign(skinDet) * (dFdx(skinHeight) / skinLX * skinR1 + dFdy(skinHeight) / skinLY * skinR2);
     if (abs(skinDet) > 0.02 && dot(skinBumped, skinBumped) > 1e-6) normal = normalize(skinBumped);
-  }`);
+  }
+#endif`);
   };
-  material.customProgramCacheKey = function () { return `${cacheKey.call(this)}|gdm-skin-texture-v1`; };
+  material.customProgramCacheKey = function () { return `${cacheKey.call(this)}|gdm-skin-height-v2`; };
   material.needsUpdate = true;
-}
-
-/** Load the experiment's height picture (repeating, read as plain numbers). */
-export function loadSkinHeight(renderer: THREE.WebGLRenderer): THREE.Texture {
-  const t = new THREE.TextureLoader().load(import.meta.env.BASE_URL + SKIN_TEXTURE.file, (loaded) => { loaded.needsUpdate = true; });
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.NoColorSpace;
-  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  return t;
 }

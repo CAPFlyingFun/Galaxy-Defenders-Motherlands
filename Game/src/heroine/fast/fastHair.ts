@@ -33,6 +33,66 @@ export interface FastHair {
   dispose(): void;
 }
 
+/**
+ * THE LOOSE LOCKS BY HER FACE, eased off her cheeks (Joshua, 2026-11-19, of a thin dark lock lying down her cheek in
+ * front of her ear: "is this one hair strand in the cheek? It's bothered me... Just offset that piece, don't remove
+ * it"). A hair file is made of separate pieces (each lock a piece of joined triangles); these are the SMALL pieces
+ * (under `FACE_LOCK_MOST_POINTS` points) lying wholly in front of her ears (their backmost point ahead of the file's
+ * middle) and below her crown. Each is moved out sideways, away from her face: a little at its top, where it leaves
+ * her hairline, and more toward its tip (`FACE_LOCK_OUT`, as shares of the lock's own length), so it hangs loose off
+ * her cheek instead of lying flat on her skin. The braid has two such locks a side.
+ */
+function easeFaceLocks(mesh: THREE.SkinnedMesh): number {
+  const geometry = mesh.geometry, P = geometry.getAttribute('position') as THREE.BufferAttribute, index = geometry.index;
+  if (!index) return 0;
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!, top = box.max.y, middleZ = (box.min.z + box.max.z) / 2;
+  const middleX = (box.min.x + box.max.x) / 2;
+  // (which piece each point belongs to: points joined by a triangle are one piece -- "union-find")
+  const parent = new Int32Array(P.count).map((_, i) => i);
+  const root = (x: number): number => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let t = 0; t < index.count; t += 3) {
+    const a = root(index.getX(t));
+    parent[root(index.getX(t + 1))] = a;
+    parent[root(index.getX(t + 2))] = a;
+  }
+  // each piece's size, how far back it reaches, and its top and bottom
+  const count = new Map<number, number>(), backmost = new Map<number, number>();
+  const highest = new Map<number, number>(), lowest = new Map<number, number>();
+  for (let v = 0; v < P.count; v++) {
+    const k = root(v), y = P.getY(v);
+    count.set(k, (count.get(k) ?? 0) + 1);
+    backmost.set(k, Math.min(backmost.get(k) ?? Infinity, P.getZ(v)));
+    highest.set(k, Math.max(highest.get(k) ?? -Infinity, y));
+    lowest.set(k, Math.min(lowest.get(k) ?? Infinity, y));
+  }
+  const height = top - box.min.y;
+  const isFaceLock = (k: number): boolean => count.get(k)! < FACE_LOCK_MOST_POINTS && backmost.get(k)! > middleZ && highest.get(k)! < top - 0.04 * height;
+  let moved = 0;
+  for (let v = 0; v < P.count; v++) {
+    const k = root(v);
+    if (!isFaceLock(k)) continue;
+    const length = Math.max(1e-6, highest.get(k)! - lowest.get(k)!);
+    // 0 at the lock's top, 1 at its tip, eased so it bends away smoothly
+    const along = (highest.get(k)! - P.getY(v)) / length;
+    const out = length * (FACE_LOCK_OUT.top + (FACE_LOCK_OUT.tip - FACE_LOCK_OUT.top) * along * along);
+    // out to her side: the side of her face the lock is on
+    P.setX(v, P.getX(v) + Math.sign(P.getX(v) - middleX) * out);
+    P.setZ(v, P.getZ(v) - length * FACE_LOCK_BACK);
+    moved++;
+  }
+  if (moved) { P.needsUpdate = true; geometry.computeBoundingBox(); geometry.computeBoundingSphere(); }
+  return moved;
+}
+/** A face lock is a small piece: the braid's are 38 points (18 in its light file); a whole style is thousands. */
+const FACE_LOCK_MOST_POINTS = 200;
+/** How far a face lock is moved out from her cheek, as shares of its own length: at its top, and at its tip. */
+const FACE_LOCK_OUT = Object.freeze({ top: 0.05, tip: 0.18 });
+/** And how far it is moved BACK toward her ear, as a share of its length (the whole lock alike). */
+const FACE_LOCK_BACK = 0.12;
+/** The styles whose face locks lie on her cheek (the ponytail's long side locks already hang clear: left alone). */
+const EASED_STYLES: ReadonlySet<string> = new Set(['braid']);
+
 /** From this detail up she wears her full hair. */
 const FULL_HAIR_FROM_DETAIL = 25;
 
@@ -61,9 +121,10 @@ function hangOnBody(hair: THREE.SkinnedMesh, body: THREE.SkinnedMesh): void {
 
 /**
  * Load her hairstyle (full and light), colour it, and hang it on her body.
- * @param strands  draw it as strands and locks with hair's own shine (hairStrands.ts; Settings -> HEROINE -> Hair strands)
+ * @param strands    draw it as strands and locks with hair's own shine (hairStrands.ts; Settings -> HEROINE -> Hair strands)
+ * @param faceLocks  leave the small loose locks by her face where the file has them (`easeFaceLocks`; Settings -> HEROINE -> Locks by her face)
  */
-export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, strands = true): Promise<FastHair> {
+export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, strands = true, faceLocks = false): Promise<FastHair> {
   const style = hairStyle(choice.style);
   if (!style) throw new Error(`[heroine] the Character Builder has no hairstyle called "${choice.style}"`);
   const [fullFile, lightFile] = await Promise.all([
@@ -78,6 +139,7 @@ export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, 
     setHairColour(material, choice.colour);
     // the game's own: strands, locks and hair's banded shine instead of a shiny hat (Joshua, 2026-11-19)
     if (strands) addHairStrands(material);
+    if (!faceLocks && EASED_STYLES.has(choice.style)) easeFaceLocks(mesh);
     // her hair's own shape: how long it is (the file is modelled at its longest; weight 1 is its shortest)
     const at = mesh.morphTargetDictionary?.[HAIR_LENGTH_MORPH];
     if (at !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[at] = 1 - choice.length;

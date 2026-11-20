@@ -86,6 +86,8 @@ export interface HeroineSettings {
   hairStrands: ShadowChoice;
   /** THE SKIN TEXTURE EXPERIMENT (Joshua, 2026-11-19; fast/skinTexture.ts). Off unless chosen. Changing it reloads. */
   skinTexture: ShadowChoice;
+  /** The small loose locks by her face: 'off' eased off her cheeks (Joshua, 2026-11-19), 'on' as the file has them. Reloads. */
+  faceLocks: ShadowChoice;
 }
 
 
@@ -134,6 +136,7 @@ export const SETTING_KEYS = Object.freeze({
   suitKnit: 'gdm.suitKnit',
   hairStrands: 'gdm.hairStrands',
   skinTexture: 'gdm.skinTexture',
+  faceLocks: 'gdm.faceLocks',
 });
 
 function read(key: string): string | null {
@@ -206,5 +209,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     suitKnit: (address.get('knit') ?? read(SETTING_KEYS.suitKnit)) === 'mesh' ? 'mesh' : 'weave',
     hairStrands: (address.get('strands') ?? read(SETTING_KEYS.hairStrands)) === 'off' ? 'off' : 'on',
     skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'on' ? 'on' : 'off',
+    faceLocks: (address.get('face_locks') ?? read(SETTING_KEYS.faceLocks)) === 'on' ? 'on' : 'off',
   };
 }

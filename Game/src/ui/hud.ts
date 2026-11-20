@@ -344,6 +344,7 @@ export class Hud {
     const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: from 30% down to 1% by the frame rate, all her body shapes live. Auto: up to 100%, lighter only if the frame rate needs it.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
     choiceRow('Skin texture (experiment)', 'skinTexture', [['Off', 'off'], ['On', 'on']], 'Your skin height map over her bare skin, 0.15 mm deep. Changing it reloads the game.');
+    choiceRow('Locks by her face', 'faceLocks', [['Eased off her cheeks', 'off'], ['As the builder has them', 'on']], 'The small loose locks of hair by her cheeks. Changing it reloads the game.');
     choiceRow('Hair strands', 'hairStrands', [['On', 'on'], ['Off', 'off']], 'On: her hair drawn as strands and locks with hair\'s own banded shine; Off: as the Character Builder draws it. Changing it reloads the game.');
     choiceRow('Suit fabric', 'suitKnit', [['Woven mesh (your photo)', 'weave'], ['Perforated mesh (drawn)', 'mesh']], 'The fabric drawn over the Shadow Operative catsuit. Changing it reloads the game.');
     const sharpRow = choiceRow('Sharp face, bust & belly', 'sharpParts', [['On', 'on'], ['Off', 'off']], 'On: her face, bust and belly stay as fine as at 100% at every detail level; the rest of her is lightened. Changing it reloads the game.');

@@ -206,6 +206,11 @@ use the game's single copy of three.js.
   turned down (roughness 0.9). All of it fades where locks are smaller than a pixel (no sparkle) and on cards seen
   edge-on (the parting faded into the hair, his ask). Settings -> HEROINE -> Hair strands (`gdm.hairStrands`,
   `?strands=off`). To be made permanent in the builder by its own agent if Joshua wants.
+- THE BRAID'S FACE LOCKS EASED OFF HER CHEEKS (Joshua, 2026-11-19: "is this one hair strand in the cheek?... Just offset
+  that piece, don't remove it"; `fastHair.ts` `easeFaceLocks`, braid only: the ponytail's long side locks hang clear
+  already): the small pieces of the hair file lying in front of her ears are moved out sideways (5% of their length at
+  the top to 18% at the tip) and 12% back toward her ear. Settings -> HEROINE -> Locks by her face (`gdm.faceLocks`,
+  `?face_locks=on` for the builder's own place).
 - SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: "curious how it works with her body texture... might make her body
   look lumpy"; `Game/src/heroine/fast/skinTexture.ts`): his skin height map from the Local Texture Lab
   (`public/fabrics/skin-test-height.png`) as a bump over her bare skin only (where the roughness picture reads below

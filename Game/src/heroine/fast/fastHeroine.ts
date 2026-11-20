@@ -158,6 +158,8 @@ export interface FastHeroineOptions {
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
   readonly hairStrands?: boolean;
+  /** Leave the small loose locks by her face where the file has them, on her cheeks (fastHair.ts easeFaceLocks). Default false: eased off. */
+  readonly faceLocks?: boolean;
   /** THE SKIN TEXTURE EXPERIMENT over her bare skin (skinTexture.ts). Default false. */
   readonly skinTexture?: boolean;
   /** Told what is loading, for a loading screen. */
@@ -371,7 +373,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let hair: FastHair | null = null;
   if (look.manifest.hair) {
     say('hair');
-    hair = await loadFastHair(look.manifest.hair, skin, options.hairStrands !== false);
+    hair = await loadFastHair(look.manifest.hair, skin, options.hairStrands !== false, options.faceLocks === true);
   }
 
   // ---- 7. her skeleton and how she moves ---------------------------------------------------------------------------

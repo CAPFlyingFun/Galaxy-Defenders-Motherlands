@@ -769,8 +769,11 @@ if (uHideHead > 0.5) {
     // which shapes this level's body carries: all of them live, or only her four motion shapes
     if (body.isLive(key)) { skin.morphTargetDictionary = liveDictionary; skin.morphTargetInfluences = liveInfluences; }
     else { skin.morphTargetDictionary = bakedDictionary; skin.morphTargetInfluences = influences; }
-    // (a live level she has left is let go if it is a heavy one: its shapes are tens of megabytes)
-    if (before !== key && body.isLive(before) && detailOfKey(before) > 5) body.release(before);
+    // (a LIVE level she has left is let go, whatever its size: each carries every one of her 43 body shapes, tens of
+    //  megabytes, and with her hands kept sharp too (v0.2.81) the low levels near the camera are nearly as heavy as
+    //  the high ones. Kept, Smart FPS stepping 5 -> 3 -> 2 -> 1 % held four of them, near and far, and the iPhone
+    //  closed the game a few seconds in (Joshua, 2026-11-19). Coming back to one makes it again in the worker.)
+    if (before !== key && body.isLive(before)) body.release(before);
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
     showHair(detail);
     pieces.setDetail(detail);

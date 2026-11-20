@@ -252,6 +252,17 @@ use the game's single copy of three.js.
   holds (1.5 L, her belly at its fullest) full. HUNGER (speed, health) from the bar: none above a third, worst empty
   (thirst stays the builder's gut's). Under half her belly draws in, up to 180 mL of room at empty
   (`bellyShrinkMl` -> `skinBreath.ts`). Water in her stomach still stands her belly out but is not on the food bar.
+- HER WATER BAR DRAINS, WATER BEFORE FOOD (Joshua, 2026-11-19: "does the water drain at all?... fluids is what really
+  should be draining the fastest... You can only survive a few days without water"; `waterBarOf`, `VITALS_TUNING.waterBar`):
+  the bar is her WATER BALANCE (body water over or under what she needs, plus what is still in her stomach): balanced
+  half, 500 mL to spare full, 1.2 L short (2% of her weight) empty. It falls from the moment she stops drinking (about
+  100 mL an hour at rest, up to 500 more running hard; at the 15x clock about half in 15 real minutes standing, empty in
+  about 20 running). THIRST from a third of the bar (400 mL short). Health: parched wears it at the full rate, starving
+  at a seventh (`health.hungerShare`, 3 days against 3 weeks); neither alone takes her under 30.
+- MEMORY (Joshua, 2026-11-19: v0.2.81-83 restarted twice and closed on his iPhone a few seconds in): the LIVE detail
+  levels (5% and under, all 43 body shapes each) were all kept once made; with her hands sharp too they were nearly as
+  heavy as the high ones. Now any live level she has left is let go (`wear` in fastHeroine.ts); it is made again if she
+  comes back to it.
 - FOOD & DRINK, TO TEST (Joshua, 2026-11-19; Settings -> FOOD & DRINK, `main.ts` `intake`): snack bar 150 / small meal
   400 / full meal 700 mL of food, sip 100 / bottle 500 / canteen 1000 mL of water, each taken in over a few seconds (her
   bar and belly rise as she eats); Make hungry / Make thirsty (bar to 25%); Bathroom: she squats 5 s (`squatFor`, a point

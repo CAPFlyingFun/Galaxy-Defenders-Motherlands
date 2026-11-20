@@ -20,9 +20,10 @@ const STYLE = `
 .gd-vitals-heart i { font-style: normal; color: #ff4f7b; display: inline-block; transform-origin: center; }
 .gd-vitals-heart b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .gd-vitals-breath { opacity: .75; font-variant-numeric: tabular-nums; min-width: 44px; }
-.gd-vitals-bars { display: grid; grid-template-columns: auto 74px; gap: 3px 6px; align-items: center; }
-.gd-vitals-bars span { opacity: .8; font-size: 9px; }
-.gd-vitals-bar { height: 6px; border-radius: 3px; background: #ffffff1f; overflow: hidden; }
+/* (five rows in the height four had: 9px rows 2px apart, so the readout under the card stays clear of the MOVE stick) */
+.gd-vitals-bars { display: grid; grid-template-columns: auto 74px; gap: 2px 6px; align-items: center; }
+.gd-vitals-bars span { opacity: .8; font-size: 8.5px; line-height: 9px; }
+.gd-vitals-bar { height: 5px; border-radius: 3px; background: #ffffff1f; overflow: hidden; }
 .gd-vitals-bar div { height: 100%; width: 100%; border-radius: 3px; transform-origin: left center; transition: background .4s; }
 /* THE BATHROOM BAR's urge: amber at the urge, red and pulsing when it is strong */
 .gd-vitals-bars span.is-urge { color: #ffc24a; opacity: 1; }

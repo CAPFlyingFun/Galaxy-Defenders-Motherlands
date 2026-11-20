@@ -38,6 +38,17 @@ export function foodBarOf(stomachFoodMl: number): number {
   return ml <= room ? 0.5 * (ml / room) : Math.min(1, 0.5 + 0.5 * ((ml - room) / (most - room)));
 }
 
+/**
+ * Her WATER bar (0..1) from her water balance, millilitres: the water in her body over (or, below 0, under) what she
+ * needs, plus what she has just drunk and is still in her stomach (VITALS_TUNING.waterBar). Like the food bar, half is
+ * "about normal": balanced. Full is `fullOverMl` to spare (a fresh bottle in her); empty is `emptyUnderMl` short, 2% of
+ * her weight, where the builder's thirst is at its strongest.
+ */
+export function waterBarOf(balanceMl: number): number {
+  const w = VITALS_TUNING.waterBar;
+  return balanceMl >= 0 ? Math.min(1, 0.5 + 0.5 * (balanceMl / w.fullOverMl)) : Math.max(0, 0.5 * (1 + balanceMl / w.emptyUnderMl));
+}
+
 /** Everything about the game's side of her vitals that is a choice, not a measurement. All GAME TUNING. */
 export const VITALS_TUNING = {
   /**
@@ -73,6 +84,16 @@ export const VITALS_TUNING = {
    * bar and is at its worst empty. Under half her belly draws IN, up to `shrinkMl` of room at empty (a third of it by 30%).
    */
   foodBar: { hungryUnder: 1 / 3, shrinkMl: 180 },
+  /**
+   * HER WATER BAR DRAINS (Joshua, 2026-11-19: "does the water drain at all? It seems to always be at max... fluids is
+   * what really should be draining the fastest"). It was 1 minus the builder's thirst, which is not felt at all until
+   * she is 0.5% of her weight short, so it sat full for hours of game time and the bar told nothing. Now it is her
+   * water balance (waterBarOf): it falls from the moment she stops drinking, as her kidneys pass the extra and her skin,
+   * breath and sweat lose the rest (about 100 mL an hour at rest, up to 500 more running hard). THIRST (speed, heart,
+   * health) starts under `thirstyUnder` of the bar (400 mL short, near the builder's 1% of her weight, 600 mL) and is at
+   * its worst empty (1.2 L short, the builder's 2%).
+   */
+  waterBar: { fullOverMl: 500, emptyUnderMl: 1200, thirstyUnder: 1 / 3 },
   /** She starts a mission having eaten and drunk: this much food and water (mL) is in her at the start. */
   startMeal: [450, 400] as readonly [foodMl: number, waterMl: number],
   /**
@@ -151,6 +172,12 @@ export const VITALS_TUNING = {
     /** Health lost each second while she is starving or parched (the need over `badOver`), at its worst. */
     lossPerSecond: 0.15,
     badOver: 0.85,
+    /**
+     * WATER BEFORE FOOD (Joshua, 2026-11-19: "You can only survive a few days without water and longer without food"):
+     * parched she loses health at the full rate; starving at this share of it. About 3 days against 3 weeks, so a
+     * seventh.
+     */
+    hungerShare: 1 / 7,
     /** Hunger and thirst alone never take her health below this: they weaken her, enemies finish her. */
     needsFloor: 30,
   },
@@ -372,9 +399,12 @@ export class HeroineVitals {
     // 3. Her health: it mends while she is fed and watered, and wears away while she is starving or parched.
     const h = tuning.health;
     const worstNeed = Math.max(this.needs.hunger, this.needs.thirst);
-    if (worstNeed > h.badOver) {
-      // (only down to the floor: if an enemy has already taken her lower, hunger does not add to it)
-      if (this.health > h.needsFloor) this.health = Math.max(h.needsFloor, this.health - h.lossPerSecond * ((worstNeed - h.badOver) / (1 - h.badOver)) * dt);
+    // (how far past `badOver` each need is, 0..1; thirst counts in full, hunger as `hungerShare` of it)
+    const past = (need: number) => clamp((need - h.badOver) / (1 - h.badOver), 0, 1);
+    const wearing = past(this.needs.thirst) + h.hungerShare * past(this.needs.hunger);
+    if (wearing > 0) {
+      // (only down to the floor: if an enemy has already taken her lower, hunger and thirst do not add to it)
+      if (this.health > h.needsFloor) this.health = Math.max(h.needsFloor, this.health - h.lossPerSecond * Math.min(1, wearing) * dt);
     } else if (worstNeed < h.wellUnder) this.health += h.regenPerSecond * dt;
     this.health = clamp(this.health, 0, h.most);
   }
@@ -400,9 +430,10 @@ export class HeroineVitals {
 
   /** TEST: her water bar down to `bar` (0..1) at once: as short of water as the builder's gut makes that thirst. */
   setWaterBar(bar: number): void {
-    const thirst = 1 - clamp(bar, 0, 1), from = GUT.thirstFrom * 0.5;
-    const lost = from + thirst * (GUT.thirstFull - from);
-    this.gut = { ...this.gut, waterMl: -lost * GUT.kg * 1000, stomachWaterMl: 0 };
+    // (waterBarOf turned round: the balance that reads as this bar, with nothing left in her stomach)
+    const w = VITALS_TUNING.waterBar, b = clamp(bar, 0, 1);
+    const balance = b >= 0.5 ? ((b - 0.5) / 0.5) * w.fullOverMl : (b / 0.5 - 1) * w.emptyUnderMl;
+    this.gut = { ...this.gut, waterMl: balance, stomachWaterMl: 0 };
     this.needs = this.gameNeeds();
   }
 
@@ -438,7 +469,8 @@ export class HeroineVitals {
   private gameNeeds(): GutNeeds {
     const needs = gutNeeds(this.gut);
     const bar = foodBarOf(this.gut.stomachFoodMl), under = VITALS_TUNING.foodBar.hungryUnder;
-    return { ...needs, hunger: clamp((under - bar) / under, 0, 1) };
+    const water = waterBarOf(this.gut.waterMl + this.gut.stomachWaterMl), dry = VITALS_TUNING.waterBar.thirstyUnder;
+    return { ...needs, hunger: clamp((under - bar) / under, 0, 1), thirst: clamp((dry - water) / dry, 0, 1) };
   }
 
   get alive(): boolean {
@@ -463,7 +495,7 @@ export class HeroineVitals {
       effort: this.now.felt,
       health: this.health,
       food: foodBarOf(this.gut.stomachFoodMl),
-      water: 1 - this.needs.thirst,
+      water: waterBarOf(this.gut.waterMl + this.gut.stomachWaterMl),
       stomachMl,
       bellyShrinkMl: VITALS_TUNING.foodBar.shrinkMl * clamp((0.5 - foodBarOf(this.gut.stomachFoodMl)) / 0.5, 0, 1),
       stomach,

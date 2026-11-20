@@ -109,7 +109,9 @@ export const SUIT_GEAR = Object.freeze({
   panelTop: { side: 0.0, back: 0.055 }, panelDown: 0.25,
   // (one each side, about a quarter of her round, from her side to near her back's middle: Joshua, 2026-11-20, of his
   //  reference, "only has one per side that covers about 1/4 of her body on each side... 4 panels is too much")
-  panels: [[74, 168]] as readonly (readonly [number, number])[],
+  // (from behind her holster, on the outside of her thigh, round to near her back's middle: Joshua, 2026-11-20, "the
+  //  gun holsters clipping through the white panels")
+  panels: [[106, 178]] as readonly (readonly [number, number])[],
   // (clear of her skin at their top by a little more than the belt stands out, so the top hem lies OVER the belt's lower
   //  half, against it, and is clamped on by gold studs; they flare out from there as they go down)
   panelGap: 0.0105, panelFlare: 0.2, panelThick: 0.0035,
@@ -355,13 +357,28 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
       const deg = Math.round(Math.abs(Math.atan2(x, z)) * (180 / Math.PI));
       for (const dd of [deg - 1, deg, deg + 1]) if (dd >= 0 && dd < A && r > reach[h][dd]) reach[h][dd] = r;
     }
-    /** How far out a panel must be at this height and angle: past all of her from its top down to here, flaring out. */
+    /** How far out her skin reaches from a height up to the panel's top, at each degree (a stiff panel clears it all). */
+    const rawAt = (d: number, y: number): number => {
+      const from = Math.round((y - bottom) / 0.01), to = Math.round((top(d) - bottom) / 0.01);
+      let most = 0.05;
+      for (let h = Math.max(0, from); h <= Math.min(H - 1, to); h++) most = Math.max(most, reach[h][d]);
+      return most;
+    };
+    /**
+     * How far out a panel must be at this height and angle: past all of her from its top down to here, flaring out.
+     * SMOOTHED ROUND HER (Joshua, 2026-11-20: "there is a wrinkle in the panels"): her outline round her is lumpy (her
+     * hip bone, the top of her buttock), and a stiff panel copying each lump creased. Here the most of her within 12
+     * degrees either way, then that evened over the same span: a smooth curve that still clears all of her.
+     */
     const radiusAt = (deg: number, y: number): number => {
       const d = Math.max(0, Math.min(180, Math.round(deg)));
-      const from = Math.round((y - bottom) / 0.01), to = Math.round((top(deg) - bottom) / 0.01);
-      let most = 0.05;
-      for (let h = Math.max(0, from); h <= Math.min(H - 1, to); h++) most = Math.max(most, reach[h][d], reach[h][Math.max(0, d - 4)], reach[h][Math.min(180, d + 4)]);
-      return most + T.panelGap + T.panelFlare * Math.max(0, top(deg) - y);
+      let sum = 0, n = 0;
+      for (let k = -12; k <= 12; k += 3) {
+        let most = 0;
+        for (let j = -12; j <= 12; j += 3) most = Math.max(most, rawAt(Math.max(0, Math.min(180, d + k + j)), y));
+        sum += most; n++;
+      }
+      return sum / n + T.panelGap + T.panelFlare * Math.max(0, top(deg) - y);
     };
     const toCarrier = new THREE.Matrix4().copy(carrier.matrixWorld).invert().multiply(root.matrixWorld);
     const up = new THREE.Vector3(0, 1, 0);

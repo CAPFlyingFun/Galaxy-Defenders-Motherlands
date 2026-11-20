@@ -100,8 +100,9 @@ export const WOVEN_MESH: KnitTile = Object.freeze({
 });
 /** Which knit the catsuit wears (Settings -> HEROINE -> Suit fabric): the picture and the size it is drawn at. */
 export const SUIT_KNITS = Object.freeze({
-  // (his photo: a picture repeat of 15 cm, so a thread about every 4 mm; finer than 3x it blurred to plain black)
-  weave: { ...WOVEN_MESH, stitch: 3, strength: 1 },
+  // (his photo: a picture repeat of 12 cm, so a thread about every 3 mm. Joshua, 2026-11-19: finer than the 3x it was
+  //  first, which read "a bit coarse" in first person; under 2.4 it blurred to plain black from the usual camera)
+  weave: { ...WOVEN_MESH, stitch: 2.4, strength: 1 },
   // (the perforated mesh drawn by code, at Joshua's 1.5x)
   mesh: { ...PERFORATED_MESH, stitch: 1.5, strength: 1 },
 });
@@ -178,22 +179,38 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         // THE LIVE KNIT, from three sides (each side's picture weighted by how much her skin faces it), as lighter and
         // darker than its middle: the suit's own colour goes lighter where a stitch stands and darker in its holes
         'vec3 knitSide = abs(normalize(vKnitNormal)); knitSide /= (knitSide.x + knitSide.y + knitSide.z);',
-        'vec3 knitAt = vKnitPos / knitTile;',
+        // HOW STRETCHED her suit is here (Joshua, 2026-11-19: "real stretch fabric pulls thinner and more open over the
+        // fullest part of her belly"): how much bigger a patch of her skin is now than as baked, from how both change
+        // from this pixel to the next; 1 unstretched. The knit is laid on by where her skin WAS (vKnitRest), so it
+        // grows with her: its threads draw apart, and from about 4 % more the holes open (darker gaps, the threads a
+        // touch brighter and flatter), fully from 40 % more.
+        'vec3 knitRX = dFdx(vKnitRest), knitRY = dFdy(vKnitRest);',
+        'float knitRestArea = length(cross(knitRX, knitRY));',
+        'float knitStretch = knitRestArea > 1e-14 ? sqrt(length(cross(dFdx(vKnitPos), dFdy(vKnitPos))) / knitRestArea) : 1.0;',
+        'float knitOpen = smoothstep(1.04, 1.4, knitStretch);',
+        'vec3 knitAt = vKnitRest / knitTile;',
+        // HOW FINE the threads are on screen: past about one thread to two pixels (far off, or where the cloth curves
+        // away), their depth fades out, as on her hair; the picture's own smaller copies keep its colour calm there
+        'float knitFine = 1.0 - smoothstep(0.012, 0.03, length(fwidth(knitAt)));',
         'float knitLight = texture2D(knitMap, knitAt.zy).r * knitSide.x + texture2D(knitMap, knitAt.xz).r * knitSide.y + texture2D(knitMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z;',
-        'diffuseColor.rgb *= mix(1.0, knitLight / knitMiddle, knitGray * knitStrength);',
+        'float knitRatio = pow(max(knitLight / knitMiddle, 0.0), 1.0 + 0.7 * knitOpen);',
+        'diffuseColor.rgb *= mix(1.0, knitRatio, knitGray * knitStrength);',
         // ITS HEIGHT, the same three ways, in metres (its depth times how raised each spot is): read again below,
         // where the light's directions are worked out
-        'float knitHeight = knitDepth * knitGray * (texture2D(knitHeightMap, knitAt.zy).r * knitSide.x + texture2D(knitHeightMap, knitAt.xz).r * knitSide.y + texture2D(knitHeightMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z);',
+        'float knitHeight = knitDepth * knitGray * knitFine * (1.0 - 0.3 * knitOpen) * (texture2D(knitHeightMap, knitAt.zy).r * knitSide.x + texture2D(knitHeightMap, knitAt.xz).r * knitSide.y + texture2D(knitHeightMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z);',
       );
       // THE THREADS' DEPTH (a "bump"): how fast the height changes from this pixel to the next, across and down the
       // screen, tilts her surface's direction the way a real raised thread would (Morten Mikkelsen's method, which
       // three.js's own bump maps use). Nothing is moved: only the light changes, so it costs almost nothing.
       const knitBump = knitUniforms ? [
+        // (each pixel step made 1 long and the height's change divided by its length: the same answer, but never a
+        //  vector of length nearly 0, which on cloth seen edge-on would light it a flat gray, as it did her hair)
         'vec3 knitSigmaX = dFdx(-vViewPosition), knitSigmaY = dFdy(-vViewPosition);',
-        'vec3 knitR1 = cross(knitSigmaY, normal), knitR2 = cross(normal, knitSigmaX);',
-        'float knitDet = dot(knitSigmaX, knitR1) * faceDirection;',
-        'vec3 knitGrad = sign(knitDet) * (dFdx(knitHeight) * knitR1 + dFdy(knitHeight) * knitR2);',
-        'normal = normalize(abs(knitDet) * normal - knitGrad);',
+        'float knitLX = max(length(knitSigmaX), 1e-7), knitLY = max(length(knitSigmaY), 1e-7);',
+        'vec3 knitR1 = cross(knitSigmaY / knitLY, normal), knitR2 = cross(normal, knitSigmaX / knitLX);',
+        'float knitDet = dot(knitSigmaX / knitLX, knitR1) * faceDirection;',
+        'vec3 knitBumped = abs(knitDet) * normal - sign(knitDet) * (dFdx(knitHeight) / knitLX * knitR1 + dFdy(knitHeight) / knitLY * knitR2);',
+        'if (abs(knitDet) > 0.02 && dot(knitBumped, knitBumped) > 1e-6) normal = normalize(knitBumped);',
       ] : [];
       material.onBeforeCompile = (shader) => {
         if (knitUniforms) {
@@ -201,10 +218,10 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
           //  shape's morphs, so it stretches round her belly as cloth would)
           shader.vertexShader = shader.vertexShader
-            .replace('#include <common>', '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;')
-            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitNormal = objectNormal;');
+            .replace('#include <common>', '#include <common>\nattribute vec3 knitRest;\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;')
+            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitRest = knitRest;\nvKnitNormal = objectNormal;');
           shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
-            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;');
+            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;');
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
@@ -212,7 +229,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}-v2`;
     }
     return material;
   };

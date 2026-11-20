@@ -53,6 +53,7 @@ import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
+import { PLAIN_KEY, detailOfKey } from './shapedBody';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
 import { buildSuitGear, type SuitGear } from './suitGear';
@@ -119,6 +120,12 @@ const REST_BREATH = { breath: 0, breathLitres: 0.5, breathsPerMinute: 14, stomac
  * shadow-only layer (core/contracts.ts SHADOW_ONLY_LAYER): not drawn, but it casts its shadow.
  */
 const HEAD_GLSL_BONES = 8;
+/**
+ * HER FACE, BUST AND BELLY KEPT SHARP WITH THE CAMERA NEAR (Joshua, 2026-11-19: "at 2m out (or body height)"): within
+ * this many metres of her middle; it counts as far again only past SHARP_LEAVE (a little give, so no flicker).
+ */
+const SHARP_WITHIN = 2.0;
+const SHARP_LEAVE = 2.3;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
 const VIEW_BALL_RADIUS = 1.5;
 
@@ -318,9 +325,16 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (the lightening is told her points, her texture layout and how important each point is: detailLevels.ts)
   const box = new THREE.Box3().setFromArray(look.shape.position);
   const maker = new DetailMaker();
-  maker.setMesh(0, look.shape.position, fullIndex, box, layout, skinImportance(look.shape.position, box, shapeMoves),
-    options.sharpParts === false ? null : sharpParts(look.shape.position, box, shapeMoves));
+  const importance = skinImportance(look.shape.position, box, shapeMoves);
+  // TWO SETS OF LEVELS (Joshua, 2026-11-19: "make the sharp camera LOD at 2m out (or body height) and beyond that, it
+  // starts fading like normal"): with her face, bust and belly kept sharp (mesh 0), for the camera within
+  // `SHARP_WITHIN` of her, and lightened all over like before (mesh 2), for the camera further off. Each is made only
+  // when first wanted. With "Sharp face, bust & belly" off, the plain set alone.
+  const keepSharp = options.sharpParts !== false;
+  maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves) : null);
   const levels = new DetailLevels(maker, 0, fullIndex);
+  if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null);
+  const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;
 
   // Her skin starts at full detail: the file's own geometry (all 43 shapes) is swapped for her baked one.
   skin.geometry = body.build(100, fullIndex);
@@ -702,40 +716,54 @@ if (uHideHead > 0.5) {
   auto.target = options.targetFps ?? 30;
   let choice: DetailChoice = options.detail ?? 'auto';
   let drawnDetail: Detail = 100;
+  /** The level KEY she is drawn at (shapedBody.ts PLAIN_KEY: the detail, plus PLAIN_KEY when not kept sharp). */
+  let drawnKey = 100;
+  /** The camera is near her (within SHARP_WITHIN; back out past SHARP_LEAVE): her face, bust and belly kept sharp. */
+  let near = true;
+  /** How far the camera last was from her middle, metres (written by the draw, below). */
+  let cameraDistance = 0;
   let firstPerson = false;
   const waitingFor = new Set<number>();
   /** How tall she was last drawn, in screen pixels: written by the draw itself (below), read by AUTO the next frame. */
   let pixels = 9999;
 
-  const wear = (detail: Detail): void => {
-    const geometry = body.geometry(detail);
+  const wear = (key: number): void => {
+    const geometry = body.geometry(key);
     if (!geometry) return;
-    const before = drawnDetail;
+    const before = drawnKey, detail = detailOfKey(key) as Detail;
+    drawnKey = key;
     drawnDetail = detail;
     skin.geometry = geometry;
     // which shapes this level's body carries: all of them live, or only her four motion shapes
-    if (body.isLive(detail)) { skin.morphTargetDictionary = liveDictionary; skin.morphTargetInfluences = liveInfluences; }
+    if (body.isLive(key)) { skin.morphTargetDictionary = liveDictionary; skin.morphTargetInfluences = liveInfluences; }
     else { skin.morphTargetDictionary = bakedDictionary; skin.morphTargetInfluences = influences; }
     // (a live level she has left is let go if it is a heavy one: its shapes are tens of megabytes)
-    if (before !== detail && body.isLive(before) && before > 5) body.release(before);
+    if (before !== key && body.isLive(before) && detailOfKey(before) > 5) body.release(before);
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
     showHair(detail);
     pieces.setDetail(detail);
   };
-  /** Ask for a level: worn at once if it has been made, otherwise made in the background and worn when ready. */
+  /**
+   * Ask for a level: worn at once if it has been made, otherwise made in the background and worn when ready. Near (or
+   * first person) it is the level with her face, bust and belly kept sharp; further off the plain one. 100 % is one.
+   */
   const want = (detail: Detail): void => {
-    if (detail === drawnDetail) return;
-    if (body.has(detail)) { wear(detail); return; }
-    if (waitingFor.has(detail)) return;
-    waitingFor.add(detail);
-    levels.get(detail).then((index) => {
-      waitingFor.delete(detail);
+    const sharp = keepSharp && (near || firstPerson);
+    const key = detail === 100 || sharp ? detail : detail + PLAIN_KEY;
+    wantedKey = key;
+    if (key === drawnKey) return;
+    if (body.has(key)) { wear(key); return; }
+    if (waitingFor.has(key)) return;
+    waitingFor.add(key);
+    (sharp ? levels : plainLevels).get(detail).then((index) => {
+      waitingFor.delete(key);
       if (disposed) return;
-      body.build(detail, index);
-      // (worn only if it is still the level wanted: the player may have changed the setting meanwhile)
-      if (wanted === detail) wear(detail);
-    }).catch((error: unknown) => { waitingFor.delete(detail); console.warn(`[heroine] detail ${detail}% could not be made; she keeps ${drawnDetail}%`, error); });
+      body.build(key, index);
+      // (worn only if it is still the level wanted: the player or the camera may have changed it meanwhile)
+      if (wantedKey === key) wear(key);
+    }).catch((error: unknown) => { waitingFor.delete(key); console.warn(`[heroine] detail ${detail}% could not be made; she keeps ${drawnDetail}%`, error); });
   };
+  let wantedKey = 100;
   let wanted: Detail = 100;
 
   // The draw tells us the camera: three.js calls this just before her skin is drawn (and not at all when she is out of view).
@@ -744,6 +772,9 @@ if (uHideHead > 0.5) {
     middle.setFromMatrixPosition(root.matrixWorld);
     middle.y += height * 0.5;
     const distance = Math.max(0.05, eyeAt.setFromMatrixPosition(camera.matrixWorld).distanceTo(middle));
+    cameraDistance = distance;
+    // (near: within SHARP_WITHIN; once near, it takes SHARP_LEAVE to count as far again, so it does not flicker between)
+    near = near ? distance < SHARP_LEAVE : distance < SHARP_WITHIN;
     // how many screen pixels her height covers at that distance, through this camera's lens
     renderer.getDrawingBufferSize(size);
     pixels = (height / distance) * camera.projectionMatrix.elements[5] * 0.5 * size.y;

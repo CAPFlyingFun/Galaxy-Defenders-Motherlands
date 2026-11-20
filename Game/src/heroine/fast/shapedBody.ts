@@ -41,6 +41,13 @@ const BREAST_GROW_MORE = 'shape:breastGrowMore';
  * of the full body is some 160 MB on the graphics chip, a 30 % body's about 50 MB (Anthill Airways' own measure).
  */
 export const LIVE_UP_TO = 30;
+/**
+ * A level's KEY: its detail, or its detail plus this for the same detail lightened WITHOUT her face, bust and belly kept
+ * sharp (Joshua, 2026-11-19: sharp only with the camera within 2 m of her; fastHeroine.ts). Both may be kept at once.
+ */
+export const PLAIN_KEY = 1000;
+/** A level key's detail (percent). */
+export const detailOfKey = (key: number): number => key % PLAIN_KEY;
 /** Below this detail her surface directions are worked out again from the triangles she has left (see `freshNormals`). */
 const FRESH_NORMALS_BELOW = 25;
 
@@ -149,7 +156,7 @@ export class ShapedBody {
   motionMoves(k: number): Float32Array { return this.motion[k]; }
 
   /** Does a level of this detail carry all her body shapes live? */
-  isLive(detail: number): boolean { return detail <= LIVE_UP_TO; }
+  isLive(detail: number): boolean { return detailOfKey(detail) <= LIVE_UP_TO; }
   /** Every size shape's weight for her belly as it is now, by name (the builder's rules): a live level's weights. */
   shapeWeights(): Record<string, number> { return this.weightsNow(); }
   /** Let a level's copy go (it is made again if she comes back to it): a live level is big. */
@@ -227,6 +234,11 @@ export class ShapedBody {
     geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geometry.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4));
     geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+    // WHERE EACH POINT WAS AS BAKED, never changed: her suit's live knit is laid on by these (outfitMaterial.ts), so it
+    // stays on her skin as her belly grows and STRETCHES with it, the threads drawing apart, as real cloth would
+    const rest = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) { const o = order[k]; rest[k * 3] = s.position[o * 3]; rest[k * 3 + 1] = s.position[o * 3 + 1]; rest[k * 3 + 2] = s.position[o * 3 + 2]; }
+    geometry.setAttribute('knitRest', new THREE.BufferAttribute(rest, 3));
     // HER MOTION SHAPES STAY LIVE: the four are carried over, for this level's own points only.
     // (their moves only; a 1 cm sway turns her surface too little for the lighting to show)
     const live = this.isLive(detail);

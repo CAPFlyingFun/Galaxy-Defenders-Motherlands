@@ -48,13 +48,13 @@ export type Stance = 'stand' | 'crouch' | 'prone' | 'fours';
  */
 export const WINDED = {
   /** How far she bends forward, degrees (most of it at her hips, the rest up her back: lowerBody.ts, as any bend). */
-  lean: 35,
+  lean: 40,
   /** ...and at most, leaning in a little more if her hands still fall short of her knees, degrees. */
-  leanMost: 45,
+  leanMost: 60,
   /** How far her hips come down, a share of her leg's length (her knees bend to keep her feet on the ground). */
-  drop: 0.2,
+  drop: 0.36,
   /** Where her palms rest: this far up her thigh from her knee, metres, and on its front. */
-  aboveKnee: 0.2,
+  aboveKnee: 0.07,
   /** How far in toward her middle her fingers point down her thighs (0 straight down them). */
   fingersIn: 0.45,
   /**

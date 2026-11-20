@@ -73,8 +73,12 @@ export interface ClothShine {
   readonly knit?: KnitTile & { readonly stitch: number; readonly strength: number };
 }
 
-/** A live knit's picture: its file (in public/), its middle brightness (0-255, as measured from the file). */
-export interface KnitTile { readonly file: string; readonly middle: number }
+/**
+ * A live knit's picture: its file (in public/), its middle brightness (0-255, as measured from the file), and, if it
+ * has one, its HEIGHT picture (white raised, black low, the same size and lined up thread for thread) with the real
+ * depth of its threads in metres: the light then catches each thread as if it stood out that far.
+ */
+export interface KnitTile { readonly file: string; readonly middle: number; readonly bump?: { readonly file: string; readonly depth: number } }
 /** The athletic knit's Dark gray swatch, from Joshua's fabric pack. */
 export const ATHLETIC_KNIT: KnitTile = Object.freeze({ file: 'fabrics/athletic-darkgray-tile.jpg', middle: 46.2 });
 /**
@@ -87,7 +91,13 @@ export const PERFORATED_MESH: KnitTile = Object.freeze({ file: 'fabrics/perforat
  * scripts/make_weave_tile.py (light flattened, edges cross-faded thread on thread, glints softened; it prints the
  * middle brightness). About 40 threads to the picture.
  */
-export const WOVEN_MESH: KnitTile = Object.freeze({ file: 'fabrics/woven-mesh-tile.png', middle: 68.8 });
+export const WOVEN_MESH: KnitTile = Object.freeze({
+  file: 'fabrics/woven-mesh-tile.png', middle: 68.7,
+  // (its HEIGHT, made by Joshua in his Local Texture Lab, docs/tools/Local_Texture_Lab.html, from the tile above: the
+  //  lab's own seam pass touched the tile's outer edge, so the tile is the lab's Base Color, lined up with the height.
+  //  Joshua, 2026-11-19: "some real 3D depth even if only like 0.5mm")
+  bump: { file: 'fabrics/woven-mesh-height.png', depth: 0.0005 },
+});
 /** Which knit the catsuit wears (Settings -> HEROINE -> Suit fabric): the picture and the size it is drawn at. */
 export const SUIT_KNITS = Object.freeze({
   // (his photo: a picture repeat of 15 cm, so a thread about every 4 mm; finer than 3x it blurred to plain black)
@@ -109,13 +119,25 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     knitTile: { value: KNIT.tileMetres * shine.knit.stitch * unitsPerMetre },
     knitStrength: { value: shine.knit.strength },
     knitMiddle: { value: shine.knit.middle / 255 },
+    // (its height picture, if it has one; a 1 x 1 flat picture otherwise, so the shader is the same either way)
+    knitHeightMap: { value: shine.knit.bump
+      ? new THREE.TextureLoader().load(import.meta.env.BASE_URL + shine.knit.bump.file, (t) => { t.needsUpdate = true; })
+      : new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1) },
+    // (the threads' real depth, metres: the same whatever size the stitch is drawn at)
+    knitDepth: { value: shine.knit.bump?.depth ?? 0 },
   } : null;
   if (knitUniforms) {
     const t = knitUniforms.knitMap.value;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.NoColorSpace;   // (read as plain numbers: how light each part of a stitch is)
     t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    const h = knitUniforms.knitHeightMap.value;
+    h.wrapS = h.wrapT = THREE.RepeatWrapping;
+    h.colorSpace = THREE.NoColorSpace;
+    h.anisotropy = t.anisotropy;
   }
+  // (DEV only: test pages set the knit's numbers by hand)
+  if (import.meta.env.DEV && knitUniforms) (window as unknown as { __knit?: unknown }).__knit = knitUniforms;
   const from = fileMaterial as THREE.MeshStandardMaterial;
   // A sharper picture at a slant (the side of her leg seen along its length), at little cost.
   const sharpness = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -159,7 +181,20 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         'vec3 knitAt = vKnitPos / knitTile;',
         'float knitLight = texture2D(knitMap, knitAt.zy).r * knitSide.x + texture2D(knitMap, knitAt.xz).r * knitSide.y + texture2D(knitMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z;',
         'diffuseColor.rgb *= mix(1.0, knitLight / knitMiddle, knitGray * knitStrength);',
+        // ITS HEIGHT, the same three ways, in metres (its depth times how raised each spot is): read again below,
+        // where the light's directions are worked out
+        'float knitHeight = knitDepth * knitGray * (texture2D(knitHeightMap, knitAt.zy).r * knitSide.x + texture2D(knitHeightMap, knitAt.xz).r * knitSide.y + texture2D(knitHeightMap, vec2(knitAt.x, -knitAt.y)).r * knitSide.z);',
       );
+      // THE THREADS' DEPTH (a "bump"): how fast the height changes from this pixel to the next, across and down the
+      // screen, tilts her surface's direction the way a real raised thread would (Morten Mikkelsen's method, which
+      // three.js's own bump maps use). Nothing is moved: only the light changes, so it costs almost nothing.
+      const knitBump = knitUniforms ? [
+        'vec3 knitSigmaX = dFdx(-vViewPosition), knitSigmaY = dFdy(-vViewPosition);',
+        'vec3 knitR1 = cross(knitSigmaY, normal), knitR2 = cross(normal, knitSigmaX);',
+        'float knitDet = dot(knitSigmaX, knitR1) * faceDirection;',
+        'vec3 knitGrad = sign(knitDet) * (dFdx(knitHeight) * knitR1 + dFdy(knitHeight) * knitR2);',
+        'normal = normalize(abs(knitDet) * normal - knitGrad);',
+      ] : [];
       material.onBeforeCompile = (shader) => {
         if (knitUniforms) {
           Object.assign(shader.uniforms, knitUniforms);
@@ -169,10 +204,11 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
             .replace('#include <common>', '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;')
             .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitNormal = objectNormal;');
           shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
-            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;');
+            '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitNormal;\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;');
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + knitBump.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
@@ -185,8 +221,9 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   return {
     fine, plain,
     setKnitStitch(stitch: number): void {
-      if (knitUniforms) knitUniforms.knitTile.value = KNIT.tileMetres * stitch * unitsPerMetre;
+      if (!knitUniforms) return;
+      knitUniforms.knitTile.value = KNIT.tileMetres * stitch * unitsPerMetre;
     },
-    dispose(): void { fine.dispose(); plain.dispose(); knitUniforms?.knitMap.value.dispose(); },
+    dispose(): void { fine.dispose(); plain.dispose(); knitUniforms?.knitMap.value.dispose(); knitUniforms?.knitHeightMap.value.dispose(); },
   };
 }

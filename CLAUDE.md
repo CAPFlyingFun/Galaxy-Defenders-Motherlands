@@ -278,7 +278,9 @@ use the game's single copy of three.js.
   of her belly; a spot it cannot reach is left. Its palm rests 2 mm off HER OWN skin there (`skinFrame`: her trunk's
   skin points round the spot fitted to a small curved patch, its real facing and its curve along her fingers; the
   kick's bump counted while it lasts), her fingers and thumb close smoothly round that curve (fingerTouch.ts
-  `gapMore`), 3 s, then back; 1.5 s before another. Not while she is down. Test pages: `pokeBelly(round, up)`.
+  `gapMore`), 3 s, then back; 1.5 s before another. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
+  (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all
   future hand related tasks"; `Game/src/heroine/fast/handPads.ts`): each finger and thumb bone's flesh on its touching
   side, and her palm's, MEASURED from her own skin when she is made (fingers straightened, the pad side square to each

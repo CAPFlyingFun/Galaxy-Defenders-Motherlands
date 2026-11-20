@@ -82,6 +82,9 @@ const thumbAt = new THREE.Vector3(), handQ = new THREE.Quaternion(), handS = new
 const world = new THREE.Matrix4(), rotation = new THREE.Matrix4(), q = new THREE.Quaternion(), offset = new THREE.Vector3();
 const point: [number, number, number] = [0, 0, 0];
 
+const tipFacing = new THREE.Vector3(), tipAlong = new THREE.Vector3(), tipBase = new THREE.Vector3(), tipAxis = new THREE.Vector3();
+const tipQ = new THREE.Quaternion(), tipParent = new THREE.Quaternion(), tipTurn = new THREE.Quaternion();
+
 export class FingerTouch {
   /** What each hand holds now [left, right], or null. */
   readonly shapes: [GripShape | null, GripShape | null] = [null, null];
@@ -179,9 +182,13 @@ export class FingerTouch {
           // (a hand laid flat on something, her belly, `gapMore`: her thumb lies along it as her fingers do, closing
           //  until it is off it by the same; round a bar it opens out and comes back to rest on the bar)
           const flat = this.gapMore[h] > 0;
-          if (finger.thumb && !flat) this.restThumb(i, shape, touched);
+          // (laid on her belly, the thumb's place is searched once a touch, as the hand arrives: some 300 tries)
+          if (finger.thumb) {
+            if (!flat) this.restThumb(i, shape, touched);
+            else if (this.thumbLaidOn[h] !== shape && reached[h] >= TOUCH.arrivedFrom) { this.layThumb(i, shape, touched); this.thumbLaidOn[h] = shape; }
+          }
           else touched.fill(0);
-          for (let k = 0; k < (finger.thumb && !flat ? 0 : n); k++) {
+          for (let k = 0; k < (finger.thumb ? 0 : n); k++) {
             // joints k and out close together, from where they are, until the finger touches; then joint k stays
             const from = touched[k];
             const found = closeToTouch((closure) => {
@@ -200,6 +207,8 @@ export class FingerTouch {
         }
         for (let j = 0; j < n; j++) this.trying[j] = base[h] + (touched[j] - base[h]) * this.amount[h];
         this.motion.curlFingerJoints(i, this.trying);
+        // (a thumb laid on her belly: tipped down at its base too, as much as it was found to need, eased in the same)
+        if (finger.thumb && shape && this.gapMore[h] > 0) this.tipThumb(i, h, this.thumbTip[h] * this.amount[h]);
         finger.bones[0].updateMatrixWorld(true);
       }
     }
@@ -223,6 +232,78 @@ export class FingerTouch {
       if (score < bestScore) { bestScore = score; best = percent; }
     }
     out.fill(best);
+  }
+
+  /**
+   * A THUMB LAID ON A SURFACE (her belly: Joshua, 2026-11-20, "the thumb is hidden in the belly"): its relaxed curl
+   * already lies inside her belly, so closing it from there could only go further in. Its whole range is tried instead,
+   * from opened out past straight to folded in, and it is set where its skin is nearest the surface while still the
+   * hand's gap off it (from its second bone out); if every place cuts in, the one that cuts in least.
+   */
+  private layThumb(i: number, shape: GripShape, out: Float32Array): void {
+    // TWO WAYS TOGETHER: its curl (which only folds it across the palm, so on a curved belly it was either inside or
+    // standing off) and its base TIPPED toward the palm's side or away (`tipThumb`), as a thumb drops to rest on what
+    // the hand lies on: each pair tried, the one nearest the surface but still the gap off it kept.
+    const h = this.ofHand[0].includes(i) ? 0 : 1, finger = this.motion.fingers[i];
+    const curls = 24, tips = 12, least = -TOUCH.thumbOpen;
+    let best = 0, bestTip = 0, bestClear = Infinity, leastIn = -Infinity, leastInAt = 0, leastInTip = 0;
+    for (let t = 0; t <= tips; t++) {
+      const tip = (-50 + 100 * t / tips) * Math.PI / 180;
+      for (let s = 0; s <= curls; s++) {
+        const percent = least + (100 - least) * s / curls;
+        this.trying.fill(percent, 0, out.length);
+        this.motion.curlFingerJoints(i, this.trying);
+        this.tipThumb(i, h, tip);
+        finger.bones[0].updateMatrixWorld(true);
+        // (from its second bone out: its first lies under the ball of her palm, which rests on her belly already, so
+        //  every place would count as touching and the one standing off furthest was taken)
+        const clear = this.clearanceAsIs(i, shape, 1);
+        if (clear >= 0 && clear < bestClear) { bestClear = clear; best = percent; bestTip = tip; }
+        if (clear > leastIn) { leastIn = clear; leastInAt = percent; leastInTip = tip; }
+      }
+    }
+    const found = Number.isFinite(bestClear);
+    out.fill(found ? best : leastInAt);
+    this.thumbTip[h] = found ? bestTip : leastInTip;
+  }
+
+  /** Each hand's thumb tipped at its base for lying on a surface, radians (`layThumb`), and the shape it was laid on. */
+  private readonly thumbTip: [number, number] = [0, 0];
+  private readonly thumbLaidOn: [GripShape | null, GripShape | null] = [null, null];
+
+  /**
+   * Tip a thumb at its base toward the way her palm faces (+) or away (-) by `angle`: about the line square to both the
+   * thumb's first bone and her palm's facing, in the world, its own curl left as it is.
+   */
+  private tipThumb(i: number, h: 0 | 1, angle: number): void {
+    if (Math.abs(angle) < 1e-5) return;
+    const finger = this.motion.fingers[i], b0 = finger.bones[0];
+    const frame = this.palm(h);
+    this.hands[h].updateWorldMatrix(true, false);
+    b0.updateMatrixWorld(true);
+    // the palm's facing in the world, and the thumb's first bone
+    const facing = tipFacing.setFromMatrixColumn(frame.basis, 2).applyQuaternion(this.hands[h].getWorldQuaternion(tipQ)).normalize();
+    const along = tipAlong.setFromMatrixPosition((finger.bones[1] ?? finger.tip).matrixWorld).sub(tipBase.setFromMatrixPosition(b0.matrixWorld)).normalize();
+    const axis = tipAxis.crossVectors(along, facing).normalize();
+    if (axis.lengthSq() < 1e-8) return;
+    // (turning about `axis` by +angle carries `along` toward `facing`)
+    b0.parent!.getWorldQuaternion(tipParent);
+    tipTurn.setFromAxisAngle(axis, angle);
+    b0.quaternion.premultiply(tipParent).premultiply(tipTurn).premultiply(tipParent.invert());
+  }
+
+  /** As `clearance`, with the finger's joints left exactly as they are now (already curled, a thumb also tipped). */
+  private clearanceAsIs(i: number, shape: GripShape, from: number): number {
+    const finger = this.motion.fingers[i];
+    let nearest = Infinity;
+    const bones = finger.bones, pads = this.pads?.pad[i];
+    for (let k = from; k < bones.length; k++) {
+      bones[k].getWorldPosition(a);
+      (k + 1 < bones.length ? bones[k + 1] : finger.tip).getWorldPosition(b);
+      const pad = pads?.[k] ?? (finger.thumb ? TOUCH.thumbPad : TOUCH.pad);
+      nearest = Math.min(nearest, this.distance(shape, c.copy(a).add(b).multiplyScalar(0.5)) - pad, this.distance(shape, b) - pad);
+    }
+    return nearest - this.gapMore[this.ofHand[0].includes(i) ? 0 : 1];
   }
 
   /**

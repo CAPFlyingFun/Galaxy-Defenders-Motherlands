@@ -81,6 +81,8 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
     pieces: {
       plate: '#eeeef2', trim: '#1c2445', accent: '#c9a35e', sole: '#1c2445', glow: '',
       boots: true, cuffs: true, shoulders: true, design: 'anime', knees: true, collar: true, gloves: true, hipPanelLining: '#b3202a',
+      // (the panels hang from the middle of the belt: its top is 3.5 cm over her hip joints at her sides, 10 cm behind)
+      hipPanelTop: [0.017, 0.082],
     },
   },
   /**

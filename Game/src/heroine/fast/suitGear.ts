@@ -61,6 +61,13 @@ export interface SuitGearStyle {
    * edged in `accent`, lined in this colour, hinged at the belt and swung by her thighs. Left out: none.
    */
   readonly hipPanelLining?: string;
+  /**
+   * Where the hip panels hang from: their tops' height over her hip joints at her sides and behind (metres). The
+   * look's own belt line, so the panels' tops go up over the lower half of the belt and hang from it (Joshua,
+   * 2026-11-20: "make the side panels look like they are connected to the belt, they look like they are floating").
+   * Left out: just under where a belt would be.
+   */
+  readonly hipPanelTop?: readonly [number, number];
 }
 
 /** GAME TUNING: sizes of the pieces (metres) and where on each bone they sit (shares of the bone's length). */
@@ -103,7 +110,11 @@ export const SUIT_GEAR = Object.freeze({
   // (one each side, about a quarter of her round, from her side to near her back's middle: Joshua, 2026-11-20, of his
   //  reference, "only has one per side that covers about 1/4 of her body on each side... 4 panels is too much")
   panels: [[74, 168]] as readonly (readonly [number, number])[],
-  panelGap: 0.014, panelFlare: 0.2, panelThick: 0.0035,
+  // (clear of her skin at their top by a little more than the belt stands out, so the top hem lies OVER the belt's lower
+  //  half, against it, and is clamped on by gold studs; they flare out from there as they go down)
+  panelGap: 0.0105, panelFlare: 0.2, panelThick: 0.0035,
+  /** The gold hem along each panel's top (how many of its 12 rows), and the studs on it: how many, their size (metres). */
+  panelHemRows: 1, panelStuds: 4, panelStud: 0.007,
   /**
    * HOW THE PANELS SWING (radians of panel per radian her thigh swings from where it stood): a side panel is pushed out
    * by her thigh swinging either way and by her leg going out to her side; a back panel by her thigh going back (and a
@@ -324,7 +335,8 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
     const hipL = src.leg.left.thigh.getWorldPosition(new THREE.Vector3()).applyMatrix4(rootInverse);
     const hipR = src.leg.right.thigh.getWorldPosition(new THREE.Vector3()).applyMatrix4(rootInverse);
     const centre = hipL.clone().add(hipR).multiplyScalar(0.5);
-    const top = (deg: number): number => centre.y + T.panelTop.side + (T.panelTop.back - T.panelTop.side) * Math.max(0, Math.min(1, (deg - 90) / 90));
+    const [hangSide, hangBack] = style.hipPanelTop ?? [T.panelTop.side, T.panelTop.back];
+    const top = (deg: number): number => centre.y + hangSide + (hangBack - hangSide) * Math.max(0, Math.min(1, (deg - 90) / 90));
     const bottom = centre.y - T.panelDown;
     // her outline round that point: for each degree round her (both sides folded together, 0 her front .. 180 her back)
     // and each 1 cm of height, how far out her skin is
@@ -377,7 +389,7 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
           const p = at(c, r, layer === 0 ? T.panelThick : 0).sub(hinge);
           positions.push(p.x, p.y, p.z);
           // outside: white edged gold; inside: the red lining
-          const edge = r === ROWS || c === 0 || c === COLS;
+          const edge = r === ROWS || c === 0 || c === COLS || r < T.panelHemRows;
           const col = layer === 1 ? lining : edge ? C.accent : C.plate;
           colours.push(col.r, col.g, col.b);
         }
@@ -390,6 +402,21 @@ export function buildSuitGear(src: SuitGearSource, style: SuitGearStyle): SuitGe
         const rim = (a0: number, a1: number, b0: number, b1: number) => index.push(a0, b0, a1, a1, b0, b1, a0, a1, b0, a1, b1, b0);
         for (let c = 0; c < COLS; c++) rim(id(0, ROWS, c), id(0, ROWS, c + 1), id(1, ROWS, c), id(1, ROWS, c + 1));
         for (let r = 0; r < ROWS; r++) { rim(id(0, r, 0), id(0, r + 1, 0), id(1, r, 0), id(1, r + 1, 0)); rim(id(0, r, COLS), id(0, r + 1, COLS), id(1, r, COLS), id(1, r + 1, COLS)); }
+        // THE STUDS clamping its hem to the belt: small gold squares standing proud of the hem, evenly along it
+        for (let n = 0; n < T.panelStuds; n++) {
+          const c = (COLS * (n + 0.5)) / T.panelStuds, half = T.panelStud / 2;
+          const base = positions.length / 3;
+          const middle = at(c, 0.45, T.panelThick + 0.0015).sub(hinge);
+          const deg = from + ((to - from) * c) / COLS, a = deg * (Math.PI / 180);
+          const out = new THREE.Vector3(Math.sin(a) * sideX, 0, Math.cos(a)), along = new THREE.Vector3().crossVectors(up, out).normalize();
+          for (const [x, y, o] of [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] as const) {
+            const p = middle.clone().addScaledVector(along, x * half).addScaledVector(up, y * half).addScaledVector(out, o * 0.003);
+            positions.push(p.x, p.y, p.z);
+            colours.push(C.accent.r, C.accent.g, C.accent.b);
+          }
+          // (its outer face and four sides)
+          for (const [a0, a1, a2, a3] of [[4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]) index.push(base + a0, base + a1, base + a2, base + a0, base + a2, base + a3);
+        }
         // (on her left, a mirror of her right: its faces wound the other way)
         const geometry = made(positions, colours, index, sideX < 0);
         // the panel on its pivot at the hinge, in the bone the legs hang from (so it turns with her hips)

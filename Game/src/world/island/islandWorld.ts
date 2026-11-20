@@ -25,6 +25,7 @@ import { createFarIsland } from './farIsland';
 import { createOcean, WATER_Y, type Ocean } from './ocean';
 import { CarveData } from './carve';
 import { KauaiHydro } from './hydro';
+import { IslandTrees } from './trees';
 
 /** The arrival point in the island's own metres (Beyond Extinction's spawn, from its manifest). */
 const ARRIVAL = { x: 21290, z: 1288 };
@@ -74,6 +75,8 @@ export interface IslandWorld {
   readonly seaLevel: number;
   /** Wait until the tiles round (x, z) are all loaded, telling `say` how far along it is. */
   ready(x: number, z: number, say: (done: number, of: number) => void): Promise<void>;
+  /** The forest, for the readout: trees drawn and in how many draws (null with trees off). */
+  treeCounts(): { trees: number; draws: number } | null;
   /** Every frame: tiles follow her, the sea follows the camera. */
   update(seconds: number, herX: number, herZ: number, camera: THREE.Camera): void;
   dispose(): void;
@@ -119,7 +122,7 @@ class IslandWalls implements Walls {
  * Open the island. `base` is where its files are (the game's address + "island/"); `scene` gets the daytime sky
  * picture and the haze. Waits for the list of tiles and the far island; the tiles round her load after (`ready`).
  */
-export async function createIslandWorld(base: string, scene: THREE.Scene): Promise<IslandWorld> {
+export async function createIslandWorld(base: string, scene: THREE.Scene, options: { trees?: boolean } = {}): Promise<IslandWorld> {
   const origin = new THREE.Vector2(ARRIVAL.x, ARRIVAL.z);
   const [manifest, pictures] = await Promise.all([
     fetch(`${base}kauai/manifest.json`).then((r) => r.json() as Promise<IslandManifest>),
@@ -145,6 +148,9 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
     surfaceHeightAt: (ix: number, iz: number) => tiles.fineHeightAtIsland(ix, iz),
     tileReadyAt: (ix: number, iz: number) => tiles.tileReadyAtIsland(ix, iz),
   };
+  // THE FOREST (trees.ts, Beyond Extinction's photo trees on the real vegetation maps), in the island's own metres as
+  // the rivers are; Settings -> WORLD -> Trees can leave it out
+  const trees = options.trees === false ? null : new IslandTrees(waterGroup, base);
 
   // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze
   scene.background = new THREE.Color(HAZE);
@@ -172,6 +178,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
     seaLevel: WATER_Y,
     arrivalFacing: ARRIVAL_FACING,
     groundAt,
+    treeCounts: () => trees?.counts ?? null,
     async ready(x, z, say) {
       tiles.update(x, z);
       for (;;) {
@@ -185,11 +192,14 @@ export async function createIslandWorld(base: string, scene: THREE.Scene): Promi
     update(seconds, herX, herZ, camera) {
       tiles.update(herX, herZ);
       hydro.update(seconds, hydroGround);
+      // (the forest by the CAMERA, in the island's metres: what is near the view is what is drawn)
+      trees?.update(seconds, camera.position.x + origin.x, camera.position.z + origin.y, hydroGround, hydro);
       ocean.update(seconds, camera);
     },
     dispose() {
       tiles.dispose();
       hydro.dispose();
+      trees?.dispose();
       far.geometry.dispose();
       (far.material as THREE.Material).dispose();
       ocean.dispose();

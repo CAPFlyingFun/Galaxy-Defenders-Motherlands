@@ -231,7 +231,16 @@ use the game's single copy of three.js.
   per tile once its 4 neighbours are in. In a river or lake deeper than 1.25 m she is held up to her shoulders
   (`standAt`: a stand-in until swimming); the sea still stops her past her knees. `waterLevelAt` takes the NEAREST
   river sample (not the highest) and ignores reaches levelled below the sea.
-  Not yet: trees and plants (`veg/`), swimming.
+  THE FOREST, PHASE 1 (Joshua, 2026-11-20: "landscaping next... what Beyond Extinction did which I think was flat
+  images... also check TCS"; `world/island/trees.ts`, from BE's `KauaiTrees.ts`): BE's PHOTO TREES, each one camera-facing
+  quad swayed by the wind in the shader, one draw per kind per 300 m patch, planted where the REAL island has trees or
+  shrubs (BE's USGS/ESA rasters, `public/island/veg/`) and off the rivers and lakes, kind by height above the sea (palm,
+  cycad, sago, fern, aspen, conifer, bush under all), streamed within 1050 m of the camera, drawn to 900 m (dithered
+  out), let go past 2600 m. Settings -> WORLD -> Trees (`gdm.trees`, `?trees=off`); the full readout's `trees N · D
+  draws`. At the arrival: about 1,000-4,800 trees in 47-82 draws, 2 triangles each. PHASE 2 (planned): TCS's
+  (Thronemound-Colony-Sim) BAKED 3D TREES near her (`src/world/tree.ts` `bakeTree`: limbs tessellated into one buffer,
+  bark photos, leaves by vertex colour, one instanced draw per kind) with solid trunks she walks round, the photos
+  beyond; ground cover (grass, ferns) near her. Not yet: swimming.
 - HER PREGNANCY (Joshua, 2026-11-19; `Game/src/heroine/pregnancyPlan.ts`): Settings -> PREGNANCY has Pregnancy on/off
   (`gdm.pregnant`), a Belly slider 10-150% with a lock that opens all of 0-200% (`gdm.belly`, `gdm.bellyUnlocked`), the
   week shown beside it off HER OWN builder chart (Blaze: START 10% = week 12, BIGGEST 150% at week 42, END 30%; the

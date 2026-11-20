@@ -10,10 +10,14 @@ Not edited by hand. To refresh, copy the same files over these again and run
 | `kauai/height/A..H/*.png`, `manifest.json`, `coast_mask.png`, `hydro.json`, `README.md` | `terrain/kauai/` |
 | `textures/{sand,grass,jungle,cliff,mountain,snow,reef}.jpg`, `riverbed_{sand,cobble,silt,algae}.jpg`, `water_normal.png` | `textures/` |
 | `sky/daysky_bg.jpg` | `hdri/daysky_bg.jpg` |
+| `veg/{canopy,landcover,water,river}.png`, `veg.json`, `README.md` (the real vegetation rasters) | `terrain/kauai/veg/` |
+| `trees/{palm,cycad,sago,fern,aspen,conifer}.png` (photo trees) | `trees/` |
+| `billboards/billboard_bush_01.png` | `billboards/` |
 
 Made here (not copied): `kauai/overview.png`, the whole island at 513 x 513 for the coarse far island
 (`scripts/make_island_overview.py`).
 
 The code that uses them is `Game/src/world/island/`, brought over from Beyond Extinction's
-`KauaiTileStreamer.ts`, `terrainSampling.ts`, `kauaiTile.worker.ts`, `KauaiCarve.ts`, `kauaiCarveCore.ts`, `KauaiHydro.ts`
-and the ocean in `KauaiStreamScene.ts` (each file says what changed). Not brought over yet: trees and plants (`veg/`).
+`KauaiTileStreamer.ts`, `terrainSampling.ts`, `kauaiTile.worker.ts`, `KauaiCarve.ts`, `kauaiCarveCore.ts`, `KauaiHydro.ts`,
+the ocean in `KauaiStreamScene.ts`, and (2026-11-20) the forest in `KauaiTrees.ts` -> `trees.ts` (each file says what
+changed).

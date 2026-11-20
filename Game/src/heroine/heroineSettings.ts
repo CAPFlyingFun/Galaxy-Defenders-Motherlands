@@ -68,6 +68,8 @@ export interface HeroineSettings {
    * a test map until its place on the island is chosen. The address's ?map= still wins. Changing it reloads the game.
    */
   map: MapChoice;
+  /** THE ISLAND'S FOREST (Joshua, 2026-11-20, landscaping): Beyond Extinction's photo trees. Changing it reloads the game. */
+  trees: ShadowChoice;
   /**
    * HER PREGNANCY, to test (Joshua, 2026-11-19: "a toggle pregnancy on/off as well as a full range belly slider from
    * 0-200%, but only 10-150% is the default range with unlock available... like the CCBS"; heroine/pregnancyPlan.ts).
@@ -173,6 +175,7 @@ export const SETTING_KEYS = Object.freeze({
   outfit: 'gdm.outfit',
   catsuitNeck: 'gdm.catsuitNeck',
   map: 'gdm.map',
+  trees: 'gdm.trees',
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
@@ -249,6 +252,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     catsuitNeck: asCatsuitNeck(address.get('neck') ?? read(SETTING_KEYS.catsuitNeck)),
     // (the island unless the town was chosen)
     map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
+    trees: (address.get('trees') ?? read(SETTING_KEYS.trees)) === 'off' ? 'off' : 'on',
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',

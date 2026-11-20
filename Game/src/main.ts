@@ -284,7 +284,7 @@ async function start(): Promise<void> {
   if (onIsland) {
     meter.step('island', 'Opening the island…');
     const { createIslandWorld } = await import('./world/island/islandWorld');
-    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene);
+    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, { trees: graphics.trees !== 'off' });
     scene.add(island.group);
     let told = -1;
     await island.ready(0, 0, (done, of) => {
@@ -1473,6 +1473,9 @@ async function start(): Promise<void> {
         // (her stomach, food + water, and her bladder: Settings -> FOOD & DRINK)
         const inside = vitals.contents;
         lines.push(`gut ${Math.round(inside.foodMl)}+${Math.round(inside.waterMl)} · bladder ${Math.round(inside.bladderMl)}`);
+        // (the island's forest: trees drawn, in how many draws)
+        const forest = island?.treeCounts();
+        if (forest) lines.push(`trees ${forest.trees} · ${forest.draws} draws`);
         hud.setReadout(lines.join('\n'));
         readoutTimer = 0;
         readoutFrames = 0;

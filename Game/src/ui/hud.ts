@@ -348,6 +348,7 @@ export class Hud {
     // (the map: Joshua, 2026-11-19, the real island for the main game, the town kept as a test map)
     element('h2', 'gd-settings-part', settings, 'WORLD');
     choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen. Changing it reloads the game.');
+    choiceRow('Trees', 'trees', [['On', 'on'], ['Off', 'off']], 'The island\'s forest: photo trees on the real island\'s own vegetation map, drawn to 900 m. Changing it reloads the game.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');
     // (her outfit, to test each as it is made: Joshua, 2026-11-19)
     choiceRow('Outfit', 'outfit', OUTFIT_CHOICES, 'Her outfit, to try each as it is made. It changes while you play (a few seconds).');

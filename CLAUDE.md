@@ -125,6 +125,17 @@ use the game's single copy of three.js.
   having ChatGPT redraw outfits 2-4 (Look 2's renders: `docs/reference/outfits/look2-anime-space-heroine-chatgpt-*`:
   bare sides at her waist and an open back with a white heart yoke, which the builder cannot cut yet); next: the green
   and gold.
+  MORE COLOURS OF THE SAME CATSUIT (Joshua, 2026-11-20: "a shiny gold, black, sliver, etc, maybe even top half above
+  belly/at bottom of breasts one tone, and below another"): every catsuit style is made by ONE recipe, `looks/catsuit.ts`
+  (`catsuitLook({ colour, neck })`, `NECKLINES` keyhole/lowU/high/diamond, the high-neck gap filled), the bronze ones
+  too. `looks/catsuitStyles.ts`: GOLD (keyhole), BLACK (high), SILVER (the builder's diamond cutout), each baked; and
+  TWO TONES drawn by the game over one of those bakes (`looks/bakedAs.ts` `BAKED_AS`, gear's `clothShine.twoTone`,
+  outfitMaterial.ts): the top colour wherever the suit's own colour is, above `TWO_TONE_LINE` (1.19 m up her as
+  baked, the bottom of her bust) and all down her arms (her arms' bones, `setToneArms`), per pixel so the line is
+  clean: black & gold, gold & black, black & silver. (Tried first: a long-sleeved top cut at her bust over the
+  suit; the builder's shirt keeps its own hem and hangs a drape between her legs.) `clothShine.metal` gives gold and
+  silver a metal sheen (about a third: the game has no sky reflections for a full metal). Gear by the look ASKED FOR,
+  not the folder it was baked in (fastHeroine.ts `lookGear`).
 - LOOK 1, THE SHADOW OPERATIVE CATSUIT (Joshua, 2026-11-19; `looks/shadowSuit.ts`, reference
   `docs/reference/outfits/look1-shadow-operative-closeup.jpg`): built ON JOSHUA'S OWN EXPORT (his Blaze in her black
   CCBS catsuit, with her braid, eye/lip colours and face; `EXPORT_BODY`, `EXPORT_SUIT_LAYER`), with red stripes painted

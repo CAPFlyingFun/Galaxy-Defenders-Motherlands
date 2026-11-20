@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "look": "catsuitBlack",
+  "bakedAt": "2026-11-20T17:21:25.629Z",
+  "builderVersion": "0.9.60",
+  "belly": 10,
+  "vertexCount": 115710,
+  "barefootHeightMetres": 1.7134932714305189,
+  "navel": 20,
+  "motion": {
+    "walkBob": 200,
+    "walkSway": 200,
+    "breastBounce": 200
+  },
+  "weeks": 12,
+  "normalScale": [
+    1,
+    -1
+  ],
+  "hair": {
+    "style": "braid",
+    "colour": "#1c1b1d",
+    "length": 1
+  },
+  "files": {
+    "albedo": "albedo.webp",
+    "normal": "normal.webp",
+    "surface": "surface.webp",
+    "shape": "shape.bin",
+    "pieces": null
+  },
+  "facts": {
+    "drawnInTheRoom": [
+      "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
+      "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0_1, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
+      "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
+      "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
+    ],
+    "extraPieces": [],
+    "lowestPointOverTheFloorMetres": -0.013362774164863424,
+    "solesOverTheFloorMetres": -0.013362774164863424,
+    "crownOverTheFloorMetres": 1.7001304972656552,
+    "pointsTheBuilderMoved": 73399,
+    "movedMostGeometryUnits": 0.15014206009903666,
+    "pointsWithChangedBones": 13408,
+    "restSkinSpread": 0.16339184491224937,
+    "captureMissing": {
+      "position": 0,
+      "normal": 0
+    },
+    "albedoCoveredTexels": 7537039,
+    "textureIslands": 317,
+    "islandsShrunkTo": 0.8150525093078614
+  }
+}

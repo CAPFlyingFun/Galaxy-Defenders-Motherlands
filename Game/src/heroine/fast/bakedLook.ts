@@ -20,6 +20,7 @@
 // her skin (the builder's own belly shapes), and the picture stretches with it, but an edge the builder would
 // have re-drawn for the new belly (the waistband under her bump) stays where it was baked.
 // ============================================================================
+import { BAKED_AS } from '../looks/bakedAs';
 import * as THREE from 'three';
 import { unpackShape, type BakedShape } from './shapeFile';
 import { unpackPieces, type BakedPiece } from './piecesFile';
@@ -75,7 +76,7 @@ export interface BakedLook {
 export const BAKED_LOOKS: readonly string[] = ['blazeSuit', 'blaze'];
 
 /** The folder a look's baked files are in (beside the game's page). */
-export const bakedLookFolder = (look: string): string => `${import.meta.env.BASE_URL}heroines/${look}/`;
+export const bakedLookFolder = (look: string): string => `${import.meta.env.BASE_URL}heroines/${BAKED_AS[look] ?? look}/`;
 
 /** Megabytes fetched so far for the look being loaded (added up by `fetchOk`'s callers). */
 let fetchedBytes = 0;

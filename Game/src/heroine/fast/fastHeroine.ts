@@ -59,7 +59,7 @@ import { buildBeltGear, type BeltGear } from './beltGear';
 import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
-import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine } from './outfitMaterial';
+import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine, type SkinMaterials } from './outfitMaterial';
 import { addSkinTexture, loadSkinPictures } from './skinTexture';
 import { addSkinShine, shineUniforms, SkinWetness } from './skinShine';
 import { shapeWeightsAt } from './shapedBody';
@@ -390,12 +390,15 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   setLiveShape();
 
   // ---- 4. her outfit: the baked pictures on one plain material -----------------------------------------------------
+  // (her look's gear and shine by the look ASKED FOR, not the folder it was baked in: a two-tone catsuit wears another
+  //  look's bake (looks/gear.ts `bakedAs`) with its own colours)
+  const lookGear = LOOK_GEAR[options.look] ?? LOOK_GEAR[look.manifest.look];
   // (or, the DEV Room's way, the file's own skin material with a tee and leggings coloured over it in the shader)
   const fileMaterial = Array.isArray(skin.material) ? skin.material[0] : skin.material;
   // (her skin model's own units to a metre, for the live knit's size: her height in the model is about 1.68 m)
   skin.geometry.computeBoundingBox();
   const unitsPerMetre = (skin.geometry.boundingBox!.max.y - skin.geometry.boundingBox!.min.y) / 1.68;
-  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(LOOK_GEAR[look.manifest.look]?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
+  const materials = painted ? makePaintedMaterials(fileMaterial, box, painted) : makeSkinMaterials(fileMaterial, look, options.renderer, withKnit(lookGear?.clothShine, options.suitKnit ? SUIT_KNITS[options.suitKnit] : undefined), unitsPerMetre);
   // HER SKIN'S DEPTH (Joshua, 2026-11-19; skinTexture.ts): the builder's hybrid, her own skin picture's depth and its pore
   // and crease tile, on her bare skin
   /** Her skin-depth pictures (kept here so `dispose` lets them go: they live only in her shader's uniforms). */
@@ -541,6 +544,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // step goes this far (footGround.ts)
   ground.shoulderWidth = new THREE.Vector3().setFromMatrixPosition(arms.left.upper.matrixWorld)
     .distanceTo(new THREE.Vector3().setFromMatrixPosition(arms.right.upper.matrixWorld));
+  // TWO TONES (outfitMaterial.ts `twoTone`): her arms' bones, every one from each shoulder joint out to her fingertips,
+  // wear the top colour all down her arms; and her feet's height as baked, for the line across her trunk
+  if ('setToneArms' in materials) {
+    const armBones: number[] = [];
+    for (const shoulder of [arms.left.upper, arms.right.upper]) shoulder.traverse((node) => { const i = bones.indexOf(node as THREE.Bone); if (i >= 0) armBones.push(i); });
+    (materials as SkinMaterials).setToneArms(armBones, skin.geometry.boundingBox!.min.y);
+  }
   const aim = new ArmAim({ spine: bone(joints.spine), chest: bone(joints.chest), ...arms });
   // Her head: the builder's `head` joint is the very top of her head (a tip that carries nothing); the bone that
   // carries her skull, face and hair is its parent.
@@ -687,7 +697,7 @@ if (uHideHead > 0.5) {
 
   // ---- 8. her guns: each one a child of its hand's bone, so it costs nothing to move ---------------------------------
   // (her guns in her outfit's colours: looks/gear.ts)
-  const gunColours = LOOK_GEAR[look.manifest.look]?.gun;
+  const gunColours = lookGear?.gun;
   const guns: Record<Hand, Gun> = { left: createGun(gunColours), right: createGun(gunColours) };
   /** Where each gun sits in its hand (in the hand bone's frame): kept, so a gun put down can be taken up again exactly. */
   const seat: Record<Hand, THREE.Matrix4> = { left: new THREE.Matrix4(), right: new THREE.Matrix4() };
@@ -711,17 +721,17 @@ if (uHideHead > 0.5) {
       right: new THREE.Matrix4().copy(arms.right.hand.matrixWorld).multiply(seat.right),
     },
     // (the outfit's own colours for it: looks/gear.ts)
-    colours: LOOK_GEAR[look.manifest.look]?.belt,
+    colours: lookGear?.belt,
     gunColours,
-    line: LOOK_GEAR[look.manifest.look]?.beltLine,
-    holsters: LOOK_GEAR[look.manifest.look]?.holsters,
-    pouches: LOOK_GEAR[look.manifest.look]?.pouches,
+    line: lookGear?.beltLine,
+    holsters: lookGear?.holsters,
+    pouches: lookGear?.pouches,
   });
   /** The thighs with a holster drawn (an outfit may have one: looks/gear.ts); a gun put away on the other is stowed out of sight. */
-  const holstered = LOOK_GEAR[look.manifest.look]?.holsters ?? (['left', 'right'] as const);
+  const holstered = lookGear?.holsters ?? (['left', 'right'] as const);
   // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist
   // cuffs and shoulder plates, each a shell shaped round her own skin on one bone. Made now, while she stands.
-  const piecesStyle = LOOK_GEAR[look.manifest.look]?.pieces;
+  const piecesStyle = lookGear?.pieces;
   const suit: SuitGear | null = piecesStyle ? buildSuitGear({
     skin, points: body.points, skinIndex: holdIndex, skinWeight: holdWeight, root, leftSign,
     arm: { left: { upper: arms.left.upper, fore: arms.left.fore, hand: arms.left.hand }, right: { upper: arms.right.upper, fore: arms.right.fore, hand: arms.right.hand } },

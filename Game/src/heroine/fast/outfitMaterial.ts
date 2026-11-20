@@ -31,8 +31,17 @@ export interface SkinMaterials {
   readonly plain: THREE.MeshStandardMaterial;
   /** The live knit's stitch size (see ClothShine `knit`); nothing when the look has no live knit. */
   setKnitStitch(stitch: number): void;
+  /**
+   * TWO TONES (ClothShine `twoTone`): which of her skeleton's bones are her arms (by their number in her skeleton: every
+   * bone from each shoulder joint out to her fingertips), and her feet's height in her model's own units, as baked. Told
+   * once her skeleton is measured; until then the top colour is only above the line on her trunk.
+   */
+  setToneArms(armBones: readonly number[], floorY: number): void;
   dispose(): void;
 }
+
+/** TWO TONES: how many of her skeleton's bones the shader can tell apart (she has 67). */
+const TONE_BONES = 96;
 
 /** Below this detail her skin wears the plain material (the DEV Room's number). */
 export const FINE_FROM_DETAIL = 25;
@@ -57,6 +66,20 @@ const TRIM_FROM = 0.85;
 export interface ClothShine {
   readonly cloth?: number;
   readonly trim?: number;
+  /**
+   * A METAL SHEEN on all her cloth (0 cloth, 1 all metal; Joshua, 2026-11-20: "a shiny gold... silver"): its
+   * highlights take its own colour, as a metal's do, and its plain colour darkens by as much. The game has no
+   * reflections of a sky to show in a full metal, so a little (about a third) reads as metallic without going dark.
+   * Left out: none.
+   */
+  readonly metal?: number;
+  /**
+   * TWO TONES (Joshua, 2026-11-20: "top half above belly/at bottom of breasts one tone, and below another, but still
+   * the same outfit"): wherever her cloth was baked in `on`, the cloth above `line` metres up her (as baked, from her
+   * feet: the bottom of her bust is about 1.19) and all down her arms is drawn in `top` instead, keeping its shading.
+   * Worked out for every pixel from where her skin was as baked, so the line is clean and stays put on her as she moves.
+   */
+  readonly twoTone?: { readonly on: string; readonly top: string; readonly line: number };
   /**
    * Darken the knit's GRAYS by this much (0.5 halves their light): the knit keeps its stitches, only darker (Joshua,
    * 2026-11-19: "manually darkening the image about 50%"). Coloured knit -- a red stripe -- and the smooth trim are
@@ -177,10 +200,18 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     return { map, tile: p.metres * unitsPerMetre, on: new THREE.Color(p.on), depth: p.depth ?? 0 };
   });
+  // TWO TONES: the colours, her arms' bones (1 each, told later: `setToneArms`) and the line
+  const tone = shine?.twoTone;
+  const toneUniforms = tone ? {
+    toneOn: { value: new THREE.Color(tone.on) },
+    toneTop: { value: new THREE.Color(tone.top) },
+    toneLineY: { value: 1e9 },
+    toneArm: { value: new Array<number>(TONE_BONES).fill(0) },
+  } : null;
   const printUniforms: Record<string, { value: unknown }> = {};
   prints.forEach((p, i) => { printUniforms[`printMap${i}`] = { value: p.map }; printUniforms[`printTile${i}`] = { value: p.tile }; });
   /** Where her skin was as baked, and which way it faced: the knit and the prints are laid on by these. */
-  const laidOn = !!knitUniforms || prints.length > 0;
+  const laidOn = !!knitUniforms || prints.length > 0 || !!toneUniforms;
   // (DEV only: test pages set the knit's numbers by hand)
   if (import.meta.env.DEV && knitUniforms) (window as unknown as { __knit?: unknown }).__knit = knitUniforms;
   const from = fileMaterial as THREE.MeshStandardMaterial;
@@ -204,11 +235,13 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.knit || prints.length)) {
+    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone)) {
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
       const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
       if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
       if (shine.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
+      // (a metal sheen: after three.js reads its metalness, where the roughness picture says cloth)
+      const metal = shine.metal !== undefined ? [`metalnessFactor = mix(metalnessFactor, ${shine.metal.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g));`] : [];
       // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
       // trim) and the colour is a gray (its channels nearly equal: a red stripe is not), the colour is darkened
       const knitSuit = [
@@ -221,6 +254,15 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
           ? `float knitGray = (1.0 - smoothstep(0.012, 0.03, distance(diffuseColor.rgb, vec3(${knitColour.r.toFixed(5)}, ${knitColour.g.toFixed(5)}, ${knitColour.b.toFixed(5)})))) * smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, knitRoughness);`
           : 'float knitGray = (1.0 - smoothstep(0.02, 0.06, knitColourful)) * knitHere;',
       ];
+      // TWO TONES: where her cloth is the suit's own colour, above the line on her trunk or anywhere on her arms, the
+      // top colour, as light or dark as the suit's is there (its brightness kept); the line eased over about a pixel
+      if (toneUniforms) knitSuit.push(
+        'float toneHere = 1.0 - smoothstep(0.03, 0.07, distance(diffuseColor.rgb, toneOn));',
+        'float toneEase = max(fwidth(vKnitRest.y) * 0.75, 1e-6);',
+        'float toneUp = max(clamp(vToneArm * 1.6 - 0.3, 0.0, 1.0), clamp((vKnitRest.y - toneLineY) / toneEase + 0.5, 0.0, 1.0));',
+        'float toneLight = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(dot(toneOn, vec3(0.2126, 0.7152, 0.0722)), 1e-4);',
+        'diffuseColor.rgb = mix(diffuseColor.rgb, toneTop * toneLight, toneHere * toneUp);',
+      );
       if (shine.darken !== undefined) knitSuit.push(`diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitGray);`);
       if (knitUniforms) knitSuit.push(
         // THE LIVE KNIT, from three sides (each side's picture weighted by how much her skin faces it), as lighter and
@@ -289,6 +331,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
       ] : [];
       material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, printUniforms);
+        if (toneUniforms) Object.assign(shader.uniforms, toneUniforms);
         if (laidOn) {
           if (knitUniforms) Object.assign(shader.uniforms, knitUniforms);
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
@@ -296,18 +339,24 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
           shader.vertexShader = shader.vertexShader
             .replace('#include <common>', '#include <common>\nattribute vec3 knitRest;\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;')
             .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitRest = knitRest;\nvKnitNormal = objectNormal;');
+          // (two tones: how much of this point her arms' bones carry)
+          if (toneUniforms) shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', `#include <common>\nuniform float toneArm[${TONE_BONES}];\nvarying float vToneArm;`)
+            .replace('#include <skinning_vertex>', '#include <skinning_vertex>\nvToneArm = toneArm[int(skinIndex.x)] * skinWeight.x + toneArm[int(skinIndex.y)] * skinWeight.y + toneArm[int(skinIndex.z)] * skinWeight.z + toneArm[int(skinIndex.w)] * skinWeight.w;');
           shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
             '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;' +
             (knitUniforms ? '\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;' : '') +
-            prints.map((_, i) => `\nuniform sampler2D printMap${i};\nuniform float printTile${i};`).join(''));
+            prints.map((_, i) => `\nuniform sampler2D printMap${i};\nuniform float printTile${i};`).join('') +
+            (toneUniforms ? '\nuniform vec3 toneOn;\nuniform vec3 toneTop;\nuniform float toneLineY;\nvarying float vToneArm;' : ''));
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
           .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + knitBump.join('\n') + '\n' + printBump.join('\n'))
-          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'));
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'))
+          .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n' + metal.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${!!knitUniforms}-${shine.knitOn ?? ''}-${(shine.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-v5`;
+      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${shine.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${shine.knitOn ?? ''}-${(shine.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-v5`;
     }
     return material;
   };
@@ -315,6 +364,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   freeMaterial(fileMaterial);
   return {
     fine, plain,
+    setToneArms(armBones: readonly number[], floorY: number): void {
+      if (!toneUniforms || !tone) return;
+      toneUniforms.toneArm.value.fill(0);
+      for (const b of armBones) if (b >= 0 && b < TONE_BONES) toneUniforms.toneArm.value[b] = 1;
+      toneUniforms.toneLineY.value = floorY + tone.line * unitsPerMetre;
+    },
     setKnitStitch(stitch: number): void {
       if (!knitUniforms) return;
       knitUniforms.knitTile.value = KNIT.tileMetres * stitch * unitsPerMetre;

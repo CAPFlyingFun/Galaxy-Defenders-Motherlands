@@ -39,10 +39,11 @@ export interface FastHair {
  * it"). A hair file is made of separate pieces (each lock a piece of joined triangles); these are the SMALL pieces
  * (under `FACE_LOCK_MOST_POINTS` points) lying wholly in front of her ears (their backmost point ahead of the file's
  * middle) and below her crown. Each lies along her cheek, and her cheek curves out under it, so its lower part went
- * INTO her skin (its tip showed as a dark speck on her cheek). Each is OFFSET -- moved as a whole, not turned --
- * straight out from her head (away from the line up through the middle of her head), by `FACE_LOCK_OUT` of its own
- * length, a touch more at its tip where her cheek is fullest, so it rests on her cheek instead of inside it. The braid
- * has two such locks a side.
+ * INTO her skin (its tips showed as dark specks on her cheek). Its lower part is moved straight out from her head (away
+ * from the line up through the middle of her head): not at all at its top, which stays in her hair as the builder has
+ * it (Joshua, 2026-11-19: the top moved "out of the hair" looked wrong), more and more toward its tip
+ * (`FACE_LOCK_OUT` of its own length there), so it comes out of her cheek and rests on it. The braid has two such locks
+ * a side.
  */
 function easeFaceLocks(mesh: THREE.SkinnedMesh): number {
   const geometry = mesh.geometry, P = geometry.getAttribute('position') as THREE.BufferAttribute, index = geometry.index;
@@ -79,7 +80,8 @@ function easeFaceLocks(mesh: THREE.SkinnedMesh): number {
     const length = Math.max(1e-6, highest.get(k)! - lowest.get(k)!);
     // 0 at the lock's top, 1 at its tip, eased so it bends away smoothly
     const along = (highest.get(k)! - P.getY(v)) / length;
-    const out = length * (FACE_LOCK_OUT.top + (FACE_LOCK_OUT.tip - FACE_LOCK_OUT.top) * along);
+    // (nothing at the top; growing with the square of the way down, so the lock bends out smoothly from her hair)
+    const out = length * FACE_LOCK_OUT.tip * along * along;
     // straight out from her head, level (away from the line up through its middle)
     const dx = P.getX(v) - middleX, dz = P.getZ(v) - headZ, flat = Math.hypot(dx, dz) || 1;
     P.setX(v, P.getX(v) + (dx / flat) * out);
@@ -91,8 +93,8 @@ function easeFaceLocks(mesh: THREE.SkinnedMesh): number {
 }
 /** A face lock is a small piece: the braid's are 38 points (18 in its light file); a whole style is thousands. */
 const FACE_LOCK_MOST_POINTS = 200;
-/** How far a face lock is moved out from her head, as shares of its own length: at its top, and at its tip. */
-const FACE_LOCK_OUT = Object.freeze({ top: 0.05, tip: 0.14 });
+/** How far a face lock's tip is moved out from her head, as a share of the lock's length (its top is not moved). */
+const FACE_LOCK_OUT = Object.freeze({ tip: 0.45 });
 /** The styles whose face locks lie on her cheek (the ponytail's long side locks already hang clear: left alone). */
 const EASED_STYLES: ReadonlySet<string> = new Set(['braid']);
 

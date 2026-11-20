@@ -209,8 +209,10 @@ use the game's single copy of three.js.
 - THE BRAID'S FACE LOCKS EASED OFF HER CHEEKS (Joshua, 2026-11-19: "is this one hair strand in the cheek?... Just offset
   that piece, don't remove it"; `fastHair.ts` `easeFaceLocks`, braid only: the ponytail's long side locks hang clear
   already): the small pieces of the hair file lying in front of her ears went INTO her cheek (the tip showed as a dark
-  speck); each is OFFSET as a whole, not turned, straight out from her head (5% of its length at the top to 14% at the
-  tip), so it rests on her cheek. Settings -> HEROINE -> Locks by her face (`gdm.faceLocks`,
+  speck); each one's lower part is moved straight out from her head, NOT its top (it stays in her hair: Joshua, "now the
+  top part is out of the hair"), growing with the square of the way down to 45% of its length at the tip, so it comes
+  out of her cheek and rests on it. (A try at testing each point against her skin on the CPU found them all clear: the
+  CPU's skin is not where the drawn one is, so the move is measured by eye.) Settings -> HEROINE -> Locks by her face (`gdm.faceLocks`,
   `?face_locks=on` for the builder's own place).
 - SKIN TEXTURE, AN EXPERIMENT (Joshua, 2026-11-19: he ran her skin picture through his Local Texture Lab at 512, then
   "a higher quality version" from the one in the repo; `Game/src/heroine/fast/skinTexture.ts`): each look's own baked

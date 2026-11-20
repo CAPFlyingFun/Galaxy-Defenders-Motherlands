@@ -158,7 +158,7 @@ export interface FastHeroineOptions {
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
   readonly hairStrands?: boolean;
-  /** Leave the small loose locks by her face where the file has them, on her cheeks (fastHair.ts easeFaceLocks). Default false: eased off. */
+  /** Leave the small loose locks by her face where the file has them, on her cheeks (fastHair.ts liftFaceLocks). Default false: lifted out of her cheeks. */
   readonly faceLocks?: boolean;
   /** THE SKIN TEXTURE EXPERIMENT over her bare skin (skinTexture.ts). Default false. */
   readonly skinTexture?: boolean;

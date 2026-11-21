@@ -38,7 +38,7 @@
 // this file's factory (`createFastHeroine`), and in the report that came with it.
 // ============================================================================
 import * as THREE from 'three';
-import { SHADOW_ONLY_LAYER, type BodyFacing, type BodyVitals, type FrameInfo, type Hand, type HeroineBody } from '../../core/contracts';
+import { type BodyFacing, type BodyVitals, type FrameInfo, type Hand, type HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
@@ -110,6 +110,9 @@ const EYE_ABOVE = 0.051;
  * her head tips up and down at most this far FROM HER TORSO'S OWN LINE, whatever her pose (standing, crouched, bent
  * over, on all fours). Her head's turn to the side stays Joshua's five bands (input/bodyTurn.ts).
  */
+/** Her head kept level from this ground speed (m/s, a fast walk) fully by this one (a jog): see "KEPT LEVEL FROM A JOG UP". */
+const HEAD_LEVEL_FROM = 1.6;
+const HEAD_LEVEL_AT = 2.4;
 const HEAD_UP_MOST = (55 * Math.PI) / 180;
 const HEAD_DOWN_MOST = (75 * Math.PI) / 180;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
@@ -143,7 +146,7 @@ const REST_BREATH = { breath: 0, breathLitres: 0.5, breathsPerMinute: 14, stomac
  * only in the picture the camera draws: a few lines added to her skin's shader (`hideHeadPatch` below) pull every
  * point her skull carries into the base of her skull, as the shrunk bone did. Her shadow is drawn by three.js with a
  * shader of its own, which these lines are not in, so it keeps her whole head. Her hair is kept too, on the
- * shadow-only layer (core/contracts.ts SHADOW_ONLY_LAYER): not drawn, but it casts its shadow.
+ * picture the same way (`hideHairPatch`), its shadow kept.
  */
 const HEAD_GLSL_BONES = 8;
 /**
@@ -663,11 +666,35 @@ if (uHideHead > 0.5) {
   };
   hideHeadPatch(materials.fine);
   hideHeadPatch(materials.plain);
-  /** Her hair: drawn in third person; in first person only its shadow (the shadow-only layer). */
+  /**
+   * HER HAIR HIDDEN FROM HER OWN CAMERA AS HER HEAD IS (Joshua, 2026-11-20: "Head is good, but no hair in the shadow"):
+   * every pixel of it left out of the camera's picture in first person (`uHideHead`), nothing moved. It had been put on
+   * the shadow-only layer, but three.js draws into a shadow only what the MAIN camera's layers see, so her hair dropped
+   * out of her shadow too; her shadow is drawn with three.js's own shader, which this is not in, so it keeps her hair.
+   */
+  const hideHairPatch = (material: THREE.Material): void => {
+    if (material.userData.hideHair) return;
+    material.userData.hideHair = true;
+    const before = material.onBeforeCompile, key = material.customProgramCacheKey;
+    material.onBeforeCompile = function (shader, renderer) {
+      before.call(this, shader, renderer);
+      shader.uniforms.uHideHead = headUniforms.uHideHead;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\nuniform float uHideHead;`)
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\nif (uHideHead > 0.5) discard;`);
+    };
+    material.customProgramCacheKey = function () { return `${key.call(this)}|hidehair`; };
+    material.needsUpdate = true;
+  };
+  /** Her hair: drawn in third person; in first person hidden from her camera (its shadow kept: `hideHairPatch`). */
   const showHair = (detail: Detail = drawnDetail): void => {
     if (!hair) return;
     hair.show(detail, true);
-    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(firstPerson ? SHADOW_ONLY_LAYER : 0);
+    for (const mesh of [hair.full, hair.light]) {
+      if (!mesh) continue;
+      mesh.layers.set(0);
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) hideHairPatch(material);
+    }
   };
   const pelvisBone = bone(joints.pelvis);
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
@@ -742,6 +769,8 @@ if (uHideHead > 0.5) {
   const wantF = new THREE.Vector3(), wantU = new THREE.Vector3(), wantS = new THREE.Vector3();
   const nowBasis = new THREE.Matrix4(), wantBasis = new THREE.Matrix4(), steadyTurn = new THREE.Quaternion();
   const spineAxis = new THREE.Vector3();
+  /** How far her head's frame leans with her torso this frame, radians (her torso's lean; none from a jog up). */
+  let headFrameLean = 0;
   /**
    * HER TORSO'S FRAME: her body's way `yaw` leaned forward by `lean` (radians): its forward, up and side (her left as
    * the compass turns), written into torsoF, torsoU, torsoS.
@@ -760,10 +789,10 @@ if (uHideHead > 0.5) {
    * Returns [r, q - lean] (the tip as the player's pitch is: her torso's line is `lean` below level).
    */
   const sideAndTip = (fromBody: number, pitch: number): [number, number] => {
-    torsoFrame(0, torsoLean);
+    torsoFrame(0, headFrameLean);
     wayNow.set(Math.sin(fromBody) * Math.cos(pitch), Math.sin(pitch), Math.cos(fromBody) * Math.cos(pitch));
     const q = Math.asin(Math.max(-1, Math.min(1, wayNow.dot(torsoU))));
-    return [Math.atan2(wayNow.dot(torsoS), wayNow.dot(torsoF)), q - torsoLean];
+    return [Math.atan2(wayNow.dot(torsoS), wayNow.dot(torsoF)), q - headFrameLean];
   };
   const wayNow = new THREE.Vector3(), rightNeat = new THREE.Vector3();
   const skullWorldQ = new THREE.Quaternion(), skullParentQ = new THREE.Quaternion();
@@ -784,7 +813,7 @@ if (uHideHead > 0.5) {
     // angle"): as a gimbal sitting on her torso, her head is swung `side` about her torso's up, then tipped `tip` from
     // her torso's line, no roll of its own. Standing, her torso's up is the world's: an ordinary turn, level whatever
     // the tip. Leaning in, the turn goes with her torso.
-    torsoFrame(yaw, torsoLean);
+    torsoFrame(yaw, headFrameLean);
     rightNeat.copy(torsoF).applyAxisAngle(torsoU, side);   // (her torso's forward, swung)
     const ct = Math.cos(tip), st = Math.sin(tip);
     wantF.copy(rightNeat).multiplyScalar(ct).addScaledVector(torsoU, st);
@@ -1406,7 +1435,7 @@ if (uHideHead > 0.5) {
       // HER HEAD AND HAIR HIDDEN FROM HER OWN CAMERA, SHADOWS KEPT (Joshua, 2026-11-20: "just hide it (shadows stay)"):
       // the first-person camera now draws from 1 cm (cameraRig.ts FIRST_NEAR), so her shoulder, arms and belly are
       // whole however near they come; at 1 cm her own cheek and nose filled the view. The camera stays locked to her
-      // skull at her eyes (`eyeView`); her hair goes on the shadow-only layer. (Hidden in v0.2.103-106 too, when the
+      // skull at her eyes (`eyeView`); her hair is hidden from her camera the same way (`hideHairPatch`). (Hidden in v0.2.103-106 too, when the
       // eased camera had let her face poke through; nothing is eased now.)
       headUniforms.uHideHead.value = on ? 1 : 0;
       showHair();
@@ -1614,6 +1643,12 @@ if (uHideHead > 0.5) {
       // looking down, it spun the view like a screw.)
       //   first person  the player's look IS that tip and turn (rig yaw less her body's way, rig pitch);
       //   third person  her look is a way in the world (a target): the tip and turn that point her head along it.
+      // HER HEAD KEPT LEVEL FROM A JOG UP (Joshua, 2026-11-20: "while anything over a walk, keep the neck and head
+      // level and the body and move as needed... Winded, Walk, idle, and other things would be normal with natural
+      // angle tilts"): her head's frame is her torso's (leaned `torsoLean`) at a walk and below, the world's level from
+      // a jog up, eased between (HEAD_LEVEL_FROM .. HEAD_LEVEL_AT, m/s). Running she leans; her head does not.
+      const levelS = Math.min(1, Math.max(0, (motion.speed - HEAD_LEVEL_FROM) / (HEAD_LEVEL_AT - HEAD_LEVEL_FROM)));
+      headFrameLean = torsoLean * (1 - levelS * levelS * (3 - 2 * levelS));
       let headSide = 0, headTip = facing?.headPitch ?? 0;
       if (facing) {
         if (firstPerson) headSide = wrap(facing.head - yawNow);
@@ -1694,7 +1729,8 @@ if (uHideHead > 0.5) {
         // steady, her skull is turned to look EXACTLY where it is meant to: tipped `rel` from her torso's line, turned
         // `headSide` about its own up, no roll; only her skull, about its own base, every frame, nothing eased. In
         // both views (her body still sways in third person; her head, as anyone's, keeps its aim).
-        steadyHead(yawNow, rel, headSide);
+        // (its tip from her head's frame: from her torso's line, or from level running)
+        steadyHead(yawNow, rel - torsoLean + headFrameLean, headSide);
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

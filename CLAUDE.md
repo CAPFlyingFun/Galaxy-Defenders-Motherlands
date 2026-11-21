@@ -30,8 +30,9 @@ use the game's single copy of three.js.
   `THIRD_NEAR`; the farthest 20 km on the island): at 6 cm her shoulder was cut open turning her head at the bar
   (Joshua: "Is there a way for the camera to not cut through the clothing"); rendered at 6, 2 and 1 cm. So HER HEAD IS
   HIDDEN FROM HER OWN CAMERA, NOT MOVED OR SHRUNK (Joshua: "don't scale the head down or anything, just hide it (shadows
-  stay)"; `hideHeadPatch`: a pixel whose point her head's bones carry over half is left out), her hair on the
-  shadow-only layer; her shadow keeps both (at 1 cm her own cheek and nose filled the view). (v0.2.103-106 hid it too,
+  stay)"; `hideHeadPatch`: a pixel whose point her head's bones carry over half is left out), her hair hidden the
+  same way (`hideHairPatch`; on the shadow-only layer it dropped out of her shadow too: three.js draws into a shadow
+  only what the MAIN camera's layers see); her shadow keeps both (at 1 cm her own cheek and nose filled the view). (v0.2.103-106 hid it too,
   folded into her skull; then it was shown again, v0.2.107-109.) (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
   Joshua: "Camera seems too low".) Where the player looks
   is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
@@ -63,7 +64,12 @@ use the game's single copy of three.js.
   with her torso (crouched 14 degrees of tilt, winded 35). (Tried: turning about the world's upright, which spun the
   view leaning over a bar; about the head's own up, which rolled it 49-59 degrees: "it's rolling and not yawing".)
   First person the player's look is that turn and tip; third person a target is turned into them; her head is held
-  steady so in both views. Her back's and neck's twists go along her spine (pelvis to neck), not the world's upright. AT THE TABLE, BARS AND DOOR the up and down
+  steady so in both views. Her back's and neck's twists go along her spine (pelvis to neck), not the world's upright. HER HEAD KEPT LEVEL FROM A JOG UP (Joshua, 2026-11-20: "when moving left
+  or right the camera banks"; "while anything over a walk, keep the neck and head level and the body and move as
+  needed... Winded, Walk, idle, and other things would be normal with natural angle tilts"; fastHeroine.ts
+  `HEAD_LEVEL_FROM` 1.6 .. `HEAD_LEVEL_AT` 2.4 m/s, `headFrameLean`): her head's frame leans with her torso at a walk and
+  below and is the world's level from a jog up, eased between; measured looking 84 degrees aside: walk 2.9 degrees of
+  tilt (her lean), jog and run 0. AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
   LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds
   (`busyFace` as bodyTurn's `hold`), her head ALONE follows the player's look, 90 each side, the rest of her square (bodyTurn.ts

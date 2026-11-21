@@ -240,6 +240,12 @@ use the game's single copy of three.js.
   See-through: nipple 0.43, navel 0.81 (Joshua, 2026-11-19: "I can't really see the belly button at 150%"; was halved to 0.225/0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
+- SENSITIVITY (Joshua, 2026-11-21: "lower the camera sensitivity (ahh, make movement and camera sensitivity adjustable in
+  settings)... then I can tweak both"): Settings -> CAMERA -> Camera sensitivity (`gdm.lookSensitivity`, 20-200%, starts
+  at 60%, 100% the old speed: cameraRig.ts `lookScale` on drags and the camera stick) and Move stick sensitivity
+  (`gdm.moveSensitivity`, 20-200%, starts 100%: controls.ts `moveScale`, the stick's push scaled, never past its edge, so
+  above 100% each ring comes with less of a push). Both live. (A saved zoom closer than -0.1 was thrown away at start:
+  heroineSettings.ts now keeps it down to -0.2.)
 - CAMERA STYLES (Joshua, 2026-11-19; `Game/src/camera/cameraRig.ts`): the CAM button also goes to SIDE L and SIDE R,
   square to her left or right side at her middle's height, turning with her (eased), so her whole profile and belly
   show. In them, aimed by hand, dragging up and down TIPS HER HEAD within her neck's reach, as first person does

@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -429,7 +429,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'lookSensitivity' | 'moveSensitivity' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -502,6 +502,10 @@ export class Hud {
     sliderRow('Skin shine', 'skinShine', 0, 100, 1, (v) => (v < 15 ? 'dry' : v > 40 ? 'oily' : 'natural') + ` ${v}`);
     element('small', 'gd-note', settings, 'How shiny her bare skin is: dry (matte, a little darker) to oily (glossy). Water makes her wet up to where it came: shiny at once, for 2 minutes, then drying over 30 s (Get wet in TEST TOOLS to try it).');
     element('h2', 'gd-settings-part', settings, 'CAMERA');
+    // (Joshua, 2026-11-21: "make movement and camera sensitivity adjustable in settings... then I can tweak both")
+    sliderRow('Camera sensitivity', 'lookSensitivity', SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most, 5, (v) => `${v}%`);
+    sliderRow('Move stick sensitivity', 'moveSensitivity', SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most, 5, (v) => `${v}%`);
+    element('small', 'gd-note', settings, 'Camera: how far a drag or the camera stick turns the view (100% was the old speed). Move stick: above 100% each ring (walk, jog, run, sprint) comes with less of a push, below it with more.');
     sliderRow('3rd person FOV', 'fovThird', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     // (Joshua, 2026-11-20: "add an offset forward/back... slider and I can adjust in the game and then share the exact

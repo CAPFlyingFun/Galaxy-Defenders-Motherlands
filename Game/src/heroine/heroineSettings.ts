@@ -63,6 +63,14 @@ export interface HeroineSettings {
    */
   eyeForward: number;
   eyeHigher: number;
+  /**
+   * SENSITIVITY (Joshua, 2026-11-21: "lower the camera sensitivity (ahh, make movement and camera sensitivity adjustable
+   * in settings)... then I can tweak both how I like it"), percent: CAMERA how far a drag or the camera stick turns the
+   * view (SENSITIVITY_RANGE; 100 is the old speed, the start is lower, `SENSITIVITY_START`), MOVE how far the MOVE stick
+   * has to be pushed: above 100 her rings (walk, jog, run, sprint) come with less of a push, below it with more.
+   */
+  lookSensitivity: number;
+  moveSensitivity: number;
   zoomThird: number;
   /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
   tableHeight: number;
@@ -130,6 +138,9 @@ export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first:
 /** The first-person camera's offset from her eyes, centimetres: back (-) to forward (+), and down (-) to up (+). */
 export const EYE_RANGE = Object.freeze({ least: -6, most: 12 });
 export const EYE_HEIGHT_RANGE = Object.freeze({ least: -6, most: 20 });
+/** The sensitivity sliders' range, percent, and where each starts (camera lowered: Joshua, "lower the camera sensitivity"). */
+export const SENSITIVITY_RANGE = Object.freeze({ least: 20, most: 200 });
+export const SENSITIVITY_START = Object.freeze({ look: 60, move: 100 });
 /** Where the third-person zoom begins unless the player chose (the camera's own start before). */
 export const ZOOM_START_DEFAULT = 0.17;
 
@@ -193,6 +204,8 @@ export const SETTING_KEYS = Object.freeze({
   fovFirst: 'gdm.fovFirst',
   eyeForward: 'gdm.eyeAhead',
   eyeHigher: 'gdm.eyeHigher',
+  lookSensitivity: 'gdm.lookSensitivity',
+  moveSensitivity: 'gdm.moveSensitivity',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
@@ -271,7 +284,10 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
     eyeForward: asNumber(address.get('eye') ?? read(SETTING_KEYS.eyeForward), EYE_RANGE.least, EYE_RANGE.most) ?? 0,
     eyeHigher: asNumber(address.get('eye_up') ?? read(SETTING_KEYS.eyeHigher), EYE_HEIGHT_RANGE.least, EYE_HEIGHT_RANGE.most) ?? 0,
-    zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.1, 1) ?? ZOOM_START_DEFAULT,
+    lookSensitivity: asNumber(read(SETTING_KEYS.lookSensitivity), SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most) ?? SENSITIVITY_START.look,
+    moveSensitivity: asNumber(read(SETTING_KEYS.moveSensitivity), SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most) ?? SENSITIVITY_START.move,
+    // (down to the closest zoom, 0.8 m since 2026-11-21: a saved zoom closer than -0.1 was thrown away for the start)
+    zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.2, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',

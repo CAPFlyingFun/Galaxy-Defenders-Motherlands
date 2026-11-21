@@ -274,11 +274,14 @@ export class CameraRig {
     this.fitFov(); // (each view has its own field of view)
   }
 
+  /** CAMERA SENSITIVITY (Settings -> CAMERA, 1 = the old LOOK_SPEED; Joshua, 2026-11-21): set by the game each frame. */
+  lookScale = 1;
+
   /** The view was dragged by this many pixels. */
   applyLook(pixelsX: number, pixelsY: number): void {
     // Dragging right looks right (a smaller compass angle); dragging up looks up.
-    this.yaw -= pixelsX * LOOK_SPEED;
-    this.pitch -= pixelsY * LOOK_SPEED;
+    this.yaw -= pixelsX * LOOK_SPEED * this.lookScale;
+    this.pitch -= pixelsY * LOOK_SPEED * this.lookScale;
     this.pitch =
       // (first person: as far up and down as her neck reaches from her torso's line, as it was last frame)
       this.mode === 'first' ? clamp(this.pitch, this.firstRange[0], this.firstRange[1])

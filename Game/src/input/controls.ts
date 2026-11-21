@@ -34,6 +34,8 @@ export class Controls {
 
   // ---- Read by the game after sample() --------------------------------------
   moveX = 0;
+  /** MOVE STICK SENSITIVITY (Settings -> CAMERA; Joshua, 2026-11-21): the stick's push is multiplied by this (set by the game). */
+  moveScale = 1;
   moveY = 0;
   fireHeld = false;
 
@@ -77,8 +79,12 @@ export class Controls {
     const keyX = (right ? 1 : 0) - (left ? 1 : 0);
     const keyY = (forward ? 1 : 0) - (back ? 1 : 0);
 
-    this.moveX = Math.max(-1, Math.min(1, this.stickX + keyX));
-    this.moveY = Math.max(-1, Math.min(1, this.stickY + keyY));
+    // (MOVE STICK SENSITIVITY, Settings -> CAMERA: the stick's push scaled, never past its edge; the keys are full anyway)
+    let sx = this.stickX * this.moveScale, sy = this.stickY * this.moveScale;
+    const far = Math.hypot(sx, sy);
+    if (far > 1) { sx /= far; sy /= far; }
+    this.moveX = Math.max(-1, Math.min(1, sx + keyX));
+    this.moveY = Math.max(-1, Math.min(1, sy + keyY));
     this.fireHeld = this.buttonFire || this.keys.has(' ');
   }
 

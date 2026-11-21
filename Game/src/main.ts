@@ -894,7 +894,7 @@ async function start(): Promise<void> {
       else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
-      else if (key === 'eyeForward' || key === 'eyeHigher') { /* live */ }
+      else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
       else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();
@@ -1123,11 +1123,13 @@ async function start(): Promise<void> {
     info.dt = dt;
     info.elapsed = elapsed;
 
-    // 1. What is the player doing?
+    // 1. What is the player doing? (with the player's sensitivities: Settings -> CAMERA)
+    controls.moveScale = graphics.moveSensitivity / 100;
+    rig.lookScale = graphics.lookSensitivity / 100;
     controls.sample();
     // Looking around: a drag on the picture, plus the camera stick (first person). The stick's push is squared
     // (keeping its sign) so a small push aims finely and a full push turns quickly.
-    const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;
+    const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;   // (rig.lookScale turns these as it does a drag)
     const stickLookY = controls.lookStickY * Math.abs(controls.lookStickY) * LOOK_STICK_SPEED * dt;
     const lookX = controls.takeLookX() + stickLookX, lookY = controls.takeLookY() - stickLookY;
     rig.applyLook(lookX, lookY); // stick up looks up

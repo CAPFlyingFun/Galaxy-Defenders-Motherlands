@@ -50,29 +50,39 @@ export const PACE_TUNING = {
   // (even fifths: on the MOVE stick, 100 pixels from middle to edge, each ring is 20 pixels deep)
   ringsFrom: [0.2, 0.4, 0.6, 0.8] as const,
   /** Seconds to change by one whole pace: easing down (ring 1), building slowly (ring 3), building quickly (ring 4). */
-  downSeconds: 2,
-  slowUpSeconds: 5,
-  fastUpSeconds: 2,
+  // (Joshua, 2026-11-21: "It feels like driving a semi": 2 / 5 / 2 s took 6 s from a walk to a sprint at the edge and 15
+  //  s on ring 3; now about 1.8 s and 4.5 s, as a person picks up pace)
+  downSeconds: 0.7,
+  slowUpSeconds: 1.5,
+  fastUpSeconds: 0.6,
   /** Pushed past what her stamina allows, she drops back a pace in this many seconds. */
   tiredDownSeconds: 1,
   // (Joshua, 2026-11-18: there is no slowing as her stamina runs low any more; at 20% she had already dropped from a
   //  sprint. She keeps her pace right down to empty, then stops at once, as letting go of the stick does.)
   /**
    * OUT OF STAMINA (Joshua, 2026-11-17: "as soon as you run out of stamina, the max speed is walk... after a 5s hold
-   * which will prevent any walking"; RAISED TO 10 s, 2026-11-20, bent over with her hands on her knees: main.ts
-   * WINDED): at empty she stands winded this long, seconds, the MOVE stick doing nothing
-   * (looking round, the camera and everything else still work); then she can only walk until her BREATHING is back
-   * down to `windedUntilBreaths` a minute (Joshua: "I would raise based on the breathing rate"). 25 is the top of
-   * the range a fit adult's breathing is back to a few minutes after hard exercise (15-25 a minute; light exercise is
-   * 20-30, resting 12-20: Fitnessenger's breathing-rate table, from Joshua's research), AND her stamina is back to
-   * at least `windedUntil` (so she cannot run straight out again; a body that gives no breathing rate goes by this
-   * alone).
+   * which will prevent any walking"; 10 s, 2026-11-20, bent over with her hands on her knees: main.ts WINDED): at empty
+   * she stands WINDED, the MOVE stick doing nothing (looking round, the camera and everything else still work), UNTIL HER
+   * BREATHING IS DOWN TO `windedBreathsUp` a minute (Joshua, 2026-11-21: "wait to release her until her breathing is
+   * about 28 or lower instead of our 10s so it's more dynamic so it could take 5s or 15s"), at least `windedLeast`
+   * seconds (jogging her stamina out barely raises her breathing: 1.5 s, a flash) and at most `windedMost` (fear and a
+   * threat add breaths on top, and could keep her bent over all through a fight); then she straightens up over
+   * `windedRiseSeconds` (his: "the same 1.5s for consistency", the camera's return). Measured with the game's vitals:
+   * a sprint to empty breathes 37 a minute and is down to 28 in 11 s, a run (41) in 15 s.
+   * After that she can only walk until her BREATHING is back down to `windedUntilBreaths` a minute (Joshua: "I would
+   * raise based on the breathing rate"). 25 is the top of the range a fit adult's breathing is back to a few minutes
+   * after hard exercise (15-25 a minute; light exercise is 20-30, resting 12-20: Fitnessenger's breathing-rate table,
+   * from Joshua's research), AND her stamina is back to at least `windedUntil` (so she cannot run straight out again; a
+   * body that gives no breathing rate goes by this alone).
    */
-  windedHoldSeconds: 10,
+  windedBreathsUp: 28,
+  windedLeast: 5,
+  windedMost: 20,
+  windedRiseSeconds: 1.5,
   windedUntilBreaths: 25,
   windedUntil: 0.15,
   /** How quickly her real speed follows the pace she is set to, metres a second each second (speeding up, slowing down). */
-  speedUp: 5,
+  speedUp: 6,
   slowDown: 9,
 } as const;
 
@@ -114,8 +124,16 @@ export class Pace {
   carrying = 0;
   /** Out of stamina: true from empty until her breath is back (walking only, after the hold). */
   winded = false;
-  /** Seconds left of the winded hold (she cannot move at all while this is above 0). */
+  /** Seconds left of the winded hold: above 0 while she is bent over or straightening up (she cannot move at all). While
+   * bent over it is the rise still to come plus a moment; straightening up, the seconds left of it. */
   holdLeft = 0;
+  /** Winded: seconds she has been bent over, and seconds left straightening up (-1 until she starts to). */
+  windedFor = 0;
+  riseLeft = -1;
+  /** Her breathing when she went winded, a minute (how far it has calmed since: `windedCalm`). */
+  private windedFrom = 0;
+  /** How far her breathing has calmed since she went winded, 0 (as it was) .. 1 (down to `windedBreathsUp`). */
+  windedCalm = 0;
   /**
    * HER STANCE'S LIMITS (Joshua, 2026-11-20: crouching, crawling; heroine/fast/groundPose.ts), set by the game each
    * frame: the highest pace she can be at (1: a walk only) and her top speed, metres a second (0 while she gets down or
@@ -155,11 +173,26 @@ export class Pace {
     this.ring = ringOf(push);
 
     // OUT OF STAMINA: the hold first (the stick does nothing), then walking only until she has her breath back
-    if (!this.winded && limits.stamina <= 0.001) { this.winded = true; this.holdLeft = t.windedHoldSeconds; }
-    const breathBack = (limits.breathsPerMinute === undefined || limits.breathsPerMinute <= t.windedUntilBreaths) && limits.stamina >= t.windedUntil;
+    const breaths = limits.breathsPerMinute;
+    if (!this.winded && limits.stamina <= 0.001) {
+      this.winded = true; this.windedFor = 0; this.riseLeft = -1; this.holdLeft = t.windedRiseSeconds + 1;
+      this.windedFrom = Math.max(t.windedBreathsUp + 1, breaths ?? 0); this.windedCalm = 0;
+    }
+    const breathBack = (breaths === undefined || breaths <= t.windedUntilBreaths) && limits.stamina >= t.windedUntil;
     if (this.winded && this.holdLeft <= 0 && breathBack) this.winded = false;
     if (this.holdLeft > 0) {
-      this.holdLeft = Math.max(0, this.holdLeft - dt);
+      // BENT OVER until her breathing is down (at least windedLeast, at most windedMost seconds), then STRAIGHTENING UP
+      this.windedFor += dt;
+      if (breaths !== undefined) this.windedCalm = Math.max(this.windedCalm, Math.min(1, Math.max(0, (this.windedFrom - breaths) / (this.windedFrom - t.windedBreathsUp))));
+      if (this.riseLeft < 0) {
+        const down = breaths === undefined ? this.windedFor >= t.windedLeast * 2 : breaths <= t.windedBreathsUp;
+        if ((this.windedFor >= t.windedLeast && down) || this.windedFor >= t.windedMost) this.riseLeft = t.windedRiseSeconds;
+        this.holdLeft = t.windedRiseSeconds + 1;
+      } else {
+        this.riseLeft = Math.max(0, this.riseLeft - dt);
+        this.holdLeft = this.riseLeft;
+        if (this.riseLeft <= 0) this.riseLeft = -1;
+      }
       this.level = 0;
     } else if (this.ring === 0) {
       // the centre: she stops, and starts again from a walk

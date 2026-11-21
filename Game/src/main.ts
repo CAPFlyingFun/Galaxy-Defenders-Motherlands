@@ -201,9 +201,9 @@ const GAIT_RESET_SPEED = 1.1;
 const GAIT_RESET_LEAST = 0;
 /** Her facing held, the stick stays on its move until another is this many times nearer (about 54 degrees, not 45). */
 const GAIT_KEEP = 1.4;
-/** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds, and straightens up over the hold's last so many. */
+/** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds (she straightens up over PACE_TUNING.windedRiseSeconds,
+ * 1.5 s, once her breathing is down: input/pace.ts). */
 const WINDED_IN = 0.6;
-const WINDED_OUT = 1.0;
 /**
  * HOLDING HER BELLY UP AS SHE RUNS (Joshua, 2026-11-20: "from a run and up"; "anything over 30 weeks"): on from this
  * pace level (3 is a run: most of the way there), off again below the other (a little room, so it does not flicker), and
@@ -228,8 +228,10 @@ const BUSY_LOOK_SIDE = Math.PI / 2;
  * BUSY_LOOK_RETURN_MOST.
  */
 const BUSY_LOOK_RETURN_SECONDS = 1.5;
-/** ...after waiting this long once the player lets go (seconds; Joshua, 2026-11-20: "add a 1s delay"). */
-const BUSY_LOOK_WAIT = 1;
+/** ...after waiting this long once the player lets go (seconds; Joshua, 2026-11-20: "add a 1s delay"; 2026-11-21: "raise
+ * the wait time... from 1s to 10s, with the transition after the 10s": at the table, bars and door, and first person
+ * following her auto-aim target). */
+const BUSY_LOOK_WAIT = 10;
 const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
@@ -1197,12 +1199,14 @@ async function start(): Promise<void> {
     }
     // WINDED (Joshua, 2026-11-20: "she bends her torso forward about 35 degrees, bends her knees a little bit, and places
     // both hands... just above her knees... after that, she will stand back up to normal and ready to move again"): all
-    // through her pace's winded hold (input/pace.ts, 10 s) she is bent over, eased in over WINDED_IN and back up over the
-    // hold's last WINDED_OUT; no aiming or firing while bent over (her hands are on her knees).
+    // through her pace's winded hold (input/pace.ts: until her breathing is down to 28 a minute, 5-20 s) she is bent
+    // over, eased in over WINDED_IN and straightened up over the 1.5 s after; no aiming or firing while bent over (her
+    // hands are on her knees). How far her breathing has calmed goes with it: her look round lifts as it does (third
+    // person: fastHeroine.ts `windedLook`).
     {
-      const hold = PACE_TUNING.windedHoldSeconds, left = pace.holdLeft;
-      windedWeight = left > 0 ? Math.min(1, (hold - left) / WINDED_IN) * Math.min(1, left / WINDED_OUT) : 0;
-      heroine.setWinded?.(windedWeight);
+      const left = pace.holdLeft, rise = PACE_TUNING.windedRiseSeconds;
+      windedWeight = left > 0 ? Math.min(1, pace.windedFor / WINDED_IN) * (pace.riseLeft >= 0 ? Math.min(1, pace.riseLeft / rise) : 1) : 0;
+      heroine.setWinded?.(windedWeight, pace.windedCalm);
       if (left > 0) stanceNoAim = true;
     }
     // HER HANDS TO HER BELLY (heroine/fast/bellyTouch.ts): holding it up from a run (past 30 weeks); and whether she may

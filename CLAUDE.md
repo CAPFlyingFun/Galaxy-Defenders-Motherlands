@@ -77,7 +77,7 @@ use the game's single copy of three.js.
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
   LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds
   (`busyFace` as bodyTurn's `hold`), her head ALONE follows the player's look, 90 each side, the rest of her square (bodyTurn.ts
-  `grip`; Joshua first asked for 30 more from her shoulders, then: "remove that extra 30° from the shoulders"); let go, the view waits 1 s (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
+  `grip`; Joshua first asked for 30 more from her shoulders, then: "remove that extra 30° from the shoulders"); let go, the view waits 10 s (`BUSY_LOOK_WAIT`; Joshua, 2026-11-21: "from 1s to 10s, with the transition after"; the same wait first person in Auto, following her aim target) then goes back over 1.5 s.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.
@@ -105,7 +105,10 @@ use the game's single copy of three.js.
   degrees of turn the foot on the side she turns to steps OUT and a little BACK, toes turned out 15 degrees; at 40
   (his number) the other foot comes in under its shoulder, square to her; and again while she turns (L, R, L, R). No
   tidy step on the spot while she turns; a turn that stops is squared up after 1 s still.
-  SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20: "right before it say sidesteps to forward, it resets really quickly
+  PICKING UP PACE (Joshua, 2026-11-21: "It feels like driving a semi"; input/pace.ts): ring 4 a pace every 0.6 s (walk to
+  sprint 1.8 s, was 6), ring 3 every 1.5 s (4.5 s, was 15), ring 1 down a pace every 0.7 s (was 2); her speed follows
+  at 6 m/s a second (was 5).
+    SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20: "right before it say sidesteps to forward, it resets really quickly
   (maybe 0.3s or variable depending on speed) to both feet side by side then plays the next one... as soon as you
   release the stick or it centers, it also puts the feet in the normal standing state"; main.ts `gait`, `GAIT_*`,
   footGround.ts 11 `squareUp`, bodyMotion.ts `standCap`): her move (stand / ahead / back / left / right with her facing
@@ -385,7 +388,15 @@ use the game's single copy of three.js.
   +-25). HOLDING HER BELLY UP (Joshua: "from a run and up", "anything over 30 weeks"): a free hand under its low curve
   toward its own side, fingers forward and in, as far under as her arm reaches (`startSupport` searches the egg),
   until she slows below a jog-and-a-half (main.ts SUPPORT_*); the other hand keeps its gun and fires.
-  WINDED (Joshua, 2026-11-20; groundPose.ts `WINDED`, input/pace.ts `windedHoldSeconds` now 10): bent over 40 degrees
+  WINDED (Joshua, 2026-11-20; groundPose.ts `WINDED`): UNTIL HER BREATHING IS 28 A MINUTE OR LOWER (Joshua, 2026-11-21:
+  "wait to release her until her breathing is about 28 or lower instead of our 10s so it's more dynamic"; input/pace.ts
+  `windedBreathsUp`, at least `windedLeast` 5 s, at most `windedMost` 20 s: fear adds breaths), then she straightens up over
+  1.5 s (`windedRiseSeconds`, his "same 1.5s for consistency"). Measured with the game's vitals: a sprint to empty stands
+  up at 11 s, a run at 15 s, a jog or a pregnant sprint at the 5 s least. THIRD PERSON SHE LOOKS ROUND (Joshua: "randomly
+  looks around like her belly, chest, feet, maybe off to the sides a little up at the horizon... Lerp's between points";
+  fastHeroine.ts `lookRound`, `WINDED_LOOK`): resting 1.2-2.5 s on a spot, gliding 0.7-1 s to the next (eased), mostly down
+  while her breath is high, more aside and to the horizon as it calms (`windedCalm`); first person keeps her bowed head.
+  Bent over 40 degrees
   (lowerBody.ts `bendOver`: most at her hips, leaning in to 50 if her hands fall short, NEVER her hips forward: with
   them forward she tipped over her toes, "over halfway to fall over"), a deeper squat (Joshua: "a
   slight more squat so her hands are closer to her knee"; hips down 0.36 of her leg, knees out round her belly), both

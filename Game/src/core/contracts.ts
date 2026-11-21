@@ -225,9 +225,9 @@ export interface HeroineBody {
   stopBellyLook?(): void;
   /**
    * WINDED (Joshua, 2026-11-20): bent over, hands just above her knees, by this much (0 standing .. 1 right over); the
-   * game eases it in and out.
+   * game eases it in and out. `calm`: how far her breathing has come down since, 0 .. 1 (her look round lifts with it).
    */
-  setWinded?(weight: number): void;
+  setWinded?(weight: number, calm?: number): void;
   /**
    * FIRST PERSON IS HER HEAD (Joshua, 2026-11-20): the camera's place and turn, fixed to her skull at her eyes' height,
    * just clear of her face; it looks where her head looks (her neck's reach is her view's limit).

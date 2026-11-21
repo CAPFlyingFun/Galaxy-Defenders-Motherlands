@@ -115,6 +115,23 @@ const HEAD_LEVEL_FROM = 1.6;
 const HEAD_LEVEL_AT = 2.4;
 const HEAD_UP_MOST = (55 * Math.PI) / 180;
 const HEAD_DOWN_MOST = (75 * Math.PI) / 180;
+/**
+ * WINDED, WHERE SHE LOOKS (degrees from her torso: `side` round, `tip` from her torso's line, down negative) and how
+ * likely each is with her breath still high (`high`) and calmed (`calm`); the horizon's tip is worked out each time
+ * (level in the world, as far as her neck reaches). Each rests `rest` seconds and glides there over `glide`.
+ */
+const WINDED_LOOK = {
+  spots: [
+    { name: 'belly', side: [-12, 12], tip: [-62, -54], high: 3, calm: 1 },
+    { name: 'chest', side: [-6, 6], tip: [-46, -38], high: 2, calm: 1 },
+    { name: 'feet', side: [-8, 8], tip: [-75, -70], high: 3, calm: 0.5 },
+    { name: 'hand', side: [18, 30], tip: [-66, -58], high: 2, calm: 0.7, eitherSide: true },
+    { name: 'aside', side: [35, 60], tip: [-30, -15], high: 0.5, calm: 2, eitherSide: true },
+    { name: 'horizon', side: [-18, 18], tip: [NaN, NaN], high: 0.2, calm: 2.5 },
+  ],
+  rest: [1.2, 2.5],
+  glide: [0.7, 1.0],
+} as const;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
@@ -1182,6 +1199,18 @@ if (uHideHead > 0.5) {
   };
   // WINDED: the player turned the view (first person): her head is theirs again until she stands up (`freeLook`)
   let windedLookFree = false;
+  /** WINDED: how far her breathing has calmed since she went winded, 0 .. 1 (from the game: input/pace.ts `windedCalm`). */
+  let windedCalm = 0;
+  /**
+   * WINDED, SHE LOOKS ROUND (Joshua, 2026-11-21: "instead of... when winded just stares straight down, she can over that
+   * time frame... randomly look around like her belly, chest, feet, maybe off to the sides a little, up at the horizon,
+   * etc... and lerp between points for a smooth head movement"; THIRD PERSON ONLY: first person keeps her bowed head).
+   * Her head rests on one spot a while (WINDED_LOOK.rest), then glides to the next (WINDED_LOOK.glide, eased at both ends).
+   * The spots are angles from her TORSO (her neck's reach is from it: `side` round, `tip` up from her torso's line,
+   * negative down): mostly down at her belly, chest, feet and hands while her breath is still high, more out to her sides
+   * and up to the horizon as it calms (`windedCalm`), so she is already looking ahead as she stands.
+   */
+  const windedLook = { fromSide: 0, fromTip: 0, toSide: 0, toTip: 0, glide: 0, glideFor: 1, rest: 0, on: false };
   const headRange: [number, number] = [0, 0];
   const skullQ = new THREE.Quaternion(), headFwd = new THREE.Vector3();
   const windedJob: [boolean, boolean] = [false, false];
@@ -1194,6 +1223,45 @@ if (uHideHead > 0.5) {
    * the thigh and a little in; a hand busy with something of the game's is left to it. As she straightens up (the game
    * easing her out), her hands come off first.
    */
+  /** A number between two, at random. */
+  const between = (range: readonly [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
+  /**
+   * WINDED, SHE LOOKS ROUND (see `windedLook`): one frame of it. Returns where her head is to look now, from her torso:
+   * [side, tip] in radians. The next spot is picked by chance, weighted between `high` (her breath still high) and `calm`
+   * (calmed) by how far her breath has come down, never the same kind twice running.
+   */
+  let windedLast = -1;
+  const lookRound = (dt: number): [number, number] => {
+    const L = windedLook, D = Math.PI / 180;
+    if (!L.on) {
+      // (she starts as she bends over: bowed right down, then her first look)
+      L.on = true; L.fromSide = L.toSide = 0; L.fromTip = L.toTip = -HEAD_DOWN_MOST; L.glide = 1; L.glideFor = 1;
+      L.rest = between(WINDED_LOOK.rest) * 0.6; windedLast = -1;
+    }
+    if (L.glide < 1) L.glide = Math.min(1, L.glide + dt / L.glideFor);
+    else if ((L.rest -= dt) <= 0) {
+      // the next spot: weighted by her breath, not the one she is on
+      const spots = WINDED_LOOK.spots;
+      let total = 0;
+      const weight = (k: number): number => k === windedLast ? 0 : spots[k].high + (spots[k].calm - spots[k].high) * windedCalm;
+      for (let k = 0; k < spots.length; k++) total += weight(k);
+      let pick = Math.random() * total, k = 0;
+      for (; k < spots.length - 1; k++) { pick -= weight(k); if (pick <= 0) break; }
+      const spot = spots[k];
+      windedLast = k;
+      const sign = 'eitherSide' in spot && spot.eitherSide && Math.random() < 0.5 ? -1 : 1;
+      // (the horizon: level in the world, which from her bent torso is as far up as her lean, within her neck's reach)
+      const tip = Number.isNaN(spot.tip[0]) ? Math.min(HEAD_UP_MOST, torsoLean) : between(spot.tip) * D;
+      // (from where her head is now, glided there, eased at both ends)
+      const e = L.glide * L.glide * (3 - 2 * L.glide);
+      L.fromSide = L.fromSide + (L.toSide - L.fromSide) * e; L.fromTip = L.fromTip + (L.toTip - L.fromTip) * e;
+      L.toSide = sign * between(spot.side) * D; L.toTip = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, tip));
+      L.glide = 0; L.glideFor = between(WINDED_LOOK.glide); L.rest = between(WINDED_LOOK.rest);
+    }
+    const e = L.glide * L.glide * (3 - 2 * L.glide);
+    return [L.fromSide + (L.toSide - L.fromSide) * e, L.fromTip + (L.toTip - L.fromTip) * e];
+  };
+  let windedLookNow: [number, number] = [0, 0];
   const windedHands = (): void => {
     const want = windedS > 0.05 && windedRising;
     for (const i of [0, 1] as const) {
@@ -1325,7 +1393,7 @@ if (uHideHead > 0.5) {
     bellyLook(out: THREE.Vector3): number { return bellyHand.look(out); },
     stopBellyLook(): void { bellyHand.stopLook(); },
     // WINDED (groundPose.ts WINDED): bent over, hands on her knees, by this much (0..1; the game eases it)
-    setWinded(weight: number): void { windedW = Math.max(0, Math.min(1, weight)); },
+    setWinded(weight: number, calm = 0): void { windedW = Math.max(0, Math.min(1, weight)); windedCalm = Math.max(0, Math.min(1, calm)); },
     // (how far she is bent forward now, radians: her hips and back, as lowerBody.ts bends her)
     bentNow(): number { return lower.bentNow; },
     // (how far her torso leans forward of how she stands, radians: any pose, bending, crouching, on her belly...)
@@ -1712,6 +1780,11 @@ if (uHideHead > 0.5) {
         headSide += wrap(spotSide - headSide) * looking * Math.min(1, flat / 0.15);
         headTip += (spotTip - headTip) * looking;
       }
+      // WINDED, SHE LOOKS ROUND (third person; `lookRound`): her head glides between her belly, chest, feet, hands, her
+      // sides and the horizon, by as much as she is bent over
+      const roundNow = windedS > 0 && !firstPerson && !windedLookFree;
+      if (roundNow) { windedLookNow = lookRound(frame.dt); headSide += wrap(windedLookNow[0] - headSide) * windedS; }
+      else if (windedW <= 0) windedLook.on = false;
       const headYaw = yawNow + headSide;
       const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       // (her back's and neck's turns go ALONG HER SPINE, pelvis to neck, not about the world's upright: crouched or
@@ -1757,7 +1830,8 @@ if (uHideHead > 0.5) {
       {
         measureLean();
         let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
-        if (windedS > 0 && !windedLookFree) rel += (-HEAD_DOWN_MOST - rel) * windedS;
+        // (bowed right down, chin to chest; third person, wherever her look round has it: `lookRound`)
+        if (windedS > 0 && !windedLookFree) rel += ((roundNow ? windedLookNow[1] : -HEAD_DOWN_MOST) - rel) * windedS;
         // (how far her pose already has her head tipped from her torso's line: her forward's pitch, plus her lean)
         skull.updateWorldMatrix(true, false);
         skull.getWorldQuaternion(skullQ);

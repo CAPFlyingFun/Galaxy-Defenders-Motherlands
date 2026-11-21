@@ -43,7 +43,7 @@ export type Stance = 'stand' | 'crouch' | 'prone' | 'fours';
 /**
  * WINDED (Joshua, 2026-11-20: "when she is winded, she bends her torso forward about 35 degrees, bends her knees a little
  * bit, and places both hands (free or holding something small like a gun) just above her knees"; fastHeroine.ts): the
- * pose she holds while out of breath (input/pace.ts `windedHoldSeconds`, 10 s), then she stands up and can go again.
+ * pose she holds while out of breath (input/pace.ts: until her breathing is down to 28 a minute, 5-20 s), then she stands up over 1.5 s and can go again.
  * GAME TUNING, to tune by eye.
  */
 export const WINDED = {

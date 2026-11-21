@@ -663,7 +663,7 @@ if (uHideHead > 0.5) {
   const showHair = (detail: Detail = drawnDetail): void => {
     if (!hair) return;
     hair.show(detail, true);
-    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(0);
+    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(firstPerson ? SHADOW_ONLY_LAYER : 0);
   };
   const pelvisBone = bone(joints.pelvis);
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
@@ -1076,6 +1076,8 @@ if (uHideHead > 0.5) {
   // WINDED: the player turned the view (first person): her head is theirs again until she stands up (`freeLook`)
   let windedLookFree = false;
   const headRange: [number, number] = [0, 0];
+  /** Where her head is meant to look this frame, world [yaw, pitch] radians (pitch goes on past straight down). */
+  const headAimNow: [number, number] = [0, 0];
   const skullQ = new THREE.Quaternion(), headFwd = new THREE.Vector3();
   const windedJob: [boolean, boolean] = [false, false];
   const windedPose: [THREE.Matrix4, THREE.Matrix4] = [new THREE.Matrix4(), new THREE.Matrix4()];
@@ -1325,6 +1327,7 @@ if (uHideHead > 0.5) {
       quaternion.copy(eyeQ).multiply(cameraInHead);
     },
     setEyeOffset(forward: number, higher: number): void { eyeForward = forward; eyeHigher = higher; },
+    headAim(): readonly [number, number] { return headAimNow; },
     headPitchRange(): readonly [number, number] { headRange[0] = -HEAD_DOWN_MOST - torsoLean; headRange[1] = HEAD_UP_MOST - torsoLean; return headRange; },
     freeLook(): void { if (windedW > 0) windedLookFree = true; bellyHand.stopLook(); },
 
@@ -1336,8 +1339,11 @@ if (uHideHead > 0.5) {
     setFirstPerson(on: boolean): void {
       if (on === firstPerson) return;
       firstPerson = on;
-      // (her head and hair stay drawn: the camera is at her eyes, her face nearer than its nearest 6 cm)
-      headUniforms.uHideHead.value = 0;
+      // HER HEAD FOLDED AWAY AGAIN IN FIRST PERSON, ITS SHADOW KEPT (Joshua, 2026-11-20: "let's hide the head in first
+      // person view only but leave the shadows and keep the eyes in the same location, as a few quick moments the face
+      // poked through the camera"): the camera stays fixed at her eyes and turns with her head (`eyeView`); only the
+      // camera's picture of her head is folded away (`hideHeadPatch`), and her hair is on the shadow-only layer.
+      headUniforms.uHideHead.value = on ? 1 : 0;
       showHair();
     },
 
@@ -1583,6 +1589,8 @@ if (uHideHead > 0.5) {
         measureLean();
         let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
         if (windedS > 0 && !windedLookFree) rel += (-HEAD_DOWN_MOST - rel) * windedS;
+        // (where her head is MEANT to look, before her body's bob and sway carry it: the steady first-person view)
+        headAimNow[0] = headYaw; headAimNow[1] = rel - torsoLean;
         // (how far her pose already has her head tipped from her torso's line: her forward's pitch, plus her lean)
         skull.updateWorldMatrix(true, false);
         skull.getWorldQuaternion(skullQ);

@@ -26,8 +26,10 @@ use the game's single copy of three.js.
   FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
   touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
   `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL AT HER EYES (7.5 cm ahead of and 5.1 cm above its base);
-  it turns, tips and bobs with her head; her head and hair are drawn, her face nearer than the camera's nearest 6 cm so
-  never seen. (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
+  it turns, tips and bobs with her head. HER HEAD IS FOLDED AWAY in the camera's picture only (Joshua, 2026-11-20: "hide
+  the head in first person view only but leave the shadows and keep the eyes in the same location, as a few quick moments
+  the face poked through the camera"; `hideHeadPatch`, `uHideHead`), her hair on the shadow-only layer; her shadow keeps
+  both. (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
   Joshua: "Camera seems too low".) Where the player looks
   is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
   same for all directions"): 75 degrees down, 55 up (`HEAD_DOWN_MOST`, `HEAD_UP_MOST`; his research: 45-60 up, 70-80
@@ -38,9 +40,12 @@ use the game's single copy of three.js.
   `?eye=`, -6..12 cm, along her face) and eye height (`gdm.eyeHigher`, `?eye_up=`, -6..20 cm, along her head's own up:
   straight up in the world showed a bowed head's own face): Joshua tunes them in game and sends the numbers.
   A STEADY VIEW (Joshua, 2026-11-20: "the brain can level out all those motions for a smooth view and we need to do the
-  same"; cameraRig.ts `steady`, `STEADY_*`): the camera's place is eased as an offset from her root (her going along is
-  never behind, only her eyes' bob and sway, 0.35 s at full), its turn only in how far her head is off the player's look
-  (a drag is never behind, only her head's wobble, 0.2 s at full), her head's roll left out. Settings -> CAMERA -> 1st
+  same"; then "still swaying left and right too much even at 100%... see what BE did": BE's first person is a camera at a
+  fixed eye height over her feet, turned only by the player; cameraRig.ts `steady`, `STEADY_*`): at full steadiness the
+  camera TURNS only where her head is MEANT to look (fastHeroine.ts `headAim`: the player's look, or her own at a kick or
+  bowed winded, within her neck's reach), none of her walk's wobble (less steady lets it back in proportion); her head's
+  roll is always left out; its PLACE is her eyes' offset from her root, eased (her going along never behind), side to
+  side over 1.2 s (a stride's sway), up, down, forward and back over 0.45 s. Settings -> CAMERA -> 1st
   person steadiness 0..100 (`gdm.fpSteady`, `?steady=`, 60 to begin with). AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
@@ -56,8 +61,11 @@ use the game's single copy of three.js.
   each band follows the one above it a moment behind (shoulders 0.1 s, belly 0.18, upper legs 0.26, feet 0.34), so a
   turn runs down her from head to feet; going a new way in third person with nothing to aim at, her head turns there
   first (quicker than body North, `moveTurn` 7). First person the look is the camera; third person it is her auto-aim
-  target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), EXCEPT in third
-  person MANUAL AT A WALK (Joshua, 2026-11-18): there she keeps facing the way the camera looks and the stick snaps to
+  target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), SIDE STEPS IN THIRD
+  PERSON TAKEN OUT (Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her": main.ts
+  `walkSides` now only backing up, which still keeps her facing the camera's way); they are kept holding a door. As they
+  were (Joshua, 2026-11-18), in third
+  person MANUAL AT A WALK she kept facing the way the camera looks and the stick snapped to
   FOUR moves only, nothing between: walk ahead, walk back, and the CRAB STEP left or right (`footGround.ts` 8: the lead
   foot steps out a shoulder width, her body catches up, the trailing foot comes in a shoulder width behind it; at most
   1.0 m/s, 0.8 at full term; a metre sideways costs 1.25 times the stamina). Jogging or faster there are no side

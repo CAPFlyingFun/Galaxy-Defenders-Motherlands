@@ -59,8 +59,11 @@ import { GrabBars, GrabUse, type BarName } from './world/grabBars';
  * there are no side steps: the stick moves her ahead, back, left or right of the camera and her body turns to run
  * that way. A crab step goes no faster than SIDE_WALK_MOST metres a second (her first belly) .. SIDE_WALK_MOST_FULL_TERM
  * (full term). A metre sideways costs SIDE_EFFORT times a metre forward (less efficient; with a big belly real work).
+ * TAKEN OUT IN THIRD PERSON (Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her"):
+ * the stick left or right now turns her head that way and her body follows it round (input/bodyTurn.ts `headLead`,
+ * `bandLag`) at any pace. Kept: holding a door (her hand is on the handle, so she side-steps), and backing up
+ * (pulled back she still keeps facing the camera's way and steps backward).
  */
-const SIDE_WALK_UNDER = 1.5;
 const SIDE_WALK_MOST = 1.0;
 const SIDE_WALK_MOST_FULL_TERM = 0.8;
 const SIDE_EFFORT = 1.25;
@@ -625,8 +628,11 @@ async function start(): Promise<void> {
    */
   // (Joshua, 2026-11-18: one setting for BOTH views, so she can be watched working on her own in either, or played)
   const aimedByHand = (): boolean => graphics.autoFire === 'off';
-  /** Her facing held to the camera's way now: third person MANUAL, at a walk or backing up, nothing else running. */
-  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && (pace.level < SIDE_WALK_UNDER || backingUp());
+  /**
+   * Her facing held to the camera's way now: third person MANUAL, backing up, nothing else running. (At a walk it was
+   * held to side-step too, until Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her".)
+   */
+  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && backingUp();
   /**
    * The stick pulled back (more back than to either side). BACKING UP she keeps facing the camera's way at ANY pace
    * (Joshua, 2026-11-19: "facing South (camera was facing North) to go backwards... it did for a moment but then

@@ -72,6 +72,7 @@ import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
 import type { LiveBody } from './liveBody';
+import { KICKS } from '@charb/sarahlab/softBody';
 import { weekForBump } from '@charb/sarahlab/baby';
 
 /**
@@ -270,6 +271,8 @@ export interface FastHeroine extends HeroineBody {
    * kicks then show on her skin. Null takes it away again.
    */
   attachLive(live: LiveBody | null): void;
+  /** Run her live body on (the one played), or hold it where it is (standing by): no steps, no kicks shown. */
+  setLiveRunning(on: boolean): void;
   /**
    * Take THE LIVE BODY back out of her WITHOUT letting it go, and return it (null if she had none): for a change of
    * outfit on the same body (main.ts `changeOutfit`), so the slow hidden room is not opened again for the new one.
@@ -569,6 +572,14 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let vitals: BodyVitals | null = null;
   /** The hidden live body, once it has been opened and attached; and how long its steps take, milliseconds, smoothed. */
   let live: LiveBody | null = null, liveMs = 0;
+  /**
+   * HER LIVE BODY RUNS ONLY WHILE SHE IS PLAYED (Joshua, 2026-11-21: "freezing his live body right after load if playing
+   * as her, and if playing him, her live body freezes... only do the active player"): `setLiveRunning(false)` holds the
+   * builder's hidden room where it is (no steps, no kicks shown); her own breath, belly and pose go on as ever.
+   */
+  let liveRunning = true;
+  /** No kicks (each one's strength 0): shown while her live body is held. */
+  const QUIET_KICKS = Array.from({ length: KICKS }, () => new THREE.Vector4(0, 0, 0, 0));
   /** A clock that runs at the speed of her breathing, for her bones' own small breathing move (the builder's stand). */
   let breathClock = 0;
 
@@ -1119,7 +1130,10 @@ if (uHideHead > 0.5) {
    * first person) it is the level with her face, bust and belly kept sharp; further off the plain one. 100 % is one.
    */
   const want = (detail: Detail): void => {
-    const sharp = keepSharp && (near || firstPerson);
+    // (JOHN ALWAYS FROM HIS SHARP SET, 2026-11-21: on Joshua's iPhone he was drawn only near the camera (his sharp set)
+    //  and further off only his belt, sneakers and shadow showed: his plain set did not draw there. His levels do not
+    //  lighten anyway (about 88,000 triangles sharp or plain, the male body's layout), so his sharp set costs nothing more.)
+    const sharp = keepSharp && (near || firstPerson || male);
     const key = detail === 100 || sharp ? detail : detail + PLAIN_KEY;
     wantedKey = key;
     if (key === drawnKey) return;
@@ -1539,6 +1553,7 @@ if (uHideHead > 0.5) {
     bellyNow: () => body.belly,
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
+    setLiveRunning(on: boolean): void { liveRunning = on; },
     detachLive(): LiveBody | null { const was = live; live = null; liveMs = 0; return was; },
     liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
@@ -1577,7 +1592,8 @@ if (uHideHead > 0.5) {
       if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
-      if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
+      if (live && liveRunning) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
+      else if (live) { liveMs = 0; breath.setKicks(QUIET_KICKS, live.kickDir); }
       // HER BELLY AS THE BUILDER SHAPES IT (Joshua, 2026-11-19: "a pointy belly... it needs to basically rebake the look
       // every second at the new size"): when the hidden live body has settled after a change (liveBody.ts), the weights
       // the builder gives each of her body shapes are read off it and she takes them (shapedBody.ts setBuilderWeights);

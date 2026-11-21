@@ -54,11 +54,17 @@ export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): S
   const own = loader.load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
     (t) => { t.needsUpdate = true; });
   own.colorSpace = THREE.NoColorSpace;
+  // ONE CHANNEL, NOT FOUR (Joshua's iPhone, 2026-11-21: the game closed a split second after both characters were
+  // drawn; measured with core/gpuTally.ts, each character's 4096 x 4096 height picture was about 85 MB on the graphics
+  // chip as colour, red, green, blue and alpha). It is a grey height, read only as `.r` in the shader below: kept as
+  // red alone (RedFormat, 1 byte a pixel) it is the very same picture at a quarter of the memory, about 21 MB.
+  own.format = THREE.RedFormat;
   own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
   own.anisotropy = sharp;
   const tile = loader.load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
   tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
   tile.colorSpace = THREE.NoColorSpace;
+  tile.format = THREE.RedFormat;   // (read as `.r` too: one channel, a quarter of the memory, the same picture)
   tile.anisotropy = sharp;
   return { own, tile };
 }

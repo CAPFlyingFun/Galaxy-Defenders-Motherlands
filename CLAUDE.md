@@ -592,17 +592,43 @@ use the game's single copy of three.js.
   two of him, one bare, and his outfit dropped. builderRoom.ts lets that load go only for her body. (2) Her pieces the
   room leaves on him (`cleavageBridge`, `tunicDrape`) are not baked on the male body (bakeLook.ts `herPieceOnHim`); the
   gap the builder's tops leave at the chest is filled in his shirt's navy (`fillCleavage(0.966, 0.5, 70)`). (3) No hair
-  on the male body (the manifest's `hair` null; `body: 'male-base'`). Next: his own vitals (no pregnancy), her
-  breast-only systems off for him, both on the map, the 🔄 swap, memory on the iPhone. ChatGPT's NPC brain template is
-  kept in `docs/npc-brain/` for after he is stable.
-- REVERTED TO v0.2.125 (Joshua, 2026-11-21, 14:50 then 14:56: v0.2.129 crashed on his iPhone a split second after both
-  characters showed, with `?john=off` too; then v0.2.126, which had run on it that morning, crashed as well; "go back to
-  v125"). v0.2.126 (John in the game, the 🔄 swap, detail by distance) and everything after it are kept on the branch
-  `after-126-fixes` (v0.2.127 John's body file in charb-files.json, v0.2.128 sharp set / glTrouble / page `no-store`,
-  v0.2.129 swap keeps camera, stance and guns, v0.2.130 John at one detail level and his crash guard, and a WIP commit:
-  core/startupLog.ts, core/gpuTally.ts, builder v0.9.70, the builder's squat). Add them back one at a time, each tested
-  on his iPhone. Code that had run on his phone failing later points at something kept ON the phone (saved settings in
-  localStorage, Safari's stored site data), which no revert changes.
+  on the male body (the manifest's `hair` null; `body: 'male-base'`).
+  IN THE GAME (v0.2.126; Joshua: "modify his colors to be Black and Neon Green, had his own stats that link up to his
+  organs, and then the swap button"): BLACK AND NEON GREEN (tights #141416, tee #16171a with a neon #39ff14 trim, the
+  chest gap filled black; belt and guns black with neon, gear.ts `john`), re-baked. He stands 1.4 m to her right and
+  0.6 m behind at the start (her left is the weapons table), made only as a fast body (`createHeroine(..., 'john',
+  true)`; Body: Performance only; `?john=off` leaves him out); he has no hidden live body of his own. main.ts
+  `Character` { name, body, vitals, ownTurn, x, z, yaw }: `blaze`, `john`, `playing`; the one not played stands where
+  left, drawn and updated, his or her OWN vitals stepped (standing still) and fed to the body. His vitals are his own
+  `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and time lapse are always Blaze's.
+  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played has
+  finished what they are in the middle of (the table, a bar, a door, a holster/draw, a reload, winded, the toilet),
+  then hands the controls, vitals card and turn to the other where they stand; a "Now playing: X" notice. EACH HOLDS
+  THEIR OWN (Joshua, 2026-11-21: "save the last known heading... each one should save independently"; "hold poses and
+  last actions"; main.ts `Character` `cam`, `stance`, `holstered`): their CAMERA (heading and tip, back at once; the
+  first time, the way they face), their STANCE (crouched or down they stay so) and their GUNS (in hand or holstered).
+  John's guns start holstered, as hers do. An outfit
+  change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
+  `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
+  played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as
+  the player's quality... a smooth transition so it's not a snap"; then "raise it to 20m for mobile, unlimited for PC";
+  heroine/fast/otherDetail.ts): the one played keeps the Detail setting (Auto live by default); the one standing by
+  is drawn at the player's level NOW within 20 m on a phone (a touch screen), then stepped down one offered level at a
+  time to 1 % over the next 10 m (no flicker: a step changes only three quarters into the next); on a computer always
+  the player's level. `?other_near=<m>` sets the 20 m for a test. Measured on the phone setting: 21 m 30 %, 24 m 10 %,
+  27 m 3 %, 35 m 1 %; back beside her 30 % again (once rebuilt). SHIPPED BODY FILE (v0.2.127): `models/male-base.glb` (17 MB) is in `Game/charb-files.json`; v0.2.126 left it out, so
+  the BUILT game had no John (the dev server reads Char_B directly). If he cannot be made, a notice says why. v0.2.128: JOHN ALWAYS FROM HIS SHARP SET (fastHeroine.ts `want`): on the
+  iPhone his plain set did not draw (only near the camera, or in first person, was he seen); his levels do not lighten
+  anyway (about 88 K triangles each). GRAPHICS TROUBLE ON SCREEN (core/glTrouble.ts): a shader the phone will not
+  build, or lost graphics, shows as a notice. THE PAGE NEVER FROM THE BROWSER'S CACHE (sw.js navigate `no-store`): his
+  iPhone showed 127's loading screen and then 126's game. v0.2.130 (Joshua: v0.2.129 "loads once... resets another time... then crashes", the iPhone out of memory): HELD AT ONE
+  DETAIL LEVEL (main.ts `JOHN_DETAIL` 30 %, never following Auto live or the player: his levels do not lighten, so more
+  levels were only more copies of him); a CRASH GUARD (`JOHN_START_KEY` 'loading' until 30 s run with him; found
+  'loading' at a start, he is left out, `JOHN_OFF_KEY`, with a notice) and Settings -> TEST TOOLS -> John on/off
+  (restarts the game); `?john=on` forces him in. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
+  breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
+  trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

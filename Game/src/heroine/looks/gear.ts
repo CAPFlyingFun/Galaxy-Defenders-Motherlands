@@ -82,6 +82,14 @@ export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
    * with a steel buckle and red accents, black holsters and pouches; tall flat black combat boots with a red band and
    * dark wrist cuffs; no shoulder plates (look 1 has none) and no glowing strips.
    */
+  /**
+   * JOHN (john.ts; Joshua, 2026-11-21: "Black and Neon Green"): a black belt, straps and holsters with neon green
+   * fittings, black guns glowing neon green (and his clips).
+   */
+  john: {
+    belt: { belt: 0x141416, edge: 0x24262a, buckle: 0x39ff14, accent: 0x39ff14, strap: 0x141416, holster: 0x101012, plate: 0x24262a },
+    gun: { metal: 0x121314, glow: 0x39ff14 },
+  },
   shadowSuit: {
     // (a leather brown light enough to read on the near-black suit, as look 1's belt does)
     belt: { belt: 0x6e5443, edge: 0x947866, buckle: 0xb4b8c0, accent: 0xff0000, strap: 0x5a4436, holster: 0x121214, plate: 0x1c1c20 },

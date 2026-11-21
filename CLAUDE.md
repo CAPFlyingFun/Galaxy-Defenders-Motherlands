@@ -52,11 +52,14 @@ use the game's single copy of three.js.
   the MOVE stick centred, the view only turns her head (90 each side of her body, her neck's reach up and down), her body
   stays, ALL OF IT (bodyTurn.ts `NO_SHARES`: her shoulders still turning after a drag stopped had pulled the view back);
   let go, it waits 1 s then settles back to straight ahead of her body over 1.5 s (was 3); the MOVE stick turns her.
-  HER HEAD TURNS AS A NECK DOES (Joshua, 2026-11-20: "the left and right ended up on the twist axis... supposed to be
-  left and right relative to the torso like standing"; fastHeroine.ts `sideAndTip`, `steadyHead(yaw, pitch, side)`):
-  it tips up or down from her torso's line, then turns left or right ABOUT ITS OWN UP (a "no" shake), so a drag pans the
-  view sideways at any tip, lean or stance (looking down and turned, the horizon tilts, as it does for a real neck);
-  first person the player's look is that tip and turn, third person a target is turned into them; her head is held
+  HER HEAD'S YAW AND PITCH ARE FIXED TO HER TORSO'S ANGLE (Joshua, 2026-11-20: "the left and right ended up on the
+  twist axis... supposed to be left and right relative to the torso like standing"; "The head's yaw and pitch need to be
+  fixed to the torso's angle"; fastHeroine.ts `torsoFrame`, `sideAndTip`, `steadyHead(yaw, tip, side)`): a gimbal on
+  her torso, swung left or right about her torso's up, tipped from her torso's line, no roll of its own. Standing that
+  is an ordinary turn, level at any tip (rendered: down 60 and turned 60, 0 tilt); crouched or bent over, the turn goes
+  with her torso (crouched 14 degrees of tilt, winded 35). (Tried: turning about the world's upright, which spun the
+  view leaning over a bar; about the head's own up, which rolled it 49-59 degrees: "it's rolling and not yawing".)
+  First person the player's look is that turn and tip; third person a target is turned into them; her head is held
   steady so in both views. Her back's and neck's twists go along her spine (pelvis to neck), not the world's upright. AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
   LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds

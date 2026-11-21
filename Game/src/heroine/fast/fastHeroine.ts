@@ -739,21 +739,36 @@ if (uHideHead > 0.5) {
   const nowBasis = new THREE.Matrix4(), wantBasis = new THREE.Matrix4(), steadyTurn = new THREE.Quaternion();
   const spineAxis = new THREE.Vector3();
   /**
-   * A way in the world (its compass angle FROM HER BODY'S WAY, and its pitch) as a neck's tip and turn: tipped by P,
-   * then turned r about the tipped head's up, a head looks along (sin r, cos r sin P, cos r cos P) in her body's frame;
-   * so r = asin of the way's sideways part, P = the angle of the rest. Returns [r, P], radians.
+   * HER TORSO'S FRAME: her body's way `yaw` leaned forward by `lean` (radians): its forward, up and side (her left as
+   * the compass turns), written into torsoF, torsoU, torsoS.
+   */
+  const torsoF = new THREE.Vector3(), torsoU = new THREE.Vector3(), torsoS = new THREE.Vector3();
+  const torsoFrame = (yaw: number, lean: number): void => {
+    const sy = Math.sin(yaw), cy = Math.cos(yaw), sl = Math.sin(lean), cl = Math.cos(lean);
+    torsoF.set(sy * cl, -sl, cy * cl);
+    torsoU.set(sy * sl, cl, cy * sl);
+    torsoS.crossVectors(torsoU, torsoF);
+  };
+  /**
+   * A way in the world (its compass angle FROM HER BODY'S WAY, and its pitch) as her head's turn and tip in her torso's
+   * frame: tipped q up from her torso's line and swung r about her torso's up, a head looks along
+   * (cos q cos r) forward + (cos q sin r) side + (sin q) up; so q = asin of its up part, r = the angle of the rest.
+   * Returns [r, q - lean] (the tip as the player's pitch is: her torso's line is `lean` below level).
    */
   const sideAndTip = (fromBody: number, pitch: number): [number, number] => {
-    const x = Math.sin(fromBody) * Math.cos(pitch), y = Math.sin(pitch), z = Math.cos(fromBody) * Math.cos(pitch);
-    return [Math.asin(Math.max(-1, Math.min(1, x))), Math.atan2(y, z)];
+    torsoFrame(0, torsoLean);
+    wayNow.set(Math.sin(fromBody) * Math.cos(pitch), Math.sin(pitch), Math.cos(fromBody) * Math.cos(pitch));
+    const q = Math.asin(Math.max(-1, Math.min(1, wayNow.dot(torsoU))));
+    return [Math.atan2(wayNow.dot(torsoS), wayNow.dot(torsoF)), q - torsoLean];
   };
+  const wayNow = new THREE.Vector3(), rightNeat = new THREE.Vector3();
   const skullWorldQ = new THREE.Quaternion(), skullParentQ = new THREE.Quaternion();
   /**
-   * Turn her skull (about its own base) as a neck turns it: from her body's way `yaw`, tipped `pitch` (world, radians;
-   * past straight down too), then turned `side` about its own up (a "no" shake pans sideways whatever the tip). Her
-   * neck is left as it is. (See "HER HEAD HELD STEADY" and "HER HEAD TURNS AS A NECK DOES".)
+   * Turn her skull (about its own base): from her body's way `yaw`, tipped `tip` from her torso's line (radians; past
+   * straight down too) and swung `side` about her torso's up, both fixed to her torso's angle, no roll of its own. Her
+   * neck is left as it is. (See "HER HEAD HELD STEADY" and "HER HEAD TURNS ABOUT HER TORSO".)
    */
-  const steadyHead = (yaw: number, pitch: number, side: number): void => {
+  const steadyHead = (yaw: number, tip: number, side: number): void => {
     if (!skull.parent) return;
     skull.updateWorldMatrix(true, false);
     skull.getWorldQuaternion(skullWorldQ);
@@ -761,12 +776,15 @@ if (uHideHead > 0.5) {
     nowU.copy(headUpLocal).applyQuaternion(skullWorldQ);
     nowS.crossVectors(nowF, nowU).normalize();
     nowU.crossVectors(nowS, nowF).normalize();
-    // (as it should be: its look tipped by `pitch`, its up square to that look in the upright plane)
-    const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
-    wantF.set(sy * cp, sp, cy * cp);
-    wantU.set(-sy * sp, cp, -cy * sp);
-    // (then turned `side` about that up: a neck's turn after its tip; its up stays as it is)
-    if (Math.abs(side) > 1e-6) wantF.applyAxisAngle(wantU, side);
+    // FIXED TO HER TORSO'S ANGLE (Joshua, 2026-11-20: "The head's yaw and pitch need to be fixed to the torso's
+    // angle"): as a gimbal sitting on her torso, her head is swung `side` about her torso's up, then tipped `tip` from
+    // her torso's line, no roll of its own. Standing, her torso's up is the world's: an ordinary turn, level whatever
+    // the tip. Leaning in, the turn goes with her torso.
+    torsoFrame(yaw, torsoLean);
+    rightNeat.copy(torsoF).applyAxisAngle(torsoU, side);   // (her torso's forward, swung)
+    const ct = Math.cos(tip), st = Math.sin(tip);
+    wantF.copy(rightNeat).multiplyScalar(ct).addScaledVector(torsoU, st);
+    wantU.copy(rightNeat).multiplyScalar(-st).addScaledVector(torsoU, ct);
     wantS.crossVectors(wantF, wantU).normalize();
     // (the turn that takes the one set of directions onto the other: want · now⁻¹; a basis's inverse is its transpose)
     nowBasis.makeBasis(nowF, nowU, nowS);
@@ -1582,11 +1600,13 @@ if (uHideHead > 0.5) {
       const upright = 1 - downS;
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
       const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
-      // HER HEAD TURNS AS A NECK DOES (Joshua, 2026-11-20: "the left and right ended up on the twist axis... it's
-      // supposed to be left and right relative to the torso like standing"): it tips up or down from her torso's line
-      // (`headTip`, then `rel` below), and turns left or right ABOUT ITS OWN UP after that tip (`headSide`, from her
-      // body's way), so a turn always pans what she sees sideways, looking level, down, bent over or on all fours.
-      // Turned about the world's upright instead, looking down it spun the view like a screw.
+      // HER HEAD TURNS ABOUT HER TORSO (Joshua, 2026-11-20: "the left and right ended up on the twist axis... it's
+      // supposed to be left and right relative to the torso like standing"; then, turned about its own up: "it's rolling
+      // and not yawing"; "The head's yaw and pitch need to be fixed to the torso's angle"): it swings left or right
+      // ABOUT HER TORSO'S UP (`headSide`, from her body's way) and tips up or down from her torso's line (`headTip`,
+      // then `rel` below), no roll of its own (`steadyHead`). Standing, that is an ordinary turn, level at any tip;
+      // leaning on a bar it swings with her torso. (About the world's upright, leaning over and
+      // looking down, it spun the view like a screw.)
       //   first person  the player's look IS that tip and turn (rig yaw less her body's way, rig pitch);
       //   third person  her look is a way in the world (a target): the tip and turn that point her head along it.
       let headSide = 0, headTip = facing?.headPitch ?? 0;
@@ -1669,7 +1689,7 @@ if (uHideHead > 0.5) {
         // steady, her skull is turned to look EXACTLY where it is meant to: tipped `rel` from her torso's line, turned
         // `headSide` about its own up, no roll; only her skull, about its own base, every frame, nothing eased. In
         // both views (her body still sways in third person; her head, as anyone's, keeps its aim).
-        steadyHead(yawNow, rel - torsoLean, headSide);
+        steadyHead(yawNow, rel, headSide);
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

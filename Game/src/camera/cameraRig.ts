@@ -156,8 +156,11 @@ export class CameraRig {
   /** Which way the camera looks now (a unit direction, world). */
   get lookDirection(): THREE.Vector3 { return this.look; }
   mode: ViewMode = 'third';
-  /** First person: how steady the view is, 0..1 (Settings -> CAMERA -> 1st person steadiness; see STEADY_PLACE_SECONDS). */
-  steadiness = 0.6;
+  /**
+   * First person: how steady the view is, 0..1 (see STEADY_PLACE_SECONDS). FIXED AT THE MOST (Joshua, 2026-11-20:
+   * "Remove the slider for steadiness and keep it fixed at max").
+   */
+  readonly steadiness = 1;
   /** First person, eased: her eyes' place from her root (and its side to side), and her head's wobble (radians). */
   private readonly steadyAt = new THREE.Vector3();
   private steadyYaw = 0;

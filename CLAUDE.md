@@ -45,8 +45,8 @@ use the game's single copy of three.js.
   camera TURNS only where her head is MEANT to look (fastHeroine.ts `headAim`: the player's look, or her own at a kick or
   bowed winded, within her neck's reach), none of her walk's wobble (less steady lets it back in proportion); her head's
   roll is always left out; its PLACE is her eyes' offset from her root, eased (her going along never behind), side to
-  side over 1.2 s (a stride's sway), up, down, forward and back over 0.45 s. Settings -> CAMERA -> 1st
-  person steadiness 0..100 (`gdm.fpSteady`, `?steady=`, 60 to begin with). AT THE TABLE, BARS AND DOOR the up and down
+  side over 1.2 s (a stride's sway), up, down, forward and back over 0.45 s. ALWAYS AT FULL (Joshua: "Remove the slider for steadiness and keep it
+  fixed at max"; `steadiness` 1). AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"

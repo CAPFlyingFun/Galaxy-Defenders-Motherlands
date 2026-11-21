@@ -1356,7 +1356,6 @@ async function start(): Promise<void> {
     //  what her neck can reach: fastHeroine.ts `eyeView`)
     turn.headPitch = rig.mode === 'third' ? actionPitch : rig.pitch;
     heroine.setEyeOffset?.(graphics.eyeForward / 100, graphics.eyeHigher / 100);
-    rig.steadiness = graphics.fpSteady / 100;
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)
     keyLight.position.set(motion.x - 4, feetY + 10, motion.z + 6);

@@ -619,8 +619,8 @@ use the game's single copy of three.js.
   John's guns start holstered, as hers do. (EACH HOLDS THEIR OWN is v0.2.129: NOT LIVE since the step back to v0.2.128,
   kept on `backup-v129`; THEIR OWN CAMERA alone came back in v0.2.134, Joshua: "they need to save and resume their last
   camera position per character": `Character.cam`, saved and restored in `swapCharacter`, cameraRig.ts
-  `faceAtOnce(yaw, pitch)`. Their held stance and guns, and John's guns holstered at startup, are still only on
-  `backup-v129`.) An outfit
+  `faceAtOnce(yaw, pitch)`. Their held stance, guns and everything else they were doing came back in v0.2.137, each
+  character's own kit: see EACH ONE THEIR OWN below.) An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
   `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
   played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as
@@ -638,6 +638,26 @@ use the game's single copy of three.js.
   NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
   breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
   trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.
+  EACH ONE THEIR OWN, AND THE ONE STANDING BY RUNS ON (v0.2.137; Joshua, 2026-11-21: "Each character should store the
+  complete state on swap whether crouching, holding on to something, auto shooting"; "Each one should work auto
+  independently"; "when you select that character, you can take control back"; "import and set up the AI brain"):
+  STEP 1, A KIT EACH (main.ts `Kit`, `makeKit`, `KitState`): every character has their OWN motion, body turn, table /
+  bar / door use, holster, belt reload, pace, burst fire, eating, aim and state (stance, bathroom, after-queues, gait,
+  winded, wet, limits...). The game's own names (`motion`, `turn`, `tableUse`...) point at the PLAYED one's kit
+  (`pointAt`); a few plain values of the played frame are copied in and out (`saveState`, `loadState`). So a swap is
+  INSTANT, mid-anything: crouched or down they stay so, a bar or the door held stays held, a reload or a draw finishes
+  on its own, their AUTO/MANUAL is their own (`Character.autoFire`; John starts MANUAL). Swapping refuses only while
+  frozen or changing outfit. The world's things are ONE AT A TIME (`tableTaken`, `barTaken`, `doorTaken`): no button for
+  what the other one has. STEP 2, THE BRAIN (`Game/src/npc/`, ChatGPT's template fitted): `brain.ts` his `NpcBrain` (a
+  queue by priority; modes ai / player / scripted), `types.ts` (+ draw, reload), `gdmPort.ts` `GdmActorPort` (its orders
+  become `ActorWants`: walk to, look, aim at, fire; it allows fireAt only in AUTO, 1-20 shots, a target it can find),
+  `routines.ts` `NeedsRoutine` (the bathroom at 83%, where they stand; food, water and rest only once there are places),
+  `autoCombat.ts` `AutoCombat` (in AUTO, every 0.25 s: draw if holstered, reload if empty, else 6 shots at the nearest
+  target; nothing over a higher task). The played one's brain is 'player' (does nothing); swapped away it is 'ai'.
+  `stepStandingBy` runs the one standing by each frame with the same systems in the same order (no camera, HUD or
+  stick). Checked in the town map: John standing by in AUTO drew and fired on his own; swapped to, his brain stood
+  down ("Player takeover"); swapped back, he fought on. Test pages: `gdm.swap()`, `gdm.brain('john')`, `gdm.kitOf(name)`.
+  NOT YET: they do not walk anywhere on their own (no places for food, water or rest), no cover or dodging.
 - BACK TO v0.2.129 (Joshua, 2026-11-21, 15:11): after crashes on his iPhone the game went back to v0.2.126 (14:51),
   which then ran again ("It's working now... on v126"), so the crashes look like the phone's state (memory, stored
   files) more than the code; then "revert to v129... that will be easier". Kept on other branches, not live:

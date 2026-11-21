@@ -53,6 +53,8 @@ import { BeltReload } from './world/beltReload';
 import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
+// (the NPC brain, ChatGPT's template fitted to this game: one per character, src/npc/)
+import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, type ActorHooks, type ActorWants } from './npc';
 
 /**
  * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
@@ -418,10 +420,18 @@ async function start(): Promise<void> {
     readonly name: string;
     body: GameHeroine;
     readonly vitals: HeroineVitals;
-    /** Their own way of facing while they are not played (the player's `turn` goes with whoever is played). */
-    readonly ownTurn: BodyTurn;
-    /** Where they stand and face while they are not played (metres, radians). */
-    x: number; z: number; yaw: number;
+    /** EVERYTHING THEY ARE DOING, THEIR OWN (Step 1, `Kit` below): where they are, which way they face, their guns,
+     *  holsters, belt, the table, a bar or the door, their stance. Played or standing by, it is always theirs. */
+    readonly kit: Kit;
+    /** AUTO or MANUAL, their own (Joshua, 2026-11-21: "Each one should work auto independently"). While played it is
+     *  the game's `graphics.autoFire`; swapped away, it is kept here, and their brain fights in AUTO (Step 2). */
+    autoFire: 'on' | 'off';
+    /** THEIR BRAIN (Step 2, src/npc/: ChatGPT's NPC brain fitted to this game): 'player' while played (it does
+     *  nothing), 'ai' while standing by (their needs, and in AUTO their fight). Made by `setUpBrain`. */
+    brain: NpcBrain | null;
+    port: GdmActorPort | null;
+    needs: NeedsRoutine | null;
+    combat: AutoCombat | null;
     /** THEIR OWN CAMERA, kept while they are not played (Joshua, 2026-11-21: "each one should save independently and on
      *  swap back, will resume the same last heading"; again in v0.2.134, on its own: v0.2.129's held stances and guns
      *  are not brought back): its heading and tip (radians) and the view it was in; null until they have been played
@@ -459,14 +469,21 @@ async function start(): Promise<void> {
   const detailFor = (c: Character | null): HeroineSettings['detail'] => (c && c === john && JOHN_DETAIL !== null ? JOHN_DETAIL : graphics.detail);
   /** Blaze is the one being played (always, without John). */
   const playingBlaze = (): boolean => !john || playing !== john;
-  const heroine: GameHeroine = new Proxy({} as GameHeroine, {
+  /**
+   * A STAND-IN for a body (see above): every question passed on to whichever body `bodyOf()` gives now. `heroine` is
+   * the one PLAYED (`bodyNow`); each character's own kit has one for their own body (`makeKit`, Step 1), so their
+   * holsters, table, bars and door keep working on THEM whoever is played, and through an outfit change.
+   */
+  const standIn = (bodyOf: () => GameHeroine): GameHeroine => new Proxy({} as GameHeroine, {
     get(_stand, key) {
-      const value = (bodyNow as unknown as Record<PropertyKey, unknown>)[key];
+      const body = bodyOf();
+      const value = (body as unknown as Record<PropertyKey, unknown>)[key];
       // (her methods are run on her own body, as if called on it directly)
-      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(bodyNow) : value;
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(body) : value;
     },
-    has(_stand, key) { return key in bodyNow; },
+    has(_stand, key) { return key in bodyOf(); },
   });
+  const heroine: GameHeroine = standIn(() => bodyNow);
   // (her skin's shine as chosen in Settings: 0 dry .. 25 natural .. 100 oily)
   heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
   await breathe();
@@ -510,13 +527,11 @@ async function start(): Promise<void> {
   // the other"). The buildings are solid and the dome's glass stops her: `walls` knows both (src/world/collision.ts)
   // and `motion` asks it where each step really ends.
   const walls = new CityWalls(city.footprints);
-  const motion = new PlayerMotion(island ? island.walls : walls);
-  if (island) { motion.x = 0; motion.z = 0; } // (she arrives at the island's centre point: the beach)
-  // Which way each part of her faces (src/input/bodyTurn.ts). She starts looking out at the city (+Z). A body that
-  // can turn its parts apart is handed this once and reads it every frame.
-  const turn = new BodyTurn();
-  if (island) turn.reset(island.arrivalFacing); // (on the island she arrives facing inland, the sea behind her)
-  heroine.setFacing?.(turn);
+  // WHERE SHE STARTS: the island's centre point, the beach, facing inland (the sea behind her); the town's plaza,
+  // looking out at the city (+Z). Her movement (`PlayerMotion`) and which way each part of her faces (`BodyTurn`,
+  // src/input/bodyTurn.ts) are her own, in her kit (`makeKit`, below).
+  const startMotion = new PlayerMotion();
+  const START = island ? { x: 0, z: 0, yaw: island.arrivalFacing } : { x: startMotion.x, z: startMotion.z, yaw: 0 };
 
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
   // where she starts, so she can walk up to it, put her guns down on it and take them up again
@@ -527,9 +542,6 @@ async function start(): Promise<void> {
   const table = new WeaponTable(graphics.tableHeight, LOOK_GEAR[tableLook]?.gun);
   table.place(1.6, 9.85, 0);
   scene.add(table.root);
-  const tableUse = new TableUse(table, heroine);
-  /** What the table's action asks for this frame (one object, rewritten). */
-  const tableAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
   // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): an upright pole and a waist-high rail beside the table, the
   // other side of the street (src/world/grabBars.ts; her fingers: src/heroine/fast/fingerTouch.ts).
   const bars = new GrabBars();
@@ -548,32 +560,122 @@ async function start(): Promise<void> {
     door.root.position.y = groundUnder(-5.2, 10.2);
     for (const thing of [table.root, bars.pole, bars.rail, door.root]) thing.updateMatrixWorld(true);
   }
-  const grabUse = new GrabUse(bars, heroine);
-  const grabAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null } = { walkTo: null, look: null, yaw: 0, lookAt: null };
-  // (the door: opening it, holding its handle while she walks it open or shut, letting go)
-  const doorUse = new DoorUse(door, heroine);
-  const doorAsk: { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null; pull: THREE.Vector3 } = { walkTo: null, look: null, yaw: 0, lookAt: null, pull: new THREE.Vector3() };
   /** Where the door puts her back (one object, rewritten). */
   const doorOut = { x: 0, z: 0 };
+
+  // ---- EVERYTHING A CHARACTER IS DOING, THEIR OWN (Step 1) -----------------------------------------------------------
+  // Joshua, 2026-11-21: "Each character should store the complete state on swap whether crouching, holding on to
+  // something, auto shooting". Before, the game had ONE of each thing she does (her holsters, her belt's reloads, the
+  // table, the bars, the door, her pace, her bursts) and they worked on whoever was played: swapping handed John
+  // Blaze's guns and table, and in AUTO the swap went strange. Now each character has a KIT of their own, on their OWN
+  // body (a stand-in onto it, so an outfit change keeps working): made below for Blaze, and for John when he is made.
+  // The game's names for these (`motion`, `turn`, `tableUse`, `holsterUse`...) POINT AT THE PLAYED ONE'S kit
+  // (`pointAt`); the one standing by keeps theirs, and carries on with it each frame (`stepStandingBy`).
+  // The table, the two bars and the door are the world's: ONE character at a time (`tableTaken`, `barTaken`, `doorTaken`).
+  type Ask = { walkTo: THREE.Vector3 | null; look: number | null; yaw: number; lookAt: THREE.Vector3 | null };
+  /** The small values of what they are doing (the played one's live in the game's own variables, copied in and out at
+   *  a swap: `saveState`, `loadState`; the one standing by's are here, and change here). */
+  interface KitState {
+    stance: 'stand' | 'crouch' | 'down'; stanceNoAim: boolean;
+    bathroomLeft: number; mustGoNow: boolean;
+    tableReloading: boolean; tableAfterDraw: 'both' | 'left' | 'right' | 'reload' | null;
+    grabAfterHolster: BarName | null; grabAfterTable: BarName | null; doorAfterHolster: Hand | null; grabWhich: 'both' | Hand;
+    aimTarget: number; supporting: boolean; gait: Gait; gaitResetLeft: number; windedWeight: number;
+    waterDepthNow: number; wetFor: number; actionPitch: number; actionPitchWant: number; sinceFire: number;
+    limits: PaceLimits; lastMoveX: number; lastMoveY: number;
+  }
+  interface Kit {
+    /** A stand-in onto their own body (whichever it is now: an outfit change swaps it underneath). */
+    readonly self: GameHeroine;
+    readonly motion: PlayerMotion;
+    readonly turn: BodyTurn;
+    readonly turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; grip: boolean };
+    readonly tableUse: TableUse; readonly tableAsk: Ask;
+    readonly grabUse: GrabUse; readonly grabAsk: Ask;
+    readonly doorUse: DoorUse; readonly doorAsk: Ask & { pull: THREE.Vector3 };
+    readonly holsterUse: HolsterUse; readonly holsterAsk: { lookAt: THREE.Vector3 | null };
+    readonly beltReload: BeltReload; readonly beltAsk: { lookAt: THREE.Vector3 | null };
+    readonly gearOf: () => BeltGear | null;
+    readonly pace: Pace;
+    readonly burst: BurstFire;
+    readonly eating: { food: number; water: number; seconds: number };
+    /** Where their guns point (standing by, firing on their own). */
+    readonly aim: THREE.Vector3;
+    /** What their brain wants of them this frame (src/npc/gdmPort.ts). */
+    readonly wants: ActorWants;
+    readonly state: KitState;
+  }
+  const freshState = (): KitState => ({
+    stance: 'stand', stanceNoAim: false, bathroomLeft: 0, mustGoNow: false, tableReloading: false, tableAfterDraw: null,
+    grabAfterHolster: null, grabAfterTable: null, doorAfterHolster: null, grabWhich: 'both', aimTarget: 0, supporting: false,
+    gait: 'stand', gaitResetLeft: 0, windedWeight: 0, waterDepthNow: 0, wetFor: Infinity, actionPitch: 0, actionPitchWant: 0,
+    sinceFire: Infinity, limits: NO_LIMITS, lastMoveX: 0, lastMoveY: 0,
+  });
+  /** A character's own kit, on their own body (`self`), standing at x, z and facing `yaw`. Their guns start holstered. */
+  const makeKit = (self: GameHeroine, x: number, z: number, yaw: number): Kit => {
+    const motion = new PlayerMotion(island ? island.walls : walls);
+    motion.x = x; motion.z = z;
+    // (a body that can turn its parts apart is handed its turning once, and reads it every frame)
+    const turn = new BodyTurn();
+    turn.reset(yaw);
+    self.setFacing?.(turn);
+    // (the weapon table: src/world/tableUse.ts; the table itself is the world's, one for everyone)
+    const tableUse = new TableUse(table, self);
+    // HER THIGH HOLSTERS (Joshua, 2026-11-18: her guns away "on the go"; src/world/holsterUse.ts). She keeps walking.
+    const holsterUse = new HolsterUse(self);
+    holsterUse.startHolstered(); // (guns start in their holsters: DRAW takes them out)
+    // RELOADING FROM HER BELT, ON THE GO (Joshua, 2026-11-18; src/world/beltReload.ts): one gun at a time, the other
+    // holstered; the empty goes back into the pouch the fresh clip came from. The table's RELOAD refills her pouches.
+    // (her belt gear is asked for each time: a new outfit brings a new belt)
+    const gearOf = (): BeltGear | null => (self as unknown as { gear?: BeltGear }).gear ?? null;
+    const beltReload = new BeltReload(self, gearOf, tableUse, holsterUse);
+    tableUse.pouchesLow = () => {
+      const gear = gearOf();
+      return !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
+    };
+    const ask = (): Ask => ({ walkTo: null, look: null, yaw: 0, lookAt: null });
+    return {
+      self, motion, turn, turnInput: { view: 'third', look: null, move: null, hold: null, grip: false },
+      tableUse, tableAsk: ask(),
+      // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): the pole and the rail (src/world/grabBars.ts)
+      grabUse: new GrabUse(bars, self), grabAsk: ask(),
+      // (the door: opening it, holding its handle while she walks it open or shut, letting go)
+      doorUse: new DoorUse(door, self), doorAsk: { ...ask(), pull: new THREE.Vector3() },
+      holsterUse, holsterAsk: { lookAt: null }, beltReload, beltAsk: { lookAt: null }, gearOf,
+      pace: new Pace(), burst: new BurstFire(), eating: { food: 0, water: 0, seconds: 0 }, aim: new THREE.Vector3(),
+      wants: { walkTo: null, look: null, aimAt: null, fire: false, shots: 0 },
+      state: freshState(),
+    };
+  };
+  // BLAZE'S KIT (her stand-in follows her body through outfit changes: `blaze.body`, or the body just made)
+  const blazeKit = makeKit(standIn(() => blaze?.body ?? bodyNow), START.x, START.z, START.yaw);
+  // THE PLAYED ONE'S THINGS, under the names the rest of the game uses (pointed at the other kit by a swap: `pointAt`)
+  let motion = blazeKit.motion, turn = blazeKit.turn, turnInput = blazeKit.turnInput;
+  let tableUse = blazeKit.tableUse, tableAsk = blazeKit.tableAsk, grabUse = blazeKit.grabUse, grabAsk = blazeKit.grabAsk;
+  let doorUse = blazeKit.doorUse, doorAsk = blazeKit.doorAsk, holsterUse = blazeKit.holsterUse, holsterAsk = blazeKit.holsterAsk;
+  let beltReload = blazeKit.beltReload, beltAsk = blazeKit.beltAsk, gearNow = blazeKit.gearOf;
+  let pace = blazeKit.pace, burst = blazeKit.burst, eating = blazeKit.eating;
+  /** Point the game's names for the played one's things at this kit (a swap). */
+  const pointAt = (k: Kit): void => {
+    motion = k.motion; turn = k.turn; turnInput = k.turnInput;
+    tableUse = k.tableUse; tableAsk = k.tableAsk; grabUse = k.grabUse; grabAsk = k.grabAsk;
+    doorUse = k.doorUse; doorAsk = k.doorAsk; holsterUse = k.holsterUse; holsterAsk = k.holsterAsk;
+    beltReload = k.beltReload; beltAsk = k.beltAsk; gearNow = k.gearOf;
+    pace = k.pace; burst = k.burst; eating = k.eating;
+  };
+  /** The played one's kit (Blaze's until there is a swap). */
+  const kitNow = (): Kit => playing?.kit ?? blazeKit;
+  /** The OTHER character's kit (null without John). */
+  const otherKitOf = (k: Kit): Kit | null => [blaze, john].find((c) => !!c && c.kit !== k)?.kit ?? null;
+  /** THE WORLD'S THINGS, ONE AT A TIME: the table while the other is at it or has guns lying on it; a bar the other
+   *  is at; the door while the other has it. */
+  const tableTaken = (k: Kit): boolean => { const o = otherKitOf(k); return !!o && (o.tableUse.busy || o.tableUse.lies('left') || o.tableUse.lies('right')); };
+  const barTaken = (k: Kit, bar: BarName): boolean => { const o = otherKitOf(k); return !!o && o.grabUse.busy && o.grabUse.bar === bar; };
+  const doorTaken = (k: Kit): boolean => { const o = otherKitOf(k); return !!o && o.doorUse.active; };
   /** A door waiting for this hand's gun to go into its holster first. */
   let doorAfterHolster: Hand | null = null;
   /** A bar to take hold of once her guns are on the table (a hand with a gun in it puts it down first). */
   let grabAfterTable: BarName | null = null;
-  // HER THIGH HOLSTERS (Joshua, 2026-11-18: her guns away "on the go"; src/world/holsterUse.ts). She keeps walking.
-  const holsterUse = new HolsterUse(heroine);
-  holsterUse.startHolstered(); // (her guns start in their holsters: DRAW takes them out)
-  /** Where she glances while she holsters or draws (one object, rewritten). */
-  const holsterAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
-  // RELOADING FROM HER BELT, ON THE GO (Joshua, 2026-11-18; src/world/beltReload.ts): one gun at a time, the other
-  // holstered; the empty goes back into the pouch the fresh clip came from. The table's RELOAD refills her pouches.
-  // (her belt gear is asked for each time: a new outfit brings a new belt)
-  const gearNow = (): BeltGear | null => (heroine as unknown as { gear?: BeltGear }).gear ?? null;
-  const beltReload = new BeltReload(heroine, gearNow, tableUse, holsterUse);
-  const beltAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
-  tableUse.pouchesLow = () => {
-    const gear = gearNow();
-    return !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
-  };
   /** Whether the table's reload is running (when it ends, her pouches are full again). */
   let tableReloading = false;
   /** A table action waiting for her holstered guns to be drawn first; a bar waiting for her guns to be put away. */
@@ -585,7 +687,8 @@ async function start(): Promise<void> {
    */
   const useTable = (which: 'both' | 'left' | 'right' | 'reload'): void => {
     const h = heroine.hands;
-    if (!h || grabUse.busy || holsterUse.busy || tableUse.busy || beltReload.busy) return;
+    // (the other one at the table, or their guns lying on it: it is theirs until they are done)
+    if (!h || grabUse.busy || holsterUse.busy || tableUse.busy || beltReload.busy || tableTaken(kitNow())) return;
     const holding = h.hasGun('left') || h.hasGun('right');
     const draw = which === 'reload' ? holsterUse.holstered.left || holsterUse.holstered.right
       : which === 'both' ? !holding && !tableUse.lies('left') && !tableUse.lies('right') && (holsterUse.holstered.left || holsterUse.holstered.right)
@@ -596,8 +699,7 @@ async function start(): Promise<void> {
   };
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
   const busyNow = (): boolean => tableUse.busy || grabUse.busy || doorUse.busy;
-  /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
-  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; grip: boolean } = { view: 'third', look: null, move: null, hold: null, grip: false };
+  // (what her turning is told each frame is in her kit: `turnInput`)
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
@@ -616,9 +718,9 @@ async function start(): Promise<void> {
   // pregnancy numbers; week 40 for a body that does not say), which its model of her breath
   // and heart takes into account. Her body shows them (she breathes faster and deeper after a run), and so does
   // the card along the top of the screen.
-  const pace = new Pace();
+  // (her pace is in her kit: `pace`)
   let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base, cam: null };
+  blaze = { name: 'Blaze', body: bodyNow, vitals, kit: blazeKit, cam: null, autoFire: graphics.autoFire === 'on' ? 'on' : 'off', brain: null, port: null, needs: null, combat: null };
   playing = blaze;
 
   // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
@@ -637,12 +739,15 @@ async function start(): Promise<void> {
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base, cam: null };
-      john.ownTurn.reset(john.yaw);
-      body.setFacing?.(john.ownTurn);
+      // (his own kit, on his own body: his movement, turning, holsters, belt, his use of the table, bars and door; his
+      //  guns start holstered, as hers do)
+      const kit = makeKit(standIn(() => john?.body ?? body), x, z, turn.base);
+      // (he starts in MANUAL whatever hers is: standing by in AUTO he would draw and fire the moment the game opens;
+      //  swapped to, AUTO is set for him, and kept)
+      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));
-      body.setYaw(john.yaw);
+      body.setYaw(turn.base);
       body.setSkinShine?.(skinOilyOf(graphics.skinShine));
       scene.add(body.root);
       applyShadows();
@@ -720,8 +825,7 @@ async function start(): Promise<void> {
   /** How far she is bent over winded now, 0..1 (set each frame from her pace's winded hold). */
   let windedWeight = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
-  /** Her guns' bursts (src/world/burstFire.ts). */
-  const burst = new BurstFire();
+  // (her guns' bursts, src/world/burstFire.ts, are in her kit: `burst`)
 
   // THE CAMERA STYLE in third person (src/camera/cameraRig.ts; Joshua, 2026-11-18): the CAM button goes round them,
   // and the choice is kept on this device.
@@ -799,8 +903,7 @@ async function start(): Promise<void> {
     bottle: { food: 0, water: 500, seconds: 5 },
     canteen: { food: 0, water: 1000, seconds: 8 },
   };
-  /** What she is eating or drinking now, still to go into her, and the seconds left to take it. */
-  const eating = { food: 0, water: 0, seconds: 0 };
+  // (what she is eating or drinking now, still to go into her, and the seconds left to take it: her kit's `eating`)
   /** Seconds left squatting for the bathroom (her bladder is emptied when they run out). */
   let bathroomLeft = 0;
   // (Joshua, 2026-11-21: "change the time from 5s to 10s, someone rarely ever goes in 5s, lol")
@@ -986,61 +1089,145 @@ async function start(): Promise<void> {
 
   /**
    * 🔄 SWAP CHARACTER (Joshua, 2026-11-21, as Beyond Extinction does it): the camera, the sticks and the vitals card go
-   * to the other one; the one left stays standing where they were, their vitals running on. Asked while the one played
-   * is busy (a bar, a door, the table, a reload, the bathroom, down on the ground, winded), it waits until they are
-   * not; guns in hand are holstered first. Each keeps their own guns, belt and vitals.
+   * to the other one, AT ONCE, whatever the one played is doing. EACH KEEPS THEIR WHOLE STATE (Step 1; Joshua: "Each
+   * character should store the complete state on swap whether crouching, holding on to something, auto shooting"):
+   * crouched or down they stay so, a bar or the door held stays held, guns in hand stay in hand, a reload or a walk to
+   * the table carries on; their AUTO or MANUAL is their own. The one left is run by their brain (Step 2: their needs,
+   * and in AUTO their fight); swapped back to, the player has them again at once (their brain lets go).
    */
-  let swapWanted = false;
+  /** The played one's small values, written into their kit as they are swapped away. */
+  const saveState = (s: KitState): void => {
+    s.stance = stance; s.stanceNoAim = stanceNoAim; s.bathroomLeft = bathroomLeft; s.mustGoNow = mustGoNow;
+    s.tableReloading = tableReloading; s.tableAfterDraw = tableAfterDraw; s.grabAfterHolster = grabAfterHolster;
+    s.grabAfterTable = grabAfterTable; s.doorAfterHolster = doorAfterHolster; s.grabWhich = grabWhich;
+    s.aimTarget = aimTarget; s.supporting = supporting; s.gait = gait; s.gaitResetLeft = gaitResetLeft;
+    s.windedWeight = windedWeight; s.waterDepthNow = waterDepthNow; s.wetFor = wetFor;
+    s.actionPitch = actionPitch; s.actionPitchWant = actionPitchWant; s.sinceFire = sinceFire; s.limits = limits;
+    s.lastMoveX = lastMoveX; s.lastMoveY = lastMoveY;
+  };
+  /** ...and taken back up from their kit as they are swapped to. */
+  const loadState = (s: KitState): void => {
+    stance = s.stance; stanceNoAim = s.stanceNoAim; bathroomLeft = s.bathroomLeft; mustGoNow = s.mustGoNow;
+    tableReloading = s.tableReloading; tableAfterDraw = s.tableAfterDraw; grabAfterHolster = s.grabAfterHolster;
+    grabAfterTable = s.grabAfterTable; doorAfterHolster = s.doorAfterHolster; grabWhich = s.grabWhich;
+    aimTarget = s.aimTarget; supporting = s.supporting; gait = s.gait; gaitResetLeft = s.gaitResetLeft;
+    windedWeight = s.windedWeight; waterDepthNow = s.waterDepthNow; wetFor = s.wetFor;
+    actionPitch = s.actionPitch; actionPitchWant = s.actionPitchWant; sinceFire = s.sinceFire; limits = s.limits;
+    lastMoveX = s.lastMoveX; lastMoveY = s.lastMoveY;
+  };
   const swapCharacter = (): void => {
     const from = playing, to = bystander();
-    if (!from || !to) return;
-    // (busy: wait. Guns in hand: put away first. Either way it is tried again each frame until it can be done)
-    const h = heroine.hands, gunInHand = !!h && holsterUse.hasHolsters && (h.hasGun('left') || h.hasGun('right'));
-    if (!idleForChange() || stance !== 'stand' || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging || gunInHand) {
-      if (!swapWanted) hud.showNotice(gunInHand ? `${from.name} holsters first…` : `${from.name} finishes first…`);
-      if (gunInHand && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
-      if (stance !== 'stand') stance = 'stand';
-      swapWanted = true;
-      return;
-    }
-    swapWanted = false;
-    // the one left behind: where they stand now, facing their own way, standing easy
-    from.x = motion.x; from.z = motion.z; from.yaw = turn.base;
+    if (!from || !to || frozen || outfitChanging) return;
+    // THE ONE LEFT keeps all they are doing: their kit has their things already; the small values are written in
+    saveState(from.kit.state);
     // (and where the camera looked while they were played, to be looked again when they are played again)
     from.cam = { yaw: rig.yaw, pitch: rig.pitch, mode: rig.mode };
-    from.ownTurn.reset(from.yaw);
-    from.body.setFacing?.(from.ownTurn);
+    from.autoFire = graphics.autoFire === 'on' ? 'on' : 'off';
+    // (seen from outside now: their head shown again; no crab steps or belly holding, which the stick drove)
     from.body.setFirstPerson(false);
-    from.body.setWinded?.(0, 0);
-    from.body.setStance?.('stand');
-    // the one now played: the player's motion, facing and vitals are theirs
+    from.body.setSideSteps?.(null);
+    from.body.setBellySupport?.(false);
+    // (their brain has them from now: their needs, and in AUTO their fight; it starts from nothing wanted)
+    Object.assign(from.kit.wants, { walkTo: null, look: null, aimAt: null, fire: false });
+    from.brain?.setMode('ai');
+    // THE ONE NOW PLAYED: the game's names point at their things, and their small values are taken back up
     playing = to;
     bodyNow = to.body;
     vitals = to.vitals;
-    limits = vitals.reading;
-    motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
-    turn.reset(to.yaw);
-    to.body.setFacing?.(turn);
-    // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: it kept the other one's heading, up
-    // to 180 degrees off them; "they need to save and resume their last camera position per character"), at once; the
-    // first time, the way they face. The tip only if it was in this same view (first and third person tip from
-    // different starting points).
+    pointAt(to.kit);
+    loadState(to.kit.state);
+    // (their brain lets go at once, stopping whatever it was doing: the player has them)
+    to.brain?.setMode('player');
+    to.port?.stopFiring();
+    graphics.autoFire = to.autoFire;
+    busyView.on = false;
+    // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: "they need to save and resume their
+    // last camera position per character"), at once; the first time, the way they face. The tip only if it was in this
+    // same view (first and third person tip from different starting points).
     if (to.cam) rig.faceAtOnce(to.cam.yaw, to.cam.mode === rig.mode ? to.cam.pitch : undefined);
-    else rig.faceAtOnce(to.yaw);
+    else rig.faceAtOnce(to.kit.turn.base);
     // (the one played takes the Detail chosen in Settings, John his fixed one; the one left follows the player's level
     //  by distance, or, while John's is fixed, keeps its own: Blaze her Settings choice, John his JOHN_DETAIL)
     to.body.setDetail?.(detailFor(to));
     if (JOHN_DETAIL !== null) from.body.setDetail?.(detailFor(from));
     otherDetail.reset();
-    bathroomLeft = 0;
     applyView();
-    holsterUse.reseat();
-    tableUse.reseat();
     hud.setSwap(from.name);
     hud.showNotice(`Now playing: ${to.name}`);
     // (an outfit chosen for Blaze while John was played is put on her now)
     if (to === blaze && outfitPending) { outfitPending = false; void changeOutfit(); }
   };
+
+  /**
+   * THE TABLE FOR A KIT that is not the played one's (the brain's reload, Step 2): as `useTable` does for the player, a
+   * holstered gun the action needs is drawn first. False if it cannot start (the table taken, hands busy).
+   */
+  const useTableFor = (k: Kit, which: 'both' | 'left' | 'right' | 'reload'): boolean => {
+    const h = k.self.hands;
+    if (!h || k.grabUse.busy || k.holsterUse.busy || k.tableUse.busy || k.beltReload.busy || tableTaken(k)) return false;
+    const holding = h.hasGun('left') || h.hasGun('right');
+    const draw = which === 'reload' ? k.holsterUse.holstered.left || k.holsterUse.holstered.right
+      : which === 'both' ? !holding && !k.tableUse.lies('left') && !k.tableUse.lies('right') && (k.holsterUse.holstered.left || k.holsterUse.holstered.right)
+      : k.holsterUse.holstered[which];
+    if (!draw) { k.tableUse.start(which); return true; }
+    if (which === 'left' || which === 'right') k.holsterUse.start(which); else k.holsterUse.drawAll();
+    k.state.tableAfterDraw = which;
+    return true;
+  };
+  /** How dangerous it is now, 0..1 (the dome's worst section, set each frame: step 5b): the brains read it. */
+  let dangerNow = 0;
+
+  /**
+   * THEIR BRAIN (Step 2; src/npc/, ChatGPT's NPC brain fitted to this game): what it can reach of them (`ActorHooks`:
+   * their own kit, body and vitals only), the port that carries out its orders, their needs (the bathroom, where they
+   * stand), and their fight in AUTO. In 'player' mode while played: it does nothing.
+   */
+  const setUpBrain = (c: Character): void => {
+    const k = c.kit;
+    const hooks: ActorHooks = {
+      actorId: c.name.toLowerCase(),
+      wants: k.wants,
+      position: () => ({ x: k.motion.x, z: k.motion.z }),
+      needs: () => {
+        const r = c.vitals.reading;
+        return { food: r.food, water: r.water, energy: r.energy, bathroom: r.bathroom, health: r.health / 100 };
+      },
+      danger: () => dangerNow,
+      locate: (id) => {
+        if (id === 'self') return { x: k.motion.x, z: k.motion.z };
+        if (id.startsWith('target:')) { const at = targets.position(Number(id.slice(7))); return { x: at.x, y: at.y, z: at.z }; }
+        return null;
+      },
+      auto: () => c.autoFire === 'on',
+      occupied: () => k.tableUse.busy || k.grabUse.busy || k.doorUse.active || k.state.bathroomLeft > 0 || k.state.windedWeight > 0
+        || k.state.mustGoNow || k.state.tableAfterDraw !== null || k.state.stance === 'down',
+      hasGun: (hand) => c.body.hands?.hasGun(hand) ?? false,
+      holstered: (hand) => k.holsterUse.holstered[hand],
+      rounds: (hand) => k.tableUse.rounds[hand],
+      hasHolsters: () => k.holsterUse.hasHolsters,
+      holsterBusy: () => k.holsterUse.busy,
+      holsterAll: () => { if (!k.holsterUse.busy && !k.beltReload.busy) k.holsterUse.holsterAll(); },
+      drawAll: () => { if (!k.holsterUse.busy && !k.beltReload.busy) k.holsterUse.drawAll(); },
+      holsterOne: (hand) => { if (!k.holsterUse.busy && !k.beltReload.busy) k.holsterUse.start(hand); },
+      startReload: () => {
+        if (k.beltReload.busy || k.tableUse.busy) return true;
+        if (k.beltReload.canStart) { k.beltReload.start(); return true; }
+        return useTableFor(k, 'reload');
+      },
+      reloading: () => k.beltReload.busy || k.tableUse.busy || k.state.tableAfterDraw !== null,
+      squat: (seconds) => { k.state.bathroomLeft = seconds; c.body.squatFor?.(seconds); },
+      squatting: () => k.state.bathroomLeft > 0,
+    };
+    const port = new GdmActorPort(hooks);
+    const brain = new NpcBrain(port);
+    c.port = port;
+    c.brain = brain;
+    c.needs = new NeedsRoutine(brain);
+    // (the sky target in front of their shoulders, as the player's AUTO picks hers)
+    c.combat = new AutoCombat(brain, port, hooks, () => `target:${targets.pick(k.motion.x, k.motion.z, k.turn.shoulders)}`);
+    brain.setMode(c === playing ? 'player' : 'ai');
+  };
+  for (const c of [blaze, john]) if (c) setUpBrain(c);
 
   const hud = new Hud(uiHost, controls, {
     debug,
@@ -1083,7 +1270,8 @@ async function start(): Promise<void> {
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
-      else if (key === 'autoFire') applyView();
+      // (Settings' AUTO is the played one's own, as the button is)
+      else if (key === 'autoFire') { if (playing) playing.autoFire = graphics.autoFire === 'on' ? 'on' : 'off'; applyView(); }
       else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
       else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
       else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
@@ -1126,6 +1314,8 @@ async function start(): Promise<void> {
     onAimMode: () => {
       graphics.autoFire = graphics.autoFire === 'on' ? 'off' : 'on';
       saveSetting('autoFire', graphics.autoFire);
+      // (it is the PLAYED one's own: each keeps theirs through a swap, Joshua: "Each one should work auto independently")
+      if (playing) playing.autoFire = graphics.autoFire === 'on' ? 'on' : 'off';
       applyView();
     },
     onHolster: (which) => {
@@ -1154,6 +1344,7 @@ async function start(): Promise<void> {
       if (grabUse.holding) { grabUse.letGo(); return; }
       if (busyNow() || holsterUse.busy || beltReload.busy) return;
       const bar = grabUse.nearest(motion.x, motion.z).bar;
+      if (barTaken(kitNow(), bar)) return;   // (the other one is at it)
       // (the hands that hold the bar must be empty: their guns go into her holsters, on the way, then she goes to the
       //  bar; Joshua, 2026-11-18: hands free "without having to go all the way to the table". With no holsters, onto
       //  the table first as before.)
@@ -1173,7 +1364,7 @@ async function start(): Promise<void> {
   /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
   function useDoor(which: 'both' | Hand): void {
     if (doorUse.holding) { doorUse.letGo(); return; }
-    if (busyNow() || holsterUse.busy || beltReload.busy || doorUse.active) return;
+    if (busyNow() || holsterUse.busy || beltReload.busy || doorUse.active || doorTaken(kitNow())) return;
     const hand = doorUse.handTo(motion.x, motion.z, which);
     // (that hand must be empty: its gun goes into its holster first, then she goes to the door)
     if (heroine.hands?.hasGun(hand) && holsterUse.hasHolsters) { holsterUse.start(hand); doorAfterHolster = hand; }
@@ -1212,7 +1403,14 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake,
+    // (the played one's things are read when asked: a swap points them at the other one's kit)
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake,
+      get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
+      get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
+      get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
+      // (each one's brain: what it is doing and what it has done, for the test pages)
+      brain: (name: 'blaze' | 'john') => { const c = name === 'john' ? john : blaze; return c?.brain ? { ...c.brain.inspect(), events: c.brain.events.slice(-8) } : null; },
+      kitOf: (name: 'blaze' | 'john') => (name === 'john' ? john : blaze)?.kit ?? null,
       // (for the test scripts: change her outfit as Settings does, and whether a change is running)
       changeOutfit: (key: string) => { graphics.outfit = key; saveSetting('outfit', key); return changeOutfit(); },
       outfitChanging: () => outfitChanging };
@@ -1276,6 +1474,120 @@ async function start(): Promise<void> {
   // The keys do nothing until the game has started, nor while it is paused (V would switch the view behind the menu).
   const playKeys = controls.onKey;
   controls.onKey = (key) => { if (pause && !pause.paused) playKeys?.(key); };
+
+  /** How far along a pregnancy slows a body (0 not pregnant .. 1 full term): Blaze's, by her belly now. */
+  const carryingOf = (c: Character): number => c !== blaze || !herPregnant() ? 0
+    : Math.max(0, Math.min(1, ((c.body.bellyNow?.() ?? 100) - PREGNANCY_ARC.firstBump) / (PREGNANCY_ARC.fullTermBump - PREGNANCY_ARC.firstBump)));
+  /**
+   * THE ONE STANDING BY, EACH FRAME (Step 1 and Step 2). What they were doing carries on with their own kit (a walk to
+   * the table, a holster or a draw, a reload from their belt, a bar or the door held), their stance and a winded bend
+   * hold, and their BRAIN, not the player's stick, says what else: their needs, and in AUTO their fight (src/npc/). The
+   * same systems the player's frame uses, without the camera, the HUD or the stick; in the same order.
+   */
+  const stepStandingBy = (c: Character, dt: number, threat: number): void => {
+    const k = c.kit, s = k.state, m = k.motion, body = c.body;
+    // 1. THEIR BRAIN decides: their needs first, then in AUTO their fight; its orders say what it wants (k.wants)
+    c.needs?.tick(dt);
+    c.combat?.tick(dt);
+    c.brain?.tick(dt);
+    // 2. WHAT THEY WERE DOING CARRIES ON (each with its own walk and its own hands)
+    k.tableAsk.yaw = k.turn.base;
+    k.tableUse.update(dt, m.x, m.z, k.tableAsk);
+    k.grabAsk.yaw = k.turn.base;
+    k.grabUse.update(dt, m.x, m.z, k.grabAsk);
+    k.doorAsk.yaw = k.turn.base;
+    k.doorUse.update(dt, m.x, m.z, k.doorAsk);
+    if (s.doorAfterHolster && !k.holsterUse.busy) { k.doorUse.start(m.x, m.z, s.doorAfterHolster); s.doorAfterHolster = null; }
+    k.holsterUse.update(dt, k.holsterAsk);
+    k.beltReload.update(dt, k.beltAsk);
+    // (the table's reload has ended: their pouches are full again)
+    if (s.tableReloading && k.tableUse.action !== 'reload') { const gear = k.gearOf(); gear?.setClips(gear.pouches); }
+    s.tableReloading = k.tableUse.action === 'reload';
+    if (s.tableAfterDraw && !k.holsterUse.busy) { const which = s.tableAfterDraw; s.tableAfterDraw = null; k.tableUse.start(which); }
+    if (s.grabAfterHolster && !k.holsterUse.busy) { k.grabUse.start(s.grabAfterHolster, s.grabWhich); s.grabAfterHolster = null; }
+    if (s.grabAfterTable && !k.tableUse.busy) { k.grabUse.start(s.grabAfterTable, s.grabWhich); s.grabAfterTable = null; }
+    const busy = k.tableUse.busy || k.grabUse.busy || k.doorUse.busy;
+    // 3. THEIR STANCE, as they were left (they stand up for the table, a bar, a door or the bathroom)
+    if ((busy || s.mustGoNow || s.bathroomLeft > 0) && s.stance !== 'stand') s.stance = 'stand';
+    body.setStance?.(s.stance === 'down' ? (c === blaze && herPregnant() ? 'fours' : 'prone') : s.stance);
+    // 4. WALKING: what they are doing walks them (to the table, a bar), else their brain's walk, at a walk; their pace's
+    //    winded hold runs down meanwhile, as it does for the player standing still
+    const ask = k.tableUse.busy ? k.tableAsk : k.grabUse.busy ? k.grabAsk : k.doorAsk;
+    const walkTo = busy ? ask.walkTo : k.wants.walkTo && s.bathroomLeft <= 0 && s.stance === 'stand' ? k.wants.walkTo : null;
+    k.pace.carrying = carryingOf(c);
+    k.pace.step(dt, 0, s.limits);
+    if (walkTo) {
+      const away = Math.hypot(walkTo.x - m.x, walkTo.z - m.z), toward = Math.atan2(walkTo.x - m.x, walkTo.z - m.z);
+      m.update(dt, 0, 1, toward, dt > 0 ? Math.min(k.pace.paceSpeed(0), away / dt) : 0);
+    } else m.update(dt, 0, 0, k.turn.base, 0);
+    // (the door: holding it they stay on its rail; otherwise it is solid to them too)
+    const radius = doorBodyRadius(body.hands?.bellyAhead() ?? 0, k.doorUse.holding);
+    if (k.doorUse.holding) k.doorUse.keepOnRail(m, k.doorAsk.pull, radius);
+    else if (door.keepOut(m.x, m.z, radius, doorOut)) { m.x = doorOut.x; m.z = doorOut.z; }
+    // (winded: bent over until their breath has calmed, as the player is)
+    const left = k.pace.holdLeft, rise = PACE_TUNING.windedRiseSeconds;
+    s.windedWeight = left > 0 ? Math.min(1, k.pace.windedFor / WINDED_IN) * (k.pace.riseLeft >= 0 ? Math.min(1, k.pace.riseLeft / rise) : 1) : 0;
+    body.setWinded?.(s.windedWeight, k.pace.windedCalm);
+    // 5. WHICH WAY THEY FACE: what they are doing looks where it needs (the table, the bar); else where their brain looks
+    //    (the target it fires at); else as they were. Holding the door they keep facing it.
+    const ti = k.turnInput;
+    ti.view = 'third';
+    ti.move = m.heading;
+    ti.look = ask.look ?? (busy ? null : k.wants.look);
+    ti.hold = k.doorUse.faceYaw();
+    ti.grip = false;
+    k.turn.step(dt, ti);
+    k.turn.headPitch = 0;
+    // 6. AIM AND FIRE (their brain's fire order, in AUTO): in bursts, with their own guns' rounds; each shot a streak
+    const noAim = busy || s.windedWeight > 0 || s.bathroomLeft > 0 || s.stance === 'down';
+    const at = k.wants.aimAt;
+    const aiming = !noAim && !!at && k.turn.aimed;
+    if (aiming && at) body.aimAt(k.aim.set(at.x, at.y ?? 0, at.z)); else body.aimAt(null);
+    let fired = false;
+    k.burst.update(dt, aiming && k.wants.fire,
+      (hand) => (body.hands?.hasGun(hand) ?? true) && k.tableUse.rounds[hand] > 0 && !k.holsterUse.handBusy(hand) && !k.beltReload.handBusy(hand),
+      (hand) => {
+        body.fire(hand);
+        tracers.fire(body.muzzle(hand, muzzle), k.aim);
+        k.tableUse.rounds[hand]--;
+        k.wants.shots++;
+        fired = true;
+      });
+    // 7. THE BATHROOM (their brain squats them where they stand: src/npc/gdmPort.ts): their bladder emptied as it ends
+    if (s.bathroomLeft > 0) { s.bathroomLeft -= dt; if (s.bathroomLeft <= 0) c.vitals.relieve(); }
+    // (anything they were eating or drinking when swapped away still goes in, evenly over its seconds)
+    const e = k.eating;
+    if (e.seconds > 0) {
+      const share = Math.min(1, dt / e.seconds), food = e.food * share, water = e.water * share;
+      c.vitals.consume(food, water);
+      e.food -= food; e.water -= water; e.seconds -= dt;
+      if (e.seconds <= 0) { e.food = 0; e.water = 0; e.seconds = 0; }
+    }
+    // 8. THEIR BODY: where they stand, on the ground under them, wet as deep as the water at their feet
+    const feetY = groundUnder(m.x, m.z);
+    body.setPosition(m.x, m.z, feetY);
+    if (island) {
+      const groundY = island.groundAt(m.x, m.z), surface = Math.max(island.waterAt(m.x, m.z) ?? -Infinity, island.seaLevel);
+      s.waterDepthNow = Number.isFinite(groundY) ? Math.max(0, surface - groundY) : 0;
+      body.setWaterDepth?.(s.waterDepthNow);
+    }
+    body.setYaw(body.setFacing ? k.turn.base : k.turn.head);
+    body.setWalk(m.speed);
+    body.update(info);
+    // HIS OR HER DETAIL (heroine/fast/otherDetail.ts): the player's own level within 20 m on a phone, then stepped down
+    // (NOT while John's detail is fixed, JOHN_DETAIL: John keeps his, and Blaze standing by keeps her own Detail)
+    const playerDetail = heroine.stats?.().detail;
+    if (playerDetail !== undefined && JOHN_DETAIL === null) {
+      const level = otherDetail.update(dt, playerDetail, Math.hypot(m.x - motion.x, m.z - motion.z));
+      if (level !== null) body.setDetail?.(level);
+    }
+    // 9. THEIR VITALS: what they just did moves them on (walking, firing, the danger); their body breathes by them
+    s.wetFor = s.waterDepthNow > 0.02 ? 0 : s.wetFor + dt;
+    const wet = s.wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (s.wetFor - WET_HOLD) / WET_DRY);
+    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, carrying: k.pace.carrying, waterDepth: s.waterDepthNow, wet });
+    body.setVitals?.(c.vitals.reading);
+    s.limits = c.vitals.reading;
+  };
 
   // ---- The loop --------------------------------------------------------------------
   const muzzle = new THREE.Vector3();
@@ -1512,10 +1824,12 @@ async function start(): Promise<void> {
     // LET GO; else the table if she is near it; else the bar), HOLSTER / DRAW with a gun in a hand or a holster,
     // RELOAD at the table or with a clip on her belt for a gun that is not full. Hidden while something else runs.
     const holstering = holsterUse.busy || beltReload.busy || tableAfterDraw !== null || grabAfterHolster !== null || doorAfterHolster !== null || doorUse.active;
-    const atTable = tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering;
-    const grabWord = tableUse.busy || grabAfterTable || holstering ? null : grabUse.label(motion.x, motion.z);
+    // (THE WORLD'S THINGS ONE AT A TIME: no button for the table, a bar or the door the other one has: `tableTaken`...)
+    const atTable = tableUse.canUse(motion.x, motion.z) && !grabUse.busy && !holstering && !tableTaken(kitNow());
+    const grabWord = tableUse.busy || grabAfterTable || holstering ? null
+      : !grabUse.holding && barTaken(kitNow(), grabUse.nearest(motion.x, motion.z).bar) ? null : grabUse.label(motion.x, motion.z);
     // (the door: LET GO while she holds it; OPEN DOOR near a handle, when nothing else is running)
-    const doorWord = doorUse.holding ? 'LET GO' : busyNow() || holstering || grabUse.busy ? null : doorUse.label(motion.x, motion.z);
+    const doorWord = doorUse.holding ? 'LET GO' : busyNow() || holstering || grabUse.busy || doorTaken(kitNow()) ? null : doorUse.label(motion.x, motion.z);
     promptIs = doorUse.holding ? 'door' : grabUse.holding && grabWord ? 'grab' : atTable ? 'table' : grabWord ? 'grab' : doorWord ? 'door' : null;
     hud.setPrompt(promptIs === 'table' ? tableUse.label() : promptIs === 'grab' ? grabWord : promptIs === 'door' ? doorWord : null);
     hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
@@ -1620,25 +1934,7 @@ async function start(): Promise<void> {
     heroine.setYaw(heroine.setFacing || rig.mode !== 'first' ? turn.base : turn.head);
     heroine.setWalk(motion.speed);
     heroine.update(info);
-    // THE ONE NOT BEING PLAYED stands where they were left, breathing (their vitals, below), facing their own way
-    {
-      const other = bystander();
-      if (other) {
-        other.body.setPosition(other.x, other.z, groundUnder(other.x, other.z));
-        other.body.setYaw(other.yaw);
-        other.body.setWalk(0);
-        other.body.update(info);
-        // HIS OR HER DETAIL (Joshua, 2026-11-21; heroine/fast/otherDetail.ts): the player's own level within 20 m on a
-        // phone (always, on a computer), then stepped down to 1 % over the next 10 m
-        // (NOT while John's detail is fixed, JOHN_DETAIL: John keeps his, and Blaze standing by keeps her own Settings
-        //  choice instead of dropping to his 1 %. Kept for when his detail follows again.)
-        const playerDetail = heroine.stats?.().detail;
-        if (playerDetail !== undefined && JOHN_DETAIL === null) {
-          const level = otherDetail.update(info.dt, playerDetail, Math.hypot(other.x - motion.x, other.z - motion.z));
-          if (level !== null) other.body.setDetail?.(level);
-        }
-      }
-    }
+    // (the one NOT being played is stepped further down, once the danger is known: `stepStandingBy`)
     // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)
     if (realShadows) ground.setHeroine(1e6, 1e6); else ground.setHeroine(motion.x, motion.z);
 
@@ -1828,6 +2124,7 @@ async function start(): Promise<void> {
     //  enemies coming close will add to it.)
     let threat = 0;
     for (const section of dome.sections) threat = Math.max(threat, section.shattered ? 1 : 0.6 * (1 - section.hp / SECTION_MAX_HP));
+    dangerNow = threat;   // (the brains read it: src/npc/)
     // (what she is eating or drinking goes in a little each frame, evenly over its seconds)
     if (eating.seconds > 0) {
       const share = Math.min(1, dt / eating.seconds);
@@ -1849,21 +2146,15 @@ async function start(): Promise<void> {
       // (she goes once nothing is running: the table's walk, a holstering, a reload from her belt)
       if (!busyNow() && !holsterUse.busy && !beltReload.busy && !gunInHand) { mustGoNow = false; intake('bathroom'); }
     }
-    // (a swap asked for while the one played was busy, or holding guns: done as soon as they are free)
-    if (swapWanted) swapCharacter();
     // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
     wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
     const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
     vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, waterDepth: waterDepthNow, wet });
     const reading = vitals.reading;
-    // (the one not played: their vitals run on, standing still; their body breathes by them. Their needs wait for the
-    //  NPC brain: for now a full bladder is held, and their bars only show once they are played again)
+    // THE ONE NOT BEING PLAYED: what they were doing carries on, and their brain runs them (Step 1 and 2)
     {
       const other = bystander();
-      if (other) {
-        other.vitals.step(dt, { speed: 0, firing: false, threat });
-        other.body.setVitals?.(other.vitals.reading);
-      }
+      if (other) stepStandingBy(other, dt, threat);
     }
     if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;

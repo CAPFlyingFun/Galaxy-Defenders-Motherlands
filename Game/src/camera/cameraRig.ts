@@ -247,6 +247,8 @@ export class CameraRig {
     if (style === 'top') this.pitch = STYLE.topPitch;
     else if (this.pitch < THIRD_PITCH_MIN) this.pitch = THIRD_PITCH_START;
     if (style === 'shoulder') this.pitch = clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
+    // (the side views: the pitch is HER HEAD'S up and down, level to begin with: see applyLook)
+    if (style === 'sideLeft' || style === 'sideRight') this.pitch = 0;
   }
 
   /** Switch between third and first person. The camera keeps looking the same compass direction. */
@@ -270,6 +272,10 @@ export class CameraRig {
     this.pitch =
       // (first person: as far up and down as her neck reaches from her torso's line, as it was last frame)
       this.mode === 'first' ? clamp(this.pitch, this.firstRange[0], this.firstRange[1])
+        // (THE SIDE VIEWS: the camera stays square to her side, and dragging up and down tips HER HEAD, as far as her
+        //  neck reaches from her torso's line, as in first person: Joshua, 2026-11-20, "For the side views, can we make
+        //  up and down work for the head?")
+        : this.style === 'sideLeft' || this.style === 'sideRight' ? clamp(this.pitch, this.firstRange[0], this.firstRange[1])
         : this.style === 'top' ? STYLE.topPitch // (top looks down at its own angle: a drag turns it only)
         : this.style === 'shoulder' ? clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax)
         : this.style === 'drone' ? clamp(this.pitch, -1.5, 0.6)
@@ -283,14 +289,15 @@ export class CameraRig {
 
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */
   update(dt: number, heroine: HeroineBody): void {
+    // (her neck's reach up and down this frame: first person and the side views look within it)
+    const range = heroine.headPitchRange?.();
+    if (range) { this.firstRange[0] = range[0]; this.firstRange[1] = range[1]; }
     if (this.mode === 'first') {
       // FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head... offset forward at touch and keep same eye
       // height like in Beyond Extinction... as it can only bend what the head can do"): the camera is fixed to her
       // skull, just clear of her face (fastHeroine.ts `eyeView`); it turns, tips and bobs with her head. Where the
       // player looks (yaw, pitch) is where her head is asked to look; the pitch is kept within her neck's reach from
       // her torso's line, so dragging past it does nothing (left and right: past 90 degrees her body turns).
-      const range = heroine.headPitchRange?.();
-      if (range) { this.firstRange[0] = range[0]; this.firstRange[1] = range[1]; }
       this.pitch = clamp(this.pitch, this.firstRange[0], this.firstRange[1]);
       if (heroine.eyeView) {
         // (on her head, exactly: no easing. Joshua, 2026-11-20: "make the camera like v0.2.102 attached to the bone no

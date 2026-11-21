@@ -56,6 +56,10 @@ use the game's single copy of three.js.
   the MOVE stick centred, the view only turns her head (90 each side of her body, her neck's reach up and down), her body
   stays, ALL OF IT (bodyTurn.ts `NO_SHARES`: her shoulders still turning after a drag stopped had pulled the view back);
   let go, it waits 1 s then settles back to straight ahead of her body over 1.5 s (was 3); the MOVE stick turns her.
+  PUSHING THE STICK GOES WHERE YOU LEFT THE VIEW (Joshua, 2026-11-20: "I look over my shoulder then push the stick
+  forward... my head is not at 90° anymore but maybe 70-75°"; main.ts `freeView.leftYaw`, `FREE_LOOK_RESTORE`): the
+  settle stops, and if it had moved the view, the view goes back to where the player left it over 0.15 s; moving, the
+  view never settles by itself.
   HER HEAD'S YAW AND PITCH ARE FIXED TO HER TORSO'S ANGLE (Joshua, 2026-11-20: "the left and right ended up on the
   twist axis... supposed to be left and right relative to the torso like standing"; "The head's yaw and pitch need to be
   fixed to the torso's angle"; fastHeroine.ts `torsoFrame`, `sideAndTip`, `steadyHead(yaw, tip, side)`): a gimbal on
@@ -229,7 +233,9 @@ use the game's single copy of three.js.
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
 - CAMERA STYLES (Joshua, 2026-11-19; `Game/src/camera/cameraRig.ts`): the CAM button also goes to SIDE L and SIDE R,
   square to her left or right side at her middle's height, turning with her (eased), so her whole profile and belly
-  show. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
+  show. In them, aimed by hand, dragging up and down TIPS HER HEAD within her neck's reach, as first person does
+  (Joshua, 2026-11-20: "For the side views, can we make up and down work for the head?"; main.ts `sideView`,
+  cameraRig.ts applyLook); left and right already turned it. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
   side L, side R; `gdm.cameraStyleManual`); while FIRE is held and 1.2 s after, the camera is over her shoulder whatever
   is chosen, and away from it she aims level the way she was turned and the crosshair is hidden.
 - GUNS AT THE START, AND AT REST IN THIRD PERSON MANUAL (Joshua, 2026-11-20: "Why are the guns always raised and ready

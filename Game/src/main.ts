@@ -230,6 +230,8 @@ const BUSY_LOOK_RETURN_SECONDS = 1.5;
 const BUSY_LOOK_WAIT = 1;
 /** FIRST PERSON, STANDING (see `freeView`): once the player lets go, the view waits this long, then settles back over this long. */
 const FREE_LOOK_WAIT = 1;
+/** ...and pushing the MOVE stick brings a settling view back to where the player left it over this long (seconds). */
+const FREE_LOOK_RESTORE = 0.15;
 const FREE_LOOK_SETTLE = 1.5; // (Joshua, 2026-11-20: "speed up to the same 1.5s" as at the bar; was 3)
 const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
@@ -536,7 +538,7 @@ async function start(): Promise<void> {
    * within its reach of her body (FREE_LOOK_*); let go, it waits, then settles back to straight ahead of her body.
    * (Before, her body turned after her head as the view moved, and the view swung back as it caught up.)
    */
-  const freeView = { idle: 0, returning: false, fromYaw: 0, fromPitch: 0 };
+  const freeView = { idle: 0, returning: false, fromYaw: 0, fromPitch: 0, leftYaw: 0, leftPitch: 0, restoring: -1, restoreYaw: 0, restorePitch: 0 };
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
@@ -1323,13 +1325,38 @@ async function start(): Promise<void> {
         freeView.idle += dt;
         if (freeView.idle > FREE_LOOK_WAIT) {
           // (it settles from where the view was when it began to, eased at both ends)
-          if (!freeView.returning) { freeView.returning = true; freeView.fromYaw = wrapAngle(rig.yaw - turn.base); freeView.fromPitch = rig.pitch; }
+          if (!freeView.returning) {
+            freeView.returning = true; freeView.fromYaw = wrapAngle(rig.yaw - turn.base); freeView.fromPitch = rig.pitch;
+            // (where the player LEFT the view, in the world: the MOVE stick takes her there, below)
+            freeView.leftYaw = rig.yaw; freeView.leftPitch = rig.pitch;
+          }
           const x = Math.min(1, (freeView.idle - FREE_LOOK_WAIT) / FREE_LOOK_SETTLE), left = 1 - x * x * (3 - 2 * x);
           rig.yaw = turn.base + freeView.fromYaw * left;
           rig.pitch = freeView.fromPitch * left;
         }
       }
-    } else { freeView.idle = 0; freeView.returning = false; }
+    } else {
+      // PUSHING THE MOVE STICK GOES WHERE THE PLAYER LEFT THE VIEW (Joshua, 2026-11-20: "I look over my shoulder then push
+      // the stick forward... as soon as start moving my head is not at 90° anymore but maybe 70-75° which wasn't my
+      // original target and feels like it pulls you off"): the settle had already begun bringing the view back to her
+      // body. Its moving stops, and if it had moved the view at all, the view goes back to where the player left it over
+      // FREE_LOOK_RESTORE (not if the player turns it meanwhile); so "forward" is where they looked, and her head leads
+      // her body round to it. Moving, the view never settles by itself.
+      if (freeView.returning && rig.mode === 'first' && !busyNow()) {
+        freeView.restoring = 0; freeView.restoreYaw = rig.yaw; freeView.restorePitch = rig.pitch;
+      }
+      freeView.idle = 0; freeView.returning = false;
+    }
+    if (freeView.restoring >= 0) {
+      if (looked || rig.mode !== 'first') freeView.restoring = -1;
+      else {
+        freeView.restoring = Math.min(1, freeView.restoring + dt / FREE_LOOK_RESTORE);
+        const x = freeView.restoring, k = x * x * (3 - 2 * x);
+        rig.yaw = freeView.restoreYaw + wrapAngle(freeView.leftYaw - freeView.restoreYaw) * k;
+        rig.pitch = freeView.restorePitch + (freeView.leftPitch - freeView.restorePitch) * k;
+        if (freeView.restoring >= 1) freeView.restoring = -1;
+      }
+    }
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
     // (aimed by hand: she looks where the camera looks, in either view)
@@ -1393,7 +1420,10 @@ async function start(): Promise<void> {
     actionPitch += (actionPitchWant - actionPitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
     // (first person her head looks where the player looks, up and down too: the camera is on her head, so the view is
     //  what her neck can reach: fastHeroine.ts `eyeView`)
-    turn.headPitch = rig.mode === 'third' ? actionPitch : rig.pitch;
+    //  (and in third person's SIDE views, aimed by hand and doing nothing else: dragging up and down tips her head, as
+    //  first person does; the side camera itself stays square to her: cameraRig.ts applyLook)
+    const sideView = rig.mode === 'third' && (rig.style === 'sideLeft' || rig.style === 'sideRight') && aimedByHand() && !busyNow();
+    turn.headPitch = rig.mode === 'third' && !sideView ? actionPitch : rig.pitch;
     heroine.setEyeOffset?.(graphics.eyeForward / 100, graphics.eyeHigher / 100);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)

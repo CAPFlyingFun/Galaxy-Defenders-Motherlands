@@ -51,7 +51,11 @@ use the game's single copy of three.js.
 - Which way each part of her faces (Joshua's five bands, 2026-11-17; `Game/src/input/bodyTurn.ts`): from body North
   her head turns up to 90 degrees, her shoulders/arms/hands 80% of that (72), her belly/torso 60% (54), her upper
   legs 40% (36), her lower legs and feet 20% (18). Past 90 body North is pulled round; when the looking stops it
-  comes round to match within 4 seconds. First person the look is the camera; third person it is her auto-aim
+  comes round to match within 4 seconds. HER HEAD LEADS, HER BODY CATCHES UP (Joshua, 2026-11-20: "the joystick moving the
+  head which the body will catch up and look more natural in 1st and 3rd person"; bodyTurn.ts `bandLag`, `headLead`):
+  each band follows the one above it a moment behind (shoulders 0.1 s, belly 0.18, upper legs 0.26, feet 0.34), so a
+  turn runs down her from head to feet; going a new way in third person with nothing to aim at, her head turns there
+  first (quicker than body North, `moveTurn` 7). First person the look is the camera; third person it is her auto-aim
   target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), EXCEPT in third
   person MANUAL AT A WALK (Joshua, 2026-11-18): there she keeps facing the way the camera looks and the stick snaps to
   FOUR moves only, nothing between: walk ahead, walk back, and the CRAB STEP left or right (`footGround.ts` 8: the lead

@@ -27,6 +27,14 @@
 //   * "maybe add a slight lag between camera/head and arms for a more realistic
 //     effect but both lock and end up the same direction": everything below her
 //     head follows its turn a moment behind.
+//   * HER HEAD LEADS, HER BODY CATCHES UP (Joshua, 2026-11-20: "when turning the
+//     joystick left or right, what is happening is the body is turning but what
+//     really should be happening is the joystick moving the head which the body
+//     will catch up and look more natural in 1st and 3rd person"): each band
+//     follows a moment behind the one above it, shoulders, then belly, then upper
+//     legs, then feet (`bandLag`), whether her head turned or her whole body did;
+//     and going a new way in third person with nothing to aim at, her head turns
+//     to it first (before, it simply faced the way her body did).
 //
 // Every direction here is a compass angle like a heroine's yaw (radians, 0 = +Z,
 // turning toward +X as it grows).
@@ -67,14 +75,20 @@ export const TURN = {
   stillBelow: 20 * DEG,
   /** How long the look's turning speed is read over (a thumb on a screen moves in small jumps). */
   lookSmooth: 0.1,
-  /** Everything below her head follows its turn: about this long to cover most of the way. */
-  followLag: 0.09,
+  /**
+   * HER HEAD LEADS (Joshua, 2026-11-20): each band below her head reaches its own turn about this long behind (seconds,
+   * about two thirds of the way in that time), each a little more than the band above it, so a turn runs down her from
+   * her head to her feet. (Before: all of them together, 0.09 s behind her head.)
+   */
+  bandLag: { shoulders: 0.1, belly: 0.18, upperLegs: 0.26, feet: 0.34 },
+  /** THIRD PERSON, MOVING with nothing to aim at: how quickly her head turns to the way she goes (bigger is snappier). */
+  headLead: 14,
   /** THIRD PERSON: how fast her head turns to a target, each second. */
   headSpeed: 360 * DEG,
   /** THIRD PERSON: the fastest her head pulls body North round after it, each second. */
   dragSpeed: 240 * DEG,
-  /** MOVING: how quickly body North turns to the way she goes (bigger is snappier). */
-  moveTurn: 10,
+  /** MOVING: how quickly body North turns to the way she goes (bigger is snappier; her head is quicker: `headLead`). */
+  moveTurn: 7,
   /**
    * FIRST PERSON, MOVING: she backs up when the way she moves is more than `backFrom` round from where she looks,
    * and steps forward again when it is back within `backUntil`. Both are a little past a right angle, so going
@@ -112,6 +126,10 @@ export function wrapAngle(angle: number): number {
   return a;
 }
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** `from` eased toward `to` the short way round, about two thirds of the way in `seconds` (the same at any frame rate). */
+function follow(from: number, to: number, seconds: number, dt: number): number {
+  return wrapAngle(from + wrapAngle(to - from) * (1 - Math.exp(-dt / seconds)));
+}
 /** `from` turned toward `to` the short way round, by no more than `most`. */
 function turnToward(from: number, to: number, most: number): number {
   return wrapAngle(from + clamp(wrapAngle(to - from), -most, most));
@@ -137,8 +155,6 @@ export class BodyTurn {
   /** FIRST PERSON, MOVING: she is backing up (stepping backward, body North facing away from the way she goes). */
   backing = false;
 
-  /** How far the bands below her head have followed its turn from body North (her head's turn, a moment behind). */
-  private followed = 0;
   /** Where she looked last frame, and how fast the look is turning (each second, smoothed). */
   private lastLook: number | null = null;
   private lookSpeed = 0;
@@ -146,7 +162,6 @@ export class BodyTurn {
   /** Stand her facing one way, all of her. */
   reset(yaw: number): void {
     this.base = this.head = this.shoulders = this.belly = this.upperLegs = this.feet = wrapAngle(yaw);
-    this.followed = 0;
     this.aimed = false;
     this.backing = false;
     this.lastLook = null;
@@ -194,7 +209,8 @@ export class BodyTurn {
         // (how far round the target is from the way she RUNS: body North is still turning to it when she sets off)
         const off = input.look === null ? Infinity : Math.abs(wrapAngle(input.look - input.move));
         this.aimed = off <= reach + (this.aimed ? TURN.aimHold : 0);
-        headWant = this.aimed && input.look !== null ? input.look : this.base;
+        // (nothing to aim at: her head looks the way she is going, and gets there before her body: `headLead`)
+        headWant = this.aimed && input.look !== null ? input.look : input.move;
       }
     } else {
       // STANDING: she turns her head to what she looks at; body North stays until it is pulled round (below).
@@ -213,7 +229,11 @@ export class BodyTurn {
     }
 
     // ---- her head: at once in first person; at its own speed in third; never past its reach from body North ----
-    this.head = first ? wrapAngle(headWant) : turnToward(this.head, headWant, TURN.headSpeed * dt);
+    // (third person, going somewhere with nothing to aim at: eased to the way she goes, quicker than her body)
+    const leading = !first && input.move !== null && !this.aimed && (input.hold === undefined || input.hold === null);
+    this.head = first ? wrapAngle(headWant)
+      : leading ? wrapAngle(this.head + wrapAngle(headWant - this.head) * (1 - Math.exp(-TURN.headLead * dt)))
+      : turnToward(this.head, headWant, TURN.headSpeed * dt);
     this.head = wrapAngle(this.base + clamp(wrapAngle(this.head - this.base), -reach, reach));
 
     // ---- standing with the look stopped: body North comes round to match, the whole reach in `catchUpSeconds` ----
@@ -222,13 +242,14 @@ export class BodyTurn {
       this.base = turnToward(this.base, this.head, pace * dt);
     }
 
-    // ---- the bands below her head: each its share of her head's turn, a moment behind, ending where it ends ----
+    // ---- the bands below her head: each its share of her head's turn, ending where it ends, but each a moment behind
+    //      the band above it (HER HEAD LEADS: `bandLag`), whether her head turned or body North did ----
     const turned = wrapAngle(this.head - this.base);
-    this.followed = clamp(this.followed + (turned - this.followed) * (1 - Math.exp(-dt / TURN.followLag)), -reach, reach);
-    this.shoulders = wrapAngle(this.base + TURN.shares.shoulders * this.followed);
-    this.belly = wrapAngle(this.base + TURN.shares.belly * this.followed);
-    this.upperLegs = wrapAngle(this.base + TURN.shares.upperLegs * this.followed);
-    this.feet = wrapAngle(this.base + TURN.shares.feet * this.followed);
+    const lag = TURN.bandLag, shares = TURN.shares;
+    this.shoulders = follow(this.shoulders, this.base + shares.shoulders * turned, lag.shoulders, dt);
+    this.belly = follow(this.belly, this.base + shares.belly * turned, lag.belly, dt);
+    this.upperLegs = follow(this.upperLegs, this.base + shares.upperLegs * turned, lag.upperLegs, dt);
+    this.feet = follow(this.feet, this.base + shares.feet * turned, lag.feet, dt);
 
     // (third person, standing: her arms come up once her head has nearly turned to the target)
     if (!first && input.move === null && input.look !== null) this.aimed = Math.abs(wrapAngle(input.look - this.head)) <= TURN.raiseWithin;

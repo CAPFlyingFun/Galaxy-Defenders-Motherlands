@@ -192,10 +192,15 @@ function tube(m: Mesher, pts: THREE.Vector3[], radii: number[], sides: number, t
       m.vertex(_a, _n, (s / sides) * around, run / tile, WHITE);
     }
   }
+  // THE TRIANGLES WOUND TO FACE OUT (Joshua, 2026-11-21, a screenshot standing at a palm: its trunk was drawn inside
+  // out, the ridged inside of a pipe). Bark is drawn from its front only, and three.js takes a triangle's front as the
+  // side its corners go round ANTI-clockwise. Going up the trunk (a0 to b0) and round it (a0 to a1) the old order made
+  // the front face IN (up x round points inward), so the outside was the hidden back and the inside showed. Now it
+  // goes round first, then up (round x up points OUT), matching the normals given above.
   for (let i = 0; i < pts.length - 1; i++) {
     for (let s = 0; s < sides; s++) {
       const a0 = first + i * (sides + 1) + s, a1 = a0 + 1, b0 = a0 + sides + 1, b1 = b0 + 1;
-      m.idx.push(a0, b0, a1, a1, b0, b1);
+      m.idx.push(a0, a1, b0, a1, b1, b0);
     }
   }
 }

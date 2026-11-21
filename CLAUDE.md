@@ -321,7 +321,7 @@ use the game's single copy of three.js.
   280 m, light models past 80 m), Off. The 3D trees are made in code after Thronemound's tree maker (leaning, flared,
   tapering trunks; boughs on a golden spiral; palm/cycad/sago/fern rosettes of drooping fronds; conifer tiers; leaf
   cards from one leaf picture drawn in code), Thronemound's bark photos (`public/island/bark/`), a palm bark drawn in
-  code; one instanced draw per kind per piece. Their TRUNKS ARE SOLID (`trunkBlocks`, her body 0.25 m round). EVERY
+  code; one instanced draw per kind per piece. Their TRUNKS ARE SOLID (`trunkBlocks`, her body 0.25 m round). Their bark FACES OUT (Joshua, 2026-11-21: a palm's trunk drawn inside out, 'flipped'; treeModels.ts `tube` had its triangles wound inward, 0 of 112 facing out on a palm; now all out). EVERY
   FADE WIPES UP THE TREE (Joshua: "fade top to bottom... you can see the trunk of it first"): the trunk shows first and
   the top last; photo and 3D wipes are exact opposites at the swap. Next: ground cover (grass, small ferns) near her.
   Not yet: swimming.

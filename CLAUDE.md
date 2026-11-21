@@ -63,9 +63,8 @@ use the game's single copy of three.js.
   steady so in both views. Her back's and neck's twists go along her spine (pelvis to neck), not the world's upright. AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
   LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds
-  (`busyFace` as bodyTurn's `hold`), her head follows the player's look, 120 each side: 90 her head and up to 30 her
-  shoulders' and torso's twist (Joshua: "30° just for the shoulders/torso + the 90° for the head"; bodyTurn.ts `grip`,
-  `gripTwist`, `gripShares`); let go, the view waits 1 s (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
+  (`busyFace` as bodyTurn's `hold`), her head ALONE follows the player's look, 90 each side, the rest of her square (bodyTurn.ts
+  `grip`; Joshua first asked for 30 more from her shoulders, then: "remove that extra 30° from the shoulders"); let go, the view waits 1 s (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.

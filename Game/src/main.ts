@@ -1362,7 +1362,7 @@ async function start(): Promise<void> {
     //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
     //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
     turnInput.hold = doorUse.faceYaw() ?? busyFace ?? (walkSides() ? rig.yaw : null);
-    // (holding on in first person: her head reaches 120 degrees each way, 30 of it her shoulders' twist: bodyTurn.ts `grip`)
+    // (holding on in first person: her head alone turns, 90 degrees each way, the rest of her square: bodyTurn.ts `grip`)
     turnInput.grip = busyFace !== null;
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
@@ -1470,7 +1470,7 @@ async function start(): Promise<void> {
       }
       busyView.pitch += (wantPitch - busyView.pitch) * ease;
       // (the player's look is limited while she holds on to something fixed; following a target it is not)
-      const side = busyNow() ? BUSY_LOOK_SIDE + (turnInput.grip ? TURN.gripTwist : 0) : Math.PI;
+      const side = busyNow() ? BUSY_LOOK_SIDE : Math.PI;
       busyView.lookYaw = Math.max(-side, Math.min(side, busyView.lookYaw));
       // (up and down: the view's own pitch stays within what HER NECK REACHES from her torso's line, as everywhere in
       //  first person: leaning on a bar she looks further down than standing. Joshua, 2026-11-20: holding the railing

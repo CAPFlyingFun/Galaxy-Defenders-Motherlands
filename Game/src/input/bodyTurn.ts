@@ -68,9 +68,6 @@ export const TURN = {
    * are 72, 54, 36 and 18 degrees.
    */
   shares: { shoulders: 0.8, belly: 0.6, upperLegs: 0.4, feet: 0.2 },
-  /** HOLDING ON (see TurnInput `grip`): how far her shoulders and torso may twist, and each band's share of her head's turn. */
-  gripTwist: 30 * DEG,
-  gripShares: { shoulders: 0.25, belly: 0.12, upperLegs: 0, feet: 0 },
   /**
    * Once the looking stops, body North comes round the whole reach in this long; less to go takes less. (Joshua:
    * "after 4s" at first; "can we lower that 4s down to 1.3s?", 2026-11-17.)
@@ -127,9 +124,9 @@ export interface TurnInput {
    */
   readonly free?: boolean;
   /**
-   * HOLDING ON (first person at a bar, the railing, the table or a door: Joshua, 2026-11-20, "30° just for the
-   * shoulders/torso + the 90° for the head so you could actually look +/-120°"): her head reaches `reach` + `gripTwist`
-   * from body North, her shoulders and torso twisting up to `gripTwist` of it (`gripShares`), her legs not at all.
+   * HOLDING ON (first person at a bar, the railing, the table or a door): her head alone turns, up to `reach` from body
+   * North; the rest of her stays square to what she holds. (Joshua, 2026-11-20, first: "30° just for the
+   * shoulders/torso + the 90° for the head", then: "remove that extra 30° from the shoulders".)
    */
   readonly grip?: boolean;
 }
@@ -186,7 +183,7 @@ export class BodyTurn {
 
   /** One frame of `dt` seconds. */
   step(dt: number, input: TurnInput): void {
-    const reach = TURN.reach + (input.grip ? TURN.gripTwist : 0), first = input.view === 'first';
+    const reach = TURN.reach, first = input.view === 'first';
 
     // How fast the look is turning: body North only comes round to match once it has stopped.
     if (input.look !== null && this.lastLook !== null && dt > 0) {
@@ -265,9 +262,9 @@ export class BodyTurn {
     const turned = wrapAngle(this.head - this.base);
     // (STANDING, LOOKING ROUND FREELY: her head alone turns, the rest of her stays square (Joshua, 2026-11-20: "unlink
     //  that rule when standing still so the head is truly independent"; her shoulders still turning after a drag
-    //  stopped had pulled the view back a little); HOLDING ON: her shoulders and torso twist a little (`gripShares`))
+    //  stopped had pulled the view back a little); HOLDING ON, the same: her head alone)
     const lag = TURN.bandLag;
-    const shares = input.free ? NO_SHARES : input.grip ? TURN.gripShares : TURN.shares;
+    const shares = input.free || input.grip ? NO_SHARES : TURN.shares;
     this.shoulders = follow(this.shoulders, this.base + shares.shoulders * turned, lag.shoulders, dt);
     this.belly = follow(this.belly, this.base + shares.belly * turned, lag.belly, dt);
     this.upperLegs = follow(this.upperLegs, this.base + shares.upperLegs * turned, lag.upperLegs, dt);

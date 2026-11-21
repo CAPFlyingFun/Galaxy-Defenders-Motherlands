@@ -348,11 +348,16 @@ use the game's single copy of three.js.
   round her belly, the diagonal crawl, 0.55 m/s; her guns holstered going down and before she moves; still, one may be
   drawn (L, R or the main button draws the right). Down and up go through her crouch, STEP BY STEP (Joshua, 2026-11-21:
   "a more realistic transition from standing to crawling without the body sinking underground"; groundPose.ts `KNEEL`,
-  `kneelTurns`, `downSteps`): crouch, then KNEELING (knees to the ground, body upright, hands on her thighs), then hands
-  forward to ALL FOURS, then (prone) down onto her elbows; all fours 1.3 s down / 1.4 up, prone 1.8 / 1.9, still while she
-  does. NEVER UNDER THE GROUND (`STANCE.groundPad`): each frame getting down or up her knees, feet, hands, elbows, head
-  and hips are measured against the ground under them and her whole body lifted by any that would be under. Measured in
-  the lab: her ankles at least 7 cm up all the way (before: 0, through the floor, as she tipped like a falling plank). The camera comes down with her (cameraRig.ts `lower`). Busy at the table, a bar or a door, she stands. Her
+  `kneelTurns`, `downSteps`; then his marked pictures: "still cuts in a bit, what about going the standing to kneeling (one
+  knee to both) then crawl?"): crouch, then ONE KNEE (her right knee down, its toes TUCKED under, heel up; her left foot
+  flat in front, that knee at her hips' height, `frontThigh`/`frontKnee` 114), then BOTH KNEES (the front knee comes down
+  beside it, its shin folded up under her on the way, `frontFold`, so its foot passes over the floor), then hands forward
+  to ALL FOURS, then (prone) down onto her elbows; all fours 1.7 s down / 1.8 up, prone 2.2 / 2.3, still while she does.
+  NEVER UNDER THE GROUND (`STANCE.groundPad`): each frame getting down or up her knees, ankles, TOES (the bone past each
+  ankle, 4.5 cm: it sits that high in her shoe standing), hands, elbows, head and hips are measured against the ground
+  under them and her whole body lifted by any that would be under. Measured in the lab: nothing under at any step; on
+  one knee her back knee about 6 cm off the floor, both knees down at 5 cm (their joints' own height). (v0.2.118 went
+  from the crouch to both knees with her feet pointed: her toes pointed into the floor while her knees were up.) The camera comes down with her (cameraRig.ts `lower`). Busy at the table, a bar or a door, she stands. Her
   body's yaw bands and her arms' keeping clear of her belly are off while she is down. NOTE: the BUILDER'S ELBOW BEND
   (about Y) only twists this body file's forearm (its arms already hang in the bind): the game bends elbows about X.
   The buttons sit just above FIRE (movable in Edit controls); PRONE reads ALL 4s while Pregnancy is on.

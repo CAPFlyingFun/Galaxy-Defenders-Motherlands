@@ -75,14 +75,14 @@ export const STANCE = {
    * `downSteps`), and to get back up to a crouch (the same steps backward). (Was 1.0 and 1.2 for both, blended
    * straight across; with real steps a little longer.)
    */
-  downSeconds: { fours: 1.3, prone: 1.8 },
-  upSeconds: { fours: 1.4, prone: 1.9 },
+  downSeconds: { fours: 1.7, prone: 2.2 },
+  upSeconds: { fours: 1.8, prone: 2.3 },
   /**
-   * NEVER UNDER THE GROUND (Joshua, 2026-11-21): getting down or up, if a knee, foot, hand, elbow or her head would go
+   * NEVER UNDER THE GROUND (Joshua, 2026-11-21): getting down or up, if a knee, ankle, toe, hand, elbow or her head would go
    * below the ground, her whole body is lifted until it does not. How far each joint's middle sits above the ground
    * when it rests on it, metres (the flesh round the joint).
    */
-  groundPad: { knee: 0.05, ankle: 0.05, wrist: 0.03, elbow: 0.04, head: 0.1, pelvis: 0.08 },
+  groundPad: { knee: 0.05, ankle: 0.05, toe: 0.045, wrist: 0.03, elbow: 0.04, head: 0.1, pelvis: 0.08 },
   /** Her top speeds, metres a second: crouch-walking, crawling on her belly, on all fours. */
   crouchSpeed: 0.9,
   proneSpeed: 0.35,
@@ -192,25 +192,48 @@ export function stanceTurns(
 }
 
 /**
- * KNEELING, THE STEP BETWEEN HER CROUCH AND THE GROUND (Joshua, 2026-11-21: "a more realistic transition from standing
- * to crawling without the body sinking underground"). As a person gets down: from the crouch her knees go to the
- * ground first, her body still upright (leaning `KNEEL.lean` forward), her thighs straight down under her hips, her
- * shins back along the ground, her feet on their tops, her hands on her thighs; THEN her hands go forward to the
- * ground (all fours), and from all fours she lowers onto her elbows (prone). Before, her crouch was blended straight
- * into the final pose, and halfway she tipped forward like a falling plank with her feet and shins through the floor.
+ * GETTING DOWN, STEP BY STEP (Joshua, 2026-11-21: "a more realistic transition from standing to crawling without the body
+ * sinking underground"; then, his marked pictures of v0.2.118: "still cuts in a bit, what about going the standing to
+ * kneeling (one knee to both) then crawl?"). As a person gets down:
+ *   1. ONE KNEE: from her crouch her right leg goes back and its knee down to the ground, its toes tucked under (heel up,
+ *      the ball of the foot on the ground); her left foot stays flat in front, that knee up, shin straight up; her body
+ *      upright, her hands on her front thigh.
+ *   2. BOTH KNEES: her front knee comes down beside the other, both shins back along the ground, toes still tucked under.
+ *   3. ALL FOURS: her hands go forward to the ground.
+ *   4. PRONE (not pregnant): from all fours she lowers onto her elbows.
+ * (v0.2.118 went from the crouch straight to both knees with her feet pointed: while her knees were still in the air her
+ * toes pointed down into the floor. Tucked toes never point down.)
  */
 export const KNEEL = {
   /** Her body's forward lean kneeling, degrees (her thighs kept straight down under it). */
-  lean: 12,
-  /** Her knees' bend: her shins straight back along the ground. */
-  knee: 92,
-  /** Her upper arms forward and her elbows bent so her hands rest on her thighs, degrees. */
+  lean: 10,
+  /** A kneeling knee's bend (its shin back along the ground, rising about 10 degrees to the ankle, held up by the tucked
+   * toes), degrees. (86 left the ankle lower than the knee and the toes pointing into the floor.) */
+  knee: 100,
+  /** A kneeling foot: its toes tucked under, the foot reaching back and down from the ankle at about 45 degrees to the
+   * ball of the foot on the ground, degrees of pointing (0 square to the shin). */
+  tucked: 35,
+  /** One knee: the front thigh forward (above level: her front knee a little higher than her hips, her shin straight
+   * up under it to a flat foot at its standing height) and the front knee's bend, degrees. (80 and 85, then 98 and 108, put the
+   * front foot 3-5 cm into the floor, and lifting her clear of it held her back knee off the ground.) */
+  frontThigh: 114,
+  frontKnee: 114,
+  /** Bringing the front knee down beside the other, its shin folds up under her by this much more at the halfway point
+   * (degrees), so its foot passes over the floor, not through it (straight across, the foot swept 15 cm under and
+   * lifted her whole body off her back knee). */
+  frontFold: 50,
+  /** Her upper arms forward and her elbows bent so her hands rest on her thighs, degrees (one knee: a little further,
+   * to her raised knee). */
   armForward: 30,
+  armForwardOneKnee: 42,
   elbow: 35,
 } as const;
 
-/** Her pose kneeling (see KNEEL), as turns from her bind pose, written into `out`. */
-export function kneelTurns(carry: number, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
+/**
+ * Her pose on one knee (`oneKnee` 1) or both (0), as turns from her bind pose, written into `out` (see KNEEL). Her right
+ * knee is the one that goes down first.
+ */
+export function kneelTurns(oneKnee: number, carry: number, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
   while (out.length < 17) out.push({ joint: -1, ax: 0, ay: 1, az: 0, radians: 0 });
   const j = measure.joints;
   const left = measure.leftSign < 0 ? -1 : 1;
@@ -224,18 +247,23 @@ export function kneelTurns(carry: number, measure: HumanMeasure, bind: readonly 
   putXZ(put, j.chest, 0, 0);
   // (her head kept looking ahead over her small lean)
   putXZ(put, j.neck, -lean, 0);
+  const armFwd = KNEEL.armForward + (KNEEL.armForwardOneKnee - KNEEL.armForward) * oneKnee;
   for (const side of [0, 1] as const) {
     const xSign = side === 0 ? left : -left;
     arm(put, bind, side === 0 ? j.shoulderL : j.shoulderR, side === 0 ? j.elbowL : j.elbowR, side === 0 ? j.wristL : j.wristR, xSign,
-      (KNEEL.armForward + KNEEL.lean) * DEG, KNEEL.elbow * DEG, 8 * DEG);
+      (armFwd + KNEEL.lean) * DEG, KNEEL.elbow * DEG, 8 * DEG);
   }
   // (her knees a little apart, wider round her belly, as on all fours)
   const wide = (6 + 10 * Math.min(2, Math.max(0, carry))) * DEG;
-  for (const side of [0, 1] as const) {
-    const s = side === 0 ? left : -left;
-    leg(put, side === 0 ? j.hipL : j.hipR, side === 0 ? j.kneeL : j.kneeR, side === 0 ? j.ankleL : j.ankleR, s,
-      lean, wide, 0, KNEEL.knee * DEG, 50 * DEG);
-  }
+  // HER RIGHT LEG: kneeling, its thigh straight down under her lean, its shin back along the ground, its toes tucked
+  leg(put, j.hipR, j.kneeR, j.ankleR, -left, lean, wide, 0, KNEEL.knee * DEG, KNEEL.tucked * DEG);
+  // HER LEFT LEG: on one knee, forward with its foot flat (thigh forward, shin straight up, the foot level); with both
+  // knees down, kneeling like the right
+  const front = (k: number, f: number): number => k + (f - k) * oneKnee;
+  leg(put, j.hipL, j.kneeL, j.ankleL, left,
+    front(lean, KNEEL.frontThigh * DEG + lean), front(wide, 6 * DEG), 0,
+    front(KNEEL.knee * DEG, KNEEL.frontKnee * DEG) + KNEEL.frontFold * DEG * Math.sin(Math.PI * Math.min(1, Math.max(0, oneKnee))),
+    front(KNEEL.tucked * DEG, (KNEEL.frontKnee - KNEEL.frontThigh) * DEG));
   out.length = n;
   return out;
 }
@@ -244,13 +272,17 @@ export function kneelTip(): number { return KNEEL.lean * DEG; }
 export function kneelHips(sizes: BodySizes): number { return foursHips(sizes); }
 
 /**
- * HOW FAR ALONG EACH STEP OF GETTING DOWN SHE IS, from how far down she is (`down`, 0 crouched .. 1 down): kneeling,
- * then all fours, then (prone only) onto her elbows, each 0..1, overlapping a little so it flows.
+ * HOW FAR ALONG EACH STEP OF GETTING DOWN SHE IS, from how far down she is (`down`, 0 crouched .. 1 down): onto one knee,
+ * onto both, then all fours, then (prone only) onto her elbows, each 0..1, overlapping a little so it flows. (`oneKnee`
+ * is how far her FRONT knee is still up: 1 on one knee, 0 once both are down.)
  */
-export function downSteps(kind: 'prone' | 'fours', down: number, out: { kneel: number; fours: number; prone: number }): void {
+export function downSteps(kind: 'prone' | 'fours', down: number, out: { kneel: number; oneKnee: number; fours: number; prone: number }): void {
   const part = (from: number, to: number): number => { const t = Math.max(0, Math.min(1, (down - from) / (to - from))); return t * t * (3 - 2 * t); };
-  if (kind === 'fours') { out.kneel = part(0, 0.5); out.fours = part(0.42, 1); out.prone = 0; }
-  else { out.kneel = part(0, 0.34); out.fours = part(0.28, 0.62); out.prone = part(0.56, 1); }
+  if (kind === 'fours') {
+    out.kneel = part(0, 0.32); out.oneKnee = 1 - part(0.3, 0.58); out.fours = part(0.52, 1); out.prone = 0;
+  } else {
+    out.kneel = part(0, 0.24); out.oneKnee = 1 - part(0.22, 0.44); out.fours = part(0.4, 0.7); out.prone = part(0.64, 1);
+  }
 }
 
 /** The forward tip of her whole body in a stance, radians (prone: flat; on all fours: her back about level). */

@@ -579,7 +579,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       hipHeight: hip.y - base, shoulderHeight: shoulder.y - base };
   })();
     /** Getting down: how far along each step she is (groundPose.ts `downSteps`), and where a joint is (reused). */
-  const steps = { kneel: 0, fours: 0, prone: 0 };
+  const steps = { kneel: 0, oneKnee: 0, fours: 0, prone: 0 };
   const padAt = new THREE.Vector3();
   /** The joints kept above the ground getting down, with the flesh round each (STANCE.groundPad). */
   const GROUND_PADS: ReadonlyArray<readonly [keyof typeof joints, number]> = [
@@ -587,6 +587,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     ['wristL', STANCE.groundPad.wrist], ['wristR', STANCE.groundPad.wrist], ['elbowL', STANCE.groundPad.elbow], ['elbowR', STANCE.groundPad.elbow],
     ['head', STANCE.groundPad.head], ['pelvis', STANCE.groundPad.pelvis],
   ];
+  /** Her toes: the bone past each ankle (the ball of her foot), found from her bind; kept above the ground too. */
+  const toeBones = [joints.ankleL, joints.ankleR].map((ankle) => motion.bind.findIndex((b) => b.parent === ankle)).filter((k) => k >= 0);
 const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
   // HER SHOULDER WIDTH (shoulder joint to shoulder joint, as she stands now): her feet stand this far apart, and a crab
   // step goes this far (footGround.ts)
@@ -1335,6 +1337,8 @@ if (uHideHead > 0.5) {
         bones[joints[name]].getWorldPosition(v);
         out[name] = [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
       }
+      // (and her toes: the bone past each ankle, the ball of her foot)
+      toeBones.forEach((k, i) => { bones[k].getWorldPosition(v); out[i === 0 ? 'toeL' : 'toeR'] = [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)]; });
       return out;
     },
     stanceInfo() {
@@ -1622,8 +1626,8 @@ if (uHideHead > 0.5) {
         const going = Math.min(1, Math.abs(along) / Math.max(1e-4, frame.dt) / 0.15);
         crawlPhase = (crawlPhase + along / (downKind === 'prone' ? STANCE.proneStride : STANCE.foursStride) + 1) % 1;
         downSteps(downKind, downW, steps);
-        // the poses, one over the other: kneeling over her crouch, all fours over kneeling, prone over all fours
-        motion.overlay(kneelTurns(body.belly / 100, motion.measure, motion.bind, stanceOut), steps.kneel);
+        // the poses, one over the other: one knee then both over her crouch, all fours over kneeling, prone over all fours
+        motion.overlay(kneelTurns(steps.oneKnee, body.belly / 100, motion.measure, motion.bind, stanceOut), steps.kneel);
         const foursTip = tipOf('fours', sizes);
         if (steps.fours > 0) motion.overlay(stanceTurns('fours', downKind === 'fours' ? crawlPhase : 0, downKind === 'fours' ? going : 0, body.belly / 100, foursTip, motion.measure, motion.bind, stanceOut), steps.fours);
         if (steps.prone > 0) motion.overlay(stanceTurns('prone', crawlPhase, going, body.belly / 100, tipOf('prone', sizes), motion.measure, motion.bind, stanceOut), steps.prone);
@@ -1658,6 +1662,12 @@ if (uHideHead > 0.5) {
           bones[joints[name]].getWorldPosition(padAt);
           const floor = ground.groundAt ? ground.groundAt(padAt.x, padAt.z) : NaN;
           const below = (Number.isFinite(floor) ? floor : root.position.y) + pad - padAt.y;
+          if (below > under) under = below;
+        }
+        for (const k of toeBones) {
+          bones[k].getWorldPosition(padAt);
+          const floor = ground.groundAt ? ground.groundAt(padAt.x, padAt.z) : NaN;
+          const below = (Number.isFinite(floor) ? floor : root.position.y) + STANCE.groundPad.toe - padAt.y;
           if (below > under) under = below;
         }
         if (under > 0) { fit.position.y += under / Math.max(1e-6, root.scale.y); fit.updateMatrixWorld(true); }

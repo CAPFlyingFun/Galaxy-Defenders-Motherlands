@@ -592,9 +592,23 @@ use the game's single copy of three.js.
   two of him, one bare, and his outfit dropped. builderRoom.ts lets that load go only for her body. (2) Her pieces the
   room leaves on him (`cleavageBridge`, `tunicDrape`) are not baked on the male body (bakeLook.ts `herPieceOnHim`); the
   gap the builder's tops leave at the chest is filled in his shirt's navy (`fillCleavage(0.966, 0.5, 70)`). (3) No hair
-  on the male body (the manifest's `hair` null; `body: 'male-base'`). Next: his own vitals (no pregnancy), her
-  breast-only systems off for him, both on the map, the 🔄 swap, memory on the iPhone. ChatGPT's NPC brain template is
-  kept in `docs/npc-brain/` for after he is stable.
+  on the male body (the manifest's `hair` null; `body: 'male-base'`).
+  IN THE GAME (v0.2.126; Joshua: "modify his colors to be Black and Neon Green, had his own stats that link up to his
+  organs, and then the swap button"): BLACK AND NEON GREEN (tights #141416, tee #16171a with a neon #39ff14 trim, the
+  chest gap filled black; belt and guns black with neon, gear.ts `john`), re-baked. He stands 1.4 m to her right and
+  0.6 m behind at the start (her left is the weapons table), made only as a fast body (`createHeroine(..., 'john',
+  true)`; Body: Performance only; `?john=off` leaves him out); he has no hidden live body of his own. main.ts
+  `Character` { name, body, vitals, ownTurn, x, z, yaw }: `blaze`, `john`, `playing`; the one not played stands where
+  left, drawn and updated, his or her OWN vitals stepped (standing still) and fed to the body. His vitals are his own
+  `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and time lapse are always Blaze's.
+  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played is free
+  (not at the table, a bar or a door, standing, not winded or going to the toilet), holsters guns first, then hands
+  the controls, camera, vitals card and turn to the other where they stand; a "Now playing: X" notice. An outfit
+  change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
+  `gdm.cast()`. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
+  breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
+  trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

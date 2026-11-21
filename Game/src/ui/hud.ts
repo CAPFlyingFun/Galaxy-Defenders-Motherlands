@@ -63,6 +63,8 @@ export interface HudOptions {
   onDomeDebug(action: DomeDebugAction): void;
   /** THE BATHROOM BUTTON (🚽, top right, shown only when she needs to go): she goes, as Settings -> Bathroom. */
   onBathroom?(): void;
+  /** The 🔄 button: play the other character (Blaze or John). */
+  onSwap?(): void;
   /** A button in Settings -> FOOD & DRINK. */
   onIntake?(action: IntakeAction): void;
   /**
@@ -169,6 +171,11 @@ export class Hud {
   private readonly reloadButton: HTMLElement;
   /** THE BATHROOM BUTTON (🚽): beside the gear, shown only from her urge. */
   private readonly bathroomButton: HTMLElement;
+  /** 🔄 SWAP CHARACTER (Joshua, 2026-11-21: "a 🔄 swap character... like how Beyond Extinction does it"; "Next to the Settings is good"). */
+  private readonly swapButton: HTMLElement;
+  /** A short note in the middle of the top of the screen ("Now playing: John"), gone after a couple of seconds. */
+  private readonly notice: HTMLElement;
+  private noticeTimer = 0;
   private readonly aimModeButton: HTMLElement;
   private readonly handsBox: HTMLElement;
   private readonly handButtons: Record<'left' | 'right', HTMLElement>;
@@ -305,6 +312,15 @@ export class Hud {
     this.bathroomButton.setAttribute('aria-label', 'Go to the bathroom');
     this.bathroomButton.hidden = true;
     tapButton(this.bathroomButton, () => options.onBathroom?.());
+    // 🔄 SWAP CHARACTER: left of the gear (Joshua: "Next to the Settings is good. I can always move it": Edit controls).
+    // Shown once there is someone to swap to. Tapped: the camera, the sticks and the vitals card go to the other one,
+    // and the one left behind stays standing where they were (main.ts `swapCharacter`).
+    this.swapButton = element('button', 'gd-button gd-swap', this.root, '🔄');
+    this.swapButton.setAttribute('aria-label', 'Swap character');
+    this.swapButton.hidden = true;
+    tapButton(this.swapButton, () => options.onSwap?.());
+    this.notice = element('div', 'gd-notice', this.root);
+    this.notice.hidden = true;
     // L and R: the hand the next action is for (tapped again: both). Beside the top of the rail.
     this.handsBox = element('div', 'gd-hands', this.root);
     const pick = (hand: 'left' | 'right'): HTMLElement => {
@@ -581,6 +597,20 @@ export class Hud {
   }
 
   /** THE BATHROOM BUTTON: hidden (null), shown at her urge (1), shown pulsing when it is strong (2). */
+  /** Show the 🔄 button (there is someone to swap to), and what it says when pressed: the name of the one it swaps to. */
+  setSwap(other: string | null): void {
+    this.swapButton.hidden = other === null;
+    if (other) this.swapButton.setAttribute('aria-label', `Swap to ${other}`);
+  }
+
+  /** A short note at the top of the screen for a couple of seconds ("Now playing: John"). */
+  showNotice(text: string, seconds = 2.2): void {
+    this.notice.textContent = text;
+    this.notice.hidden = false;
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = window.setTimeout(() => { this.notice.hidden = true; }, seconds * 1000);
+  }
+
   setBathroom(urge: 0 | 1 | 2 | null): void {
     this.bathroomButton.hidden = !urge;
     this.bathroomButton.classList.toggle('is-strong', urge === 2);

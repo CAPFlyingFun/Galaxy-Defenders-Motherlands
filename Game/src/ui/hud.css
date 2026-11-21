@@ -132,36 +132,10 @@
   height: 44px;
   font-size: 22px;
 }
-/* 🔄 SWAP CHARACTER (Joshua, 2026-11-21: "Next to the Settings is good"): left of the gear */
-.gd-swap {
-  position: absolute;
-  right: calc(var(--safe-right) + 64px);
-  top: calc(var(--safe-top) + 12px);
-  width: 44px;
-  height: 44px;
-  font-size: 22px;
-}
-.gd-hud.is-editing .gd-swap[hidden] { display: flex !important; }
-/* "Now playing: John": a short note at the top middle, never in the way of a touch */
-.gd-notice {
-  position: absolute;
-  left: 50%;
-  top: calc(var(--safe-top) + 12px);
-  transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 14px;
-  background: rgba(8, 12, 20, 0.82);
-  border: 1px solid rgba(94, 232, 200, 0.55);
-  color: #e9f5f2;
-  font: 600 14px system-ui, -apple-system, sans-serif;
-  letter-spacing: 0.04em;
-  pointer-events: none;
-}
-.gd-notice[hidden] { display: none; }
-/* THE BATHROOM BUTTON (Joshua, 2026-11-19): left of the gear (and of 🔄), only when she needs to go; pulsing red when it is strong */
+/* THE BATHROOM BUTTON (Joshua, 2026-11-19): left of the gear, only when she needs to go; pulsing red when it is strong */
 .gd-bathroom {
   position: absolute;
-  right: calc(var(--safe-right) + 116px);
+  right: calc(var(--safe-right) + 64px);
   top: calc(var(--safe-top) + 12px);
   width: 44px;
   height: 44px;

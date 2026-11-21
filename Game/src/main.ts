@@ -19,7 +19,6 @@ import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
-import { OtherDetail } from './heroine/fast/otherDetail';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -112,16 +111,14 @@ type GameHeroine = HeroineBody & {
  * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
  * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false): Promise<GameHeroine> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
-  if (asked.get('heroine') === 'standin' && !onlyFast) return createStandInHeroine();
+  if (asked.get('heroine') === 'standin') return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
   // (her outfit: the one asked for -- at the start the address's ?look=, else the one chosen in Settings
   //  (heroineSettings.ts OUTFIT_CHOICES); after a change in Settings, the new one: see `changeOutfit`)
   const look = lookKey(outfit);
-  // (who: the look's own name, Blaze or John)
-  const who = LOOKS[look]?.name ?? 'Blaze';
-  say(`Loading ${who}…`);
+  say('Loading Blaze…');
   if (settings.body === 'performance') {
     try {
       const { createFastHeroine } = await import('./heroine/fast/fastHeroine');
@@ -140,15 +137,12 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         hairStrands: settings.hairStrands !== 'off',
         skinTexture: settings.skinTexture !== 'off',
         faceLocks: settings.faceLocks === 'on',
-        onProgress: (stage) => say(`Loading ${who}: ${stage}…`),
+        onProgress: (stage) => say(`Loading Blaze: ${stage}…`),
       });
     } catch (error) {
-      // (John is made only as a fast body: there is no second builder's room for him)
-      if (onlyFast) throw error;
       console.error('The fast heroine could not be made; trying the Character Builder\'s own room.', error);
     }
   }
-  if (onlyFast) throw new Error(`${who} needs Body: Performance`);
   try {
     const { createBuilderHeroine } = await import('./heroine/builderHeroine');
     return await createBuilderHeroine({
@@ -400,33 +394,6 @@ async function start(): Promise<void> {
    * with no new hand-over: they all ask `heroine.hands`, `heroine.root` and so on afresh each time.
    */
   let bodyNow: GameHeroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
-  /**
-   * THE TWO OF THEM (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character to change and switch
-   * between like how Beyond Extinction does it"). Blaze and John, Blaze's husband (heroine/looks/john.ts), each with
-   * a body, their own vitals, where they stand and which way they face. The one being PLAYED is `bodyNow` (so
-   * everything that works through `heroine` below works with them); the other stands where they were left, breathing,
-   * their vitals running on (`swapCharacter`, and each frame in the loop). Made just below, once their vitals exist.
-   */
-  interface Character {
-    readonly name: string;
-    body: GameHeroine;
-    readonly vitals: HeroineVitals;
-    /** Their own way of facing while they are not played (the player's `turn` goes with whoever is played). */
-    readonly ownTurn: BodyTurn;
-    /** Where they stand and face while they are not played (metres, radians). */
-    x: number; z: number; yaw: number;
-  }
-  let john: Character | null = null, blaze: Character | null = null;
-  /** Who is being played now (Blaze until the first swap). */
-  let playing: Character | null = null;
-  /** Whoever is NOT being played (null while John is not in the game). */
-  const bystander = (): Character | null => (!john || !blaze ? null : playing === john ? blaze : john);
-  const bystanderBody = (): GameHeroine | null => bystander()?.body ?? null;
-  /** The detail of the one standing by: the player's within 20 m on a phone (always on a computer), then down to 1 %
-   *  over 10 m (heroine/fast/otherDetail.ts). */
-  const otherDetail = new OtherDetail();
-  /** Blaze is the one being played (always, without John). */
-  const playingBlaze = (): boolean => !john || playing !== john;
   const heroine: GameHeroine = new Proxy({} as GameHeroine, {
     get(_stand, key) {
       const value = (bodyNow as unknown as Record<PropertyKey, unknown>)[key];
@@ -447,8 +414,6 @@ async function start(): Promise<void> {
     keyLight.castShadow = realShadows;
     shadowFloor.visible = realShadows && !island; // (on the island the ground itself takes her shadow)
     heroine.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
-    // (and whoever is not being played)
-    bystanderBody()?.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
     // (materials are compiled with or without shadows: they are made again for the new setting)
     scene.traverse((node) => { const m = (node as THREE.Mesh).material; if (m) for (const one of Array.isArray(m) ? m : [m]) one.needsUpdate = true; });
   };
@@ -585,35 +550,7 @@ async function start(): Promise<void> {
   // and heart takes into account. Her body shows them (she breathes faster and deeper after a run), and so does
   // the card along the top of the screen.
   const pace = new Pace();
-  let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base };
-  playing = blaze;
-
-  // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
-  // green). Only as a fast body (Body: Performance); if he cannot be made, she plays on alone (no 🔄).
-  // His vitals are his own and never pregnant: the builder's vitals are the same model for both bodies, its organs
-  // laid to each (Char_B actor/maleOrgans.ts: his bladder and prostate, no womb). His age is a guess until the story
-  // says (30).
-  if (graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
-    try {
-      const body = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), 'john', true);
-      // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
-      //  and at first he was put right on it)
-      const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base };
-      john.ownTurn.reset(john.yaw);
-      body.setFacing?.(john.ownTurn);
-      if (island) body.setGround?.(island.standAt);
-      body.setPosition(x, z, groundUnder(x, z));
-      body.setYaw(john.yaw);
-      body.setSkinShine?.(skinOilyOf(graphics.skinShine));
-      scene.add(body.root);
-      applyShadows();
-    } catch (error) {
-      console.error('John could not be made; Blaze plays on alone.', error);
-      john = null;
-    }
-  }
+  const vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
 
   // HER PREGNANCY, to test (Joshua, 2026-11-19; heroine/pregnancyPlan.ts): on or off and her belly, from Settings (as
   // her look has them until changed), the week off her own chart, and the time lapse from week 12 to her delivery week.
@@ -621,12 +558,7 @@ async function start(): Promise<void> {
   const plan = new PregnancyPlan((ALL_LOOKS[tableLook]?.body as { pregnancy?: unknown } | undefined)?.pregnancy);
   if (graphics.pregnant === null) graphics.pregnant = plan.lookPregnant ? 'on' : 'off';
   if (graphics.belly === null) graphics.belly = Math.round(heroine.bellyNow?.() ?? plan.start);
-  /** Pregnancy is on in Settings (it is BLAZE's: her body, her vitals). */
-  const herPregnant = (): boolean => graphics.pregnant === 'on';
-  /** The one being PLAYED is pregnant: Blaze, with Pregnancy on (her crawl, her carrying, her week chip). */
-  const pregnantNow = (): boolean => herPregnant() && playingBlaze();
-  /** Blaze's body, whether or not she is played. */
-  const herBody = (): GameHeroine => (blaze ? blaze.body : heroine);
+  const pregnantNow = (): boolean => graphics.pregnant === 'on';
 
   // HER STANCE (Joshua, 2026-11-20: "Walk while crouch, crawling on belly (however, once pregnancy is on, make her crawl
   // on all four with weapons holstered)"; heroine/fast/groundPose.ts). The CROUCH and PRONE buttons: CROUCH crouches or
@@ -640,14 +572,13 @@ async function start(): Promise<void> {
   /** Her belly and pregnancy as Settings (or the time lapse) have them, on her body, her live body and her vitals. */
   const applyPregnancy = (): void => {
     const belly = graphics.belly ?? plan.start;
-    // (always on BLAZE, whoever is played)
-    herBody().setPregnant?.(herPregnant());
-    herBody().setBelly(belly);
-    (blaze?.vitals ?? vitals).setWeeks(herPregnant() ? plan.weekFor(belly) : 0);
+    heroine.setPregnant?.(pregnantNow());
+    heroine.setBelly(belly);
+    vitals.setWeeks(pregnantNow() ? plan.weekFor(belly) : 0);
   };
   applyPregnancy();
   /** Her belly as Settings shows it: the percent and the week it stands for (or "not pregnant"). */
-  const bellyText = (percent: number): string => herPregnant() ? `${percent}% · ${weekText(plan.weekFor(percent))}` : `${percent}% · not pregnant`;
+  const bellyText = (percent: number): string => pregnantNow() ? `${percent}% · ${weekText(plan.weekFor(percent))}` : `${percent}% · not pregnant`;
   const vitalsPanel = new VitalsPanel();
   // (Settings -> HUD: the list or the gauges, and the units; both change while she plays)
   vitalsPanel.setStyle(graphics.vitalsStyle);
@@ -785,7 +716,6 @@ async function start(): Promise<void> {
     eating.seconds = Math.max(eating.seconds, 0) + portion.seconds;
   };
   vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
-  if (john) john.vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
 
   const domeDebug = (action: DomeDebugAction) => {
     if (action === 'wet') { heroine.soakSkin?.(); wetFor = 0; return; }
@@ -902,7 +832,6 @@ async function start(): Promise<void> {
     // 4. the new body, as she was
     outfitNow = wanted || null;
     bodyNow = await createHeroine(renderer, scene, graphics, say, outfitNow);
-    if (blaze) blaze.body = bodyNow;
     scene.add(heroine.root);
     heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
     heroine.setFacing?.(turn);
@@ -929,11 +858,7 @@ async function start(): Promise<void> {
     outfitCover.style.display = 'none';
     frozen = false;
   };
-  /** An outfit chosen in Settings while John was played: Blaze puts it on when she is played again (`swapCharacter`). */
-  let outfitPending = false;
   const changeOutfit = async (): Promise<void> => {
-    // (her outfits are BLAZE's: chosen while John is played, she changes when she is swapped back to)
-    if (!playingBlaze()) { outfitPending = true; hud.showNotice('Blaze changes when you swap back to her'); return; }
     if (outfitChanging) { outfitAgain = true; return; }
     outfitChanging = true;
     try {
@@ -943,54 +868,6 @@ async function start(): Promise<void> {
       console.error('The outfit could not be changed while playing; starting again with it.', error);
       restart();
     } finally { outfitChanging = false; }
-  };
-
-  /**
-   * 🔄 SWAP CHARACTER (Joshua, 2026-11-21, as Beyond Extinction does it): the camera, the sticks and the vitals card go
-   * to the other one; the one left stays standing where they were, their vitals running on. Asked while the one played
-   * is busy (a bar, a door, the table, a reload, the bathroom, down on the ground, winded), it waits until they are
-   * not; guns in hand are holstered first. Each keeps their own guns, belt and vitals.
-   */
-  let swapWanted = false;
-  const swapCharacter = (): void => {
-    const from = playing, to = bystander();
-    if (!from || !to) return;
-    // (busy: wait. Guns in hand: put away first. Either way it is tried again each frame until it can be done)
-    const h = heroine.hands, gunInHand = !!h && holsterUse.hasHolsters && (h.hasGun('left') || h.hasGun('right'));
-    if (!idleForChange() || stance !== 'stand' || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging || gunInHand) {
-      if (!swapWanted) hud.showNotice(gunInHand ? `${from.name} holsters first…` : `${from.name} finishes first…`);
-      if (gunInHand && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
-      if (stance !== 'stand') stance = 'stand';
-      swapWanted = true;
-      return;
-    }
-    swapWanted = false;
-    // the one left behind: where they stand now, facing their own way, standing easy
-    from.x = motion.x; from.z = motion.z; from.yaw = turn.base;
-    from.ownTurn.reset(from.yaw);
-    from.body.setFacing?.(from.ownTurn);
-    from.body.setFirstPerson(false);
-    from.body.setWinded?.(0, 0);
-    from.body.setStance?.('stand');
-    // the one now played: the player's motion, facing and vitals are theirs
-    playing = to;
-    bodyNow = to.body;
-    vitals = to.vitals;
-    limits = vitals.reading;
-    motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
-    turn.reset(to.yaw);
-    to.body.setFacing?.(turn);
-    // (the one played takes the Detail chosen in Settings; the one left follows the player's level by distance)
-    to.body.setDetail?.(graphics.detail);
-    otherDetail.reset();
-    bathroomLeft = 0;
-    applyView();
-    holsterUse.reseat();
-    tableUse.reseat();
-    hud.setSwap(from.name);
-    hud.showNotice(`Now playing: ${to.name}`);
-    // (an outfit chosen for Blaze while John was played is put on her now)
-    if (to === blaze && outfitPending) { outfitPending = false; void changeOutfit(); }
   };
 
   const hud = new Hud(uiHost, controls, {
@@ -1023,19 +900,16 @@ async function start(): Promise<void> {
       }
       // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
       // heroine, so the game starts again with it.
-      // (the target frame rate and skin shine are EVERYONE'S, Blaze's and John's, played or standing by: Joshua,
-      //  2026-11-21, "link up him to the same detail %"; before, only the one played took a change)
-      // (Detail is the PLAYER'S: the one standing by follows the player's level by distance, otherDetail.ts)
       if (key === 'detail') heroine.setDetail?.(graphics.detail);
-      else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
+      else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();
-      else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
-      else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
+      else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
+      else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
       else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
@@ -1060,7 +934,6 @@ async function start(): Promise<void> {
     onDomeDebug: domeDebug,
     onIntake: intake,
     onBathroom: () => { if (bathroomLeft <= 0) intake('bathroom'); },
-    onSwap: () => swapCharacter(),
     // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
     onPrompt: (which) => {
       if (promptIs === 'table') useTable(which);
@@ -1094,8 +967,6 @@ async function start(): Promise<void> {
     onCrouch: () => { stance = stance === 'crouch' ? 'stand' : 'crouch'; },
     onProne: () => { stance = stance === 'down' ? 'stand' : 'down'; },
   });
-  // (🔄 shows once there is someone to swap to: John, made beside her)
-  hud.setSwap(john ? 'John' : null);
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
     {
@@ -1160,7 +1031,7 @@ async function start(): Promise<void> {
 
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake,
+    (window as unknown as Record<string, unknown>).gdm = { renderer, scene, dome, city, heroine, motion, turn, rig, controls, targets, pace, vitals, walls, table, tableUse, bars, grabUse, holsterUse, beltReload, door, doorUse, island, plan, hud, intake,
       // (for the test scripts: change her outfit as Settings does, and whether a change is running)
       changeOutfit: (key: string) => { graphics.outfit = key; saveSetting('outfit', key); return changeOutfit(); },
       outfitChanging: () => outfitChanging };
@@ -1568,23 +1439,6 @@ async function start(): Promise<void> {
     heroine.setYaw(heroine.setFacing || rig.mode !== 'first' ? turn.base : turn.head);
     heroine.setWalk(motion.speed);
     heroine.update(info);
-    // THE ONE NOT BEING PLAYED stands where they were left, breathing (their vitals, below), facing their own way
-    {
-      const other = bystander();
-      if (other) {
-        other.body.setPosition(other.x, other.z, groundUnder(other.x, other.z));
-        other.body.setYaw(other.yaw);
-        other.body.setWalk(0);
-        other.body.update(info);
-        // HIS OR HER DETAIL (Joshua, 2026-11-21; heroine/fast/otherDetail.ts): the player's own level within 20 m on a
-        // phone (always, on a computer), then stepped down to 1 % over the next 10 m
-        const playerDetail = heroine.stats?.().detail;
-        if (playerDetail !== undefined) {
-          const level = otherDetail.update(info.dt, playerDetail, Math.hypot(other.x - motion.x, other.z - motion.z));
-          if (level !== null) other.body.setDetail?.(level);
-        }
-      }
-    }
     // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)
     if (realShadows) ground.setHeroine(1e6, 1e6); else ground.setHeroine(motion.x, motion.z);
 
@@ -1795,22 +1649,11 @@ async function start(): Promise<void> {
       // (she goes once nothing is running: the table's walk, a holstering, a reload from her belt)
       if (!busyNow() && !holsterUse.busy && !beltReload.busy && !gunInHand) { mustGoNow = false; intake('bathroom'); }
     }
-    // (a swap asked for while the one played was busy, or holding guns: done as soon as they are free)
-    if (swapWanted) swapCharacter();
     // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
     wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
     const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
     vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, waterDepth: waterDepthNow, wet });
     const reading = vitals.reading;
-    // (the one not played: their vitals run on, standing still; their body breathes by them. Their needs wait for the
-    //  NPC brain: for now a full bladder is held, and their bars only show once they are played again)
-    {
-      const other = bystander();
-      if (other) {
-        other.vitals.step(dt, { speed: 0, firing: false, threat });
-        other.body.setVitals?.(other.vitals.reading);
-      }
-    }
     if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;
     heroine.setVitals?.(reading);

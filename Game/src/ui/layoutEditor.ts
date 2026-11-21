@@ -55,7 +55,6 @@ const CONTROLS = [
   { id: 'crouch', selector: '.gd-crouch', label: 'CROUCH' },
   { id: 'prone', selector: '.gd-prone', label: 'PRONE / ALL 4s' },
   { id: 'bathroom', selector: '.gd-bathroom', label: 'Bathroom (🚽)' },
-  { id: 'swap', selector: '.gd-swap', label: 'Swap character (🔄)' },
   { id: 'prompt', selector: '.gd-prompt', label: 'Prompt (grab, put down...)' },
   { id: 'ammo', selector: '.gd-ammo', label: 'Rounds' },
   { id: 'vitals', selector: '.gd-top-slot', label: 'Vitals card' },

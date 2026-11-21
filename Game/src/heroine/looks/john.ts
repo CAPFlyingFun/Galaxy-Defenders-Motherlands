@@ -3,10 +3,7 @@
 // Character Builder (export "character-john.json", 2026-11-21 12:29; kept in
 // docs/reference/characters/). The builder's MALE BASE MODEL (male-base.glb,
 // one bone more in his spine than hers), his belly at 50%, his long-sleeve
-// shirt over his tights, sneakers. HIS COLOURS (Joshua, 2026-11-21: "modify his
-// colors to be Black and Neon Green"): his shirt black with a NEON GREEN collar
-// and cuffs, his tights black (his export had them navy and charcoal); his belt
-// and guns black with neon green (looks/gear.ts `john`).
+// shirt (navy jersey) over his tights (charcoal athletic knit), sneakers.
 //
 // Joshua, 2026-11-21: "Here is the male model and Blaze's husband name will be
 // John"; both in the game at once with a swap button, as Beyond Extinction does.
@@ -56,7 +53,7 @@ export const JOHN_LOOK: HeroineLook = {
         "fabric": {
           "family": "athletic",
           "colour": 0,
-          "tint": "#141416"
+          "tint": "#232326"
         },
         "match": true,
         "trim": null,
@@ -108,11 +105,10 @@ export const JOHN_LOOK: HeroineLook = {
         "fabric": {
           "family": "jersey",
           "colour": 0,
-          "tint": "#16171a"
+          "tint": "#26324f"
         },
-        // (his collar and cuffs in NEON GREEN: "match" off gives the top's collar and bands the trim's own colour)
-        "match": false,
-        "trim": { "family": "flat", "colour": 0, "tint": "#39ff14" },
+        "match": true,
+        "trim": null,
         "stitch": 1,
         "opacity": null
       },
@@ -155,12 +151,12 @@ export const JOHN_LOOK: HeroineLook = {
       },
       "mask": ""
     },
-    // 3. THE GAP AT HIS CHEST FILLED IN, in his shirt's own black jersey (painted by code, below). The builder's drawn
+    // 3. THE GAP AT HIS CHEST FILLED IN, in his shirt's own navy jersey (painted by code, below). The builder's drawn
     //    tops leave the front of the chest between the breasts to the strip it lays across her cleavage; on him that
     //    strip was baked as a patch on his chest and a spike down between his legs, so it is left out (bakeLook.ts)
     //    and the gap is filled as her high-necked catsuits' is (catsuit.ts `fillCleavage`), up to his crew neck.
     {
-      "choice": { "fabric": { "family": "jersey", "colour": 0, "tint": "#16171a" }, "match": true, "trim": null, "stitch": 1, "opacity": null },
+      "choice": { "fabric": { "family": "jersey", "colour": 0, "tint": "#26324f" }, "match": true, "trim": null, "stitch": 1, "opacity": null },
       "detail": { "mode": "auto", "material": null, "override": { "nipple": 0.45, "navel": 0.8 } },
       "template": null,
       "mask": ""

@@ -19,6 +19,7 @@ import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
+import { OtherDetail } from './heroine/fast/otherDetail';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -421,6 +422,9 @@ async function start(): Promise<void> {
   /** Whoever is NOT being played (null while John is not in the game). */
   const bystander = (): Character | null => (!john || !blaze ? null : playing === john ? blaze : john);
   const bystanderBody = (): GameHeroine | null => bystander()?.body ?? null;
+  /** The detail of the one standing by: the player's within 20 m on a phone (always on a computer), then down to 1 %
+   *  over 10 m (heroine/fast/otherDetail.ts). */
+  const otherDetail = new OtherDetail();
   /** Blaze is the one being played (always, without John). */
   const playingBlaze = (): boolean => !john || playing !== john;
   const heroine: GameHeroine = new Proxy({} as GameHeroine, {
@@ -976,6 +980,9 @@ async function start(): Promise<void> {
     motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
     turn.reset(to.yaw);
     to.body.setFacing?.(turn);
+    // (the one played takes the Detail chosen in Settings; the one left follows the player's level by distance)
+    to.body.setDetail?.(graphics.detail);
+    otherDetail.reset();
     bathroomLeft = 0;
     applyView();
     holsterUse.reseat();
@@ -1016,9 +1023,10 @@ async function start(): Promise<void> {
       }
       // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
       // heroine, so the game starts again with it.
-      // (detail and the target frame rate are EVERYONE'S, Blaze's and John's, played or standing by: Joshua, 2026-11-21,
-      //  "link up him to the same detail %"; before, only the one played took a change)
-      if (key === 'detail') { for (const c of [blaze, john]) c?.body.setDetail?.(graphics.detail); }
+      // (the target frame rate and skin shine are EVERYONE'S, Blaze's and John's, played or standing by: Joshua,
+      //  2026-11-21, "link up him to the same detail %"; before, only the one played took a change)
+      // (Detail is the PLAYER'S: the one standing by follows the player's level by distance, otherDetail.ts)
+      if (key === 'detail') heroine.setDetail?.(graphics.detail);
       else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
@@ -1568,6 +1576,13 @@ async function start(): Promise<void> {
         other.body.setYaw(other.yaw);
         other.body.setWalk(0);
         other.body.update(info);
+        // HIS OR HER DETAIL (Joshua, 2026-11-21; heroine/fast/otherDetail.ts): the player's own level within 20 m on a
+        // phone (always, on a computer), then stepped down to 1 % over the next 10 m
+        const playerDetail = heroine.stats?.().detail;
+        if (playerDetail !== undefined) {
+          const level = otherDetail.update(info.dt, playerDetail, Math.hypot(other.x - motion.x, other.z - motion.z));
+          if (level !== null) other.body.setDetail?.(level);
+        }
       }
     }
     // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)

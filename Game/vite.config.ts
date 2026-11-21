@@ -213,11 +213,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL('./', self.location).pathname)) return;
 
   // A page: the network first (so a new version arrives), the stored page when there is no signal.
-  // (ASKED PAST THE BROWSER'S OWN CACHE, 'no-store': GitHub Pages lets a browser keep a page 10 minutes, and Joshua's
-  //  iPhone opened v0.2.127's loading screen, then an older page with v0.2.126's code: 2026-11-21. The code files have
-  //  new names each build, so only the page itself must never be an old copy.)
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request, { cache: 'no-store' }).then((response) => {
+    event.respondWith(fetch(request).then((response) => {
       const copy = response.clone();
       // (the worker is kept alive until the copy is stored; a full store is not a reason to fail the page)
       event.waitUntil(caches.open(APP).then((cache) => cache.put(request, copy)).catch(() => {}));

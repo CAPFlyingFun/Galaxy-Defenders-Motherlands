@@ -17,10 +17,9 @@ import { isUpright, keepLandscape, onStageResize, refitNow } from './core/orient
 import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
-import { restartGame, setRestart } from './core/restart';
+import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
-import { onGlTrouble, watchGlTrouble } from './core/glTrouble';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -252,13 +251,6 @@ const LOOK_STICK_SPEED = 520; // the camera stick pushed fully over turns the vi
 const AIM_RANGE = 150; // first person aims at a point this far along the line of sight
 const SHADOW_FLOOR_RADIUS = 4; // metres: the patch of ground round her feet that can show her real shadow
 const DEBUG_KEY = 'gdm.debug'; // "Show FPS and test tools" in Settings, remembered on this device
-/** JOHN LEFT OUT (Settings -> TEST TOOLS -> John on/off; and after a start that closed with him in it: see `start`). */
-const JOHN_OFF_KEY = 'gdm.johnOff';
-/** A start with John in it: 'loading' until the game has run 30 s with him, then 'ok'. */
-const JOHN_START_KEY = 'gdm.johnStart';
-/** JOHN'S ONE DETAIL LEVEL (percent): his levels all come out about 88 K triangles (the male body's layout does not
- *  lighten), so he is held at this one instead of building more copies of himself as Auto live moves. */
-const JOHN_DETAIL = 30;
 
 async function start(): Promise<void> {
   const host = document.getElementById('app');
@@ -298,8 +290,6 @@ async function start(): Promise<void> {
   // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
   const graphics = loadHeroineSettings();
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  // (a shader the phone will not build, or the graphics lost, said on screen: core/glTrouble.ts)
-  watchGlTrouble(renderer.domElement);
   // (if loading fails part-way and the splash's "tap to try again" reloads, the graphics chip is let go of first;
   //  once the game is up, `restart` below takes over with the full clean-up)
   setRestart(() => {
@@ -425,15 +415,6 @@ async function start(): Promise<void> {
     readonly ownTurn: BodyTurn;
     /** Where they stand and face while they are not played (metres, radians). */
     x: number; z: number; yaw: number;
-    /** THEIR OWN CAMERA, kept while they are not played (Joshua, 2026-11-21: "each one should save independently and on
-     *  swap back, will resume the same last heading"): its heading and tip (radians) and the view it was in; null until
-     *  they have been played (then the camera starts looking the way they face). */
-    cam: { yaw: number; pitch: number; mode: string } | null;
-    /** THEIR OWN POSE, held while they are not played and taken up again (Joshua, 2026-11-21: "hold poses and last
-     *  actions"): standing, crouched or down (prone, or all fours for Blaze when pregnant), and which guns are holstered
-     *  (the others stay in their hands). */
-    stance: 'stand' | 'crouch' | 'down';
-    holstered: { left: boolean; right: boolean };
   }
   let john: Character | null = null, blaze: Character | null = null;
   /** Who is being played now (Blaze until the first swap). */
@@ -605,7 +586,7 @@ async function start(): Promise<void> {
   // the card along the top of the screen.
   const pace = new Pace();
   let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base, cam: null, stance: 'stand', holstered: { left: true, right: true } };
+  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base };
   playing = blaze;
 
   // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
@@ -613,58 +594,24 @@ async function start(): Promise<void> {
   // His vitals are his own and never pregnant: the builder's vitals are the same model for both bodies, its organs
   // laid to each (Char_B actor/maleOrgans.ts: his bladder and prostate, no womb). His age is a guess until the story
   // says (30).
-  /** Why John could not be made, if he could not (shown in a notice once the HUD is up). */
-  let johnFailed: string | null = null;
-  // JOHN LEFT OUT AFTER A CRASH (Joshua, 2026-11-21, v0.2.129: "it loads once... resets another time... then crashes"):
-  // a start with him in is written down (JOHN_START_KEY 'loading') and marked 'ok' once the game has run 30 s. Found
-  // still 'loading', the last start closed with him in it (an iPhone closes a page that runs out of memory and
-  // reloads it, which closed too): he is left out (JOHN_OFF_KEY) until Settings -> TEST TOOLS -> John on, or ?john=on.
-  const johnAsked = new URLSearchParams(location.search).get('john');
-  let johnOff = false;
-  try {
-    johnOff = localStorage.getItem(JOHN_OFF_KEY) === '1';
-    if (johnAsked === 'on') { johnOff = false; localStorage.removeItem(JOHN_OFF_KEY); }
-    else if (!johnOff && localStorage.getItem(JOHN_START_KEY) === 'loading') {
-      johnOff = true;
-      localStorage.setItem(JOHN_OFF_KEY, '1');
-      johnFailed = 'left out: the game closed with him in it last time (TEST TOOLS: John on)';
-    }
-    localStorage.removeItem(JOHN_START_KEY);
-  } catch { /* private browsing: nothing remembered */ }
-  if (graphics.body === 'performance' && johnAsked !== 'off' && !johnOff) {
-    try { localStorage.setItem(JOHN_START_KEY, 'loading'); } catch { /* not remembered */ }
-    setTimeout(() => { try { if (john) localStorage.setItem(JOHN_START_KEY, 'ok'); } catch { /* not remembered */ } }, 30000);
+  if (graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
     try {
       const body = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), 'john', true);
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base, cam: null, stance: 'stand', holstered: { left: true, right: true } };
+      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base };
       john.ownTurn.reset(john.yaw);
       body.setFacing?.(john.ownTurn);
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));
       body.setYaw(john.yaw);
       body.setSkinShine?.(skinOilyOf(graphics.skinShine));
-      // (HELD AT ONE DETAIL LEVEL: his levels do not lighten (about 88 K triangles at every one, the male body's layout),
-      //  so following Auto live only built and kept more copies of him for nothing; memory on the iPhone, v0.2.129)
-      body.setDetail?.(JOHN_DETAIL);
-      // (his guns start in their holsters, as hers do (holsterUse.ts `startHolstered`): put straight into their seats,
-      //  as holsterUse `reseat` does; `john.holstered` says so)
-      for (const hand of ['left', 'right'] as const) {
-        const seat = body.hands?.holster(hand);
-        if (!seat) { john.holstered[hand] = false; continue; }
-        const gun = body.hands!.releaseGun(hand, seat.bone);
-        gun.matrix.copy(seat.seat);
-        gun.matrixWorldNeedsUpdate = true;
-      }
       scene.add(body.root);
       applyShadows();
     } catch (error) {
       console.error('John could not be made; Blaze plays on alone.', error);
       john = null;
-      // (said on screen too, once the HUD is up: v0.2.126 left him out without a word on Joshua's iPhone)
-      johnFailed = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -842,12 +789,6 @@ async function start(): Promise<void> {
 
   const domeDebug = (action: DomeDebugAction) => {
     if (action === 'wet') { heroine.soakSkin?.(); wetFor = 0; return; }
-    // (John on or off: written down, and the game started again with or without him)
-    if (action === 'john') {
-      try { if (john) localStorage.setItem(JOHN_OFF_KEY, '1'); else { localStorage.removeItem(JOHN_OFF_KEY); localStorage.removeItem(JOHN_START_KEY); } } catch { /* not remembered */ }
-      restartGame();
-      return;
-    }
     if (action === 'hit') sectionInView().damage(25);
     else if (action === 'shatter') sectionInView().damage(SECTION_MAX_HP);
     else dome.repairAll();
@@ -1006,34 +947,31 @@ async function start(): Promise<void> {
 
   /**
    * 🔄 SWAP CHARACTER (Joshua, 2026-11-21, as Beyond Extinction does it): the camera, the sticks and the vitals card go
-   * to the other one; the one left stays where they were, their vitals running on. Asked while the one played is in the
-   * middle of something (a bar, a door, the table, a reload, a holster or draw, the bathroom, winded), it waits until
-   * that is done. EACH HOLDS THEIR POSE (Joshua, 2026-11-21: "hold poses and last actions"): crouched or down they stay
-   * so, guns in hand stay in hand, and swapped back to they take it all up again; their camera too (`cam`).
+   * to the other one; the one left stays standing where they were, their vitals running on. Asked while the one played
+   * is busy (a bar, a door, the table, a reload, the bathroom, down on the ground, winded), it waits until they are
+   * not; guns in hand are holstered first. Each keeps their own guns, belt and vitals.
    */
   let swapWanted = false;
   const swapCharacter = (): void => {
     const from = playing, to = bystander();
     if (!from || !to) return;
-    // (in the middle of something: wait, tried again each frame until it is done)
-    if (!idleForChange() || holsterUse.busy || beltReload.busy || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging) {
-      if (!swapWanted) hud.showNotice(`${from.name} finishes first…`);
+    // (busy: wait. Guns in hand: put away first. Either way it is tried again each frame until it can be done)
+    const h = heroine.hands, gunInHand = !!h && holsterUse.hasHolsters && (h.hasGun('left') || h.hasGun('right'));
+    if (!idleForChange() || stance !== 'stand' || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging || gunInHand) {
+      if (!swapWanted) hud.showNotice(gunInHand ? `${from.name} holsters first…` : `${from.name} finishes first…`);
+      if (gunInHand && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+      if (stance !== 'stand') stance = 'stand';
       swapWanted = true;
       return;
     }
     swapWanted = false;
     // the one left behind: where they stand now, facing their own way, standing easy
     from.x = motion.x; from.z = motion.z; from.yaw = turn.base;
-    // (and where the camera looked while they were played, to be looked again when they are played again)
-    from.cam = { yaw: rig.yaw, pitch: rig.pitch, mode: rig.mode };
     from.ownTurn.reset(from.yaw);
     from.body.setFacing?.(from.ownTurn);
     from.body.setFirstPerson(false);
     from.body.setWinded?.(0, 0);
-    // (their pose is HELD: their body keeps the stance it was given, their guns stay where they are; written down here
-    //  so it is taken up again when they are played)
-    from.stance = stance;
-    from.holstered = { left: holsterUse.holstered.left, right: holsterUse.holstered.right };
+    from.body.setStance?.('stand');
     // the one now played: the player's motion, facing and vitals are theirs
     playing = to;
     bodyNow = to.body;
@@ -1042,19 +980,10 @@ async function start(): Promise<void> {
     motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
     turn.reset(to.yaw);
     to.body.setFacing?.(turn);
-    // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: it kept the other one's heading, up
-    // to 180 degrees off them), at once; the first time, the way they face. The tip only if it was in this same view
-    // (first and third person tip from different starting points).
-    if (to.cam) rig.faceAtOnce(to.cam.yaw, to.cam.mode === rig.mode ? to.cam.pitch : undefined);
-    else rig.faceAtOnce(to.yaw);
     // (the one played takes the Detail chosen in Settings; the one left follows the player's level by distance)
-    to.body.setDetail?.(to === john ? JOHN_DETAIL : graphics.detail);
+    to.body.setDetail?.(graphics.detail);
     otherDetail.reset();
     bathroomLeft = 0;
-    // (their own pose taken up again: their stance, and which of their guns are holstered)
-    stance = to.stance;
-    holsterUse.holstered.left = to.holstered.left;
-    holsterUse.holstered.right = to.holstered.right;
     applyView();
     holsterUse.reseat();
     tableUse.reseat();
@@ -1097,7 +1026,7 @@ async function start(): Promise<void> {
       // (the target frame rate and skin shine are EVERYONE'S, Blaze's and John's, played or standing by: Joshua,
       //  2026-11-21, "link up him to the same detail %"; before, only the one played took a change)
       // (Detail is the PLAYER'S: the one standing by follows the player's level by distance, otherDetail.ts)
-      if (key === 'detail') { if (playingBlaze()) heroine.setDetail?.(graphics.detail); }
+      if (key === 'detail') heroine.setDetail?.(graphics.detail);
       else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
@@ -1167,8 +1096,6 @@ async function start(): Promise<void> {
   });
   // (🔄 shows once there is someone to swap to: John, made beside her)
   hud.setSwap(john ? 'John' : null);
-  if (johnFailed) hud.showNotice(johnFailed.startsWith('left out') ? `John ${johnFailed}` : `John couldn't load: ${johnFailed.slice(0, 60)}`, 10);
-  onGlTrouble((line) => hud.showNotice(line, 12));
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
     {
@@ -1652,8 +1579,7 @@ async function start(): Promise<void> {
         // HIS OR HER DETAIL (Joshua, 2026-11-21; heroine/fast/otherDetail.ts): the player's own level within 20 m on a
         // phone (always, on a computer), then stepped down to 1 % over the next 10 m
         const playerDetail = heroine.stats?.().detail;
-        // (John is held at JOHN_DETAIL: only Blaze, standing by, follows the player)
-        if (playerDetail !== undefined && other !== john) {
+        if (playerDetail !== undefined) {
           const level = otherDetail.update(info.dt, playerDetail, Math.hypot(other.x - motion.x, other.z - motion.z));
           if (level !== null) other.body.setDetail?.(level);
         }

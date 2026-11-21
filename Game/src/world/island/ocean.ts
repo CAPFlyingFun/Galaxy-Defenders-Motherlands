@@ -166,8 +166,11 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
           float ground = -8.0 + enc * 10.0;
           float camDist = distance(vOceanWpos, cameraPosition);
           float f = clamp((camDist - 350.0) / 2650.0, 0.0, 1.0);
-          float hiddenG = mix(-0.5, -2.8, f);
-          float visibleG = mix(-1.8, -5.5, f);
+          // (NEAR HER it is full by half a metre deep, not 1.4 m: Joshua, 2026-11-20, of the lagoon behind the beach at
+          //  the river's mouth, which is this same sea at its level: "that water is too transparent it stopped me before
+          //  I thought I was in the water"; she stops wading at 0.6 m. The sea level is -0.4: it shows from 5 cm deep.)
+          float hiddenG = mix(-0.45, -2.8, f);
+          float visibleG = mix(-0.9, -5.5, f);
           float t = clamp((ground - hiddenG) / (visibleG - hiddenG), 0.0, 1.0);
           diffuseColor.a *= t * t * (3.0 - 2.0 * t);
           if (diffuseColor.a < 0.01) discard;

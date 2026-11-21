@@ -104,6 +104,7 @@ const CASCADE_LEN = 64; // m — whitewater streak length along flow, spanning t
 const CASCADE_STATIONS = 12; // vertices along the streak (smooth follow of the bed)
 const CASCADE_SCROLL = 0.55; // v/s — fast tumble so it reads as rapids, not still water
 const CASCADE_LIFT = 0.06; // m above the ribbon surface so the foam sits on top
+const CASCADE_MIN_SLOPE = 0.03; // only where the river falls at least 3 m in 100 m (rapids); flat water gets none
 
 /**
  * Ocean-family water material (see KauaiStreamScene.makeOceanMaterial).
@@ -466,6 +467,7 @@ interface Crossing {
   dx: number; // unit flow direction (downstream)
   dz: number;
   w: number; // river width here (m)
+  slope: number; // how steeply the river falls here (metres down per metre along)
 }
 
 /** Every tile-boundary crossing along one run, with the local flow direction. */
@@ -479,16 +481,17 @@ function runCrossings(run: HydroRiver): Crossing[] {
     let dx = b[0] - a[0];
     let dz = b[2] - a[2];
     const len = Math.hypot(dx, dz) || 1;
+    const slope = Math.abs(b[1] - a[1]) / len;
     dx /= len;
     dz /= len;
     for (const B of GRID_LINES) {
       if ((a[0] - B) * (b[0] - B) < 0) {
         const t = (B - a[0]) / (b[0] - a[0]);
-        out.push({ x: B, z: a[2] + t * (b[2] - a[2]), dx, dz, w });
+        out.push({ x: B, z: a[2] + t * (b[2] - a[2]), dx, dz, w, slope });
       }
       if ((a[2] - B) * (b[2] - B) < 0) {
         const t = (B - a[2]) / (b[2] - a[2]);
-        out.push({ x: a[0] + t * (b[0] - a[0]), z: B, dx, dz, w });
+        out.push({ x: a[0] + t * (b[0] - a[0]), z: B, dx, dz, w, slope });
       }
     }
   }
@@ -507,6 +510,10 @@ function buildCascades(
 ): void {
   for (const run of rivers) {
     for (const c of runCrossings(run)) {
+      // ONLY WHERE THE RIVER REALLY FALLS (Joshua, 2026-11-20, on the beach: the water "drawn in SPLOTCHES (a pale flat
+      // patch sits on the turquoise)"): on a flat lowland river or lagoon the streak was a 64 m pale, straight-edged
+      // sheet lying on calm water. There the two tiles' water meets at the same level anyway, so no foam is needed.
+      if (c.slope < CASCADE_MIN_SLOPE) continue;
       const px = -c.dz; // perpendicular to flow (XZ)
       const pz = c.dx;
       const halfW = Math.min(Math.max(c.w * 0.6, 3), 14);

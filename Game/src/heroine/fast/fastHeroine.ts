@@ -1486,7 +1486,7 @@ if (uHideHead > 0.5) {
         const yaw = headYaw;
         tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
         // (looking down at her belly her neck bends further than it does otherwise: LOOK_TIP_MOST)
-        const most = HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * Math.max(looking, windedS);
+        const most = Math.max(HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * looking, HEAD_TIP_MOST + (WINDED.headDownMost * (Math.PI / 180) - HEAD_TIP_MOST) * windedS);
         const angle = Math.max(-most, Math.min(most, tip));
         for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, angle * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       }

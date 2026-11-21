@@ -299,8 +299,9 @@ use the game's single copy of three.js.
   WINDED (Joshua, 2026-11-20; groundPose.ts `WINDED`, input/pace.ts `windedHoldSeconds` now 10): bent over 40 degrees
   (lowerBody.ts `bendOver`: most at her hips, leaning in to 60 if her hands fall short), a deeper squat (Joshua: "a
   slight more squat so her hands are closer to her knee"; hips down 0.36 of her leg, knees out round her belly), both
-  palms (guns and all) on her thighs 7 cm above her knees, her head down 50 more at her feet ("look more at her feet"); eased in 0.6 s, back up over the hold's last 1 s; no aiming or firing; first
-  person the view tips down to 75 degrees unless turned. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  palms (guns and all) on her thighs 7 cm above her knees, her head down 50 more at her feet ("look more at her feet"; 70 more, to 75 at most: 50 was "too high up"); eased in 0.6 s, back up over the
+  hold's last 1 s; no aiming or firing; first person the view tips down to 85 degrees (her chest, belly and feet)
+  unless turned. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all
@@ -310,9 +311,12 @@ use the game's single copy of three.js.
   (poles, door, clips, belly) instead of one guess. Blaze: finger bones 7-11 / 6-8 / 5.5-7.5 mm, thumb 16 / 15, palm 15.
   Logged as "[hand pads]" in the console.
 - (The heroine lab shows no body at detail under 100 with `live=off`: use `detail=100` for test pictures.)
-- WATER TO FIX, NOTED (Joshua, 2026-11-20, screenshots on the beach): the river/lagoon water is drawn in SPLOTCHES (a
-  pale flat patch sits on the turquoise), and it is too see-through: she was stopped by the sea's edge before he could
-  tell she was in water. Come back after the movement work.
+- THE LAGOON BEHIND THE BEACH (Joshua, 2026-11-20, screenshots: "different splotches... that water is too transparent
+  it stopped me before I thought I was in the water"; "the ocean was fine, it was the closest inland water"): the
+  Wailua river's mouth is low ground at sea level, drawn by the SEA (ocean.ts), and a river cascade streak lay across it
+  where it crosses a tile seam (x = -290). Cascades now only where a river falls 3 m in 100 (hydro.ts
+  `CASCADE_MIN_SLOPE`): on flat water the 64 m streak was the pale straight-edged patch. Near the camera the sea is full
+  by half a metre deep (was 1.4 m; `hiddenG`/`visibleG`), so the lagoon reads as water where she wades.
 - OUTFIT PICTURES IN SETTINGS (Joshua, 2026-11-20: "a little thumbnail... bake the images at 10%, 50%, 80%, 120%, and
   150% and it will pick the closest based on the belly slider"): `public/thumbs/<look>-<belly>.webp` (135, 120 x 200,
   about 4 KB each), made by `Game/scripts/make_outfit_thumbs.py` from the built game; Settings -> Outfit is a grid of

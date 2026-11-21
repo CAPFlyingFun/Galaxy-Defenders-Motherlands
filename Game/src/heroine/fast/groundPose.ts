@@ -59,9 +59,11 @@ export const WINDED = {
   fingersIn: 0.45,
   /**
    * Her head tipped down this much further than her bent back has it, degrees (Joshua: "look more at her feet which would
-   * naturally make her look at her chest/belly").
+   * naturally make her look at her chest/belly"; 50 was "too high up").
    */
-  headDown: 50,
+  headDown: 70,
+  /** ...as far as her neck bends then, degrees (her chin to her chest: Joshua, "it's too high up"). */
+  headDownMost: 75,
   /** Her thigh's front, from its bone, just above her knee, metres (her palm rests on it). */
   thighFront: 0.06,
 } as const;

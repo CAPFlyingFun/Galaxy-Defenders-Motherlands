@@ -188,10 +188,10 @@ const MANUAL_AIM_HOLD = 1.2;
 const WINDED_IN = 0.6;
 const WINDED_OUT = 1.0;
 /**
- * ...and in first person the view tips down this far with her, toward her feet, past her chest and belly (radians, 75
- * degrees: Joshua, "make her head look more at her feet"), unless the player turns it.
+ * ...and in first person the view tips down this far with her, at her chest and belly and on to her feet (radians, 85
+ * degrees: Joshua, "make her head look more at her feet"; 75 was "too high up"), unless the player turns it.
  */
-const WINDED_VIEW_PITCH = -75 * Math.PI / 180;
+const WINDED_VIEW_PITCH = -85 * Math.PI / 180;
 /**
  * HOLDING HER BELLY UP AS SHE RUNS (Joshua, 2026-11-20: "from a run and up"; "anything over 30 weeks"): on from this
  * pace level (3 is a run: most of the way there), off again below the other (a little room, so it does not flicker), and

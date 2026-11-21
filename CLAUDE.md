@@ -484,7 +484,11 @@ use the game's single copy of three.js.
   at a seventh (`health.hungerShare`, 3 days against 3 weeks); neither alone takes her under 30.
 - OUTFITS CHANGE WHILE THE GAME RUNS (Joshua, 2026-11-20: "It should freeze the screen, remove the old clothing, apply
   the new one, then unfreeze"; main.ts `changeOutfit`): Settings -> Outfit (and suit fabric, hair strands, skin depth,
-  face locks, sharp parts) no longer reload. The game freezes under a "Changing outfit" cover, waits for whatever she is
+  face locks, sharp parts, and since 2026-11-21 Live body on/off) no longer reload. NOTHING VISUAL RESTARTS THE GAME
+  (Joshua, 2026-11-21: "turning the stats on and off are causing a whole app restart which ends up crashing... It's just a
+  visual toggle"): Show full readout is shown or hidden at once (hud.ts `setDebug`; the readout is always made), the eye
+  sliders are read every frame; only Map, Body (Performance/Visual) and Skin (the Visual body's) still restart, as they
+  build a different world or kind of heroine. An outfit swap that throws part-way still falls back to a restart. The game freezes under a "Changing outfit" cover, waits for whatever she is
   doing to end (lets go of a bar or door), LETS GO OF THE OLD BODY FIRST, makes the new one where she stood (facing,
   belly, pregnancy, view, guns in hand/holster/on the table with their rounds, full pouches), then unfreezes. Everything
   holds her through ONE stand-in (`heroine`, a Proxy onto `bodyNow`), so nothing is handed over again. Her hidden live

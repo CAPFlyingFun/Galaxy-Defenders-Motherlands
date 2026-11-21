@@ -164,7 +164,9 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
  * `changeOutfit`); every other one that needs a new heroine (the Body, Light or Full, the live body) still starts the
  * game again.
  */
-const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'catsuitNeck', 'suitKnit', 'hairStrands', 'skinTexture', 'faceLocks', 'sharpParts'];
+// (and her live body on or off: the swap opens it, or lets go of it, as it makes her again: Joshua, 2026-11-21, a restart
+//  for it crashed on his iPhone)
+const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'catsuitNeck', 'suitKnit', 'hairStrands', 'skinTexture', 'faceLocks', 'sharpParts', 'liveBody'];
 
 /** How wide the portrait cover's still picture of the game is made, pixels (it is shown far smaller). */
 const SNAPSHOT_WIDTH = 480;
@@ -271,7 +273,8 @@ async function start(): Promise<void> {
   // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
   let debugRemembered = false;
   try { debugRemembered = localStorage.getItem(DEBUG_KEY) === '1'; } catch { /* private browsing: just off */ }
-  const debug = new URLSearchParams(location.search).get('debug') === '1' || debugRemembered;
+  // (`let`: "Show full readout" in Settings turns it on or off while the game runs, below)
+  let debug = new URLSearchParams(location.search).get('debug') === '1' || debugRemembered;
 
   // ---- Renderer ---------------------------------------------------------------
   // No shadows (the ground paints her shadow itself) and at most 2 device pixels
@@ -850,9 +853,11 @@ async function start(): Promise<void> {
   const hud = new Hud(uiHost, controls, {
     debug,
     onDebugChange(on) {
-      // The readout is built when the game starts, so remember the choice and start again.
+      // SHOWN OR HIDDEN AT ONCE (Joshua, 2026-11-21: "It's just a visual toggle"): it used to restart the whole game,
+      // which crashed on his iPhone. Remembered for next time; the readout is filled from the next half second.
       try { localStorage.setItem(DEBUG_KEY, on ? '1' : '0'); } catch { /* cannot remember it: nothing to do */ }
-      restart();
+      debug = on;
+      hud.setDebug(on);
     },
     graphics,
     bellyText,
@@ -886,6 +891,8 @@ async function start(): Promise<void> {
       else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
       else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
+      // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
+      else if (key === 'eyeForward' || key === 'eyeHigher') { /* live */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
       else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();

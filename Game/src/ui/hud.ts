@@ -188,10 +188,10 @@ export class Hud {
   private readonly viewName: HTMLElement;
   private readonly fireButton: HTMLElement;
   private readonly crosshair: HTMLElement;
-  private readonly readout: HTMLElement | null = null;
-  private readonly domeLabel: HTMLElement | null = null;
-  /** The box the readout and the dome test buttons are in (null when they are not shown). */
-  private readonly debugPanel: HTMLElement | null = null;
+  private readonly readout: HTMLElement;
+  private readonly domeLabel: HTMLElement;
+  /** The box the readout is in: always made, hidden while "Show full readout" is off (`setDebug`). */
+  private readonly debugPanel: HTMLElement;
   /** THE PREGNANCY rows in Settings: the belly slider and its value, and the time lapse's button; and the chip on screen. */
   private bellySlider: HTMLInputElement | null = null;
   private pregnantSelect: HTMLSelectElement | null = null;
@@ -209,13 +209,14 @@ export class Hud {
     // it. (Joshua, 2026-11-17: it used to be made last; when two more lines made it bigger it lay over the gear
     // and the view switch and caught the finger, so Settings could not be opened.) hud.css also lets a touch
     // pass straight through it: only its three buttons take one.
-    if (options.debug) {
-      const debug = element('div', 'gd-debug', this.root);
-      this.debugPanel = debug;
-      this.readout = element('pre', '', debug);
-      this.domeLabel = element('pre', '', debug);
-      // (the dome's test buttons are in Settings now, TEST TOOLS: Joshua, 2026-11-18, the corner was cluttered)
-    }
+    // SHOWN OR HIDDEN WHILE THE GAME RUNS (Joshua, 2026-11-21: turning it on or off restarted the whole game, and the
+    // restart crashed on his iPhone; "It's just a visual toggle"): it is always made, and `setDebug` shows or hides it.
+    const debug = element('div', 'gd-debug', this.root);
+    this.debugPanel = debug;
+    this.readout = element('pre', '', debug);
+    this.domeLabel = element('pre', '', debug);
+    debug.hidden = !options.debug;
+    // (the dome's test buttons are in Settings now, TEST TOOLS: Joshua, 2026-11-18, the corner was cluttered)
 
     // ---- Top middle: the time lapse's week (only while it runs; a tap stops it) -------------------------------------
     this.lapseChip = element('button', 'gd-lapse-chip', this.root);
@@ -414,7 +415,7 @@ export class Hud {
     choiceRow('Hair strands', 'hairStrands', [['On', 'on'], ['Off', 'off']], 'On: her hair drawn as strands and locks with hair\'s own banded shine; Off: as the Character Builder draws it. It changes while you play (a few seconds).');
     choiceRow('Suit fabric', 'suitKnit', [['Woven mesh (your photo)', 'weave'], ['Perforated mesh (drawn)', 'mesh']], 'The fabric drawn over the Shadow Operative catsuit. It changes while you play (a few seconds).');
     const sharpRow = choiceRow('Sharp face, bust & belly', 'sharpParts', [['On', 'on'], ['Off', 'off']], 'On: her face, bust and belly stay as fine as at 100% at every detail level; the rest of her is lightened. It changes while you play (a few seconds).');
-    choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it reloads the game.');
+    choiceRow('Live body', 'liveBody', [['On', 'on'], ['Off', 'off']], 'On: her baby, womb, organs and the rest are kept and run but not drawn (kicks show on her belly). Loads after she appears. Changing it remakes her while the game runs, as an outfit change does.');
     choiceRow('Shadows', 'shadows', [['On', 'on'], ['Off', 'off']], 'On: she casts a real shadow on the plaza.');
     element('h2', 'gd-settings-part', settings, 'COMBAT');
     choiceRow('Auto aim, fire & reload', 'autoFire', [['Auto', 'on'], ['Manual', 'off']], 'Auto: in either view she aims at targets, fires bursts and, when both guns are empty, walks to the table and reloads on her own (first person: the view follows her; drag to look away). Manual: you aim with the crosshair, hold FIRE, and press RELOAD at the table (3rd person: over her shoulder).');
@@ -646,7 +647,13 @@ export class Hud {
 
   /** The readout's text: FPS, triangles and the rest, one short line each (debug only). */
   setReadout(text: string): void {
-    if (this.readout) this.readout.textContent = text;
+    this.readout.textContent = text;
+  }
+
+  /** Show or hide the full readout ("Show full readout" in Settings), at once. */
+  setDebug(on: boolean): void {
+    this.debugPanel.hidden = !on;
+    if (on) this.placeReadout();
   }
 
   /** Which dome section the test buttons act on, and its health (debug only). */
@@ -743,7 +750,7 @@ export class Hud {
       this.slot.appendChild(this.fpsLine);
       // The readout keeps clear of whatever is put here. A "ResizeObserver" tells us whenever the screen or the
       // card changes size (the phone is turned, the card is first filled in), and the readout is placed again.
-      if (this.debugPanel && typeof ResizeObserver !== 'undefined') {
+      if (typeof ResizeObserver !== 'undefined') {
         const watch = new ResizeObserver(() => this.placeReadout());
         watch.observe(this.root);
         watch.observe(this.slot);
@@ -766,7 +773,7 @@ export class Hud {
    */
   private placeReadout(): void {
     const panel = this.debugPanel, slot = this.slot;
-    if (!panel || !slot) return;
+    if (!slot) return;
     // (Joshua's layout, 2026-11-18: her card and the FPS line are in the top left corner; the full readout goes
     //  right under them, no wider than the card's own corner)
     panel.style.left = `${slot.offsetLeft}px`;

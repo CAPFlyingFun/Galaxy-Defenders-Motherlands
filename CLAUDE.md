@@ -547,8 +547,32 @@ use the game's single copy of three.js.
   `vitalsPanel.ts`): a fifth bar on her vitals card, her bladder (of the builder's 600 mL) or rectum (of 300 mL),
   whichever is fuller. Grey; AMBER at the urge (bladder 300 mL, rectum 150), RED and pulsing when strong (bladder 500,
   rectum 240; the builder's `BLADDER.urgeMl`, `RECTUM`). From the urge a 🚽 button shows left of the gear (pulsing red
-  when strong; movable in Edit controls): it does the 5 s squat. Not automatic (no accidents) until the NPC brain.
+  when strong; movable in Edit controls): it does the squat, 10 s (Joshua, 2026-11-21: "someone rarely ever goes in
+  5s, lol"), still where she is, no aiming. Late in a pregnancy her baby presses on her bladder: it holds up to 30% less
+  (`bladderSqueeze`), so every mark comes sooner. THE ETA (Joshua, 2026-11-21: "once it gets to 85% full, will show an
+  ETA until you will go regardless of what's going on"): from 85% the 🚽 stat shows the real m:ss until full, from
+  how fast it has been filling (`bathroomEta`, smoothed 8 s); at 0:00 she GOES WHATEVER SHE IS DOING (main.ts
+  `mustGoNow`): lets go of a bar or door, drops what she was about to do, holsters her guns, stands, squats 10 s.
   To test: FOOD & DRINK -> Need to go (350 mL) / Must go now (520 mL).
+- HER VITALS CARD, TWO LAYOUTS (Joshua, 2026-11-21, approved step by step as drawings; `vitals/vitalsPanel.ts`):
+  Settings -> HUD -> Vitals style (`gdm.vitalsStyle`, `?vitals=`): LIST, the default (two columns: emoji, number, name;
+  heart, breathing, speed, then her stats) or GAUGES (heart, breathing, speed as plain numbers on the left; four ROUND
+  gauges over two rows of HEXAGONS, 4 then 3 tucked between, each ring filling like a bar). Settings -> HUD -> Units
+  (`gdm.units`, `?units=`): Both (default: mph with km/h, °F with °C), Imperial, Metric. Emoji he picked: ❤️ heart rate,
+  ⛑️ health (not ❤️: it read as the heart rate twice), ⚡️ stamina, 💧 water, 🍽️ food, 🔋 energy, 🚽, 👻 fear, 🔥
+  adrenaline, mood's face (😄 great, 🙂 okay, 😟 uneasy, 😫 miserable), 🌡️, 💪 effort. THE PRIORITY LIST
+  (`VITALS_PRIORITY`): health, water, food, stamina (the big four), energy, bathroom, fear, adrenaline, mood,
+  temperature, effort; an URGENT one (bathroom from 85%, energy under 15%, fear over 75%, mood under 15%, temperature
+  out of 35.8-38.5 C) SWAPS with the least important big one until it is not; what needs her attention pulses. CHIPS
+  under the card only while they apply: 🤰 WEEK, 👶 KICK, 😮‍💨 WINDED, 🤕 PAIN, 🍽️ HUNGRY, 💧 THIRSTY. Checked at 932 x 430.
+  THE NEW STATS (`heroineVitals.ts` VITALS_TUNING): ENERGY, her tiredness over the day on her body clock: drains moving
+  (awake 16 h, plus effort squared a bar per 8 h, 30% faster late in a pregnancy), back STANDING STILL (empty to full
+  in 3 h; his pick until beds and sleep); under half it caps how far her stamina refills (to 50% at empty) and lowers
+  her mood. ADRENALINE: follows her fear and a fight (fired in the last 3 s: 35%) up in 1 s, jumps on a hit, fades
+  over 90 s; lifts her heart (+12) and breathing (+2), refills stamina up to 50% faster, dulls pain by up to 60%, and
+  CRASHES her energy as it fades (12% for a full fade). MOOD from her needs (Sims style), shown only. TEMPERATURE,
+  37 C at rest, to 38.8 working her hardest, cooler wet (0.4) and in water (1 at 1 m), shown only. Effort and fear were
+  there already, now shown. TEST: FOOD & DRINK -> Make tired (energy 10%).
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

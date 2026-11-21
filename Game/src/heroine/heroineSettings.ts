@@ -127,6 +127,13 @@ export interface HeroineSettings {
   skinShine: number;
   /** HER BODY'S CLOCK: game hours per real hour for her stomach and gut (Joshua, 2026-11-19, to test). Takes hold at once. */
   bodyClock: number;
+  /**
+   * HER VITALS CARD'S LAYOUT (Joshua, 2026-11-21: "create two layouts to choose from"; "Layout B as default"): 'list' a
+   * clean two-column list of icon, number and name; 'gauges' round and hexagon gauges (vitals/vitalsPanel.ts). Live.
+   */
+  vitalsStyle: 'list' | 'gauges';
+  /** Units for her speed and temperature (Joshua: "Both, with imperial and metric units in settings"). Live. */
+  units: 'imperial' | 'metric' | 'both';
 }
 
 
@@ -225,6 +232,8 @@ export const SETTING_KEYS = Object.freeze({
   faceLocks: 'gdm.faceLocks',
   skinShine: 'gdm.skinShine',
   bodyClock: 'gdm.bodyClock',
+  vitalsStyle: 'gdm.vitalsStyle',
+  units: 'gdm.units',
 });
 
 function read(key: string): string | null {
@@ -309,5 +318,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
     // (15: what the game has run at; Joshua's real-life plan is 6)
     bodyClock: asNumber(address.get('clock') ?? read(SETTING_KEYS.bodyClock), 1, 60) ?? 15,
+    // (the list unless the gauges were chosen; both units unless one was)
+    vitalsStyle: (address.get('vitals') ?? read(SETTING_KEYS.vitalsStyle)) === 'gauges' ? 'gauges' : 'list',
+    units: ((v) => (v === 'imperial' || v === 'metric' ? v : 'both'))(address.get('units') ?? read(SETTING_KEYS.units)),
   };
 }

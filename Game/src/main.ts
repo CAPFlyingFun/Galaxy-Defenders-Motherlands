@@ -580,6 +580,16 @@ async function start(): Promise<void> {
   /** Her belly as Settings shows it: the percent and the week it stands for (or "not pregnant"). */
   const bellyText = (percent: number): string => pregnantNow() ? `${percent}% · ${weekText(plan.weekFor(percent))}` : `${percent}% · not pregnant`;
   const vitalsPanel = new VitalsPanel();
+  // (Settings -> HUD: the list or the gauges, and the units; both change while she plays)
+  vitalsPanel.setStyle(graphics.vitalsStyle);
+  vitalsPanel.setUnits(graphics.units);
+  /**
+   * How deep the water is at her feet now (metres), and how wet her skin still is (1 soaked .. 0 dry): they cool her
+   * (her vitals' temperature). Wet as long as her skin shows it (heroine/fast/skinShine.ts): fully for 2 minutes out
+   * of the water, then drying over 30 s.
+   */
+  let waterDepthNow = 0, wetFor = Infinity;
+  const WET_HOLD = 120, WET_DRY = 30;
   /** What her body allows this frame (her stamina, her share of full speed), from last frame's vitals. */
   let limits: PaceLimits = NO_LIMITS;
   /**
@@ -685,12 +695,20 @@ async function start(): Promise<void> {
   const eating = { food: 0, water: 0, seconds: 0 };
   /** Seconds left squatting for the bathroom (her bladder is emptied when they run out). */
   let bathroomLeft = 0;
-  const BATHROOM_SECONDS = 5;
+  // (Joshua, 2026-11-21: "change the time from 5s to 10s, someone rarely ever goes in 5s, lol")
+  const BATHROOM_SECONDS = 10;
+  /**
+   * SHE CAN HOLD IT NO LONGER (Joshua, 2026-11-21: "once it gets to 85% full, will show an ETA until you will go
+   * regardless of what's going on"): her bathroom bar is full, so she lets go of whatever she holds, puts her guns
+   * away, stands, and goes where she is (step 5b below). True until she has started.
+   */
+  let mustGoNow = false;
   const intake = (action: IntakeAction) => {
     if (action === 'hungry') { vitals.setFoodBar(0.25); return; }
     if (action === 'thirsty') { vitals.setWaterBar(0.25); return; }
     if (action === 'needToGo') { vitals.setBladder(350); return; }
     if (action === 'mustGo') { vitals.setBladder(520); return; }
+    if (action === 'tired') { vitals.setEnergy(0.1); return; }
     if (action === 'bathroom') { bathroomLeft = BATHROOM_SECONDS; heroine.squatFor?.(BATHROOM_SECONDS); return; }
     const portion = INTAKE[action];
     eating.food += portion.food;
@@ -700,7 +718,7 @@ async function start(): Promise<void> {
   vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
 
   const domeDebug = (action: DomeDebugAction) => {
-    if (action === 'wet') { heroine.soakSkin?.(); return; }
+    if (action === 'wet') { heroine.soakSkin?.(); wetFor = 0; return; }
     if (action === 'hit') sectionInView().damage(25);
     else if (action === 'shatter') sectionInView().damage(SECTION_MAX_HP);
     else dome.repairAll();
@@ -892,6 +910,8 @@ async function start(): Promise<void> {
       else if (key === 'autoFire') applyView();
       else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
       else if (key === 'bodyClock') vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
+      else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
+      else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
       else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity') { /* live: read every frame */ }
@@ -1174,7 +1194,7 @@ async function start(): Promise<void> {
     // HER STANCE: what she is asked to be, and what it allows her (input/pace.ts `levelMost`, `speedMost`)
     {
       // (busy at the table, a bar or a door: she stands up for it)
-      if (busyNow() && stance !== 'stand') stance = 'stand';
+      if ((busyNow() || mustGoNow || bathroomLeft > 0) && stance !== 'stand') stance = 'stand';
       heroine.setStance?.(stanceAsked());
       const st = heroine.stanceInfo?.();
       const c = Math.max(0, Math.min(1, pace.carrying));
@@ -1193,6 +1213,8 @@ async function start(): Promise<void> {
           stanceNoAim = pushed || pace.speed > 0.05;
         }
       }
+      // (squatting for the bathroom: she stays where she is, and does not aim or fire)
+      if (bathroomLeft > 0) { pace.speedMost = 0; stanceNoAim = true; }
       // (going down on all fours: both guns are put away first, on the way down)
       if (st && st.asked === 'fours' && st.down < 1 && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
       hud.setStance(stanceAsked(), pregnantNow());
@@ -1409,7 +1431,8 @@ async function start(): Promise<void> {
     if (island) {
       const ground = island.groundAt(motion.x, motion.z);
       const surface = Math.max(island.waterAt(motion.x, motion.z) ?? -Infinity, island.seaLevel);
-      heroine.setWaterDepth?.(Number.isFinite(ground) ? surface - ground : 0);
+      waterDepthNow = Number.isFinite(ground) ? Math.max(0, surface - ground) : 0;
+      heroine.setWaterDepth?.(waterDepthNow);
     }
     // (a body that turns its parts apart was handed `turn` once, where it was made, and reads it each frame; one
     //  that cannot faces one way, all of it: where she looks, or the way she goes)
@@ -1592,7 +1615,7 @@ async function start(): Promise<void> {
       });
     // (third person: with both guns empty she goes to the table and reloads on her own)
     // (from her belt if she has clips there, on the go; else at the table)
-    if (!aimedByHand() && !busyNow() && !holsterUse.busy && !beltReload.busy && !tableAfterDraw && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) {
+    if (!aimedByHand() && !busyNow() && !holsterUse.busy && !beltReload.busy && !tableAfterDraw && bathroomLeft <= 0 && !mustGoNow && tableUse.rounds.left === 0 && tableUse.rounds.right === 0) {
       if (beltReload.canStart) beltReload.start(); else useTable('reload');
     }
     hud.setAmmo(heroine.hands?.hasGun('left') === false ? null : tableUse.rounds.left, heroine.hands?.hasGun('right') === false ? null : tableUse.rounds.right, burst.clicked !== null);
@@ -1615,11 +1638,32 @@ async function start(): Promise<void> {
     }
     // (the bathroom: squatting, then her bladder emptied)
     if (bathroomLeft > 0) { bathroomLeft -= dt; if (bathroomLeft <= 0) vitals.relieve(); }
-    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying });
+    // SHE CAN HOLD IT NO LONGER (mustGoNow): whatever she is doing, she lets go, her guns go away, and she goes
+    if (mustGoNow && bathroomLeft <= 0) {
+      if (grabUse.holding) grabUse.letGo();
+      if (doorUse.holding) doorUse.letGo();
+      // (anything she was about to do next is dropped)
+      grabAfterHolster = null; grabAfterTable = null; tableAfterDraw = null; doorAfterHolster = null;
+      const h = heroine.hands, gunInHand = !!h && holsterUse.hasHolsters && (h.hasGun('left') || h.hasGun('right'));
+      if (gunInHand && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+      // (she goes once nothing is running: the table's walk, a holstering, a reload from her belt)
+      if (!busyNow() && !holsterUse.busy && !beltReload.busy && !gunInHand) { mustGoNow = false; intake('bathroom'); }
+    }
+    // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
+    wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
+    const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
+    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, waterDepth: waterDepthNow, wet });
     const reading = vitals.reading;
+    if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;
     heroine.setVitals?.(reading);
-    vitalsPanel.show(reading);
+    vitalsPanel.show(reading, {
+      speed: motion.speed,
+      pace: pace.name,
+      week: pregnantNow() ? plan.weekFor(heroine.bellyNow?.() ?? graphics.belly ?? plan.start) : null,
+      kick: (heroine.liveInfo?.()?.kicks ?? 0) > 0,
+      winded: pace.holdLeft > 0,
+    });
     // (the 🚽 button: from her urge, hidden while she is already going)
     hud.setBathroom(bathroomLeft > 0 ? null : reading.bathroomUrge);
     hud.setPace(pace.name, pace.ring);

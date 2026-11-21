@@ -186,6 +186,51 @@ export const VITALS_TUNING = {
    * share off, and she is never slower than `slowest`.
    */
   speed: { tiredFrom: 0.35, tiredCost: 0.35, hungerCost: 0.1, thirstCost: 0.15, slowest: 0.45 },
+  /**
+   * HER ENERGY, HER TIREDNESS OVER THE DAY (Joshua, 2026-11-21: "adding new stats like energy/effort, adrenaline";
+   * "standing still not moving is fine for now to bring the energy back up"). Not her stamina (her wind, seconds to
+   * empty and to refill): this goes over hours of her body's clock (gutHoursPerSecond, so the Body clock setting moves
+   * it too). Moving, it drains: an ordinary day empties it in `awakeHours`, and work adds a full bar every `hardHours`
+   * at her hardest (by her effort SQUARED: a walk costs little on top, a hard run a lot), and late in a pregnancy it
+   * drains `pregnantMore` faster. Standing still (no walking, no
+   * firing) it comes back, empty to full in `restHours`, until there are beds and sleep. Under `lowFrom` it costs her:
+   * her stamina can fill only to `staminaMostAtEmpty` of its bar at empty energy, and her mood drops.
+   * At the 15x clock (checked by simulation): 20 real minutes of walking costs about a third of it, 3 minutes of running
+   * a tenth; standing still fills it from empty in 12 minutes.
+   */
+  energy: { awakeHours: 16, hardHours: 8, pregnantMore: 0.3, restHours: 3, lowFrom: 0.5, staminaMostAtEmpty: 0.5 },
+  /**
+   * ADRENALINE (Joshua, 2026-11-21): fear is the spark, adrenaline what it does to her body. It follows the worst of her
+   * fear and a fight (she has fired in the last `fightSeconds`, at `fromFight`) up within `riseSeconds`, jumps on a hit
+   * (`perHealthLost` a point), and fades over `fallSeconds` (95%) once they pass: fear can drop in seconds while it is
+   * still up. While it is up: her heart and breathing are lifted (`heart`, `breaths` at full), her stamina refills
+   * `staminaBack` faster, her pain is dulled by `dullsPain`. As it fades she CRASHES: a full fade costs `crashEnergy` of
+   * her energy. GAME TUNING (real adrenaline lasts minutes; how strongly it acts varies a great deal).
+   */
+  adrenaline: { riseSeconds: 1, fallSeconds: 90, fightSeconds: 3, fromFight: 0.35, perHealthLost: 0.03, heart: 12, breaths: 2, staminaBack: 0.5, dullsPain: 0.6, crashEnergy: 0.12 },
+  /**
+   * HER MOOD (Joshua, 2026-11-21: "fear/mood"), 0 miserable .. 1 great, from her needs, the way a Sims mood works: full
+   * marks less a share for each thing wearing on her at its worst (hunger, thirst, needing the bathroom past half,
+   * pain, fear, low energy, being out of breath). It follows them over `seconds` (95%). Shown, and read nowhere else yet.
+   */
+  mood: { hunger: 0.3, thirst: 0.35, bathroom: 0.2, pain: 0.35, fear: 0.3, tired: 0.25, winded: 0.1, seconds: 12 },
+  /**
+   * HER BODY TEMPERATURE, degrees C (Joshua, 2026-11-21: "body temperature 🌡️ (heat, the sea, being wet)"): 37 at rest,
+   * up to `hardest` working her hardest (a hard run's core heat), down `wet` with her skin wet and up to `water` more in
+   * water to her chest (1 m deep). It follows over `riseSeconds` heating and `fallSeconds` cooling (95%). Shown only.
+   */
+  temperature: { rest: 37, hardest: 38.8, wet: 0.4, water: 1, waterFullAt: 1, riseSeconds: 90, fallSeconds: 150 },
+  /**
+   * HER BABY PRESSES ON HER BLADDER (Joshua, 2026-11-21): late in a pregnancy her bladder holds this share less (at
+   * week 36 on), so the bathroom bar fills, and the urge comes, sooner.
+   */
+  bladderSqueeze: 0.3,
+  /**
+   * THE BATHROOM ETA (Joshua, 2026-11-21: "once it gets to 85% full, will show an ETA until you will go regardless of
+   * what's going on"): from `etaFrom` full, the real seconds until it is full, from how fast it has been filling
+   * (smoothed over `rateSeconds`). At full she goes, whatever she is doing (main.ts).
+   */
+  bathroomEta: { etaFrom: 0.85, rateSeconds: 8 },
 } as const;
 
 /** What the game tells her vitals each frame. */
@@ -198,6 +243,10 @@ export interface VitalsInput {
   readonly threat?: number;
   /** how far along she is by her belly, 0 (first visible) .. 1 (full term): her paces' speeds (speedsFullTerm). Left out: 0. */
   readonly carrying?: number;
+  /** how deep the water is at her feet, metres (0 dry land): it cools her. Left out: 0. */
+  readonly waterDepth?: number;
+  /** how wet her skin is, 0 dry .. 1 soaked (fresh from the water): it cools her. Left out: 0. */
+  readonly wet?: number;
 }
 
 /** One reading of her vitals, for the display and for her body. */
@@ -237,15 +286,36 @@ export interface VitalsReading {
   readonly bathroom: number;
   /** her need to go: 0 none, 1 the urge (bladder 300 mL, rectum 150 mL), 2 strong (bladder 500 mL, rectum 240 mL) */
   readonly bathroomUrge: 0 | 1 | 2;
+  /**
+   * Real seconds until she cannot hold it (VITALS_TUNING.bathroomEta): from 85% full while it is filling; 0 once full;
+   * null below 85% or while it is not filling.
+   */
+  readonly bathroomEta: number | null;
+  /** her energy over the day, 0 exhausted .. 1 rested (VITALS_TUNING.energy) */
+  readonly energy: number;
+  /** her fear, 0 calm .. 1 terrified */
+  readonly fear: number;
+  /** her adrenaline, 0 .. 1 (VITALS_TUNING.adrenaline) */
+  readonly adrenaline: number;
+  /** her mood, 0 miserable .. 1 great (VITALS_TUNING.mood) */
+  readonly mood: number;
+  /** her body temperature, degrees C */
+  readonly temperature: number;
+  /** how much she hurts (after adrenaline dulls it), how hungry and how thirsty she is: each 0 none .. 1 worst */
+  readonly pain: number;
+  readonly hunger: number;
+  readonly thirst: number;
 }
 
 /** The bathroom bar and her urge, from what is in her bladder and rectum (the builder's thresholds). */
-export function bathroomOf(bladderMl: number, rectumMl: number): { fill: number; urge: 0 | 1 | 2 } {
-  const fill = clamp(Math.max(bladderMl / BLADDER.mostMl, rectumMl / RECTUM.mostMl), 0, 1);
+export function bathroomOf(bladderMl: number, rectumMl: number, squeeze = 0): { fill: number; urge: 0 | 1 | 2 } {
+  // (her baby presses on her bladder: it holds `squeeze` less, and every mark on it comes that much sooner)
+  const room = 1 - clamp(squeeze, 0, 0.9);
+  const fill = clamp(Math.max(bladderMl / (BLADDER.mostMl * room), rectumMl / RECTUM.mostMl), 0, 1);
   // (the bladder's urge starts at 300 mL and is at its strongest by 500; the rectum's at 150, strongest by 1.6 times
   //  that, as the builder's gutNeeds reads them)
-  const strong = bladderMl >= BLADDER.urgeMl[1] || rectumMl >= RECTUM.urgeMl * 1.6;
-  const urge = strong ? 2 : bladderMl >= BLADDER.urgeMl[0] || rectumMl >= RECTUM.urgeMl ? 1 : 0;
+  const strong = bladderMl >= BLADDER.urgeMl[1] * room || rectumMl >= RECTUM.urgeMl * 1.6;
+  const urge = strong ? 2 : bladderMl >= BLADDER.urgeMl[0] * room || rectumMl >= RECTUM.urgeMl ? 1 : 0;
   return { fill, urge };
 }
 
@@ -316,6 +386,19 @@ export class HeroineVitals {
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
   private needs: GutNeeds;
+  /** Her energy over the day (VITALS_TUNING.energy), 0..1. (Not `vitals.energy`: that is the builder's name for her stamina.) */
+  private dayEnergy = 1;
+  /** Her adrenaline, 0..1, and the seconds left of "in a fight" since she last fired. */
+  private adrenaline = 0;
+  private fightLeft = 0;
+  /** Her mood, 0..1, and her body temperature, degrees C. */
+  private mood = 1;
+  private temperature: number = VITALS_TUNING.temperature.rest;
+  /** Her pain this step (dulled by adrenaline), for the reading. */
+  private pain = 0;
+  /** The bathroom bar last step, and how fast it has been filling (a share a real second, smoothed). */
+  private lastBathroom = -1;
+  private bathroomRate = 0;
 
   /**
    * `body`: her age in years and how many weeks pregnant she is (the builder's vitals add pregnancy's faster
@@ -354,10 +437,27 @@ export class HeroineVitals {
     const st = tuning.stress;
     const threat = clamp(input.threat ?? 0, 0, 1);
     this.fear += (threat - this.fear) * (1 - Math.exp(-dt / (threat > this.fear ? st.fearRiseSeconds : st.fearFallSeconds)));
-    const thirst = this.needs.thirst, pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1), fear = this.fear;
+    // ADRENALINE (VITALS_TUNING.adrenaline): up toward the worst of her fear and a fight, quickly; down slowly. As it
+    // comes down she crashes: her energy pays for it.
+    const ad = tuning.adrenaline;
+    this.fightLeft = input.firing ? ad.fightSeconds : Math.max(0, this.fightLeft - dt);
+    const adWant = Math.max(this.fear, this.fightLeft > 0 ? ad.fromFight : 0);
+    const adWas = this.adrenaline;
+    this.adrenaline += (adWant - this.adrenaline) * (1 - Math.exp((-3 * dt) / (adWant > this.adrenaline ? ad.riseSeconds : ad.fallSeconds)));
+    if (this.adrenaline < adWas) this.dayEnergy = Math.max(0, this.dayEnergy - (adWas - this.adrenaline) * ad.crashEnergy);
+    // (her pain, dulled while her adrenaline is up)
+    const thirst = this.needs.thirst, fear = this.fear;
+    const pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1) * (1 - ad.dullsPain * this.adrenaline);
+    this.pain = pain;
     // ...they make her stamina drain faster
     const drainMore = 1 + st.thirst.drain * thirst + st.pain.drain * pain + st.fear.drain * fear;
-    this.vitals.energy = clamp(stamina + staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore, input.carrying ?? null) * dt, 0, 1);
+    let rate = staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore, input.carrying ?? null);
+    if (rate > 0) rate *= 1 + ad.staminaBack * this.adrenaline;   // (adrenaline: her wind comes back faster)
+    // HER ENERGY (VITALS_TUNING.energy): low, her stamina cannot fill all the way
+    const en = tuning.energy;
+    const staminaMost = this.dayEnergy >= en.lowFrom ? 1 : en.staminaMostAtEmpty + (1 - en.staminaMostAtEmpty) * (this.dayEnergy / en.lowFrom);
+    // (refilling stops at that most; stamina already above it is not taken away, it just drains as usual)
+    this.vitals.energy = clamp(rate > 0 ? Math.min(stamina + rate * dt, Math.max(staminaMost, stamina)) : stamina + rate * dt, 0, 1);
     // ...and lift her heart and her breathing on top of what the work does. Her breath and her heartbeat are moved on
     // by the extra too, so what she shows (the heart on her card, her chest rising) goes at the rate the card says.
     // (each follows where the stress puts it at its own pace: her heart first, her breathing later; calming down
@@ -367,8 +467,9 @@ export class HeroineVitals {
       const seconds = want >= now ? riseSeconds : riseSeconds * st.calmTimes * (1 + (st.calmTimesWhenHigh - 1) * high);
       return now + (want - now) * (1 - Math.exp((-3 * dt) / seconds));
     };
-    this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart);
-    this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths);
+    const adr = this.adrenaline;
+    this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear + ad.heart * adr, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart + ad.heart);
+    this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear + ad.breaths * adr, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths + ad.breaths);
     // (never past the most a heart of her age can beat: about 220 less her age, 192 at 28. Fear on top of a sprint
     //  would otherwise show a number no real heart reaches.)
     const moreBeats = Math.min(this.now.beatsPerMinute + this.extraBeats, 220 - (this.body.age ?? 28)) - this.now.beatsPerMinute;
@@ -395,6 +496,39 @@ export class HeroineVitals {
     const [sweatRest, sweatHard] = tuning.sweatMlPerHour;
     this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * this.now.felt) * hours;
     this.needs = this.gameNeeds();
+
+    // 2b. HER ENERGY over the day: drains moving (more working hard, more late in a pregnancy), comes back standing still.
+    const still = input.speed < 0.1 && !input.firing;
+    if (still) this.dayEnergy += hours / en.restHours;
+    else this.dayEnergy -= hours * (1 / en.awakeHours + (this.now.felt * this.now.felt) / en.hardHours) * (1 + en.pregnantMore * this.pregnancy);
+    this.dayEnergy = clamp(this.dayEnergy, 0, 1);
+
+    // 2c. HER BODY TEMPERATURE: warmed by work, cooled by wet skin and water
+    const tt = tuning.temperature;
+    const tempWant = tt.rest + (tt.hardest - tt.rest) * this.now.felt - tt.wet * clamp(input.wet ?? 0, 0, 1)
+      - tt.water * clamp((input.waterDepth ?? 0) / tt.waterFullAt, 0, 1);
+    this.temperature += (tempWant - this.temperature) * (1 - Math.exp((-3 * dt) / (tempWant > this.temperature ? tt.riseSeconds : tt.fallSeconds)));
+
+    // 2d. THE BATHROOM: how fast it is filling (for its ETA)
+    const fillNow = this.bathroomNow().fill;
+    if (this.lastBathroom >= 0) {
+      // (she has just gone, or a test has set her bladder: a jump, not filling. Start again from here.)
+      //  The first rate measured after it is taken as it is, then smoothed: -1 marks "not measured yet".)
+      const inst = (fillNow - this.lastBathroom) / dt;
+      if (Math.abs(fillNow - this.lastBathroom) > 0.02) this.bathroomRate = -1;
+      else if (this.bathroomRate < 0) this.bathroomRate = inst;
+      else this.bathroomRate += (inst - this.bathroomRate) * (1 - Math.exp(-dt / tuning.bathroomEta.rateSeconds));
+    }
+    this.lastBathroom = fillNow;
+
+    // 2e. HER MOOD: full marks less what wears on her (VITALS_TUNING.mood)
+    const md = tuning.mood;
+    const tired = clamp((en.lowFrom - this.dayEnergy) / en.lowFrom, 0, 1);
+    const winded = clamp((0.2 - this.vitals.energy) / 0.2, 0, 1);
+    const pressing = clamp((fillNow - 0.5) / 0.5, 0, 1);
+    const moodWant = clamp(1 - md.hunger * this.needs.hunger - md.thirst * this.needs.thirst - md.bathroom * pressing
+      - md.pain * pain - md.fear * fear - md.tired * tired - md.winded * winded, 0, 1);
+    this.mood += (moodWant - this.mood) * (1 - Math.exp((-3 * dt) / md.seconds));
 
     // 3. Her health: it mends while she is fed and watered, and wears away while she is starving or parched.
     const h = tuning.health;
@@ -446,6 +580,7 @@ export class HeroineVitals {
   /** She uses the bathroom: her bladder emptied (and her rectum, if she needed to go). */
   relieve(): void {
     this.gut = { ...this.gut, bladderMl: 0, rectumMl: 0 };
+    this.bathroomRate = -1;
     this.needs = this.gameNeeds();
   }
 
@@ -459,8 +594,20 @@ export class HeroineVitals {
   changeHealth(amount: number): void {
     this.health = clamp(this.health + amount, 0, VITALS_TUNING.health.most);
     // (a hit frightens her at once)
-    if (amount < 0) this.fear = Math.min(1, this.fear - amount * VITALS_TUNING.stress.fearPerHealthLost);
+    if (amount < 0) {
+      this.fear = Math.min(1, this.fear - amount * VITALS_TUNING.stress.fearPerHealthLost);
+      // (and her adrenaline jumps at once)
+      this.adrenaline = Math.min(1, this.adrenaline - amount * VITALS_TUNING.adrenaline.perHealthLost);
+    }
   }
+
+  /** The bathroom bar and her urge now, her baby's press on her bladder included. */
+  private bathroomNow(): { fill: number; urge: 0 | 1 | 2 } {
+    return bathroomOf(this.gut.bladderMl, this.gut.rectumMl, VITALS_TUNING.bladderSqueeze * this.pregnancy);
+  }
+
+  /** TEST: her energy set to `share` (0..1) at once (Settings -> FOOD & DRINK -> Make tired). */
+  setEnergy(share: number): void { this.dayEnergy = clamp(share, 0, 1); }
 
   /**
    * Her hunger and thirst. Thirst as the builder's gut has it; HUNGER from her food bar (Joshua: hungry below a third of
@@ -485,6 +632,7 @@ export class HeroineVitals {
     const s = tuning.speed;
     const tired = clamp((s.tiredFrom - this.vitals.energy) / s.tiredFrom, 0, 1); // 0 until her energy is under `tiredFrom`
     const speedShare = clamp(1 - tired * s.tiredCost - this.needs.hunger * s.hungerCost - this.needs.thirst * s.thirstCost, s.slowest, 1);
+    const bath = this.bathroomNow();
     return {
       heartRate: this.now.beatsPerMinute,
       breathsPerMinute: this.now.breathsPerMinute,
@@ -501,8 +649,17 @@ export class HeroineVitals {
       stomach,
       bellyExtra: stomach * tuning.bellyWhenFull,
       speedShare,
-      bathroom: bathroomOf(this.gut.bladderMl, this.gut.rectumMl).fill,
-      bathroomUrge: bathroomOf(this.gut.bladderMl, this.gut.rectumMl).urge,
+      bathroom: bath.fill,
+      bathroomUrge: bath.urge,
+      bathroomEta: bath.fill >= 0.999 ? 0 : bath.fill >= tuning.bathroomEta.etaFrom && this.bathroomRate > 1e-6 ? (1 - bath.fill) / this.bathroomRate : null,
+      energy: this.dayEnergy,
+      fear: this.fear,
+      adrenaline: this.adrenaline,
+      mood: this.mood,
+      temperature: this.temperature,
+      pain: this.pain,
+      hunger: this.needs.hunger,
+      thirst: this.needs.thirst,
     };
   }
 }

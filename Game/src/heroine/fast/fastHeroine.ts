@@ -1078,6 +1078,7 @@ if (uHideHead > 0.5) {
   const headRange: [number, number] = [0, 0];
   /** Where her head is meant to look this frame, world [yaw, pitch] radians (pitch goes on past straight down). */
   const headAimNow: [number, number] = [0, 0];
+  const eyeReachNow: [number, number] = [0, 0];
   const skullQ = new THREE.Quaternion(), headFwd = new THREE.Vector3();
   const windedJob: [boolean, boolean] = [false, false];
   const windedPose: [THREE.Matrix4, THREE.Matrix4] = [new THREE.Matrix4(), new THREE.Matrix4()];
@@ -1328,6 +1329,7 @@ if (uHideHead > 0.5) {
     },
     setEyeOffset(forward: number, higher: number): void { eyeForward = forward; eyeHigher = higher; },
     headAim(): readonly [number, number] { return headAimNow; },
+    eyeReach(): readonly [number, number] { eyeReachNow[0] = EYE_AHEAD + eyeForward; eyeReachNow[1] = EYE_ABOVE + eyeHigher; return eyeReachNow; },
     headPitchRange(): readonly [number, number] { headRange[0] = -HEAD_DOWN_MOST - torsoLean; headRange[1] = HEAD_UP_MOST - torsoLean; return headRange; },
     freeLook(): void { if (windedW > 0) windedLookFree = true; bellyHand.stopLook(); },
 

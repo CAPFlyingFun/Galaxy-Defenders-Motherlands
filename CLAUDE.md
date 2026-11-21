@@ -40,13 +40,14 @@ use the game's single copy of three.js.
   `?eye=`, -6..12 cm, along her face) and eye height (`gdm.eyeHigher`, `?eye_up=`, -6..20 cm, along her head's own up:
   straight up in the world showed a bowed head's own face): Joshua tunes them in game and sends the numbers.
   A STEADY VIEW (Joshua, 2026-11-20: "the brain can level out all those motions for a smooth view and we need to do the
-  same"; then "still swaying left and right too much even at 100%... see what BE did": BE's first person is a camera at a
-  fixed eye height over her feet, turned only by the player; cameraRig.ts `steady`, `STEADY_*`): at full steadiness the
-  camera TURNS only where her head is MEANT to look (fastHeroine.ts `headAim`: the player's look, or her own at a kick or
-  bowed winded, within her neck's reach), none of her walk's wobble (less steady lets it back in proportion); her head's
-  roll is always left out; its PLACE is her eyes' offset from her root, eased (her going along never behind), side to
-  side over 1.2 s (a stride's sway), up, down, forward and back over 0.45 s. ALWAYS AT FULL (Joshua: "Remove the slider for steadiness and keep it
-  fixed at max"; `steadiness` 1). AT THE TABLE, BARS AND DOOR the up and down
+  same"; "still swaying left and right too much even at 100%... see what BE did": BE's first person is a camera at a
+  fixed eye height over her feet, turned only by the player; "keep it fixed at max"; cameraRig.ts `steady`, `STEADY_*`):
+  the camera TURNS at once to where her head is MEANT to look (fastHeroine.ts `headAim`: the player's look, or her own at
+  a kick or bowed winded, within her neck's reach), none of her walk's wobble and no roll; only the BASE OF HER SKULL is
+  eased, as an offset from her root (her going along never behind), side to side over 1.2 s (a stride's sway), the rest
+  over 0.45 s, and her eyes are set rigidly from it along the turn (`eyeReach`), so a drag swings them round at once.
+  (v0.2.102-103 eased her head's offset from the player's look, and dragging the view STUTTERED: Joshua, "there is a
+  shutter when trying to move the camera around".) AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"

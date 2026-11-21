@@ -128,20 +128,21 @@ const FOV_LANDSCAPE = 58;
 /**
  * FIRST PERSON, A STEADY VIEW (Joshua, 2026-11-20: "each step move the camera up/down/left/right which each sway and bob,
  * and in real life, it really happens like that, but the brain can level out all those motions for a smooth view and we
- * need to do the same"; then "still swaying left and right too much even at 100%... see what BE did"). Beyond
- * Extinction's first person is a camera at a fixed eye height over her feet that turns only as the player turns it:
- * nothing of her walk reaches it. Here the camera is on her head, so at full steadiness (1) it is made as steady:
+ * need to do the same"; "still swaying left and right too much even at 100%... see what BE did"; "keep it fixed at
+ * max"). Beyond Extinction's first person is a camera at a fixed eye height over her feet that turns only as the
+ * player turns it: nothing of her walk reaches it. Here the camera is on her head, and is made as steady:
  *   ITS TURN is where her head is MEANT to look (`headAim`: the player's look, or her own at a kick or bowed winded,
- *   within her neck's reach), none of the wobble her walk gives her head; less steady, that wobble comes back in
- *   proportion (0: her head exactly). Her head's roll is always left out: the view stays level.
- *   ITS PLACE is her eyes' offset from her feet's root, eased (her going along is never behind, only her eyes' bob and
- *   sway about it): side to side over STEADY_SIDE_SECONDS, up, down, forward and back over STEADY_PLACE_SECONDS (a
- *   stride's sway is slower than its bob, once a stride, not once a step).
+ *   within her neck's reach), at once, never eased: none of the wobble her walk gives her head, and no roll.
+ *   ITS PLACE: only the BASE OF HER SKULL (what her walk bobs and sways) is eased, as an offset from her feet's root (her
+ *   going along is never behind): side to side over STEADY_SIDE_SECONDS, up, down, forward and back over
+ *   STEADY_PLACE_SECONDS (a stride's sway is slower than its bob, once a stride, not once a step). Her eyes are then
+ *   set from that eased base along the turn, rigidly (`eyeReach`), so turning the view swings them round with it at
+ *   once. (v0.2.102-103 eased the whole place, and her head's offset from the player's look: dragging the view, her
+ *   head a frame behind it was eased in and out, and the view stuttered. Joshua: "there is a shutter when trying to
+ *   move the camera around".)
  */
 const STEADY_SIDE_SECONDS = 1.2;
 const STEADY_PLACE_SECONDS = 0.45;
-/** ...and her head's wobble, as much as is let through, is eased over this long (seconds, at full). */
-const STEADY_TURN_SECONDS = 0.2;
 /** ...and past this far from where it was eased to (metres), it is put straight there (she was put somewhere else). */
 const STEADY_JUMP = 0.6;
 
@@ -156,15 +157,8 @@ export class CameraRig {
   /** Which way the camera looks now (a unit direction, world). */
   get lookDirection(): THREE.Vector3 { return this.look; }
   mode: ViewMode = 'third';
-  /**
-   * First person: how steady the view is, 0..1 (see STEADY_PLACE_SECONDS). FIXED AT THE MOST (Joshua, 2026-11-20:
-   * "Remove the slider for steadiness and keep it fixed at max").
-   */
-  readonly steadiness = 1;
-  /** First person, eased: her eyes' place from her root (and its side to side), and her head's wobble (radians). */
+  /** First person, eased: the base of her skull from her root (and its side to side). */
   private readonly steadyAt = new THREE.Vector3();
-  private steadyYaw = 0;
-  private steadyPitch = 0;
   private steadySide = 0;
   private steadyOn = false;
   private readonly headLook = new THREE.Vector3();
@@ -505,40 +499,32 @@ export class CameraRig {
    */
   private steady(dt: number, heroine: HeroineBody): void {
     const cam = this.camera, root = heroine.root.position;
-    // WHICH WAY HER HEAD LOOKS, as a yaw and a pitch that go on past straight down (bowed, winded, on all fours: her
-    // head's own up points forward then, and it says which way is ahead of her when her face is turned to the ground).
-    // Tipped by p, her look is (ahead cos p, sin p) and her head's up (-ahead sin p, cos p), so ahead is her look's flat
-    // part times cos p less her up's times sin p: cos p is her up's height, sin p her look's.
+    // THE BASE OF HER SKULL: back from her eyes along her head as it is (eyeView put the camera there and turned it as
+    // her head is: its -Z is her face's way, its +Y her head's up)
+    const reach = heroine.eyeReach?.() ?? [0.075, 0.051];
     const f = this.headLook.set(0, 0, -1).applyQuaternion(cam.quaternion);
     const u = this.headUp.set(0, 1, 0).applyQuaternion(cam.quaternion);
-    const aheadX = f.x * u.y - u.x * f.y, aheadZ = f.z * u.y - u.z * f.y, ahead = Math.hypot(aheadX, aheadZ) || 1;
-    const headYaw = Math.atan2(aheadX, aheadZ);
-    const headPitch = Math.atan2(f.y, (f.x * aheadX + f.z * aheadZ) / ahead);
-    // WHERE HER HEAD IS MEANT TO LOOK (no wobble in it), and her head's wobble about that
-    const aim = heroine.headAim?.();
-    const aimYaw = aim ? aim[0] : this.yaw, aimPitch = aim ? aim[1] : this.pitch;
-    const wobYaw = Math.atan2(Math.sin(headYaw - aimYaw), Math.cos(headYaw - aimYaw)), wobPitch = headPitch - aimPitch;
-    const s = clamp(this.steadiness, 0, 1);
-    // HER EYES' PLACE FROM HER ROOT, split into her side to side (across the way she faces) and the rest
-    const placeAt = cam.position.sub(root);
+    const base = cam.position.addScaledVector(f, -reach[0]).addScaledVector(u, -reach[1]).sub(root);
+    // ...eased as an offset from her root, her side to side (across the way she faces) more slowly than the rest
     const face = heroine.root.rotation.y, sideX = Math.cos(face), sideZ = -Math.sin(face);
-    const side = placeAt.x * sideX + placeAt.z * sideZ;
-    if (!this.steadyOn || s <= 0 || this.steadyAt.distanceTo(placeAt) > STEADY_JUMP) {
-      this.steadyAt.copy(placeAt); this.steadySide = side; this.steadyYaw = wobYaw; this.steadyPitch = wobPitch; this.steadyOn = true;
+    const side = base.x * sideX + base.z * sideZ;
+    if (!this.steadyOn || this.steadyAt.distanceTo(base) > STEADY_JUMP) {
+      this.steadyAt.copy(base); this.steadySide = side; this.steadyOn = true;
     } else {
       // (1 - e^(-dt/seconds): the same smoothing at any frame rate)
-      this.steadyAt.lerp(placeAt, 1 - Math.exp(-dt / (STEADY_PLACE_SECONDS * s)));
-      this.steadySide += (side - this.steadySide) * (1 - Math.exp(-dt / (STEADY_SIDE_SECONDS * s)));
-      const turn = 1 - Math.exp(-dt / (STEADY_TURN_SECONDS * s));
-      this.steadyYaw += Math.atan2(Math.sin(wobYaw - this.steadyYaw), Math.cos(wobYaw - this.steadyYaw)) * turn;
-      this.steadyPitch += (wobPitch - this.steadyPitch) * turn;
+      this.steadyAt.lerp(base, 1 - Math.exp(-dt / STEADY_PLACE_SECONDS));
+      this.steadySide += (side - this.steadySide) * (1 - Math.exp(-dt / STEADY_SIDE_SECONDS));
     }
-    // (the eased place, with its side to side taken from the more slowly eased one)
-    const sideNow = this.steadyAt.x * sideX + this.steadyAt.z * sideZ, sideFix = this.steadySide - sideNow;
+    const sideFix = this.steadySide - (this.steadyAt.x * sideX + this.steadyAt.z * sideZ);
+    // THE TURN: where her head is meant to look, at once
+    const aim = heroine.headAim?.();
+    this.setLook(aim ? aim[0] : this.yaw, aim ? aim[1] : this.pitch);
+    // HER EYES from the eased base, along that turn
+    cam.updateMatrixWorld();
+    u.set(0, 1, 0).applyQuaternion(cam.quaternion);
     cam.position.copy(root).add(this.steadyAt);
     cam.position.x += sideX * sideFix; cam.position.z += sideZ * sideFix;
-    // (her head's wobble let through in proportion to how un-steady the view is asked to be)
-    this.setLook(aimYaw + this.steadyYaw * (1 - s), aimPitch + this.steadyPitch * (1 - s));
+    cam.position.addScaledVector(this.look, reach[0]).addScaledVector(u, reach[1]);
   }
 
   /** Point the camera along (yaw, pitch) and remember that direction in `look`. */

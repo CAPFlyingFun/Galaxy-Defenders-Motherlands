@@ -35,6 +35,13 @@
 //     legs, then feet (`bandLag`), whether her head turned or her whole body did;
 //     and going a new way in third person with nothing to aim at, her head turns
 //     to it first (before, it simply faced the way her body did).
+//   * FIRST PERSON, QUICKER (Joshua, 2026-11-21: "1.3s is still too laggy in
+//     appearance and feel... the timing of each one is 0.1s apart for a total of
+//     0.5s for the head and feet to sync up"; "Only in 1st person"): standing, body
+//     North follows her look at once (no waiting for the look to stop), and each
+//     band below her head shows exactly where its turn was 0.1 s, 0.2, 0.3 and 0.4 s
+//     ago (`firstBandGap`): a turn runs down her from head to feet and all of her
+//     faces one way half a second after the look stops. Third person is as it was.
 //
 // Every direction here is a compass angle like a heroine's yaw (radians, 0 = +Z,
 // turning toward +X as it grows).
@@ -58,6 +65,10 @@
 const DEG = Math.PI / 180;
 /** No band below her head follows its turn (holding on: see `grip`). */
 const NO_SHARES = { shoulders: 0, belly: 0, upperLegs: 0, feet: 0 } as const;
+
+/** How many past frames first person keeps (0.4 s even at 240 frames a second), and one reused pair to read them into. */
+const HISTORY = 128;
+const PAST: [number, number] = [0, 0];
 
 /** GAME TUNING for her turning. Angles in radians, times in seconds. */
 export const TURN = {
@@ -85,6 +96,14 @@ export const TURN = {
   bandLag: { shoulders: 0.1, belly: 0.18, upperLegs: 0.26, feet: 0.34 },
   /** THIRD PERSON, MOVING with nothing to aim at: how quickly her head turns to the way she goes (bigger is snappier). */
   headLead: 14,
+  /**
+   * FIRST PERSON ONLY (Joshua, 2026-11-21): each band below her head shows its turn as it was this much longer ago
+   * than the band above it (seconds: shoulders 0.1, belly 0.2, upper legs 0.3, feet 0.4), a true delay, not an easing,
+   * so each one gets exactly where it is going; and standing, body North follows her look within about this long
+   * (`firstCatchUp`, seconds, about two thirds of the way), so her feet are with her head 0.5 s after the look stops.
+   */
+  firstBandGap: 0.1,
+  firstCatchUp: 0.03,
   /** THIRD PERSON: how fast her head turns to a target, each second. */
   headSpeed: 360 * DEG,
   /** THIRD PERSON: the fastest her head pulls body North round after it, each second. */
@@ -163,6 +182,17 @@ export class BodyTurn {
   /** FIRST PERSON, MOVING: she is backing up (stepping backward, body North facing away from the way she goes). */
   backing = false;
 
+  /**
+   * FIRST PERSON: the last moments of body North and her head (time, body North, head), a ring of HISTORY entries, so
+   * each band can be shown where its turn was a moment ago (`firstBandGap`). Filled in place: nothing new each frame.
+   */
+  private clock = 0;
+  private readonly pastT = new Float64Array(HISTORY);
+  private readonly pastBase = new Float64Array(HISTORY);
+  private readonly pastHead = new Float64Array(HISTORY);
+  private pastCount = 0;
+  private pastNext = 0;
+
   /** Where she looked last frame, and how fast the look is turning (each second, smoothed). */
   private lastLook: number | null = null;
   private lookSpeed = 0;
@@ -174,6 +204,29 @@ export class BodyTurn {
     this.backing = false;
     this.lastLook = null;
     this.lookSpeed = 0;
+    this.pastCount = 0;
+  }
+
+  /** Where body North and her head were `ago` seconds back (first person), written into `out` [base, head]. */
+  private past(ago: number, out: [number, number]): void {
+    const want = this.clock - ago;
+    // (newest first: the first entry at or before `want`, eased between it and the one after it)
+    let newer = -1;
+    for (let k = 0; k < this.pastCount; k++) {
+      const i = (this.pastNext - 1 - k + HISTORY) % HISTORY;
+      if (this.pastT[i] <= want) {
+        if (newer < 0) { out[0] = this.pastBase[i]; out[1] = this.pastHead[i]; return; }
+        const span = this.pastT[newer] - this.pastT[i], t = span > 0 ? (want - this.pastT[i]) / span : 0;
+        out[0] = wrapAngle(this.pastBase[i] + wrapAngle(this.pastBase[newer] - this.pastBase[i]) * t);
+        out[1] = wrapAngle(this.pastHead[i] + wrapAngle(this.pastHead[newer] - this.pastHead[i]) * t);
+        return;
+      }
+      newer = i;
+    }
+    // (not that far back yet: the oldest there is)
+    const oldest = (this.pastNext - this.pastCount + HISTORY) % HISTORY;
+    out[0] = this.pastCount ? this.pastBase[oldest] : this.base;
+    out[1] = this.pastCount ? this.pastHead[oldest] : this.head;
   }
 
   /** One frame of `dt` seconds. */
@@ -247,9 +300,13 @@ export class BodyTurn {
 
     // ---- standing with the look stopped: body North comes round to match, the whole reach in `catchUpSeconds` ----
     // (not while her facing is held)
+    // (FIRST PERSON: at once, not waiting for the look to stop: `firstCatchUp`)
     if (input.move === null && !held) {
-      const pace = (reach / TURN.catchUpSeconds) * calm;
-      this.base = turnToward(this.base, this.head, pace * dt);
+      if (first) this.base = follow(this.base, this.head, TURN.firstCatchUp, dt);
+      else {
+        const pace = (reach / TURN.catchUpSeconds) * calm;
+        this.base = turnToward(this.base, this.head, pace * dt);
+      }
     }
 
     // ---- the bands below her head: each its share of her head's turn, ending where it ends, but each a moment behind
@@ -258,10 +315,27 @@ export class BodyTurn {
     // (HOLDING ON: her head alone turns, the rest of her stays square to what she holds)
     const lag = TURN.bandLag;
     const shares = input.grip ? NO_SHARES : TURN.shares;
-    this.shoulders = follow(this.shoulders, this.base + shares.shoulders * turned, lag.shoulders, dt);
-    this.belly = follow(this.belly, this.base + shares.belly * turned, lag.belly, dt);
-    this.upperLegs = follow(this.upperLegs, this.base + shares.upperLegs * turned, lag.upperLegs, dt);
-    this.feet = follow(this.feet, this.base + shares.feet * turned, lag.feet, dt);
+    // (remembered for first person's delays, every frame in both views so a change of view starts from now)
+    this.clock += dt;
+    this.pastT[this.pastNext] = this.clock;
+    this.pastBase[this.pastNext] = this.base;
+    this.pastHead[this.pastNext] = this.head;
+    this.pastNext = (this.pastNext + 1) % HISTORY;
+    this.pastCount = Math.min(HISTORY, this.pastCount + 1);
+    if (first) {
+      // FIRST PERSON: each band exactly where its turn was 0.1 s further back than the band above it
+      const gap = TURN.firstBandGap, then = PAST;
+      const at = (k: number, share: number): number => { this.past(k * gap, then); return wrapAngle(then[0] + share * wrapAngle(then[1] - then[0])); };
+      this.shoulders = at(1, shares.shoulders);
+      this.belly = at(2, shares.belly);
+      this.upperLegs = at(3, shares.upperLegs);
+      this.feet = at(4, shares.feet);
+    } else {
+      this.shoulders = follow(this.shoulders, this.base + shares.shoulders * turned, lag.shoulders, dt);
+      this.belly = follow(this.belly, this.base + shares.belly * turned, lag.belly, dt);
+      this.upperLegs = follow(this.upperLegs, this.base + shares.upperLegs * turned, lag.upperLegs, dt);
+      this.feet = follow(this.feet, this.base + shares.feet * turned, lag.feet, dt);
+    }
 
     // (third person, standing: her arms come up once her head has nearly turned to the target)
     if (!first && input.move === null && input.look !== null) this.aimed = Math.abs(wrapAngle(input.look - this.head)) <= TURN.raiseWithin;

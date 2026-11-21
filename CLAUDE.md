@@ -54,7 +54,12 @@ use the game's single copy of three.js.
   catches up to the head since that is what steers the player... remove all the delays, and have the body follow like it
   does in 3rd person and based on our angle system"): the view is her head and her body follows it by the five bands
   (bodyTurn.ts: past 90 body North is pulled round, once the look stops it comes round to match, each band a moment
-  behind), so she already faces where she will go. Nothing settles the view back. (v0.2.108-112 held her body still and
+  behind), so she already faces where she will go. Nothing settles the view back. QUICKER, FIRST PERSON ONLY (Joshua, 2026-11-21: "1.3s is still too
+  laggy... each one is 0.1s apart for a total of 0.5s for the head and feet to sync up"; "Only in 1st person"; bodyTurn.ts
+  `firstBandGap`, `firstCatchUp`): standing, body North follows her look at once (no wait for the look to stop, no 1.3 s),
+  and each band shows exactly where its turn was 0.1 / 0.2 / 0.3 / 0.4 s ago (a true delay from a short history, not an
+  easing); measured, a 90 degree drag: shoulders, belly, upper legs, feet arrive 0.1 s apart, all synced 0.5 s after the
+  look stops. Third person keeps the eased lags and the 1.3 s catch-up. (v0.2.108-112 held her body still and
   settled the view back to it after 1 s, over 1.5 s; the stick then put the view back where it was left: all removed.)
   HER HEAD'S YAW AND PITCH ARE FIXED TO HER TORSO'S ANGLE (Joshua, 2026-11-20: "the left and right ended up on the
   twist axis... supposed to be left and right relative to the torso like standing"; "The head's yaw and pitch need to be

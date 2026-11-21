@@ -1,6 +1,8 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `bae4157`
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `e2ebcf8`
+(2026-11-21, v0.9.68: her body's fixes seated, her bump keeps its standing shape and her hips stay closed, no pinching
+at her belly and pelvis; and HIS outfit pictures, the male body's clothes). Before that: `bae4157`
 (2026-11-20, v0.9.60: a chest cutout, oval, diamond or keyhole, on the catsuit, leotard and swimsuit; the room lets its
 head panel go on dispose; since v0.9.59 the catsuit's drawn edges and an adjustable neckline, low V/U up to a
 turtleneck). Before that: `74ff232` (2026-11-19, v0.9.51: skin depth, a hybrid of each body's own skin

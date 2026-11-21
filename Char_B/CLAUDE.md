@@ -820,7 +820,18 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
 - **HER NAVEL THROUGH A SKIRT OVER HER BELLY** (his, the same day: the side profile showed it, "but didn't show from the
   front… probably need to add the same thing for the skirt like the shirt"): drawn through the fabric as through the
   cloth tee (`clothDetail.ts`, `DetailSpots.cloth`), at the tee's NAVEL DETAIL. MEASURED at 100%, front and three-quarter.
-- NOT DONE, AND NAMED: its colour is one flat colour, not the fabric's weave; seated, the CLOTH passes through the
+- **A SKIRT IS A PIECE, AND A GARMENT CAN BE TAKEN OFF** (Joshua, 2026-11-20: "make the skirts as a layer to remove,
+  different textures + custom import texture like the other ones… I can't remove as a bottom"; "check the cloth shirts as
+  well"). The skirt is the outfit editor's BOTTOM piece `garment:skirt` (`fabricPanel` `garmentKind`): its material is
+  named 'skirt' and its mesh is among the panel's (`meshes`), its points carry a REST PLACE for the weave (`clothSkirt.ts`:
+  each point where it is cut, in the room's units, and its way out from the skirt's axis -- the weave triplanar there,
+  so it stays on the cloth as it moves), so every fabric family, swatch, custom colour and a picture of his own are
+  offered as for the cloth tee; an outfit's skirt opens in the ATHLETIC knit in its own colour. REMOVE PIECE on a
+  garment's piece takes it off her (`FabricHooks.takeOff`, the room's `takenOff`: the skirt, the cloth tee, any modelled
+  garment) until another outfit is put on; a save keeps the list (`SavedClothes.off`, `sameMake`). MEASURED in the room
+  (light skin, 1x, 10%): the A-line in SWEATER and in FLAT, then removed (her bikini bottom under it); the cloth crew
+  tee removed; no error on the page. NOT TRIED in the room: a picture of his own on the skirt (the same path as the tee's).
+- NOT DONE, AND NAMED: seated, the CLOTH passes through the
   stool's edge and shows a hole at her side (pictured again at 0 and 100% on the new line: as it was; on her, FIT 0,
   and half-way it sits whole); her hands pass through it; it does not collide with itself; walking at 200% it gathers
   between her thighs; the maxi walking and a narrow skirt as her walk begins ("As her walk begins", above); a look saved in a low skirt on v0.9.41
@@ -1759,6 +1770,74 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   light skin and the full one alike: turned (3,827 and 3,969 points, 33 mm at the most) the top of her calf was drawn
   in thin with a hook behind her knee; not turned it is full, and the front of her knee is round at RECLINE's bend, at
   0 and 150%. Her knees' smoothing (`BIRTH_KNEES_FIELD`) stays: without it the back of her knee is torn.
+- **SEATED, HER BODY IS ONE PIECE AND EACH LEG ANOTHER, AS IN RECLINE AND SQUAT** (Joshua, 2026-11-20, from under the
+  stool at 0 to 200%: "at 0% belly size there is no pelvis, lol, it's all hidden"; "it's okay if the legs alter shape to
+  fit the belly a little"; 2026-11-21, of a room between her thighs laid alone: "The belly looks like a flat piece of skin
+  in front… it is not blended yet from standing to sitting… don't push until correctly fixed"; and "you can render
+  standing to sitting and see… what angle and when it messes up"). `SarahLabScene.ts` `sitWay`, `sitWeightsShare`,
+  `sitTenths`, `sitRoomHere`, `keepBirthRoom`.
+  - WHERE IT WENT WRONG, MEASURED in the room going from standing to seated at 0% (the probe's `sitReading`: each hip's
+    bend, her legs' spread, how far her inner thighs near her crotch have come inside where they stand standing): fine to
+    about 55 degrees of her hips' bend; by 75 the tops of her thighs rise over her groin and cover her mound and her vulva,
+    her lower belly ending in a flat ledge (seated: 84 degrees). Her inner thighs come NO nearer her middle than standing
+    (1 mm at the most): it is her skinning -- the skin of her groin is half her thighs' -- not her thighs closing.
+  - SO SEATED SHE WEARS WHAT RECLINE AND SQUAT WEAR: "the leotard" (`birthWeights.ts`: her belly, mound and vulva her
+    pelvis's, each leg its thigh's, across a soft band at each leg opening); her hips turned round in that band, not
+    averaged (`hipTurn.ts`; eased in by her thigh's share of a point, `SIT_HIP_EASE` 0.15 -- turned from a fiftieth at
+    once, a dashed hairline across her belly's flank at 100%, MEASURED; `tests/hipTurnEase.test.ts`); and her groin
+    smoothed (`birthNormals.ts`, with no half-turn, her hips being turned).
+  - HER BELLY IS NOT HELD SEATED, AS RECLINE'S IS (`sitHoldOn` false; Joshua, 2026-11-21, of v0.9.66 at 150 and 200% from
+    his phone, low in front: "100% and below is good, after 100%, you can see it changed the front profile and the sides
+    of the belly is like sucked in… the side profile is good, it's the front profile"). v0.9.66 held it (`BELLY_HOLD`:
+    none to 100%, all from 150%): her bump's far skin carried by her body's bones evened, which lean with her spine
+    seated, while the leotard keeps what is under it with her pelvis -- a crescent tucked in along the lower sides of her
+    bump. MEASURED in the room: the hold moves 3,750 to 3,850 points of her belly at 150 and 200%, up to 47 mm; at 100%
+    none over 1.2 mm; her side profile the same either way. Pictured from his view at 100, 150 and 200%, v0.9.65,
+    v0.9.66 and without the hold: no crescent; the lower belly runs down into her groin as it does at 100%.
+  - HER BUMP KEEPS ITS STANDING SHAPE, CARRIED AS ONE PIECE, A LITTLE LOWER IN ITS MIDDLE (Joshua, 2026-11-21: "before
+    looked better as it kept the rounder belly and also sat lower… below the belly into the pelvis/opening, keep your
+    fix"; then, of v0.9.67: "lower the belly more and maybe right in the middle of the belly a slight sag/downwards dip";
+    "make sure the belly shape from the side and front doesn't change, 73% is changing from the front view like 200%
+    did"; "fix the hips, the skin is not closing leaving some gaps"). `sitBelly.ts`, field `shape:sitBelly`: each point
+    of her bump where it stands STANDING (her own weights, her standing bones read for a moment, her seated correctives
+    left out), moved by the one turn and carry that best take the top of her bump from standing to seated (`rigidFit`:
+    her own weights, which give her thighs none of it there; MEASURED 1.1 to 2.3 degrees), let down under its middle
+    (`SIT_BELLY.sag` 1 cm at 200%, a bell 8 cm either side of her middle, all of it at its lowest and none half-way up
+    it), taken back through the leotard's weights. Laid by her bump's FOOTPRINT -- how far her 200% bump moves each
+    point from her 0% belly over the most it moves any, 0.15 to 0.5 (her mound is 0.12, MEASURED down her middle) --
+    times her bump's size (none at 0%, all from 50%, `grow`). Her hips' turn and her groin's smoothing are kept off it by
+    the same share (`SitBelly.under`). GAME TUNING all.
+    - v0.9.67 HAD laid her OWN weights' place by how far over the under-belly line a point stands (`hoopInside`): her
+      thighs' share of her bump's lower sides pulled them, and the line ran across her lower back and her hips, where her
+      own weights and the leotard's differ and its value steps between her leg's skin and her trunk's -- a ragged tear
+      across the top of her seat (pictured at 200% from behind with the field on and off). The footprint touches nothing
+      behind her (MEASURED: none of its points behind her rest middle).
+    - 2 cm of sag let her bump over her mound at 200% from in front and low (past his red line, just over it); her flat
+      belly carried so at 0% stood forward of her mound in a fold (44 mm at the most): hence 1 cm, and `grow`.
+    - MEASURED in the room (light skin, 1x; her points against her standing points): her bump's shape, any two of its
+      points' distance apart against standing, p50 / p95 0.4 / 1.7 mm at 50%, 0.8 / 2.7 at 73%, 1.0 / 4.1 at 100%,
+      2.1 / 11.4 at 150%, 2.4 / 18.2 at 200% (the sag); v0.9.65 1.2 / 4.0 to 8.7 / 26, v0.9.66 4.0 / 21 to 13.8 / 60. The
+      lowest of her bump 58.1, 58.0, 57.8, 57.8 and 57.8 cm off the floor at 50, 73, 100, 150 and 200% (v0.9.65 57.7 to
+      60.1, v0.9.66 59.1 to 62.8). Her bump's points under the top of a thigh (a 1 cm grid of her thighs' tops): 12 (7 mm
+      at the most) at 73%, 25 (10 mm) at 100%, none at 50, 150 and 200% (v0.9.65 more at each). PICTURED at 0, 50, 73,
+      100, 150 and 200% from his view, in front low, close under her bump, her side and behind; and going from standing
+      to seated and back at 200%: no tear behind her, her mound and vulva under her bump at every size.
+    - The probe's `sitBelly(on, { from, to, sag, sagHigh, sagWide, grow, normals })`, `sitBellyMask()` (her footprint
+      as laid). `tests/sitBelly.test.ts`.
+  - FROM STANDING TO SEATED AND BACK: the leotard's weights all at once as she sets off (standing, weights move nothing),
+    and its fields worked out ONCE on her SEATED pose as she sets off (`sitAsSeated`; kept as she stands again) and laid
+    as far as she has sat, in `SIT_LAY_STEPS` (10) steps -- each her fields laid again (MEASURED: 25 ms a step on the build
+    machine; working them out 1.1 to 1.7 s, once, as she sets off -- as RECLINE's are as it is pressed). The weights
+    eased in by tenths instead tore a ragged line along each groin crease on the way (her weights blended past four bones
+    a point and the smallest dropped, point by point): MEASURED, and not done.
+  - TRIED FIRST AND TAKEN OUT: the birth poses' room between her thighs laid in SIT (`birthRoom.ts`; no change he could
+    see), then a room of its own twice as wide (`SIT_ROOM`, 7.5 cm off her middle) -- pushed every point of her inner
+    thighs to one plane and stretched her mound between: his "flat piece of skin". The probe can still lay one
+    (`sitRoom(true, normals, tune)`; `sitRoomOn` false).
+  - MEASURED in the room 2026-11-21 (light skin, 1x, nothing worn): seated at 0, 50, 100, 150 and 200% from her front,
+    his low view, her three-quarter and her side: her lower belly runs into her mound and her vulva, her thighs beside
+    them, at every size; going from standing to seated and back at 0%, pictured at each second: smooth throughout; with
+    her seated correctives (`bellySeat`, `bellySeatV2`) on and off at 100 and 200%: as good either way, left on.
 - MEASURED in the room, both poses at 200 and 150% on the light skin and 200% on the full one: round, no line down her
   belly's sides, no patch. LEFT, AND NAMED: faint ripples low on her belly's front in SQUAT at 200%.
 - After anything changes the hold, her soft belly's share or her navel's lay: `tests/bellyHold.test.ts`,
@@ -2022,7 +2101,71 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   and below, off and on (60 passes within 7 cm tried first: the pinch gone, a line left down his middle): one surface from
   thigh to thigh. LEFT: a soft line of shade down his middle; a white streak along his lower belly's left side from below,
   there without it too.
-- NOT DONE: his own pelvis bone; clothes;
+- **HIS BELLY IS HIS BODY'S IN SQUAT, AS HERS IS** (Joshua, 2026-11-20: "at max belly for the male squatting, his lower belly
+  was squished"; `SarahLabScene.ts` `MALE_HOLD`, `maleHeld`, field `shape:maleHold`, laid by `keepMaleSquat` before his groin's
+  smoothing; `hipTurn.ts` `createHipTurn`'s `opts`: his units and his numbers). His lower belly is up to half his thighs'
+  in his file, so the hold takes points his thigh carries up to half of (`most` 0.5, none past 0.85 -- hers 0.12/0.22: at
+  hers it held 2,000 points a side and left a torn edge across his belly), and by his belly's size from 0 to 50% (his
+  file has none; at 100% unheld his belly was squashed flat). MEASURED in the room, SQUAT: 0% as before; 100% and 200%
+  round over his thighs from his side and three-quarter, about 4,700 points held a side, 82 mm moved at the most at 200%.
+  The probe's `maleHold(on, numbers)`. LEFT: a firm fold where the underside of a 200% belly meets his thighs.
+- **HIS BELLY IS CARRIED BY HIS PELVIS, AND KEEPS ITS SIDE PROFILE IN SQUAT** (Joshua, 2026-11-20: "Is it possible for the
+  male model to keep the same side profile of the belly from 0-200% while squatting? It still appears to be off and
+  flatten the bottom"; `SarahLabScene.ts` `MALE_BELLY_CARRY`, `carryMaleBelly`). SUPERSEDES THE HOLD ABOVE, which is off
+  (`maleHoldOn` false; the probe's `maleHold(true)` puts it back). Where his belly's own shape is (`maleBellyFoot`: what it
+  moves him at 100%, none under 2 mm, all from 15 mm) his thighs' share of his skin is handed to his PELVIS bone, by his
+  belly's size: none at 0% -- his file's weights exactly, as he has always been -- all from 50%; the skinWeight attribute
+  is written again from his file's own copy whenever that share changes, in every pose. His groin's smoothing (MALE_GROIN)
+  is kept off the same points by the same share: it smoothed the bulge's underside away. GAME TUNING.
+  - WHAT WAS TRIED FIRST, MEASURED in the room (light skin, 1x), each taken out: the hold given the belly's footprint (his
+    body's bones evened in from round it: a boxy belly with seams where one bone's share gave way to the next); the
+    bulge alone carried by ONE turn, his belly's own (as good as none: the squash is where his skinning carries the skin
+    UNDER the bulge, not how it turns the bulge); all of it by one rigid carry (his groin's skin pulled up into a sheet).
+  - A FAULT FOUND ON THE WAY, in v0.9.64 as live: in SQUAT his hands rest on his hips, and at 100 and 200% the hold carried
+    a piece of his flank up with them in a flap (his file gives his arm bones a share of his flank, and the hold evened
+    it inward). Gone with the hold.
+  - MEASURED in the room (light skin, 1x, his boxer briefs): SQUAT at 0, 50, 100 and 200% from his side and three-quarter
+    -- round over his thighs, its underside curved as standing; standing and walking at 200%. `maleCarry(on)` switches it.
+- **HIS CLOTHES: HIS OWN OUTFITS, PAINTED** (Joshua, 2026-11-20: "start on some clothing options for the male model"; the
+  order he passed: his underwear first, so he never loads bare, then the painted basics, then the cloth tee, then cuts of
+  his own). The outfit editor's paint is laid on him as on her (`SarahLabScene.ts`: his skin given an all-nothing
+  `_cloth_cover`, the attribute the editor finds its body by; `wearPaint`'s `dressable`). SIX OUTFITS OF HIS
+  (`sarahLabTool.ts` `BuiltInOutfit.his`, put after everything there was; `offeredOutfits(available, his)`: his on him
+  and hers on her, and her OUTFIT never steps onto his): his boxer briefs (`HIS_DEFAULT_OUTFIT`: what he opens in), his
+  trunks, a tee, a V-neck tee, a sleeveless shirt over athletic shorts, a long-sleeve shirt over compression tights, in
+  `MALE_COLOURS`. Four templates of his (`paintTemplates.ts`): `trunks` (0.105 of his leg), `boxerBriefs` (0.17),
+  `shortsMale` (0.32), `tightsMale`, all on `MALE_RISE` (0.1 / 0.14 / 0.18 of his trunk: under his navel in front,
+  over his seat behind) with a 3.5 cm waistband; his tops are her drawn tops as they are. All GAME TUNING.
+  - THREE FAULTS FOUND PUTTING THEM ON HIM, each fixed: (1) HER OPENING'S AREA WAS REBUILT ON HIM (`remakeVulva`; her birth
+    shade and her cleft's and lips' fields too) and drawn over his own skin -- a patch on the inside of his right thigh and
+    under his seat that no paint reached; it is hers alone now. (2) HE WAS READ FACING BACKWARD: `bodyRegions.mapBody` tells
+    which way a body faces by its torso (a pregnant torso reaches further forward than back), and his seat and back reach
+    further back: every drawn top's neck opening was laid on his back (a V-neck a crew in front) and a waistband's front
+    and back were swapped. His facing is told by his feet now (`mapBody`'s `facing`: his toes reach further from his
+    ankles than his heels). (3) HIS FILE GIVES HIS ARM BONES THE SIDE OF HIS CHEST under his armpit: a sleeveless shirt's
+    armhole was bare there in a ragged patch. His arm's skin is what lies within `MALE_ARM_REACH` (8.5 cm) of his arm's
+    bones (`mapBody`'s `armReach`); further, it is his torso's. Hers is told as it always was.
+  - TRUE BRIEFS ARE NOT A RING ROUND HIS LEG: tried at 0.04 of his leg, the lower half of his seat was bare. They want a
+    drawn leg opening, as her bikini bottom has: NOT DONE. MEASURED in the room (light skin, 1x): the six from his
+    three-quarter and his back, his underwear from his front, side, back and below, the sleeveless from both sides.
+  - Their cards: `MALE=1 node scripts/bakeOutfitThumbs.mjs` (ONLY= his); his styles' pictures: `MALE=1
+    ONLY=trunks,boxerBriefs,shortsMale,tightsMale node scripts/bakeStyleThumbs.mjs`.
+- **HIS CLOTH TEE** (Joshua, 2026-11-20: "we should focus on his cloth tee now"). The procedural tee (`garment/`) DRAFTED ON
+  HIM: `bodyInput.ts` `rigOf` (his joints by role, his arm bones every bone from a shoulder down, his geometry's metres as
+  they are: `bindScale` 1, no offset) in place of her `SARAH_V2_RIG`; `RoomGarment`'s `rig`, `detailPoints: null` (her
+  navel and nipples' detail points are hers) and `fabricScale` (his weave laid in metres, as hers is: `1 / M`, or the
+  jersey drew in blotches). Its material is `shirtSpandexLite`, so the outfit editor's fabrics, colours and a picture of
+  his own reach it. Three outfits of his, put after his six (`sarahLabTool.ts`): `his cloth tee`, `his cloth V-neck tee`
+  and `his cloth long-sleeve tee + athletic shorts`, each at LENGTH 17 (the drafted hem, her hip's, is at his mid-thigh:
+  his widest girth is low -- at 12 a gap of skin over his shorts' waistband), fetching nothing. GAME TUNING.
+  - TWO WRONG STEPS OF MINE ON THE WAY: `unitsPerMetre` must be the room's (M, world cm): at 1 the tee closed to a ring;
+    and a HALF TURN I gave his body on the way in, thinking her rest frame faces -z -- `measure.ts` reads her front as
+    the LARGEST z, as his faces: turned, the V-neck was on his back. Taken out.
+  - MEASURED in the room (light skin, 1x): the three from his three-quarter and his back, the crew from his side; hem
+    86 to 87 cm from the floor, over his shorts' waistband; no error on the page.
+  - NOT DONE: his tee in his poses (squat, seated, walking) looked at; its sleeves stand a little off his arms (the
+    draft's ease is hers); a cuff's edge at the long sleeve's wrist.
+- NOT DONE: his own pelvis bone; true briefs; loose shorts and trousers;
   his head's parts; RECLINE floats (her bed is not drawn either); his NAVEL setting kept in a save.
 - After anything changes him: `tests/maleBase.test.ts`, `tests/maleBelly.test.ts`, `tests/sarahBase.test.ts`; then the room:
   MALE, his belly at 0, 100 and 200% from his side and front, T-POSE from his back, X-RAY from his side.

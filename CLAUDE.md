@@ -293,7 +293,8 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.60 (copied 2026-11-20 from its approved `main` bae4157: the catsuit DRAWN, smooth edges; its
+- THE BUILDER, v0.9.68 (copied 2026-11-21 from its `main` e2ebcf8 at Joshua's word: her seated fixes, no pinching at her belly
+  and pelvis, and the male body's outfits; checked in the BUILT game, her hidden live body running. Before that v0.9.60, 2026-11-20, `main` bae4157: the catsuit DRAWN, smooth edges; its
   neckline from a low U/V to a turtleneck, neck shape and width; a CHEST CUTOUT, oval, diamond or keyhole; its room now
   disposes its head panel, the 350 MB leak; before that v0.9.51, skin depth's hybrid; v0.9.49, the hybrid pregnancy
   curve, kicks, exact belly %; Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a

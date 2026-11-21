@@ -63,11 +63,12 @@ export interface BirthRoom {
   readonly parts: { side: number; back: number; bend: number };
 }
 
-export function createBirthRoom(mesh: THREE.SkinnedMesh, toRest: THREE.Matrix4, indices: ArrayLike<number>, pelvis: number, thighL: number, thighR: number): BirthRoom | null {
+/** `tune`: numbers of its own (a probe's: SIT's room is not laid -- `SarahLabScene.ts` `sitRoomOn`) */
+export function createBirthRoom(mesh: THREE.SkinnedMesh, toRest: THREE.Matrix4, indices: ArrayLike<number>, pelvis: number, thighL: number, thighR: number, tune: Partial<Record<keyof typeof BIRTH_ROOM, number>> = {}): BirthRoom | null {
   const g = mesh.geometry as THREE.BufferGeometry;
   const si = g.getAttribute('skinIndex') as THREE.BufferAttribute | undefined, sw = g.getAttribute('skinWeight') as THREE.BufferAttribute | undefined, pa = g.getAttribute('position');
   if (!si || !sw || !pa) return null;
-  const n = pa.count, B = BIRTH_ROOM, rest = new Float32Array(n * 3), v = new THREE.Vector3();
+  const n = pa.count, B = { ...BIRTH_ROOM, ...tune }, rest = new Float32Array(n * 3), v = new THREE.Vector3();
   for (let i = 0; i < n; i++) v.set(pa.getX(i), pa.getY(i), pa.getZ(i)).applyMatrix4(toRest).toArray(rest, i * 3);
   const c = birthAreaCentre(rest);
   if (!c) return null;

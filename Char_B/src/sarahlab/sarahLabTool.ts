@@ -667,6 +667,8 @@ export const SHEET_BOTTOMS = Object.freeze({ black: '#232326', slate: '#4f5d7c',
  * over the high rise's band.
  */
 export const SHEET_BOTTOMS_TEE_HEM = 0.42;
+/** HIS OUTFITS' COLOURS (GAME TUNING): plain menswear colours. */
+export const MALE_COLOURS = Object.freeze({ black: '#232326', navy: '#26324f', charcoal: '#45464c', white: '#e6e6e2', heather: '#9a9ca2' });
 /**
  * One layer of a built-in outfit: a template and its fabric, a pack colour or a custom one (`tint`, fabricTint.ts).
  * `edging`: a drawn top's bands in a colour of their own (`fabricLibrary.edgingOf`); without one they match its fabric.
@@ -688,16 +690,16 @@ export interface PaintedLayer {
  * GAME TUNING, by eye on her: metres under her front neck point and across her shoulders, and the sliders' own stops.
  */
 export const CLOTH_TOPS: readonly (readonly [name: string, tint: string | null, cut: Partial<GarmentSettings>, construction?: 'raglan' | 'setIn'])[] = Object.freeze([
-  ['cloth crew tee + leggings', null, { neckDepth: 0.025, neckWidth: 0.18 }],
+  ['cloth crew tee + leggings', null, { neckDepth: 0.025, neckWidth: 0.18, length: 17 }],
   ['cloth U-neck tee + leggings', null, { neckDepth: 0.11, neckWidth: 0.2, neckCurve: 0 }],
-  ['cloth V-neck tee + leggings', null, { neckDepth: 0.13, neckWidth: 0.2, neckCurve: 1 }],
+  ['cloth V-neck tee + leggings', null, { neckDepth: 0.13, neckWidth: 0.2, neckCurve: 1, length: 17 }],
   ['cloth scoop-neck tee + leggings', SHEET_PLUM, { neckDepth: 0.12, neckWidth: 0.26, neckCurve: 0.15 }],
   // (these two SET-IN: MEASURED in the room on the base model, a raglan cut off at her shoulder leaves its armhole open
   // down her side to her waist; a set-in's armhole lies round her arm -- and is still deep, seen from her side)
   ['cloth sleeveless tee + leggings', SHEET_TOPS.olive, { neckDepth: 0.06, neckWidth: 0.2, sleeve: 0 }, 'setIn'],
   ['cloth cap-sleeve tee + leggings', SHEET_TOPS.rose, { neckDepth: 0.06, neckWidth: 0.2, sleeve: 20 }, 'setIn'],
   ['cloth three-quarter tee + leggings', SHEET_TOPS.heather, { neckDepth: 0.04, sleeve: 80 }],
-  ['cloth long-sleeve tee + leggings', SHEET_DENIM, { neckDepth: 0.025, sleeve: 100 }],
+  ['cloth long-sleeve tee + leggings', SHEET_DENIM, { neckDepth: 0.025, sleeve: 100, length: 17 }],
   ['cloth crop tee + leggings', SHEET_TOPS.lilac, { neckDepth: 0.04, length: 0 }],
   ['cloth tunic + leggings', SHEET_TOPS.burgundy, { neckDepth: 0.08, neckWidth: 0.22, length: 50 }],
 ]);
@@ -779,7 +781,9 @@ export interface BuiltInOutfit { readonly name: string; readonly garments: reado
   /** A SKIRT (`skirt/skirtDraft.ts`): its top, its length, its flare, its fit. */
   readonly skirt?: SkirtSettings;
   /** Its skirt's colour (a tint of the pack's ATHLETIC knit, as its painted part was dyed): a skirt has no paint of its own to take one from. */
-  readonly skirtTint?: string }
+  readonly skirtTint?: string;
+  /** HIS (the male base model's): offered on him and only on him (`offeredOutfits`); every other outfit is hers. */
+  readonly his?: true }
 export const OUTFITS: readonly BuiltInOutfit[] = [
   { name: 'tee + leggings', garments: ['shirtAthletic', 'leggings'] },
   { name: 'top + low leggings', garments: ['shirtAthletic', 'leggingsLow'] },
@@ -868,6 +872,30 @@ export const OUTFITS: readonly BuiltInOutfit[] = [
   ...TEE_SKIRTS.map(([name, tint, skirt, cut]): BuiltInOutfit => ({
     name, garments: ['shirtSpandexLite'], skirt, skirtTint: tint, procedural: 'raglan', cut,
     fabrics: { shirtSpandexLite: { family: 'jersey', colour: 0 } }, paint: skirtUnderwear(tint),
+  })),  // HIS OUTFITS (Joshua, 2026-11-20: "start on some clothing options for the male model"; the order he passed: his
+  // underwear first, so he never loads bare, then the painted basics), all paint, offered on him alone. Put after
+  // everything there was: no outfit has moved.
+  ...([
+    ['his boxer briefs', [['boxerBriefs', MALE_COLOURS.navy]]],
+    ['his trunks', [['trunks', MALE_COLOURS.charcoal]]],
+    ['his tee + athletic shorts', [['shortsMale', MALE_COLOURS.black], ['teeShort', MALE_COLOURS.white]]],
+    ['his V-neck tee + athletic shorts', [['shortsMale', MALE_COLOURS.charcoal], ['teeV', MALE_COLOURS.heather]]],
+    ['his sleeveless shirt + athletic shorts', [['shortsMale', MALE_COLOURS.navy], ['sleeveless', MALE_COLOURS.white]]],
+    ['his long-sleeve shirt + tights', [['tightsMale', MALE_COLOURS.black], ['teeLong', MALE_COLOURS.navy]]],
+  ] as const).map(([name, layers]): BuiltInOutfit => ({
+    name, garments: [], his: true,
+    paint: layers.map(([template, tint]) => ({ template, fabric: { family: template === 'teeShort' || template === 'teeV' || template === 'sleeveless' || template === 'teeLong' ? 'jersey' : 'athletic', colour: 0, tint } })),
+  })),
+  // HIS CLOTH TEES (Joshua, 2026-11-20: "focus on his cloth tee now"): the procedural tee tailored to him, over his
+  // athletic shorts -- crew, V-neck and long sleeve. Put after his painted six
+  ...([
+    ['his cloth tee + athletic shorts', MALE_COLOURS.heather, MALE_COLOURS.black, { neckDepth: 0.025, neckWidth: 0.18, length: 17 }],
+    ['his cloth V-neck tee + athletic shorts', MALE_COLOURS.navy, MALE_COLOURS.charcoal, { neckDepth: 0.13, neckWidth: 0.2, neckCurve: 1, length: 17 }],
+    ['his cloth long-sleeve tee + athletic shorts', MALE_COLOURS.charcoal, MALE_COLOURS.black, { neckDepth: 0.025, sleeve: 100, length: 17 }],
+  ] as const).map(([name, tee, shorts, cut]): BuiltInOutfit => ({
+    name, garments: [], his: true, procedural: 'raglan', cut,
+    paint: [{ template: 'shortsMale', fabric: { family: 'athletic', colour: 0, tint: shorts } }],
+    fabrics: { shirtSpandexLite: { family: 'jersey', colour: 0, tint: tee } },
   })),
 ];
 /**
@@ -936,6 +964,7 @@ export function nextOutfit(index: number, available: readonly Garment[] = []): n
 }
 /** Whether a model offering `available` offers outfit `index` (what OUTFIT steps through, and the WEAR cards show). */
 function offered(index: number, available: readonly Garment[]): boolean {
+  if (OUTFITS[index].his) return false;
   const wanted = wantedGarments(index, available);
   if (OUTFITS[index].paint && available.length && !paintedOutfitsAvailable(available)) return false;
   // where painted outfits are, the modelled clothes that need their own files are kept but never offered, so never
@@ -959,9 +988,11 @@ export function outfitWorn(index: number, available: readonly Garment[]): number
   return offered(i, available) ? i : paintedOutfitsAvailable(available) ? SARAH_DEFAULT_OUTFIT : 0;
 }
 /** Every outfit a model offering `available` offers, in OUTFITS order, without 'none' (a blank outfit is NEW OUTFIT's). */
-export function offeredOutfits(available: readonly Garment[]): number[] {
-  return OUTFITS.map((_, i) => i).filter((i) => OUTFITS[i].name !== 'none' && offered(i, available));
+export function offeredOutfits(available: readonly Garment[], his = false): number[] {
+  return OUTFITS.map((_, i) => i).filter((i) => OUTFITS[i].name !== 'none' && !!OUTFITS[i].his === his && (his || offered(i, available)));
 }
+/** The outfit the MALE BASE MODEL opens in: his boxer briefs (he never loads bare). */
+export const HIS_DEFAULT_OUTFIT = OUTFITS.findIndex((o) => o.name === 'his boxer briefs');
 /** Where a built-in outfit's baked card picture is served (`scripts/bakeOutfitThumbs.mjs` writes it). */
 export const outfitThumbPath = (name: string): string => `sarahlab/outfits/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.jpg`;
 /**
@@ -1335,7 +1366,8 @@ export function statusLine(loaded: boolean, failed: boolean, garments: readonly 
   const called = MODEL_NAMES[m.id];
   if (failed) return `${m.path} did not load`;
   if (!loaded) return `loading ${called ?? m.id}…`;
-  const g = garments.length ? `${garments.length} garment${garments.length === 1 ? '' : 's'}` : 'no clothes in this file yet';
+  // (his clothes are all paint: none of them is in his file, and he is not without clothes)
+  const g = garments.length ? `${garments.length} garment${garments.length === 1 ? '' : 's'}` : isMaleModel(m.id) ? 'painted clothes' : 'no clothes in this file yet';
   const rest = `${hasBelly ? 'belly slider' : 'no belly slider'} · ${g}`;
   if (called) return named ? `${called} · ${rest}` : rest;
   return `model ${m.id} · ${rest}`;

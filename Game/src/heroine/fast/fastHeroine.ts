@@ -737,12 +737,23 @@ if (uHideHead > 0.5) {
   const nowF = new THREE.Vector3(), nowU = new THREE.Vector3(), nowS = new THREE.Vector3();
   const wantF = new THREE.Vector3(), wantU = new THREE.Vector3(), wantS = new THREE.Vector3();
   const nowBasis = new THREE.Matrix4(), wantBasis = new THREE.Matrix4(), steadyTurn = new THREE.Quaternion();
+  const spineAxis = new THREE.Vector3();
+  /**
+   * A way in the world (its compass angle FROM HER BODY'S WAY, and its pitch) as a neck's tip and turn: tipped by P,
+   * then turned r about the tipped head's up, a head looks along (sin r, cos r sin P, cos r cos P) in her body's frame;
+   * so r = asin of the way's sideways part, P = the angle of the rest. Returns [r, P], radians.
+   */
+  const sideAndTip = (fromBody: number, pitch: number): [number, number] => {
+    const x = Math.sin(fromBody) * Math.cos(pitch), y = Math.sin(pitch), z = Math.cos(fromBody) * Math.cos(pitch);
+    return [Math.asin(Math.max(-1, Math.min(1, x))), Math.atan2(y, z)];
+  };
   const skullWorldQ = new THREE.Quaternion(), skullParentQ = new THREE.Quaternion();
   /**
-   * Turn her skull (about its own base) so it looks along `yaw` and `pitch` (world, radians; pitch goes on past straight
-   * down), level: its up in the upright plane of its look. Her neck is left as it is. (See "HER HEAD HELD STEADY".)
+   * Turn her skull (about its own base) as a neck turns it: from her body's way `yaw`, tipped `pitch` (world, radians;
+   * past straight down too), then turned `side` about its own up (a "no" shake pans sideways whatever the tip). Her
+   * neck is left as it is. (See "HER HEAD HELD STEADY" and "HER HEAD TURNS AS A NECK DOES".)
    */
-  const steadyHead = (yaw: number, pitch: number): void => {
+  const steadyHead = (yaw: number, pitch: number, side: number): void => {
     if (!skull.parent) return;
     skull.updateWorldMatrix(true, false);
     skull.getWorldQuaternion(skullWorldQ);
@@ -754,6 +765,8 @@ if (uHideHead > 0.5) {
     const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
     wantF.set(sy * cp, sp, cy * cp);
     wantU.set(-sy * sp, cp, -cy * sp);
+    // (then turned `side` about that up: a neck's turn after its tip; its up stays as it is)
+    if (Math.abs(side) > 1e-6) wantF.applyAxisAngle(wantU, side);
     wantS.crossVectors(wantF, wantU).normalize();
     // (the turn that takes the one set of directions onto the other: want · now⁻¹; a basis's inverse is its transpose)
     nowBasis.makeBasis(nowF, nowU, nowS);
@@ -1569,22 +1582,40 @@ if (uHideHead > 0.5) {
       const upright = 1 - downS;
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
       const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
+      // HER HEAD TURNS AS A NECK DOES (Joshua, 2026-11-20: "the left and right ended up on the twist axis... it's
+      // supposed to be left and right relative to the torso like standing"): it tips up or down from her torso's line
+      // (`headTip`, then `rel` below), and turns left or right ABOUT ITS OWN UP after that tip (`headSide`, from her
+      // body's way), so a turn always pans what she sees sideways, looking level, down, bent over or on all fours.
+      // Turned about the world's upright instead, looking down it spun the view like a screw.
+      //   first person  the player's look IS that tip and turn (rig yaw less her body's way, rig pitch);
+      //   third person  her look is a way in the world (a target): the tip and turn that point her head along it.
+      let headSide = 0, headTip = facing?.headPitch ?? 0;
+      if (facing) {
+        if (firstPerson) headSide = wrap(facing.head - yawNow);
+        else [headSide, headTip] = sideAndTip(facing.head - yawNow, headTip);
+      }
       // SHE LOOKS DOWN AT HER HAND WHERE THE BABY KICKED (bellyTouch.ts `look`; Joshua, 2026-11-20), over where she was
       // looking: her head turned and tipped toward the spot by as much as the look is on (in first person too: the
       // camera is on her head)
-      let headYaw = facing ? facing.head : yawNow, headTip = facing?.headPitch ?? 0;
       const looking = bellyHand.look(lookSpot) * upright;
       if (looking > 0) {
         skull.updateWorldMatrix(true, false);
         skull.getWorldPosition(skullAt);
         const dx = lookSpot.x - skullAt.x, dz = lookSpot.z - skullAt.z, flat = Math.hypot(dx, dz);
         // (a spot nearly straight below her head says little about which way: her head turns only as far as it says)
-        headYaw += wrap(Math.atan2(dx, dz) - headYaw) * looking * Math.min(1, flat / 0.15);
-        headTip += (Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)) - headTip) * looking;
+        const [spotSide, spotTip] = sideAndTip(Math.atan2(dx, dz) - yawNow, Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)));
+        headSide += wrap(spotSide - headSide) * looking * Math.min(1, flat / 0.15);
+        headTip += (spotTip - headTip) * looking;
       }
+      const headYaw = yawNow + headSide;
       const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
-      if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
-      if (Math.abs(headTurn) > 1e-4) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+      // (her back's and neck's turns go ALONG HER SPINE, pelvis to neck, not about the world's upright: crouched or
+      //  leaning in, she twists in herself instead of swinging sideways)
+      root.updateMatrixWorld(true);
+      bone(joints.pelvis).getWorldPosition(leanFrom);
+      spineAxis.copy(neckBone.getWorldPosition(leanTo)).sub(leanFrom).normalize();
+      if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnAbout(backBones[i], spineAxis, backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
+      if (Math.abs(headTurn) > 1e-4) for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], spineAxis, headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       // (her head's tip up or down comes after her body is bent and lowered, below: it is measured from her torso)
 
       // GETTING DOWN TO WHAT HER HANDS REACH FOR (lowerBody.ts): toward the middle of the hands that have a job.
@@ -1633,11 +1664,12 @@ if (uHideHead > 0.5) {
           for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, tip * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
           root.updateMatrixWorld(true);
         }
-        // FIRST PERSON, HER HEAD HELD STEADY (Joshua, 2026-11-20: "The camera bob is fixed, but the sway is still there"):
-        // her walk still twists her hips and shoulders, and her neck carried her head with them. As a real person keeps
-        // her eyes steady, her skull is turned to look EXACTLY where it is meant to (`headYaw`, and `rel` from her
-        // torso's line), level, no roll: only her skull, about its own base, every frame, nothing eased.
-        if (firstPerson) steadyHead(headYaw, rel - torsoLean);
+        // HER HEAD HELD STEADY (Joshua, 2026-11-20: "The camera bob is fixed, but the sway is still there"): her walk
+        // still twists her hips and shoulders, and her neck carried her head with them. As a real person keeps her eyes
+        // steady, her skull is turned to look EXACTLY where it is meant to: tipped `rel` from her torso's line, turned
+        // `headSide` about its own up, no roll; only her skull, about its own base, every frame, nothing eased. In
+        // both views (her body still sways in third person; her head, as anyone's, keeps its aim).
+        steadyHead(yawNow, rel - torsoLean, headSide);
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

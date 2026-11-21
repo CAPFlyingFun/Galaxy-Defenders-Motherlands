@@ -50,12 +50,19 @@ use the game's single copy of three.js.
   "allow full rotating if not moving and to see past your limit, you have to move your joystick... settle over 3s to
   body center"; "wait 1 s before settling back over 3 s"; main.ts `freeView`, bodyTurn.ts `free`): first person with
   the MOVE stick centred, the view only turns her head (90 each side of her body, her neck's reach up and down), her body
-  stays; let go, it waits 1 s then settles back to straight ahead of her body over 3 s; the MOVE stick turns her. (Her
-  body had turned after her head and the view swung back as it caught up.) AT THE TABLE, BARS AND DOOR the up and down
+  stays, ALL OF IT (bodyTurn.ts `NO_SHARES`: her shoulders still turning after a drag stopped had pulled the view back);
+  let go, it waits 1 s then settles back to straight ahead of her body over 1.5 s (was 3); the MOVE stick turns her.
+  HER HEAD TURNS AS A NECK DOES (Joshua, 2026-11-20: "the left and right ended up on the twist axis... supposed to be
+  left and right relative to the torso like standing"; fastHeroine.ts `sideAndTip`, `steadyHead(yaw, pitch, side)`):
+  it tips up or down from her torso's line, then turns left or right ABOUT ITS OWN UP (a "no" shake), so a drag pans the
+  view sideways at any tip, lean or stance (looking down and turned, the horizon tilts, as it does for a real neck);
+  first person the player's look is that tip and turn, third person a target is turned into them; her head is held
+  steady so in both views. Her back's and neck's twists go along her spine (pelvis to neck), not the world's upright. AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
   LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds
-  (`busyFace` as bodyTurn's `hold`), her head follows the player's look, 90 each side; let go, the view waits 1 s
-  (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
+  (`busyFace` as bodyTurn's `hold`), her head follows the player's look, 120 each side: 90 her head and up to 30 her
+  shoulders' and torso's twist (Joshua: "30° just for the shoulders/torso + the 90° for the head"; bodyTurn.ts `grip`,
+  `gripTwist`, `gripShares`); let go, the view waits 1 s (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.

@@ -230,7 +230,7 @@ const BUSY_LOOK_RETURN_SECONDS = 1.5;
 const BUSY_LOOK_WAIT = 1;
 /** FIRST PERSON, STANDING (see `freeView`): once the player lets go, the view waits this long, then settles back over this long. */
 const FREE_LOOK_WAIT = 1;
-const FREE_LOOK_SETTLE = 3;
+const FREE_LOOK_SETTLE = 1.5; // (Joshua, 2026-11-20: "speed up to the same 1.5s" as at the bar; was 3)
 const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
@@ -528,7 +528,7 @@ async function start(): Promise<void> {
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
   const busyNow = (): boolean => tableUse.busy || grabUse.busy || doorUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
-  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; free: boolean } = { view: 'third', look: null, move: null, hold: null, free: false };
+  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; free: boolean; grip: boolean } = { view: 'third', look: null, move: null, hold: null, free: false, grip: false };
   /**
    * FIRST PERSON, LOOKING ROUND STANDING STILL (Joshua, 2026-11-20: "allow full rotating if not moving and to see past
    * your limit, you have to move your joystick to look further so it's basically a free to look and will settle over 3s
@@ -1362,6 +1362,8 @@ async function start(): Promise<void> {
     //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
     //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
     turnInput.hold = doorUse.faceYaw() ?? busyFace ?? (walkSides() ? rig.yaw : null);
+    // (holding on in first person: her head reaches 120 degrees each way, 30 of it her shoulders' twist: bodyTurn.ts `grip`)
+    turnInput.grip = busyFace !== null;
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
@@ -1468,7 +1470,7 @@ async function start(): Promise<void> {
       }
       busyView.pitch += (wantPitch - busyView.pitch) * ease;
       // (the player's look is limited while she holds on to something fixed; following a target it is not)
-      const side = busyNow() ? BUSY_LOOK_SIDE : Math.PI;
+      const side = busyNow() ? BUSY_LOOK_SIDE + (turnInput.grip ? TURN.gripTwist : 0) : Math.PI;
       busyView.lookYaw = Math.max(-side, Math.min(side, busyView.lookYaw));
       // (up and down: the view's own pitch stays within what HER NECK REACHES from her torso's line, as everywhere in
       //  first person: leaning on a bar she looks further down than standing. Joshua, 2026-11-20: holding the railing

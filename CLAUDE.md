@@ -645,6 +645,17 @@ use the game's single copy of three.js.
   on a phone), and `after-126-fixes`, `wip-131` as above. Proposed, not yet asked for: a build of 128 with switches,
   `?john_sharp=off` (127's detail sets), `?nosw=1` (no offline copy), `?john=off`; each opened twice (the first open
   after an update, then a second).
+- JOHN FIXED AT 1 % (v0.2.133, on v0.2.128; Joshua, 2026-11-21: 128 froze about 10 s in; "Put him at 1% detail. If that
+  works, then we can do the face and hands only and try again… and slowly add more"; "if no crashes, then we can make
+  certain parts maybe at 10% or 15% details where it looks good but not heavy either since she should be the main
+  one"): main.ts `JOHN_DETAIL` (1; null = he follows the player's level as before) and `JOHN_SHARP_PARTS` (false: none
+  of him kept sharp). Played or standing by, whatever Detail or the frame rate says, he is made once at 1 % and never
+  rebuilt; Blaze standing by keeps her own Detail choice (not his 1 %); OtherDetail is not used while his is fixed.
+  fastHeroine.ts `want`: a male body always takes the SHARP set's keys (the way that draws on the iPhone), even with
+  nothing locked. Measured in the lab before: his levels were 100 % 256 K triangles (skin 222 K + belt, guns, gear
+  34 K), 30 % 98 K, 10 % to 1 % about 92 K (his face, chest, belly, hands and arms locked held about 57 K of skin);
+  now about 2 K of skin at 1 %, about 36 K with his gear. NEXT (his plan): certain parts of him (face, hands) at
+  10-15 %, a lock that lightens them less rather than keeping them at 100 %.
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

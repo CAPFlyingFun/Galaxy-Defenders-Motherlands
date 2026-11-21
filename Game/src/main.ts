@@ -428,6 +428,19 @@ async function start(): Promise<void> {
   /** The detail of the one standing by: the player's within 20 m on a phone (always on a computer), then down to 1 %
    *  over 10 m (heroine/fast/otherDetail.ts). */
   const otherDetail = new OtherDetail();
+  /**
+   * JOHN'S DETAIL, FIXED (Joshua, 2026-11-21: v0.2.128 froze on his iPhone about 10 s in; "Put him at 1% detail. If that
+   * works, then we can do the face and hands only and try again… and slowly add more"). John is drawn at this ONE level,
+   * played or standing by, whatever the Detail setting or the frame rate says: made once, never rebuilt (before, every
+   * change of the frame rate made new copies of both bodies). Nothing of him is kept sharp (JOHN_SHARP_PARTS): with his
+   * face, chest, belly, hands and arms kept, about 57,000 of his 222,000 triangles stayed at every level, so his 1 % was
+   * about 92,000 triangles with his belt and guns; now about 36,000. Blaze is unchanged. null: he follows as before.
+   */
+  const JOHN_DETAIL: 1 | null = 1;
+  /** John's face, hands and the rest kept sharp at his fixed level (fastHeroine.ts `sharpParts`): none, for now. */
+  const JOHN_SHARP_PARTS = false;
+  /** The Detail a character is drawn at while PLAYED: John's fixed one, or the Settings choice (Blaze). */
+  const detailFor = (c: Character | null): HeroineSettings['detail'] => (c && c === john && JOHN_DETAIL !== null ? JOHN_DETAIL : graphics.detail);
   /** Blaze is the one being played (always, without John). */
   const playingBlaze = (): boolean => !john || playing !== john;
   const heroine: GameHeroine = new Proxy({} as GameHeroine, {
@@ -601,7 +614,9 @@ async function start(): Promise<void> {
   let johnFailed: string | null = null;
   if (graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
     try {
-      const body = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), 'john', true);
+      // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
+      const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
+      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true);
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
@@ -987,8 +1002,10 @@ async function start(): Promise<void> {
     motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
     turn.reset(to.yaw);
     to.body.setFacing?.(turn);
-    // (the one played takes the Detail chosen in Settings; the one left follows the player's level by distance)
-    to.body.setDetail?.(graphics.detail);
+    // (the one played takes the Detail chosen in Settings, John his fixed one; the one left follows the player's level
+    //  by distance, or, while John's is fixed, keeps its own: Blaze her Settings choice, John his JOHN_DETAIL)
+    to.body.setDetail?.(detailFor(to));
+    if (JOHN_DETAIL !== null) from.body.setDetail?.(detailFor(from));
     otherDetail.reset();
     bathroomLeft = 0;
     applyView();
@@ -1033,7 +1050,8 @@ async function start(): Promise<void> {
       // (the target frame rate and skin shine are EVERYONE'S, Blaze's and John's, played or standing by: Joshua,
       //  2026-11-21, "link up him to the same detail %"; before, only the one played took a change)
       // (Detail is the PLAYER'S: the one standing by follows the player's level by distance, otherDetail.ts)
-      if (key === 'detail') heroine.setDetail?.(graphics.detail);
+      // (Blaze takes it whether she is played or standing by; John keeps his fixed level: JOHN_DETAIL)
+      if (key === 'detail') { if (JOHN_DETAIL === null) heroine.setDetail?.(graphics.detail); else blaze ? blaze.body.setDetail?.(graphics.detail) : heroine.setDetail?.(graphics.detail); }
       else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
@@ -1587,8 +1605,10 @@ async function start(): Promise<void> {
         other.body.update(info);
         // HIS OR HER DETAIL (Joshua, 2026-11-21; heroine/fast/otherDetail.ts): the player's own level within 20 m on a
         // phone (always, on a computer), then stepped down to 1 % over the next 10 m
+        // (NOT while John's detail is fixed, JOHN_DETAIL: John keeps his, and Blaze standing by keeps her own Settings
+        //  choice instead of dropping to his 1 %. Kept for when his detail follows again.)
         const playerDetail = heroine.stats?.().detail;
-        if (playerDetail !== undefined) {
+        if (playerDetail !== undefined && JOHN_DETAIL === null) {
           const level = otherDetail.update(info.dt, playerDetail, Math.hypot(other.x - motion.x, other.z - motion.z));
           if (level !== null) other.body.setDetail?.(level);
         }

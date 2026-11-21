@@ -1120,9 +1120,12 @@ if (uHideHead > 0.5) {
    */
   const want = (detail: Detail): void => {
     // (JOHN ALWAYS FROM HIS SHARP SET, 2026-11-21: on Joshua's iPhone he was drawn only near the camera (his sharp set)
-    //  and further off only his belt, sneakers and shadow showed: his plain set did not draw there. His levels do not
-    //  lighten anyway (about 88,000 triangles sharp or plain, the male body's layout), so his sharp set costs nothing more.)
-    const sharp = keepSharp && (near || firstPerson || male);
+    //  and further off only his belt, sneakers and shadow showed: his plain set did not draw there. So a male body always
+    //  takes the sharp set's way, the one that draws on the iPhone, EVEN WITH NOTHING KEPT SHARP (`sharpParts` off: then
+    //  that set is simply lightened all over, the same triangles a plain set would have, under the sharp set's keys).
+    //  John is made that way for now, at 1 % (main.ts JOHN_DETAIL): with his face, chest, belly, hands and arms kept
+    //  sharp, about 57,000 of his 222,000 triangles stayed at every level, so 30 % and 1 % were nearly the same.)
+    const sharp = male || (keepSharp && (near || firstPerson));
     const key = detail === 100 || sharp ? detail : detail + PLAIN_KEY;
     wantedKey = key;
     if (key === drawnKey) return;

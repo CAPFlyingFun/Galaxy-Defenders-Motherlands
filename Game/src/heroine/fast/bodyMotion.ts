@@ -208,8 +208,14 @@ export class BodyMotion {
   get bind(): readonly BindJoint[] { return this.rig.bind; }
   /** This frame's weights for her four motion shapes, in shapedBody.ts's MOTION_SHAPES order. */
   readonly weights = [0, 0, 0, 0];
-  /** Her look's Bob, percent (read by the heroine, who lifts and lowers her by it: fastHeroine.ts). */
-  get walkBob(): number { return this.settings.walkBob; }
+  /**
+   * HOW MUCH OF HER LOOK'S BOB AND SWAY SHE HAS, 0..1 (Joshua, 2026-11-20: "the body naturally has a bob and sway
+   * adjustment... in 1st person, make 0% Bob, Sway, but show it in 3rd person"): 0 in first person, 1 in third
+   * (fastHeroine.ts `setFirstPerson`).
+   */
+  bobSwayShare = 1;
+  /** Her look's Bob, percent, as much as she has now (read by the heroine, who lifts and lowers her by it: fastHeroine.ts). */
+  get walkBob(): number { return this.settings.walkBob * this.bobSwayShare; }
   /** 0 standing, 1 walking, in between while she starts or stops. */
   walkBlend = 0;
   /**
@@ -412,7 +418,7 @@ export class BodyMotion {
         // (her legs her own: the stride at her speed, over the builder's fixed walk or run legs)
         writeLegs(this.walkTurns, measure, bind, phase, this.shape, carry, this.unitsPerMetre);
         // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
-        const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * walkEase(speed));
+        const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * this.bobSwayShare * walkEase(speed));
         this.rig.apply(weighWalk(measure, steps, weight, this.weighedTurns));
         return weight.sway;
       };

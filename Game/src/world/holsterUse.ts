@@ -123,6 +123,17 @@ export class HolsterUse {
   }
 
   /**
+   * AT THE START HER GUNS ARE IN THEIR HOLSTERS (Joshua, 2026-11-20: "Keep guns in holsters at start up and you can
+   * remove them": DRAW takes them out). A side with no holster keeps its gun in her hand.
+   */
+  startHolstered(): void {
+    const h = this.heroine.hands;
+    if (!h) return;
+    for (const hand of ['left', 'right'] as const) if (h.hasGun(hand) && h.holster(hand)) this.holstered[hand] = true;
+    this.reseat();
+  }
+
+  /**
    * A NEW OUTFIT (main.ts `changeOutfit`): she is a new body with her guns back in her hands, so every gun that was
    * holstered is put straight into the new body's holster, in its seat (no reach: the change happens behind a cover).
    * A body with no holster on that side keeps that gun in her hand.

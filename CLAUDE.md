@@ -26,10 +26,10 @@ use the game's single copy of three.js.
   FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
   touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
   `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL AT HER EYES (7.5 cm ahead of and 5.1 cm above its base);
-  it turns, tips and bobs with her head. HER HEAD IS FOLDED AWAY in the camera's picture only (Joshua, 2026-11-20: "hide
-  the head in first person view only but leave the shadows and keep the eyes in the same location, as a few quick moments
-  the face poked through the camera"; `hideHeadPatch`, `uHideHead`), her hair on the shadow-only layer; her shadow keeps
-  both. (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
+  it turns and tips with her head, NOTHING EASED; her head and hair are drawn, her face nearer than the camera's nearest
+  6 cm so never seen (Joshua, 2026-11-20: "v0.2.102 had no issues cutting into the face as it was locked to the bone, so,
+  undo what you did about hiding the face and hair": the face poked through only while the camera was eased off her
+  head, v0.2.103-106; `hideHeadPatch` kept, unused). (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
   Joshua: "Camera seems too low".) Where the player looks
   is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
   same for all directions"): 75 degrees down, 55 up (`HEAD_DOWN_MOST`, `HEAD_UP_MOST`; his research: 45-60 up, 70-80
@@ -39,15 +39,11 @@ use the game's single copy of three.js.
   where it is (`freeLook`), firing ends a kick look. Settings -> CAMERA -> 1st person eye forward (`gdm.eyeAhead`,
   `?eye=`, -6..12 cm, along her face) and eye height (`gdm.eyeHigher`, `?eye_up=`, -6..20 cm, along her head's own up:
   straight up in the world showed a bowed head's own face): Joshua tunes them in game and sends the numbers.
-  A STEADY VIEW (Joshua, 2026-11-20: "the brain can level out all those motions for a smooth view and we need to do the
-  same"; "still swaying left and right too much even at 100%... see what BE did": BE's first person is a camera at a
-  fixed eye height over her feet, turned only by the player; "keep it fixed at max"; cameraRig.ts `steady`, `STEADY_*`):
-  the camera TURNS at once to where her head is MEANT to look (fastHeroine.ts `headAim`: the player's look, or her own at
-  a kick or bowed winded, within her neck's reach), none of her walk's wobble and no roll; only the BASE OF HER SKULL is
-  eased, as an offset from her root (her going along never behind), side to side over 1.2 s (a stride's sway), the rest
-  over 0.45 s, and her eyes are set rigidly from it along the turn (`eyeReach`), so a drag swings them round at once.
-  (v0.2.102-103 eased her head's offset from the player's look, and dragging the view STUTTERED: Joshua, "there is a
-  shutter when trying to move the camera around".) AT THE TABLE, BARS AND DOOR the up and down
+  NO BOB OR SWAY IN FIRST PERSON (Joshua, 2026-11-20: "make the camera like v0.2.102 attached to the bone no damping...
+  the body naturally has a bob and sway adjustment... in 1st person, make 0% Bob, Sway, but show it in 3rd person";
+  bodyMotion.ts `bobSwayShare`, set by `setFirstPerson`): her look's own Bob and Sway are 0 in first person, as they are
+  in third. (Tried and dropped, v0.2.102-106: easing the camera, BE-style, which swayed, stuttered dragging the view and
+  let her face poke through.) AT THE TABLE, BARS AND DOOR the up and down
   look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
@@ -207,6 +203,11 @@ use the game's single copy of three.js.
   show. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
   side L, side R; `gdm.cameraStyleManual`); while FIRE is held and 1.2 s after, the camera is over her shoulder whatever
   is chosen, and away from it she aims level the way she was turned and the crosshair is hidden.
+- GUNS AT THE START, AND AT REST IN THIRD PERSON MANUAL (Joshua, 2026-11-20: "Why are the guns always raised and ready
+  to shoot at start in 3rd person and missing the crosshairs?"; "Keep guns in holsters at start up"): she starts with
+  both guns in their holsters (holsterUse.ts `startHolstered`; DRAW takes them out). Drawn, in third person MANUAL with
+  the camera not over her shoulder (follow, side), her guns are DOWN, not aimed; FIRE brings the shoulder camera, the
+  crosshair and her aim (main.ts step 4).
 - HUD (Joshua's pick "design 4", 2026-11-18; `Game/src/ui/hud.ts`, `hud.css`): vitals card top-left with one FPS/version
   line under it (full readout only with "Show full readout"; dome test buttons in Settings -> TEST TOOLS); a rail of
   square buttons on the right edge that show only when needed (HOLSTER/DRAW, RELOAD at the table or from the belt, CAM,

@@ -235,13 +235,6 @@ export interface HeroineBody {
   eyeView?(position: THREE.Vector3, quaternion: THREE.Quaternion): void;
   /** The world pitch her head can look at now, radians [down, up]: her neck's reach from her torso's own line. */
   headPitchRange?(): readonly [number, number];
-  /**
-   * Where her head is MEANT to look this frame, world [yaw, pitch] radians: the player's look, or her own (a kick, bowed
-   * winded), within her neck's reach; her bob and sway are not in it (the steady first-person view).
-   */
-  headAim?(): readonly [number, number];
-  /** Where the first-person camera sits from the base of her skull, metres [along her face, along her head's up]. */
-  eyeReach?(): readonly [number, number];
   /** The player's own forward (+) or back offset for that camera, metres (Settings -> CAMERA). */
   setEyeOffset?(forward: number, higher: number): void;
   /**

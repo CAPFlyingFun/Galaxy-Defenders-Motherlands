@@ -487,6 +487,7 @@ async function start(): Promise<void> {
   let grabAfterTable: BarName | null = null;
   // HER THIGH HOLSTERS (Joshua, 2026-11-18: her guns away "on the go"; src/world/holsterUse.ts). She keeps walking.
   const holsterUse = new HolsterUse(heroine);
+  holsterUse.startHolstered(); // (her guns start in their holsters: DRAW takes them out)
   /** Where she glances while she holsters or draws (one object, rewritten). */
   const holsterAsk: { lookAt: THREE.Vector3 | null } = { lookAt: null };
   // RELOADING FROM HER BELT, ON THE GO (Joshua, 2026-11-18; src/world/beltReload.ts): one gun at a time, the other
@@ -1512,10 +1513,10 @@ async function start(): Promise<void> {
       // (aimed by hand, in first person or over her shoulder: at the crosshair, down the camera's line of sight)
       targets.setAimed(-1);
       if (rig.mode === 'third' && rig.style !== 'shoulder') {
-        // (aimed by hand but the camera is not behind her, follow or a side view: she aims level the way the player
-        //  turned her, not down the camera's line, which in a side view runs across her)
-        aim.set(motion.x + Math.sin(rig.yaw) * AIM_RANGE, groundY + 1.4, motion.z + Math.cos(rig.yaw) * AIM_RANGE);
-        heroine.aimAt(aim);
+        // (aimed by hand but the camera is not behind her, follow or a side view, so not firing: her guns are DOWN,
+        //  not aimed (Joshua, 2026-11-20: "Why are the guns always raised and ready to shoot... and missing the
+        //  crosshairs?"). FIRE puts the camera over her shoulder with the crosshair, and she aims at it.)
+        heroine.aimAt(null);
       } else heroine.aimAt(rig.aimPoint(AIM_RANGE, aim));
     } else if (turn.aimed) {
       // (the target her top half has turned to, picked above with her turning)

@@ -1,7 +1,7 @@
 {
   "name": "galaxy-defenders-motherlands",
   "private": true,
-  "version": "0.2.126",
+  "version": "0.2.127",
   "type": "module",
   "description": "Galaxy Defenders: Motherlands. A 3D dome-defense game; the heroine is the Custom Character Builder body (../Char_B).",
   "scripts": {

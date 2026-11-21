@@ -594,6 +594,8 @@ async function start(): Promise<void> {
   // His vitals are his own and never pregnant: the builder's vitals are the same model for both bodies, its organs
   // laid to each (Char_B actor/maleOrgans.ts: his bladder and prostate, no womb). His age is a guess until the story
   // says (30).
+  /** Why John could not be made, if he could not (shown in a notice once the HUD is up). */
+  let johnFailed: string | null = null;
   if (graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
     try {
       const body = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), 'john', true);
@@ -612,6 +614,8 @@ async function start(): Promise<void> {
     } catch (error) {
       console.error('John could not be made; Blaze plays on alone.', error);
       john = null;
+      // (said on screen too, once the HUD is up: v0.2.126 left him out without a word on Joshua's iPhone)
+      johnFailed = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -1096,6 +1100,7 @@ async function start(): Promise<void> {
   });
   // (🔄 shows once there is someone to swap to: John, made beside her)
   hud.setSwap(john ? 'John' : null);
+  if (johnFailed) hud.showNotice(`John couldn't load: ${johnFailed.slice(0, 60)}`, 8);
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
     {

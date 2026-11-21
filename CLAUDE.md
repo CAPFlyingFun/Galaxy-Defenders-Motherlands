@@ -49,7 +49,15 @@ use the game's single copy of three.js.
   `footGround.ts` 10): standing, a planted foot keeps facing the way it landed while her body turns over it; at 15
   degrees of turn the foot on the side she turns to steps OUT and a little BACK, toes turned out 15 degrees; at 40
   (his number) the other foot comes in under its shoulder, square to her; and again while she turns (L, R, L, R). No
-  tidy step on the spot while she turns; a turn that stops is squared up after 1 s still. (A shuffle
+  tidy step on the spot while she turns; a turn that stops is squared up after 1 s still.
+  SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20: "right before it say sidesteps to forward, it resets really quickly
+  (maybe 0.3s or variable depending on speed) to both feet side by side then plays the next one... as soon as you
+  release the stick or it centers, it also puts the feet in the normal standing state"; main.ts `gait`, `GAIT_*`,
+  footGround.ts 11 `squareUp`, bodyMotion.ts `standCap`): her move (stand / ahead / back / left / right with her facing
+  held / go) changing from a move to anything else sets both feet side by side at home TOGETHER first, over 0.3 s at a
+  walk (shorter faster, at least 0.15), her walk faded out with them and restarted from the stride's beginning; she
+  waits meanwhile. The 4-way stick keeps its move until another is 1.4x nearer (`GAIT_KEEP`), so a diagonal does not
+  flick. Measured: her ankles never closer than 0.28 m (her stance 0.30). (A shuffle
   and a skip are built in `footGround.ts` but not used.) She stands with her feet her shoulder width apart (measured
   from her own bones). Holding a door, her facing is held too (the same four moves).
 - Loading and turning the phone (Joshua, 2026-11-17, "like how Beyond Extinction does it"): a splash with a real

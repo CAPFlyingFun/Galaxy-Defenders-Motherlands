@@ -184,6 +184,17 @@ const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
 const MANUAL_CAMERA_STYLES: readonly CameraStyle[] = ['shoulder', 'follow', 'sideLeft', 'sideRight'];
 const MANUAL_CAMERA_STYLE_KEY = 'gdm.cameraStyleManual';
 const MANUAL_AIM_HOLD = 1.2;
+/** Her move, for squaring her feet up between moves (see GAIT_RESET). */
+type Gait = 'stand' | 'ahead' | 'back' | 'left' | 'right' | 'go';
+/**
+ * SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20): her feet are set side by side over this long at a walk, seconds; going
+ * faster than GAIT_RESET_SPEED, shorter by as much (never under GAIT_RESET_LEAST).
+ */
+const GAIT_RESET = 0.3;
+const GAIT_RESET_SPEED = 1.1;
+const GAIT_RESET_LEAST = 0.15;
+/** Her facing held, the stick stays on its move until another is this many times nearer (about 54 degrees, not 45). */
+const GAIT_KEEP = 1.4;
 /** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds, and straightens up over the hold's last so many. */
 const WINDED_IN = 0.6;
 const WINDED_OUT = 1.0;
@@ -584,6 +595,8 @@ async function start(): Promise<void> {
   const lookSpot = new THREE.Vector3();
   /** Holding her belly up as she runs (Joshua: "from a run and up"; "anything over 30 weeks"), with a little room each way. */
   let supporting = false;
+  /** Her move now, and how long she still waits for her feet to be squared up before the next (see GAIT_RESET). */
+  let gait: Gait = 'stand', gaitResetLeft = 0;
   /** How far she is bent over winded now, 0..1 (set each frame from her pace's winded hold). */
   let windedWeight = 0;
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
@@ -1225,7 +1238,12 @@ async function start(): Promise<void> {
       const facingHeld = (turnInput.hold !== undefined && turnInput.hold !== null) || walkSides();
       let moveX = controls.moveX, moveY = controls.moveY;
       if (facingHeld && push > 0) {
-        if (Math.abs(moveX) > Math.abs(moveY)) moveY = 0; else moveX = 0;
+        // (the four moves, with a little room each way: the stick stays on the move it is on until it is clearly
+        //  nearer another, GAIT_KEEP, so a stick held near a diagonal does not flick between two)
+        const sideways = gait === 'left' || gait === 'right' ? Math.abs(moveX) * GAIT_KEEP >= Math.abs(moveY)
+          : gait === 'ahead' || gait === 'back' ? Math.abs(moveX) > Math.abs(moveY) * GAIT_KEEP
+          : Math.abs(moveX) > Math.abs(moveY);
+        if (sideways) moveY = 0; else moveX = 0;
         moveX = Math.sign(moveX) * (moveX !== 0 ? push : 0);
         moveY = Math.sign(moveY) * (moveY !== 0 ? push : 0);
       }
@@ -1237,6 +1255,26 @@ async function start(): Promise<void> {
         // (a crab step's top speed: a brisk walk, slower the further along she is)
         const c = Math.max(0, Math.min(1, pace.carrying));
         speed = Math.min(speed, SIDE_WALK_MOST + (SIDE_WALK_MOST_FULL_TERM - SIDE_WALK_MOST) * c);
+      }
+      // SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20: "right before it say sidesteps to forward, it resets really
+      // quickly (maybe 0.3s or variable depending on speed) to both feet side by side then plays the next one... and
+      // as soon as you release the stick or it centers, it also puts the feet in the normal standing state"): her move
+      // now (standing; ahead, back, left, right with her facing held; or just going, her body turned the way she goes);
+      // when it changes from a move to anything else, her feet are set side by side first (footGround.ts 11), over
+      // GAIT_RESET seconds at a walk, less the faster she was going, and she waits for them; then the new move starts.
+      const gaitNow: Gait = push <= 0 || (moveX === 0 && moveY === 0) ? 'stand'
+        : facingHeld ? (moveX > 0 ? 'right' : moveX < 0 ? 'left' : moveY > 0 ? 'ahead' : 'back') : 'go';
+      if (gaitNow !== gait) {
+        if (gait !== 'stand' && gaitResetLeft <= 0) {
+          gaitResetLeft = Math.max(GAIT_RESET_LEAST, GAIT_RESET * Math.min(1, GAIT_RESET_SPEED / Math.max(0.01, motion.speed)));
+          heroine.squareFeet?.(gaitResetLeft);
+        }
+        gait = gaitNow;
+      }
+      if (gaitResetLeft > 0) {
+        gaitResetLeft -= dt;
+        moveX = 0; moveY = 0;
+        sideStepping = false;
       }
       // her feet: crab steps for left and right (fastHeroine.ts); a crab walk only (the walk's pace, 1)
       heroine.setSideSteps?.(facingHeld ? 1 : null);

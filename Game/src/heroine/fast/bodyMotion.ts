@@ -212,6 +212,11 @@ export class BodyMotion {
   get walkBob(): number { return this.settings.walkBob; }
   /** 0 standing, 1 walking, in between while she starts or stops. */
   walkBlend = 0;
+  /**
+   * SQUARED UP BETWEEN MOVES (footGround.ts 11; Joshua, 2026-11-20): while her feet are set side by side, her walk is
+   * held to at most this much (1: as it would be; 0: standing, her next walk starting from the stride's beginning).
+   */
+  standCap = 1;
   /** 0 walking, 1 running, in between while one eases into the other. */
   runBlend = 0;
   /** Where she is in her stride, 0..1 wrapping (the builder's cycle: her left foot lands at 0.25, her right at 0.75). */
@@ -361,7 +366,8 @@ export class BodyMotion {
     this.walkBlend += ((walking ? 1 : 0) - this.walkBlend) * ease;
     if (walking && this.walkBlend > 0.999) this.walkBlend = 1;
     // (standing again: her next walk starts from the moment of a stride that is nearest to standing)
-    if (!walking && this.walkBlend < 0.001) { this.walkBlend = 0; this.stridePhase = this.strides?.walk.startAt ?? 0; this.running = false; this.runBlend = 0; }
+    if (this.walkBlend > this.standCap) this.walkBlend = Math.max(0, this.standCap);
+    if ((!walking || this.standCap <= 0) && this.walkBlend < 0.001) { this.walkBlend = 0; this.stridePhase = this.strides?.walk.startAt ?? 0; this.running = false; this.runBlend = 0; }
     // walking or running, eased the same way
     if (this.running ? speed < RUN_BACK : speed > RUN_FROM) this.running = !this.running;
     this.runBlend += ((this.running ? 1 : 0) - this.runBlend) * (1 - Math.exp(-dt / RUN_BLEND_SECONDS));

@@ -1169,6 +1169,8 @@ if (uHideHead > 0.5) {
       return { stance: now, asked: stanceAsked, settled, crouch: crouchW, down: downW };
     },
     setSideSteps(level: number | null): void { sideLevel = level; },
+    // SQUARED UP BETWEEN MOVES (footGround.ts 11; the game asks as she changes from one move to another, or stops)
+    squareFeet(seconds: number): void { if (downW === 0) ground.squareUp(seconds); },
     // (the island's ground: each foot on the ground under it, laid along its slope: footGround.ts 9)
     setGround(groundAt: ((x: number, z: number) => number) | null): void { ground.groundAt = groundAt; },
     // (her steps follow the distance she really covers, measured each frame in `update`: the game's speed is not needed)
@@ -1397,6 +1399,8 @@ if (uHideHead > 0.5) {
       lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
       reach.advance(frame.dt);
       motion.grip[0] = reach.grip[0]; motion.grip[1] = reach.grip[1];
+      // (squaring her feet up between moves: her walk fades out as they go, gone as they land: footGround.ts 11)
+      { const sq = ground.squaring; motion.standCap = sq >= 0 ? 1 - sq * sq * (3 - 2 * sq) : 1; }
       motion.update(frame.dt, breathClock, along, body.belly);
       influences[0] = motion.weights[0]; influences[1] = motion.weights[1]; influences[2] = motion.weights[2]; influences[3] = motion.weights[3];
       // (the same four on a live level, where they sit among all her other shapes)

@@ -165,6 +165,11 @@ export interface HeroineBody {
    */
   setSideSteps?(level: number | null): void;
   /**
+   * SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20): both feet set down side by side at home together over `seconds`
+   * (the game asks as she changes from one move to another, or stops, and holds her still meanwhile).
+   */
+  squareFeet?(seconds: number): void;
+  /**
    * UNEVEN GROUND (the island): the ground's height at a place, metres, so each foot stands on the ground under it and
    * lies along its slope. Null (and a body without this): a flat floor at her root's height. Optional.
    */

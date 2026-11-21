@@ -73,6 +73,16 @@
 //        - and again, for as long as she keeps turning.
 //      A turn that stops short of 40 degrees leaves her feet as they are; she
 //      squares them up after standing still for `turnSettle`.
+//  11. SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20: "right before it say
+//      sidesteps to forward, it resets really quickly (maybe 0.3s or variable
+//      depending on speed) to both feet side by side then plays the next one
+//      so it always has the same transitions between all the animations and as
+//      soon as you release the stick or it centers, it also puts the feet in the
+//      normal standing state"; `squareUp`, asked for by the game, src/main.ts):
+//      both feet are lifted a little and set down at home TOGETHER, side by
+//      side, square to her, over a short time; nothing else steps meanwhile.
+//      Every move (walk ahead, back, a crab step either way) then starts from
+//      the same stance, and her feet never bunch up between two of them.
 //   9. UNEVEN GROUND (Joshua, 2026-11-19, the island: "making sure her feet
 //      actually walk and snap to the ground"). With `groundAt` set (the
 //      island's drawn ground: src/world/island/), each foot stands on the
@@ -183,6 +193,8 @@ export const FOOT_GROUND = {
   faceMost: (55 * Math.PI) / 180,
   turnStill: (3 * Math.PI) / 180,
   turnSettle: 1.0,
+  /** SQUARED UP BETWEEN MOVES (see 11 above): her feet are lifted at most this high on the way home, metres. */
+  squareHeight: 0.025,
 } as const;
 
 /**
@@ -277,6 +289,13 @@ export class FootGround {
   private stepHigh: number = FOOT_GROUND.stepHeight;
   /** Going sideways, which foot steps next: her lead foot (out) or her trailing foot (in). */
   private crabNext: 'lead' | 'trail' = 'lead';
+  /** SQUARING UP (see 11 above): how far through it, 0..1 (-1: not), over how long, and where each foot started from. */
+  private squareClock = -1;
+  private squareSeconds = 0.3;
+  private readonly squareFrom: [number, number, number, number] = [0, 0, 0, 0];
+  private squareBegun = false;
+  /** Squaring up now (see 11 above): how far through it, 0..1, or -1 not. */
+  get squaring(): number { return this.squareClock; }
   /** The step being taken is a crab step (her trailing foot's, `stepHop` high: a skip's hop). */
   crabbing = false;
   private stepHop = 0;
@@ -331,6 +350,17 @@ export class FootGround {
     this.poseWidth = new THREE.Vector3().setFromMatrixPosition(left.ankle.matrixWorld).distanceTo(new THREE.Vector3().setFromMatrixPosition(right.ankle.matrixWorld));
   }
 
+  /**
+   * SQUARE UP (see 11 above): both feet set down at home together, side by side and square to her, over `seconds`.
+   * Asked for again while it runs, it carries on from where it is.
+   */
+  squareUp(seconds: number): void {
+    if (this.squareClock >= 0) return;
+    this.squareClock = 0;
+    this.squareSeconds = Math.max(0.05, seconds);
+    this.squareBegun = false;
+  }
+
   /** Let go of both feet (she has been put somewhere else: the spots her feet were held to mean nothing there). */
   letGo(): void {
     for (const foot of this.feet) { foot.locked = false; foot.offX = 0; foot.offZ = 0; }
@@ -366,7 +396,10 @@ export class FootGround {
     let drop = 0;
     // (her walk's own steps: while she walks, unless she has gone over to crab steps, which take her feet at once
     //  even while the builder's walk is still fading from her legs)
-    const walking = walk > 0 && strides !== null && strides !== undefined && !(crab && crab.speed >= tuning.crabFrom) && !this.crabbing;
+    // (squaring up between moves: no walk, no crab, no other step: see 11 above)
+    const squaring = this.squareClock >= 0;
+    if (squaring) crab = null;
+    const walking = !squaring && walk > 0 && strides !== null && strides !== undefined && !(crab && crab.speed >= tuning.crabFrom) && !this.crabbing;
     if (walking && strides) {
       this.stepFoot = -1;                                          // (walking has steps of its own)
       this.crabbing = false;
@@ -398,7 +431,11 @@ export class FootGround {
     } else {
       // STANDING: both feet planted but for the one taking a step (a crab step or a step on the spot: decided below,
       // once each foot's home is known)
-      if (this.stepFoot >= 0) {
+      if (squaring) {
+        // (squaring up: both feet are on their way home together; a step that was in the air goes with them)
+        this.stepFoot = -1; this.crabbing = false; this.stepHop = 0; this.crabNext = 'lead'; this.turnStage = 0;
+        this.squareClock = Math.min(1, this.squareClock + dt / this.squareSeconds);
+      } else if (this.stepFoot >= 0) {
         this.stepClock += dt / this.stepSeconds;
         if (this.stepClock >= 1) {
           // (landed: held to where it came down)
@@ -434,7 +471,7 @@ export class FootGround {
     this.lastYaw = yaw;
     this.turnQuiet = turnRate < tuning.turnStill ? this.turnQuiet + dt : 0;
     // (walking or going sideways her feet go with her walk: they face her way, and she counts as square)
-    const feetFree = walking || this.crabbing || !!(crab && crab.speed >= tuning.crabFrom);
+    const feetFree = walking || squaring || this.crabbing || !!(crab && crab.speed >= tuning.crabFrom);
     if (feetFree || !Number.isFinite(this.squareYaw)) {
       this.squareYaw = yaw;
       this.turnStage = 0;
@@ -455,8 +492,8 @@ export class FootGround {
       foot.homeX = foot.ankle.x + leftX * out;
       foot.homeZ = foot.ankle.z + leftZ * out;
     }
-    // STANDING: WHICH FOOT STEPS NEXT (when none is stepping)
-    if (!walking && this.stepFoot < 0) {
+    // STANDING: WHICH FOOT STEPS NEXT (when none is stepping; none while squaring up)
+    if (!walking && !squaring && this.stepFoot < 0) {
       if (crab && crab.speed >= tuning.crabFrom && this.shoulderWidth > 0) {
         // THE CRAB STEP: how far each foot is out from its home, the way she goes (+ ahead of it, - left behind)
         const width = this.shoulderWidth;
@@ -547,7 +584,19 @@ export class FootGround {
       foot.knee.addScaledVector(line, -foot.knee.dot(line));
       // where her pose (and her sway, and her stance) puts this ankle over the ground
       const poseX = foot.homeX + shiftX, poseZ = foot.homeZ + shiftZ;
-      if (this.stepFoot === side && !walking) {
+      if (squaring) {
+        // SQUARING UP: from where it was when this began (its offset from home), home, eased; let go meanwhile, and
+        // held where it lands at the end
+        if (!this.squareBegun) {
+          this.squareFrom[side * 2] = foot.locked ? foot.lockX - poseX : foot.offX;
+          this.squareFrom[side * 2 + 1] = foot.locked ? foot.lockZ - poseZ : foot.offZ;
+        }
+        const t = this.squareClock, smooth = t * t * (3 - 2 * t);
+        foot.locked = false;
+        foot.offX = this.squareFrom[side * 2] * (1 - smooth);
+        foot.offZ = this.squareFrom[side * 2 + 1] * (1 - smooth);
+        if (t >= 1) { foot.locked = true; foot.lockX = poseX + foot.offX; foot.lockZ = poseZ + foot.offZ; }
+      } else if (this.stepFoot === side && !walking) {
         // STEPPING (standing): carried from where it left to where it lands, smoothly, lifted on the way
         const t = clamp(this.stepClock, 0, 1), smooth = t * t * (3 - 2 * t);
         foot.locked = false;
@@ -578,6 +627,8 @@ export class FootGround {
       let want = Math.max(above, 0);                               // (a planted foot above the floor cannot be reached down: a leg cannot grow)
       if (swing[side] >= 0) want = Math.max(want, tuning.clear * walk * ease(0, tuning.clearEase, swing[side]) * ease(0, tuning.clearEase, 1 - swing[side]));
       if (this.stepFoot === side) want = Math.max(want, this.stepHigh * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)));
+      // (squaring up: lifted a little on the way, if it has any way to go)
+      if (squaring) want = Math.max(want, tuning.squareHeight * Math.min(1, Math.hypot(this.squareFrom[side * 2], this.squareFrom[side * 2 + 1]) / 0.05) * Math.sin(Math.PI * this.squareClock));
       foot.raise = want - above;
       this.raised[side] = foot.raise > tuning.least ? foot.raise : 0;
     }
@@ -622,6 +673,11 @@ export class FootGround {
     this.hopNow = this.stepFoot >= 0 && this.stepHop > 0 ? this.stepHop * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)) : 0;
     fit.position.y = this.fitFloorY - drop + this.hopNow;
     fit.position.x = motion.sway;
+    // (squaring up: its starting places taken; done once her feet are home, set square to her)
+    if (squaring) {
+      this.squareBegun = true;
+      if (this.squareClock >= 1) { this.squareClock = -1; this.squareYaw = yaw; this.footFace[0] = yaw; this.footFace[1] = yaw; }
+    }
   }
 
   /**

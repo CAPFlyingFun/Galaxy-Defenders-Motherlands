@@ -50,16 +50,12 @@ use the game's single copy of three.js.
   let her face poke through.) HER HEAD HELD STEADY (Joshua, 2026-11-20: "The camera bob is fixed,
   but the sway is still there"; fastHeroine.ts `steadyHead`): first person, her skull is turned each frame to look
   EXACTLY where it is meant to, level, no roll (her walk's hip and shoulder twist had swung it 6.4 degrees); measured
-  walking: 0 degrees of turn, 1.2 cm side to side and 2.6 cm up and down left in her eyes. FREE LOOK STANDING (Joshua:
-  "allow full rotating if not moving and to see past your limit, you have to move your joystick... settle over 3s to
-  body center"; "wait 1 s before settling back over 3 s"; main.ts `freeView`, bodyTurn.ts `free`): first person with
-  the MOVE stick centred, the view only turns her head (90 each side of her body, her neck's reach up and down), her body
-  stays, ALL OF IT (bodyTurn.ts `NO_SHARES`: her shoulders still turning after a drag stopped had pulled the view back);
-  let go, it waits 1 s then settles back to straight ahead of her body over 1.5 s (was 3); the MOVE stick turns her.
-  PUSHING THE STICK GOES WHERE YOU LEFT THE VIEW (Joshua, 2026-11-20: "I look over my shoulder then push the stick
-  forward... my head is not at 90° anymore but maybe 70-75°"; main.ts `freeView.leftYaw`, `FREE_LOOK_RESTORE`): the
-  settle stops, and if it had moved the view, the view goes back to where the player left it over 0.15 s; moving, the
-  view never settles by itself.
+  walking: 0 degrees of turn, 1.2 cm side to side and 2.6 cm up and down left in her eyes. FIRST PERSON STANDING, HER BODY FOLLOWS HER HEAD (Joshua, 2026-11-20: "after 1s of no camera movements, the body
+  catches up to the head since that is what steers the player... remove all the delays, and have the body follow like it
+  does in 3rd person and based on our angle system"): the view is her head and her body follows it by the five bands
+  (bodyTurn.ts: past 90 body North is pulled round, once the look stops it comes round to match, each band a moment
+  behind), so she already faces where she will go. Nothing settles the view back. (v0.2.108-112 held her body still and
+  settled the view back to it after 1 s, over 1.5 s; the stick then put the view back where it was left: all removed.)
   HER HEAD'S YAW AND PITCH ARE FIXED TO HER TORSO'S ANGLE (Joshua, 2026-11-20: "the left and right ended up on the
   twist axis... supposed to be left and right relative to the torso like standing"; "The head's yaw and pitch need to be
   fixed to the torso's angle"; fastHeroine.ts `torsoFrame`, `sideAndTip`, `steadyHead(yaw, tip, side)`): a gimbal on
@@ -147,7 +143,13 @@ use the game's single copy of three.js.
   little side-on so her belly is beside her reach, and twists it. Her grip is chosen as the way round the handle that
   turns her wrist least (her joint limits had left her hand twisted), never palm up. Then walking back pulls it, forward pushes it (her
   elbow's spring: a few cm of play round where her hand closed on it), and LET GO is manual. Opened from the push side
-  and let go it swings shut (waiting while she is in the doorway); from the pull side it stays. The door is solid.
+  and let go it swings shut (waiting while she is in the doorway); from the pull side it stays. The door is solid. HER RAIL (Joshua, 2026-11-20, his drawing): holding it she walks an invisible path
+  (door.ts `buildRail`, `keepOnRail`), built from where she took hold: from the PUSH side straight up the doorway at
+  `railPush` (0.6 m from the hinge, a little past mid-door so her hand reaches the knob across her body; she stands there to
+  take it) then round the hinge; from the PULL side straight back, easing out to `railPull` (1.0 m, just outside the free
+  edge: inside it the door shut her in against the wall) then round. Only ahead and back move her along it (sideways does
+  nothing), she faces along it (still side-on), turning with the door; the handle's pull moves her along it; the panel
+  stops her on it, never pushes her off. At the stop she waits for LET GO.
 - THE GRAY AND RED SUIT (Joshua's outfit design 2, 2026-11-18; `docs/reference/outfits/`; look `graySuit`, open with
   `?look=graySuit`, NOT the default until he approves): `Game/src/heroine/looks/graySuit.ts` paints the builder's full
   bodysuit in light gray with red edging, red bands painted by code (`paintMask.ts` now measures her trunk and arms as

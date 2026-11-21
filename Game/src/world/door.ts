@@ -116,6 +116,21 @@ export const DOOR = Object.freeze({
   shoulderUp: 1.35,
   /** How hard the stick may push her while she holds the door (a walk). */
   walkPush: 0.4,
+  /**
+   * THE RAIL (Joshua, 2026-11-20, his drawing): holding the door she walks an invisible path, straight up to the door
+   * and then round the hinge as the door swings, so she and the door turn together. Its distance from the hinge:
+   * from the PUSH side a little past mid-door (his "about mid door width", nudged toward the handle so her hand reaches
+   * it across her body); from the PULL side just outside the door's free edge (inside it, the door would shut her in
+   * against the wall), metres.
+   */
+  railPush: 0.6,
+  railPull: 1.0,
+  /** The rail runs this far back from where she took hold (she can step back), and round the hinge this far
+   * (radians: past the door's stop, so the panel, not the rail's end, is what stops her). */
+  railBack: 0.6,
+  railRound: (150 * Math.PI) / 180,
+  /** From the pull side she backs out to the rail's distance over this much of it (metres). */
+  railEaseOut: 0.3,
 });
 
 export type DoorSide = 'pull' | 'push';
@@ -290,6 +305,9 @@ export class Door {
     // (turned side-on, her belly reaches toward the door by less: its front is turned away)
     const back = Math.max(DOOR.standBack, bellyAhead * Math.cos(DOOR.sideOn) + DOOR.bellyGap);
     const z = side === 'pull' ? DOOR.thick / 2 + back : -(DOOR.thick / 2 + back);
+    // FROM THE PUSH SIDE SHE STANDS ON HER RAIL (Joshua's drawing: the path comes straight up the middle of the
+    // doorway): DOOR.railPush from the hinge, the handle to her far side, taken across her body
+    if (side === 'push') return out.set(DOOR.railPush, 0, z).applyMatrix4(this.hinge.matrixWorld);
     // (her middle a little toward her other hand's side of the handle; facing -z her right is +x, facing +z her left)
     const rightIsPlusX = side === 'pull';
     const towardHand = (hand === 'right') === rightIsPlusX ? 1 : -1;
@@ -447,6 +465,25 @@ export class DoorUse {
   private handBeyondWrist = 0;
   /** For the tests: the handle's distance from her shoulder now, and her elbow's spring (metres). */
   readonly springInfo = { now: 0, least: 0, most: 0 };
+  /**
+   * HER RAIL while she holds the door (see DOOR.railPush): points every few centimetres, x and z in turn, in the
+   * door's own frame (its root), running TOWARD THE DOOR (so "ahead" on the stick is further along it); the distance
+   * along it to each point; and how far along it she is.
+   */
+  private rail: number[] = [];
+  private railAt: number[] = [];
+  private railS = 0;
+
+  /** For the tests: the rail in the world, as [x, z] pairs (empty while she is not holding the door). */
+  railPoints(): Array<[number, number]> {
+    const out: Array<[number, number]> = [];
+    for (let i = 0; i < this.rail.length; i += 2) {
+      v1.set(this.rail[i], 0, this.rail[i + 1]);
+      this.door.root.localToWorld(v1);
+      out.push([v1.x, v1.z]);
+    }
+    return out;
+  }
 
   constructor(private readonly door: Door, private readonly heroine: HeroineBody) {}
 
@@ -496,10 +533,161 @@ export class DoorUse {
     h.hold(this.hand, null);
     h.reach(this.hand, null);
     this.phase = 'release';
+    // (off her rail: the stick is free again)
+    this.rail = [];
+    this.railAt = [];
   }
 
-  /** The way she keeps facing while she holds it (toward the door), or null. */
-  faceYaw(): number | null { return this.holding ? this.door.faceYaw(this.side, this.hand, this.takenAngle) : null; }
+  /**
+   * The way she keeps facing while she holds it, or null. ON HER RAIL she turns with the door (Joshua: "you and the
+   * door will sync up directionally"): square to it along the rail where she is, still a little side-on.
+   */
+  faceYaw(): number | null {
+    if (!this.holding) return null;
+    if (this.rail.length < 4) return this.door.faceYaw(this.side, this.hand, this.takenAngle);
+    return this.railYaw() + (this.hand === 'right' ? 1 : -1) * DOOR.sideOn;
+  }
+
+  /** The way "ahead" goes along her rail where she is (toward the door), a compass angle (0 = +Z). */
+  railYaw(): number {
+    const i = this.railSegment(this.railS) * 2;
+    const tx = this.rail[i + 2] - this.rail[i], tz = this.rail[i + 3] - this.rail[i + 1];
+    // (the door's root is only turned about its upright: a direction's compass angle just adds its turn)
+    return this.door.root.rotation.y + Math.atan2(tx, tz);
+  }
+
+  /**
+   * BUILD HER RAIL as she takes hold, from where she stands (Joshua's drawing). Worked out in the panel's frame as
+   * it stood when her hand set out (x out from the hinge along the panel, z out of its face toward the pull side),
+   * then put in the door's frame.
+   *   From the PUSH side: straight up to the door's line at DOOR.railPush from the hinge, then round the hinge at
+   *   that distance; the door swings away ahead of her.
+   *   From the PULL side: straight back out from the door, easing out to DOOR.railPull from the hinge (past the
+   *   door's free edge), then round the hinge at that distance; the door swings toward her and stays beside her.
+   */
+  private buildRail(atX: number, atZ: number): void {
+    const start = v1.set(atX, 0, atZ);
+    this.door.root.updateMatrixWorld(true);
+    this.door.root.worldToLocal(start);
+    // into the panel's frame as it stood when taken (the hinge at the doorway's -x edge, turned by takenAngle)
+    const a = this.takenAngle, ca = Math.cos(a), sa = Math.sin(a), hx = -DOOR.width / 2;
+    const sx = (start.x - hx) * ca + start.z * sa, sz = -(start.x - hx) * sa + start.z * ca;
+    const pts: number[] = [];
+    const add = (x: number, z: number) => pts.push(x, z);
+    const ease = (t: number) => t * t * (3 - 2 * t);
+    const step = 0.02;
+    if (this.side === 'push') {
+      // (toward the door is +z here: the rail is laid out in the order she goes)
+      const r = DOOR.railPush;
+      for (let z = sz - DOOR.railBack; z < sz; z += step) add(sx, z);
+      const n = Math.max(2, Math.ceil(-sz / step));
+      for (let k = 0; k <= n; k++) { const t = k / n; add(sx + (r - sx) * ease(t), sz * (1 - t)); }
+      for (let phi = step / r; phi <= DOOR.railRound; phi += step / r) add(r * Math.cos(phi), r * Math.sin(phi));
+    } else {
+      // (laid out going AWAY from the door, then turned round, so the rail runs toward the door like the other)
+      const r = DOOR.railPull;
+      const zOut = sz + DOOR.railEaseOut;
+      const phiOut = Math.asin(Math.min(0.95, zOut / r));
+      const xOut = r * Math.cos(phiOut);
+      add(sx, Math.max(DOOR.thick / 2 + 0.12, sz - 0.1));
+      const n = Math.max(2, Math.ceil(DOOR.railEaseOut / step));
+      for (let k = 0; k <= n; k++) { const t = k / n; add(sx + (xOut - sx) * ease(t), sz + (zOut - sz) * t); }
+      for (let phi = phiOut + step / r; phi <= DOOR.railRound; phi += step / r) add(r * Math.cos(phi), r * Math.sin(phi));
+      const back: number[] = [];
+      for (let i = pts.length - 2; i >= 0; i -= 2) back.push(pts[i], pts[i + 1]);
+      pts.length = 0;
+      pts.push(...back);
+    }
+    // smoothed (a running average, twice) so where the straight part meets the round one she turns, not snaps
+    for (let pass = 0; pass < 2; pass++) {
+      const was = pts.slice();
+      for (let i = 2; i < pts.length - 2; i += 2) {
+        let x = 0, z = 0, count = 0;
+        for (let k = -4; k <= 4; k++) {
+          const j = i + k * 2;
+          if (j < 0 || j >= was.length) continue;
+          x += was[j]; z += was[j + 1]; count++;
+        }
+        pts[i] = x / count; pts[i + 1] = z / count;
+      }
+    }
+    // back into the door's frame
+    this.rail = [];
+    for (let i = 0; i < pts.length; i += 2) this.rail.push(hx + pts[i] * ca - pts[i + 1] * sa, pts[i] * sa + pts[i + 1] * ca);
+    this.railAt = [0];
+    for (let i = 2; i < this.rail.length; i += 2) {
+      this.railAt.push(this.railAt[this.railAt.length - 1] + Math.hypot(this.rail[i] - this.rail[i - 2], this.rail[i + 1] - this.rail[i - 1]));
+    }
+    this.railS = this.nearestOnRail(start.x, start.z, 0, Infinity);
+  }
+
+  /** The rail's piece (its first point's number) that holds distance `s` along it. */
+  private railSegment(s: number): number {
+    const at = this.railAt;
+    let lo = 0, hi = at.length - 2;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (at[mid] <= s) lo = mid; else hi = mid - 1; }
+    return Math.max(0, Math.min(at.length - 2, lo));
+  }
+
+  /** The point `s` along the rail, in the world. */
+  private railPoint(s: number, out: { x: number; z: number }): void {
+    s = THREE.MathUtils.clamp(s, 0, this.railAt[this.railAt.length - 1]);
+    const k = this.railSegment(s), i = k * 2;
+    const len = this.railAt[k + 1] - this.railAt[k], t = len > 0 ? (s - this.railAt[k]) / len : 0;
+    v3.set(this.rail[i] + (this.rail[i + 2] - this.rail[i]) * t, 0, this.rail[i + 1] + (this.rail[i + 3] - this.rail[i + 1]) * t);
+    this.door.root.localToWorld(v3);
+    out.x = v3.x; out.z = v3.z;
+  }
+
+  /** How far along the rail its nearest point to (x, z) (the door's frame) is, looking only between `from` and `to`. */
+  private nearestOnRail(x: number, z: number, from: number, to: number): number {
+    const r = this.rail, at = this.railAt;
+    let best = Infinity, bestS = this.railS;
+    for (let k = 0; k < at.length - 1; k++) {
+      if (at[k + 1] < from || at[k] > to) continue;
+      const i = k * 2, dx = r[i + 2] - r[i], dz = r[i + 3] - r[i + 1], len2 = dx * dx + dz * dz;
+      const t = len2 > 0 ? THREE.MathUtils.clamp(((x - r[i]) * dx + (z - r[i + 1]) * dz) / len2, 0, 1) : 0;
+      const d = (r[i] + dx * t - x) ** 2 + (r[i + 1] + dz * t - z) ** 2;
+      if (d < best) { best = d; bestS = at[k] + (at[k + 1] - at[k]) * t; }
+    }
+    return bestS;
+  }
+
+  /**
+   * KEEP HER ON HER RAIL (call after she has walked, instead of the door's own keepOut): where she walked to is taken
+   * back to the rail (only how far ALONG it she got counts: a stick pushed sideways does nothing), the handle's pull
+   * (where the door cannot go) moves her along it too, and the door's panel stops her on it, never pushes her off it.
+   * `pos` is her place (x, z), changed in place; returns how far she really went (metres).
+   */
+  keepOnRail(pos: { x: number; z: number }, pull: THREE.Vector3, radius: number): number {
+    if (!this.holding || this.rail.length < 4) return 0;
+    const was = this.railS;
+    const before = { x: 0, z: 0 };
+    this.railPoint(was, before);
+    // where she got to, plus the handle's pull, measured along the rail near where she was
+    v1.set(pos.x + pull.x, 0, pos.z + pull.z);
+    this.door.root.worldToLocal(v1);
+    let want = this.nearestOnRail(v1.x, v1.z, was - 0.3, was + 0.3);
+    const free = (s: number) => { this.railPoint(s, pos); return !this.door.keepOut(pos.x, pos.z, radius, this.blocked); };
+    if (!free(want)) {
+      // THE PANEL STOPS HER ON THE RAIL: as far as she can go toward where she wanted (halving the step)
+      if (free(was)) {
+        let ok = was, bad = want;
+        for (let k = 0; k < 8; k++) { const mid = (ok + bad) / 2; if (free(mid)) ok = mid; else bad = mid; }
+        want = ok;
+      } else {
+        // (the door has come into her where she stood, swinging: the nearest clear spot along the rail, either way)
+        want = was;
+        for (let d = 0.02; d <= 0.4; d += 0.02) {
+          if (free(was - d)) { want = was - d; break; }
+          if (free(was + d)) { want = was + d; break; }
+        }
+      }
+    }
+    this.railS = want;
+    this.railPoint(want, pos);
+    return Math.hypot(pos.x - before.x, pos.z - before.z);
+  }
 
   /**
    * One frame. `at` is where she stands; writes where she should walk and look (as the table's and the bars' do).
@@ -590,10 +778,12 @@ export class DoorUse {
       door.latched = false;
       this.openedFrom = this.side;
       this.phase = 'hold';
+      // her rail, from where she stands now
+      this.buildRail(atX, atZ);
       return;
     }
     if (this.phase === 'hold') {
-      out.look = face;
+      out.look = this.faceYaw() ?? face;
       this.follow(dt, out.pull ?? null);
       return;
     }

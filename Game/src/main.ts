@@ -30,7 +30,7 @@ import type { IntakeAction } from './ui/hud';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
-import { BodyTurn, TURN, wrapAngle } from './input/bodyTurn';
+import { BodyTurn, wrapAngle } from './input/bodyTurn';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { VERSION_NUMBER } from './ui/versionTag';
 import { createCity } from './world/city';
@@ -228,11 +228,6 @@ const BUSY_LOOK_SIDE = Math.PI / 2;
 const BUSY_LOOK_RETURN_SECONDS = 1.5;
 /** ...after waiting this long once the player lets go (seconds; Joshua, 2026-11-20: "add a 1s delay"). */
 const BUSY_LOOK_WAIT = 1;
-/** FIRST PERSON, STANDING (see `freeView`): once the player lets go, the view waits this long, then settles back over this long. */
-const FREE_LOOK_WAIT = 1;
-/** ...and pushing the MOVE stick brings a settling view back to where the player left it over this long (seconds). */
-const FREE_LOOK_RESTORE = 0.15;
-const FREE_LOOK_SETTLE = 1.5; // (Joshua, 2026-11-20: "speed up to the same 1.5s" as at the bar; was 3)
 const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
@@ -530,15 +525,7 @@ async function start(): Promise<void> {
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
   const busyNow = (): boolean => tableUse.busy || grabUse.busy || doorUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
-  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; free: boolean; grip: boolean } = { view: 'third', look: null, move: null, hold: null, free: false, grip: false };
-  /**
-   * FIRST PERSON, LOOKING ROUND STANDING STILL (Joshua, 2026-11-20: "allow full rotating if not moving and to see past
-   * your limit, you have to move your joystick to look further so it's basically a free to look and will settle over 3s
-   * to body center"; "wait 1 s before settling back over 3 s, like at the bar"): the view turns only her head, held
-   * within its reach of her body (FREE_LOOK_*); let go, it waits, then settles back to straight ahead of her body.
-   * (Before, her body turned after her head as the view moved, and the view swung back as it caught up.)
-   */
-  const freeView = { idle: 0, returning: false, fromYaw: 0, fromPitch: 0, leftYaw: 0, leftPitch: 0, restoring: -1, restoreYaw: 0, restorePitch: 0 };
+  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; grip: boolean } = { view: 'third', look: null, move: null, hold: null, grip: false };
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
@@ -1260,6 +1247,9 @@ async function start(): Promise<void> {
         moveX = Math.sign(moveX) * (moveX !== 0 ? push : 0);
         moveY = Math.sign(moveY) * (moveY !== 0 ? push : 0);
       }
+      // HOLDING THE DOOR SHE IS ON HER RAIL (Joshua, 2026-11-20, his drawing; src/world/door.ts `keepOnRail`): only
+      // ahead (toward the door) and back move her, along the rail; the stick pushed sideways does nothing
+      if (doorUse.holding) moveX = 0;
       sideStepping = facingHeld && moveX !== 0;
       let speed = pace.speed;
       // (backing up: no faster than her jog)
@@ -1291,11 +1281,17 @@ async function start(): Promise<void> {
       }
       // her feet: crab steps for left and right (fastHeroine.ts); a crab walk only (the walk's pace, 1)
       heroine.setSideSteps?.(facingHeld ? 1 : null);
-      motion.update(dt, moveX, moveY, rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, speed);
+      // (on her rail "ahead" is along it, toward the door, whichever way the camera looks)
+      motion.update(dt, moveX, moveY, doorUse.holding ? doorUse.railYaw() : rig.mode === 'first' || aimedByHand() ? rig.yaw : rig.viewYaw, speed);
     }
-    // THE DOOR: its handle draws her where the door cannot go (holding it), and it is solid (src/world/door.ts)
-    if (doorUse.holding) { motion.x += doorAsk.pull.x; motion.z += doorAsk.pull.z; }
-    if (door.keepOut(motion.x, motion.z, doorBodyRadius(heroine.hands?.bellyAhead() ?? 0, doorUse.holding), doorOut)) { motion.x = doorOut.x; motion.z = doorOut.z; }
+    // THE DOOR: holding it, she is kept on her rail (the handle's pull moving her along it where the door cannot go,
+    // the panel stopping her on it); otherwise the door is solid (src/world/door.ts)
+    const doorRadius = doorBodyRadius(heroine.hands?.bellyAhead() ?? 0, doorUse.holding);
+    if (doorUse.holding) {
+      const went = doorUse.keepOnRail(motion, doorAsk.pull, doorRadius);
+      // (her real pace, for her walk: only what she went along the rail)
+      motion.speed = dt > 0 ? Math.min(motion.speed, went / dt) : 0;
+    } else if (door.keepOut(motion.x, motion.z, doorRadius, doorOut)) { motion.x = doorOut.x; motion.z = doorOut.z; }
     // THE BUTTONS THAT SHOW ONLY WHEN NEEDED (Joshua, 2026-11-18): the prompt near the table or a bar (holding a bar,
     // LET GO; else the table if she is near it; else the bar), HOLSTER / DRAW with a gun in a hand or a holster,
     // RELOAD at the table or with a clip on her belt for a gun that is not full. Hidden while something else runs.
@@ -1314,49 +1310,12 @@ async function start(): Promise<void> {
     // legs and feet 20 %; past 90 body North is pulled round; when the looking stops it comes round to match).
     //   first person  she looks where the camera looks;
     //   third person  she looks at the sky target most in front of her shoulders (her auto-aim).
-    // FIRST PERSON, STANDING STILL: FREE LOOK (see `freeView`): her body stays where it faces, the view only turns her
-    // head, up to its reach (90 degrees each side; up and down her neck's reach, cameraRig.ts); the MOVE stick turns her
-    turnInput.free = rig.mode === 'first' && aimedByHand() && !busyNow() && controls.moveX === 0 && controls.moveY === 0;
-    if (turnInput.free) {
-      const off = wrapAngle(rig.yaw - turn.base);
-      rig.yaw = turn.base + Math.max(-TURN.reach, Math.min(TURN.reach, off));
-      if (looked) { freeView.idle = 0; freeView.returning = false; }
-      else {
-        freeView.idle += dt;
-        if (freeView.idle > FREE_LOOK_WAIT) {
-          // (it settles from where the view was when it began to, eased at both ends)
-          if (!freeView.returning) {
-            freeView.returning = true; freeView.fromYaw = wrapAngle(rig.yaw - turn.base); freeView.fromPitch = rig.pitch;
-            // (where the player LEFT the view, in the world: the MOVE stick takes her there, below)
-            freeView.leftYaw = rig.yaw; freeView.leftPitch = rig.pitch;
-          }
-          const x = Math.min(1, (freeView.idle - FREE_LOOK_WAIT) / FREE_LOOK_SETTLE), left = 1 - x * x * (3 - 2 * x);
-          rig.yaw = turn.base + freeView.fromYaw * left;
-          rig.pitch = freeView.fromPitch * left;
-        }
-      }
-    } else {
-      // PUSHING THE MOVE STICK GOES WHERE THE PLAYER LEFT THE VIEW (Joshua, 2026-11-20: "I look over my shoulder then push
-      // the stick forward... as soon as start moving my head is not at 90° anymore but maybe 70-75° which wasn't my
-      // original target and feels like it pulls you off"): the settle had already begun bringing the view back to her
-      // body. Its moving stops, and if it had moved the view at all, the view goes back to where the player left it over
-      // FREE_LOOK_RESTORE (not if the player turns it meanwhile); so "forward" is where they looked, and her head leads
-      // her body round to it. Moving, the view never settles by itself.
-      if (freeView.returning && rig.mode === 'first' && !busyNow()) {
-        freeView.restoring = 0; freeView.restoreYaw = rig.yaw; freeView.restorePitch = rig.pitch;
-      }
-      freeView.idle = 0; freeView.returning = false;
-    }
-    if (freeView.restoring >= 0) {
-      if (looked || rig.mode !== 'first') freeView.restoring = -1;
-      else {
-        freeView.restoring = Math.min(1, freeView.restoring + dt / FREE_LOOK_RESTORE);
-        const x = freeView.restoring, k = x * x * (3 - 2 * x);
-        rig.yaw = freeView.restoreYaw + wrapAngle(freeView.leftYaw - freeView.restoreYaw) * k;
-        rig.pitch = freeView.restorePitch + (freeView.leftPitch - freeView.restorePitch) * k;
-        if (freeView.restoring >= 1) freeView.restoring = -1;
-      }
-    }
+    // FIRST PERSON, STANDING STILL (Joshua, 2026-11-20: "remove all the delays, and have the body follow like it does in
+    // 3rd person and based on our angle system... as soon as you need to go, there is minimal adjustments"): the view is
+    // her head, and her body follows it as in third person (src/input/bodyTurn.ts: past 90 degrees body North is pulled
+    // round, and once the look stops it comes round to match, each band a moment behind the one above). Nothing settles
+    // the view back: her body comes to where she looks, so she already faces the way she will go.
+    // (Before, v0.2.108-112: her body stayed put, and 1 s after the look stopped the view settled back to it over 1.5 s.)
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
     // (aimed by hand: she looks where the camera looks, in either view)

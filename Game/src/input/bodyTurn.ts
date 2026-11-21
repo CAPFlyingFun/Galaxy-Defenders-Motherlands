@@ -56,7 +56,7 @@
 // ============================================================================
 
 const DEG = Math.PI / 180;
-/** No band below her head follows its turn (standing, looking round freely). */
+/** No band below her head follows its turn (holding on: see `grip`). */
 const NO_SHARES = { shoulders: 0, belly: 0, upperLegs: 0, feet: 0 } as const;
 
 /** GAME TUNING for her turning. Angles in radians, times in seconds. */
@@ -118,11 +118,6 @@ export interface TurnInput {
    * backward or sideways facing it (holding a door's handle: Joshua, 2026-11-18). Null or left out: as usual.
    */
   readonly hold?: number | null;
-  /**
-   * FREE LOOK (first person, standing still: Joshua, 2026-11-20): her head turns to the look, but body North stays where
-   * it is: never pulled round, never coming round to match. The game keeps the look within her head's reach of it.
-   */
-  readonly free?: boolean;
   /**
    * HOLDING ON (first person at a bar, the railing, the table or a door): her head alone turns, up to `reach` from body
    * North; the rest of her stays square to what she holds. (Joshua, 2026-11-20, first: "30° just for the
@@ -235,7 +230,7 @@ export class BodyTurn {
     // ---- body North pulled round by her head: never more than her head's reach behind where it is to point ----
     // (not while she runs in third person: there body North goes the way she runs, and her head is held within reach)
     const behind = wrapAngle(headWant - this.base);
-    const held = (input.hold !== undefined && input.hold !== null) || input.free === true;
+    const held = input.hold !== undefined && input.hold !== null;
     if (Math.abs(behind) > reach && (first || input.move === null) && !held) {
       const want = headWant - Math.sign(behind) * reach;
       // (first person the camera cannot wait, so body North keeps up exactly; third person it turns at its own speed)
@@ -251,7 +246,7 @@ export class BodyTurn {
     this.head = wrapAngle(this.base + clamp(wrapAngle(this.head - this.base), -reach, reach));
 
     // ---- standing with the look stopped: body North comes round to match, the whole reach in `catchUpSeconds` ----
-    // (not while her facing is held, or she looks round freely: see `free`)
+    // (not while her facing is held)
     if (input.move === null && !held) {
       const pace = (reach / TURN.catchUpSeconds) * calm;
       this.base = turnToward(this.base, this.head, pace * dt);
@@ -260,11 +255,9 @@ export class BodyTurn {
     // ---- the bands below her head: each its share of her head's turn, ending where it ends, but each a moment behind
     //      the band above it (HER HEAD LEADS: `bandLag`), whether her head turned or body North did ----
     const turned = wrapAngle(this.head - this.base);
-    // (STANDING, LOOKING ROUND FREELY: her head alone turns, the rest of her stays square (Joshua, 2026-11-20: "unlink
-    //  that rule when standing still so the head is truly independent"; her shoulders still turning after a drag
-    //  stopped had pulled the view back a little); HOLDING ON, the same: her head alone)
+    // (HOLDING ON: her head alone turns, the rest of her stays square to what she holds)
     const lag = TURN.bandLag;
-    const shares = input.free || input.grip ? NO_SHARES : TURN.shares;
+    const shares = input.grip ? NO_SHARES : TURN.shares;
     this.shoulders = follow(this.shoulders, this.base + shares.shoulders * turned, lag.shoulders, dt);
     this.belly = follow(this.belly, this.base + shares.belly * turned, lag.belly, dt);
     this.upperLegs = follow(this.upperLegs, this.base + shares.upperLegs * turned, lag.upperLegs, dt);

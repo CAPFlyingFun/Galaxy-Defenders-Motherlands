@@ -30,7 +30,7 @@ import type { IntakeAction } from './ui/hud';
 import { Controls } from './input/controls';
 import { preventPageZoom } from './input/noZoom';
 import { PlayerMotion } from './input/playerMotion';
-import { BodyTurn } from './input/bodyTurn';
+import { BodyTurn, TURN, wrapAngle } from './input/bodyTurn';
 import { Hud, type DomeDebugAction } from './ui/hud';
 import { VERSION_NUMBER } from './ui/versionTag';
 import { createCity } from './world/city';
@@ -226,6 +226,11 @@ const BUSY_LOOK_SIDE = Math.PI / 2;
  * BUSY_LOOK_RETURN_MOST.
  */
 const BUSY_LOOK_RETURN_SECONDS = 1.5;
+/** ...after waiting this long once the player lets go (seconds; Joshua, 2026-11-20: "add a 1s delay"). */
+const BUSY_LOOK_WAIT = 1;
+/** FIRST PERSON, STANDING (see `freeView`): once the player lets go, the view waits this long, then settles back over this long. */
+const FREE_LOOK_WAIT = 1;
+const FREE_LOOK_SETTLE = 3;
 const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
@@ -523,7 +528,15 @@ async function start(): Promise<void> {
   /** Whether she is busy with the table or a bar (the stick waits, she does not aim or fire). */
   const busyNow = (): boolean => tableUse.busy || grabUse.busy || doorUse.busy;
   /** What her turning is told each frame (one object, rewritten: nothing new is made in the loop). */
-  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null } = { view: 'third', look: null, move: null, hold: null };
+  const turnInput: { view: 'first' | 'third'; look: number | null; move: number | null; hold: number | null; free: boolean } = { view: 'third', look: null, move: null, hold: null, free: false };
+  /**
+   * FIRST PERSON, LOOKING ROUND STANDING STILL (Joshua, 2026-11-20: "allow full rotating if not moving and to see past
+   * your limit, you have to move your joystick to look further so it's basically a free to look and will settle over 3s
+   * to body center"; "wait 1 s before settling back over 3 s, like at the bar"): the view turns only her head, held
+   * within its reach of her body (FREE_LOOK_*); let go, it waits, then settles back to straight ahead of her body.
+   * (Before, her body turned after her head as the view moved, and the view swung back as it caught up.)
+   */
+  const freeView = { idle: 0, returning: false, fromYaw: 0, fromPitch: 0 };
   /** The sky target her auto-aim picked this frame (third person). */
   let aimTarget = 0;
   const rig = new CameraRig();
@@ -1299,6 +1312,24 @@ async function start(): Promise<void> {
     // legs and feet 20 %; past 90 body North is pulled round; when the looking stops it comes round to match).
     //   first person  she looks where the camera looks;
     //   third person  she looks at the sky target most in front of her shoulders (her auto-aim).
+    // FIRST PERSON, STANDING STILL: FREE LOOK (see `freeView`): her body stays where it faces, the view only turns her
+    // head, up to its reach (90 degrees each side; up and down her neck's reach, cameraRig.ts); the MOVE stick turns her
+    turnInput.free = rig.mode === 'first' && aimedByHand() && !busyNow() && controls.moveX === 0 && controls.moveY === 0;
+    if (turnInput.free) {
+      const off = wrapAngle(rig.yaw - turn.base);
+      rig.yaw = turn.base + Math.max(-TURN.reach, Math.min(TURN.reach, off));
+      if (looked) { freeView.idle = 0; freeView.returning = false; }
+      else {
+        freeView.idle += dt;
+        if (freeView.idle > FREE_LOOK_WAIT) {
+          // (it settles from where the view was when it began to, eased at both ends)
+          if (!freeView.returning) { freeView.returning = true; freeView.fromYaw = wrapAngle(rig.yaw - turn.base); freeView.fromPitch = rig.pitch; }
+          const x = Math.min(1, (freeView.idle - FREE_LOOK_WAIT) / FREE_LOOK_SETTLE), left = 1 - x * x * (3 - 2 * x);
+          rig.yaw = turn.base + freeView.fromYaw * left;
+          rig.pitch = freeView.fromPitch * left;
+        }
+      }
+    } else { freeView.idle = 0; freeView.returning = false; }
     turnInput.view = rig.mode;
     turnInput.move = motion.heading;
     // (aimed by hand: she looks where the camera looks, in either view)
@@ -1319,13 +1350,18 @@ async function start(): Promise<void> {
       turnInput.look = Math.atan2(at.x - motion.x, at.z - motion.z);
     }
     // (while the table's action runs, she looks at the table)
-    if (ask.look !== null) turnInput.look = ask.look;
+    // (FIRST PERSON, holding on or working at something (Joshua, 2026-11-20: "When holding on to stuff like the bar or
+    //  railing, I can only move the camera up and down, not left to right"): her BODY keeps facing it (`hold`), and her
+    //  head looks where the player looks, the view held within 90 degrees each side of it (busyView below))
+    const busyFace = rig.mode === 'first' && ask.look !== null ? ask.look : null;
+    if (busyFace !== null) turnInput.look = rig.yaw;
+    else if (ask.look !== null) turnInput.look = ask.look;
     // (holding the door's handle she keeps facing the door, whichever way she steps: bodyTurn.ts `hold`)
     // (MANUAL in third person, Joshua 2026-11-18: she keeps facing the way the camera looks, so the stick's forward and
     //  back go straight ahead and behind, and left and right are side steps. Her body used to turn to the way she
     //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
     //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
-    turnInput.hold = doorUse.faceYaw() ?? (walkSides() ? rig.yaw : null);
+    turnInput.hold = doorUse.faceYaw() ?? busyFace ?? (walkSides() ? rig.yaw : null);
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
@@ -1393,7 +1429,7 @@ async function start(): Promise<void> {
         // (the action has just begun: the view follows from where it is, with no look of the player's added yet)
         busyView.on = true;
         busyView.yaw = rig.yaw; busyView.pitch = rig.pitch;
-        busyView.lookYaw = 0; busyView.lookPitch = 0; busyView.idle = busyView.returnSeconds = BUSY_LOOK_RETURN_SECONDS;
+        busyView.lookYaw = 0; busyView.lookPitch = 0; busyView.returnSeconds = BUSY_LOOK_RETURN_SECONDS; busyView.idle = BUSY_LOOK_WAIT + busyView.returnSeconds;
         busyView.fromYaw = 0; busyView.fromPitch = 0;
       } else {
         // (what the player dragged since last frame: rig.applyLook moved the view from where it was set)
@@ -1406,15 +1442,19 @@ async function start(): Promise<void> {
         if (Math.abs(draggedYaw) > 1e-5 || Math.abs(draggedPitch) > 1e-5) {
           busyView.idle = 0;
           busyView.dragging = true;
-        } else if (busyView.idle < busyView.returnSeconds) {
-          busyView.idle = Math.min(busyView.returnSeconds, busyView.idle + dt);
-          const x = busyView.idle / busyView.returnSeconds, left = 1 - x * x * (3 - 2 * x);
+        } else if (busyView.idle < BUSY_LOOK_WAIT + busyView.returnSeconds) {
+          // (Joshua, 2026-11-20: "add a 1s delay after you have released the camera before it then goes back")
+          busyView.idle = Math.min(BUSY_LOOK_WAIT + busyView.returnSeconds, busyView.idle + dt);
+          const x = Math.max(0, busyView.idle - BUSY_LOOK_WAIT) / busyView.returnSeconds, left = 1 - x * x * (3 - 2 * x);
           busyView.lookYaw = busyView.fromYaw * left;
           busyView.lookPitch = busyView.fromPitch * left;
         }
       }
       const ease = 1 - Math.exp(-dt / FIRST_PERSON_FOLLOW_SECONDS);
-      busyView.yaw += Math.atan2(Math.sin(turn.head - busyView.yaw), Math.cos(turn.head - busyView.yaw)) * ease;
+      // (the view follows what she is doing: its way, or where her head turns to it; first person her head follows the
+      //  player's look, so the view follows the thing itself)
+      const busyWay = ask.look ?? turn.head;
+      busyView.yaw += Math.atan2(Math.sin(busyWay - busyView.yaw), Math.cos(busyWay - busyView.yaw)) * ease;
       // (tipped down to HER HANDS, between the two: when she leans over the table her head is ahead of them, and a
       //  fixed tip passed right over them. Never quite straight down.)
       // (WALKING OVER she looks nearly level, as in third person; the view tips down to her hands only as they start to

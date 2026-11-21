@@ -733,6 +733,38 @@ if (uHideHead > 0.5) {
     b.quaternion.premultiply(heldQuaternion).premultiply(upQuaternion).premultiply(heldQuaternion.invert());
   };
   const tipAxis = new THREE.Vector3();
+  // (for `steadyHead`: her skull's forward and up now and as they should be, and the turn between them)
+  const nowF = new THREE.Vector3(), nowU = new THREE.Vector3(), nowS = new THREE.Vector3();
+  const wantF = new THREE.Vector3(), wantU = new THREE.Vector3(), wantS = new THREE.Vector3();
+  const nowBasis = new THREE.Matrix4(), wantBasis = new THREE.Matrix4(), steadyTurn = new THREE.Quaternion();
+  const skullWorldQ = new THREE.Quaternion(), skullParentQ = new THREE.Quaternion();
+  /**
+   * Turn her skull (about its own base) so it looks along `yaw` and `pitch` (world, radians; pitch goes on past straight
+   * down), level: its up in the upright plane of its look. Her neck is left as it is. (See "HER HEAD HELD STEADY".)
+   */
+  const steadyHead = (yaw: number, pitch: number): void => {
+    if (!skull.parent) return;
+    skull.updateWorldMatrix(true, false);
+    skull.getWorldQuaternion(skullWorldQ);
+    nowF.copy(headForwardLocal).applyQuaternion(skullWorldQ);
+    nowU.copy(headUpLocal).applyQuaternion(skullWorldQ);
+    nowS.crossVectors(nowF, nowU).normalize();
+    nowU.crossVectors(nowS, nowF).normalize();
+    // (as it should be: its look tipped by `pitch`, its up square to that look in the upright plane)
+    const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
+    wantF.set(sy * cp, sp, cy * cp);
+    wantU.set(-sy * sp, cp, -cy * sp);
+    wantS.crossVectors(wantF, wantU).normalize();
+    // (the turn that takes the one set of directions onto the other: want · now⁻¹; a basis's inverse is its transpose)
+    nowBasis.makeBasis(nowF, nowU, nowS);
+    wantBasis.makeBasis(wantF, wantU, wantS);
+    steadyTurn.setFromRotationMatrix(wantBasis.multiply(nowBasis.transpose()));
+    // (laid on her skull in the world, then written back as a turn from its parent)
+    skullWorldQ.premultiply(steadyTurn);
+    skull.parent.getWorldQuaternion(skullParentQ);
+    skull.quaternion.copy(skullParentQ.invert().multiply(skullWorldQ));
+    skull.updateMatrixWorld(true);
+  };
   const turnUpright = (b: THREE.Bone, angle: number): void => {
     if (!b.parent || Math.abs(angle) < 1e-5) return;
     b.parent.getWorldQuaternion(heldQuaternion);
@@ -1601,6 +1633,11 @@ if (uHideHead > 0.5) {
           for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, tip * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
           root.updateMatrixWorld(true);
         }
+        // FIRST PERSON, HER HEAD HELD STEADY (Joshua, 2026-11-20: "The camera bob is fixed, but the sway is still there"):
+        // her walk still twists her hips and shoulders, and her neck carried her head with them. As a real person keeps
+        // her eyes steady, her skull is turned to look EXACTLY where it is meant to (`headYaw`, and `rel` from her
+        // torso's line), level, no roll: only her skull, about its own base, every frame, nothing eased.
+        if (firstPerson) steadyHead(headYaw, rel - torsoLean);
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

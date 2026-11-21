@@ -116,6 +116,11 @@ export interface TurnInput {
    * backward or sideways facing it (holding a door's handle: Joshua, 2026-11-18). Null or left out: as usual.
    */
   readonly hold?: number | null;
+  /**
+   * FREE LOOK (first person, standing still: Joshua, 2026-11-20): her head turns to the look, but body North stays where
+   * it is: never pulled round, never coming round to match. The game keeps the look within her head's reach of it.
+   */
+  readonly free?: boolean;
 }
 
 /** An angle brought into -180°..180°. */
@@ -222,7 +227,8 @@ export class BodyTurn {
     // ---- body North pulled round by her head: never more than her head's reach behind where it is to point ----
     // (not while she runs in third person: there body North goes the way she runs, and her head is held within reach)
     const behind = wrapAngle(headWant - this.base);
-    if (Math.abs(behind) > reach && (first || input.move === null) && (input.hold === undefined || input.hold === null)) {
+    const held = (input.hold !== undefined && input.hold !== null) || input.free === true;
+    if (Math.abs(behind) > reach && (first || input.move === null) && !held) {
       const want = headWant - Math.sign(behind) * reach;
       // (first person the camera cannot wait, so body North keeps up exactly; third person it turns at its own speed)
       this.base = first ? wrapAngle(want) : turnToward(this.base, want, TURN.dragSpeed * dt);
@@ -237,7 +243,8 @@ export class BodyTurn {
     this.head = wrapAngle(this.base + clamp(wrapAngle(this.head - this.base), -reach, reach));
 
     // ---- standing with the look stopped: body North comes round to match, the whole reach in `catchUpSeconds` ----
-    if (input.move === null) {
+    // (not while her facing is held, or she looks round freely: see `free`)
+    if (input.move === null && !held) {
       const pace = (reach / TURN.catchUpSeconds) * calm;
       this.base = turnToward(this.base, this.head, pace * dt);
     }

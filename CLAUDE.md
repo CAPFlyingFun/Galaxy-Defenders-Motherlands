@@ -43,8 +43,19 @@ use the game's single copy of three.js.
   the body naturally has a bob and sway adjustment... in 1st person, make 0% Bob, Sway, but show it in 3rd person";
   bodyMotion.ts `bobSwayShare`, set by `setFirstPerson`): her look's own Bob and Sway are 0 in first person, as they are
   in third. (Tried and dropped, v0.2.102-106: easing the camera, BE-style, which swayed, stuttered dragging the view and
-  let her face poke through.) AT THE TABLE, BARS AND DOOR the up and down
-  look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
+  let her face poke through.) HER HEAD HELD STEADY (Joshua, 2026-11-20: "The camera bob is fixed,
+  but the sway is still there"; fastHeroine.ts `steadyHead`): first person, her skull is turned each frame to look
+  EXACTLY where it is meant to, level, no roll (her walk's hip and shoulder twist had swung it 6.4 degrees); measured
+  walking: 0 degrees of turn, 1.2 cm side to side and 2.6 cm up and down left in her eyes. FREE LOOK STANDING (Joshua:
+  "allow full rotating if not moving and to see past your limit, you have to move your joystick... settle over 3s to
+  body center"; "wait 1 s before settling back over 3 s"; main.ts `freeView`, bodyTurn.ts `free`): first person with
+  the MOVE stick centred, the view only turns her head (90 each side of her body, her neck's reach up and down), her body
+  stays; let go, it waits 1 s then settles back to straight ahead of her body over 3 s; the MOVE stick turns her. (Her
+  body had turned after her head and the view swung back as it caught up.) AT THE TABLE, BARS AND DOOR the up and down
+  look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough), and
+  LEFT AND RIGHT TOO (Joshua: "I can only move the camera up and down, not left to right"): her body faces what she holds
+  (`busyFace` as bodyTurn's `hold`), her head follows the player's look, 90 each side; let go, the view waits 1 s
+  (`BUSY_LOOK_WAIT`) then goes back over 1.5 s.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.

@@ -58,7 +58,7 @@ import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
-import { DetailLevels, DetailMaker, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
+import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
@@ -224,6 +224,10 @@ export interface FastHeroineOptions {
    *  (detailLevels.ts `headPart`; Joshua, 2026-11-21: John at 1 % with "only his face details to 30%", main.ts
    *  JOHN_HEAD_DETAIL). Unset: the head goes with the rest (or with `sharpParts`, kept at 100 %). */
   readonly headDetail?: number;
+  /** Both hands kept at THIS detail (percent) when the level is lighter, the rest of the body at the level
+   *  (detailLevels.ts `handPart`; Joshua, 2026-11-21, John: "Do face at 70%, hands at 15%", main.ts JOHN_HANDS_DETAIL).
+   *  With the sharp set it replaces the 100 % `sharpParts` holds them at. Unset: as before. */
+  readonly handsDetail?: number;
   /** The catsuit's knit in place of her look's own (outfitMaterial.ts SUIT_KNITS), for looks that wear a live knit. */
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
@@ -427,7 +431,12 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // "Her shoulders still aren't fixed yet". Now in the plain set too. (Not on a male body: John is held at his own.)
   const shoulders = male ? null : { points: shoulderPart(look.shape.position, box), detail: SHOULDERS_DETAIL };
   if (shoulders) ownParts.push(shoulders);
-  maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves) : null, ownParts);
+  // THE HANDS AT THEIR OWN PERCENT, if asked (`handsDetail`; Joshua, 2026-11-21, John: "Do face at 70%, hands at 15%"):
+  // a part like the head. With the sharp set (Blaze near the camera) they come out of its 100 % lock and are kept at
+  // this percent instead; Blaze does not ask for it (her hands stay at 100 % near).
+  const handsOwn = options.handsDetail !== undefined && options.handsDetail < 100;
+  if (handsOwn) ownParts.push({ points: handPart(look.shape.position, box), detail: options.handsDetail! });
+  maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves, undefined, !handsOwn) : null, ownParts);
   const levels = new DetailLevels(maker, 0, fullIndex);
   if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null, shoulders ? [shoulders] : []);
   const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;

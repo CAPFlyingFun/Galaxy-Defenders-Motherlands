@@ -119,6 +119,22 @@ export function shoulderPart(points: Float32Array, box: THREE.Box3): Uint8Array 
   return inside;
 }
 
+/** A point of her hands: out at her sides below her wrists (shares of her height from her middle and her feet), as
+ *  `skinImportance` finds them. */
+const isHand = (xr: number, yr: number): boolean => xr > 0.13 && yr > 0.38 && yr < 0.57;
+
+/**
+ * HER HANDS, as a part that can be kept at its own detail (detailWorker.ts `parts`) in place of the full 100 % that
+ * `sharpParts` holds them at (Joshua, 2026-11-21: "What if we made both hands at 50% detail? How would that look?"):
+ * at 1 % near they were about 33,000 of her 92,000 triangles.
+ */
+export function handPart(points: Float32Array, box: THREE.Box3): Uint8Array {
+  const n = points.length / 3, H = box.max.y - box.min.y, cx = (box.min.x + box.max.x) / 2;
+  const inside = new Uint8Array(n);
+  for (let v = 0; v < n; v++) if (isHand(Math.abs(points[v * 3] - cx) / H, (points[v * 3 + 1] - box.min.y) / H)) inside[v] = 1;
+  return inside;
+}
+
 /**
  * HER FACE, HANDS, ARMS, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
  * details even when at 1%... at 1% her face and belly looks bad... a compromise of speed and quality"): the points of
@@ -126,7 +142,7 @@ export function shoulderPart(points: Float32Array, box: THREE.Box3): Uint8Array 
  * any point. The lightening never takes these away (detailWorker.ts), at any level; the rest of her is lightened.
  * Settings -> HEROINE -> Sharp face, bust & belly turns it off.
  */
-export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMoves, share = 0.12): Uint8Array {
+export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMoves, share = 0.12, withHands = true): Uint8Array {
   const n = points.length / 3;
   const H = box.max.y - box.min.y, cx = (box.min.x + box.max.x) / 2;
   const lock = new Uint8Array(n);
@@ -135,7 +151,8 @@ export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMo
     if (yr > HEAD_FROM) lock[v] = 1; // her head, above her neck
     // HER HANDS (Joshua, 2026-11-19, of her fingers round a bar at 1%: "the hands look weird holding the pole... are the
     // hands included?"): out at her sides below her wrists, as `skinImportance` finds them
-    if (xr > 0.13 && yr > 0.38 && yr < 0.57) lock[v] = 1;
+    // (`withHands` false: her hands are not held here but kept at their own percent instead, `handPart`)
+    if (withHands && isHand(xr, yr)) lock[v] = 1;
     // HER ARMS, from her shoulders down to her wrists (Joshua, 2026-11-20, near the camera at 25%: "her arm is flat like
     // a pancake"; measured: her left upper arm lightened to a flat strip, round again at 100% and with these locked;
     // giving them more weight in the lightening was not enough)

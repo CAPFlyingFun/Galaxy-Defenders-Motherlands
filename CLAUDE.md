@@ -676,6 +676,11 @@ use the game's single copy of three.js.
   Measured in the lab (`heroine-lab.html?heroine=fast&look=john&detail=1&sharp_parts=off&head=30`, the lab now takes
   `sharp_parts` and `head`): John at 1 % 5,849 triangles in all, with his head at 30 % 13,063: a real face again (a
   few colour patches where his skin picture's pieces meet). Next the same way: hands, and so on.
+  v0.2.136 (Joshua, after 134: "His face is better, but not 100%"; "Do face at 70%, hands at 15%"): main.ts
+  `JOHN_HEAD_DETAIL` 70, `JOHN_HANDS_DETAIL` 15 (fastHeroine.ts option `handsDetail`, detailLevels.ts `handPart`, the
+  same points `sharpParts` calls her hands; with the sharp set, as on Blaze near, they leave its 100 % lock for their
+  percent, but Blaze does not ask for it: her hands stay 100 % near). createHeroine's last argument is now
+  `{ headDetail, handsDetail }`. Lab (`&head=70&hands=15`): 28,821 triangles at 1 % (head 30 % alone 13,063).
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

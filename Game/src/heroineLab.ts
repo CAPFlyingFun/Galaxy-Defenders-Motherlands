@@ -107,6 +107,8 @@ async function start(): Promise<void> {
       // (?sharp_parts=off: nothing kept at 100 %; ?head=30: the head kept at 30 % when the level is lighter, as John is)
       sharpParts: asked.get('sharp_parts') !== 'off',
       headDetail: asked.has('head') ? Number(asked.get('head')) : undefined,
+      // (?hands=50: both hands kept at 50 % near the camera instead of 100 %)
+      handsDetail: asked.has('hands') ? Number(asked.get('hands')) : undefined,
       onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
     });
     scene.add(heroine.root);

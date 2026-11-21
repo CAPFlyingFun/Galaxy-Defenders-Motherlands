@@ -113,7 +113,7 @@ type GameHeroine = HeroineBody & {
  * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
  * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false, headDetail?: number): Promise<GameHeroine> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false, parts: { headDetail?: number; handsDetail?: number } = {}): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin' && !onlyFast) return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
@@ -141,8 +141,10 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         hairStrands: settings.hairStrands !== 'off',
         skinTexture: settings.skinTexture !== 'off',
         faceLocks: settings.faceLocks === 'on',
-        // (the head at its own detail when the level is lighter: John's face, JOHN_HEAD_DETAIL; unset for Blaze)
-        headDetail,
+        // (the head and hands at their own detail when the level is lighter: John's, JOHN_HEAD_DETAIL and
+        //  JOHN_HANDS_DETAIL; unset for Blaze)
+        headDetail: parts.headDetail,
+        handsDetail: parts.handsDetail,
         onProgress: (stage) => say(`Loading ${who}: ${stage}…`),
       });
     } catch (error) {
@@ -446,11 +448,13 @@ async function start(): Promise<void> {
   const JOHN_DETAIL: 1 | null = 1;
   /** John's face, hands and the rest kept sharp at his fixed level (fastHeroine.ts `sharpParts`): none, for now. */
   const JOHN_SHARP_PARTS = false;
-  /** HIS FACE AT 30 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
-   *  30%"): his head, above his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts
-   *  `headDetail`, detailLevels.ts `headPart`: the rest lightened first with his head held, then his head alone).
-   *  Next, if it runs: other parts (hands...) at their own percent the same way. null: his head goes with the rest. */
-  const JOHN_HEAD_DETAIL: number | null = 30;
+  /** HIS FACE AT 70 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
+   *  30%"; v0.2.134 at 30 %: "His face is better, but not 100%"; then "Do face at 70%, hands at 15%"): his head, above
+   *  his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts `headDetail`, detailLevels.ts
+   *  `headPart`: the rest lightened first with his head held, then his head alone). null: it goes with the rest. */
+  const JOHN_HEAD_DETAIL: number | null = 70;
+  /** HIS HANDS AT 15 % (the same ask), the same way (fastHeroine.ts `handsDetail`, detailLevels.ts `handPart`). */
+  const JOHN_HANDS_DETAIL: number | null = 15;
   /** The Detail a character is drawn at while PLAYED: John's fixed one, or the Settings choice (Blaze). */
   const detailFor = (c: Character | null): HeroineSettings['detail'] => (c && c === john && JOHN_DETAIL !== null ? JOHN_DETAIL : graphics.detail);
   /** Blaze is the one being played (always, without John). */
@@ -628,7 +632,8 @@ async function start(): Promise<void> {
     try {
       // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
       const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
-      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true, JOHN_DETAIL !== null ? JOHN_HEAD_DETAIL ?? undefined : undefined);
+      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true,
+        JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined } : {});
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);

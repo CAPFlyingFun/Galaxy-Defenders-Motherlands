@@ -601,9 +601,13 @@ use the game's single copy of three.js.
   `Character` { name, body, vitals, ownTurn, x, z, yaw }: `blaze`, `john`, `playing`; the one not played stands where
   left, drawn and updated, his or her OWN vitals stepped (standing still) and fed to the body. His vitals are his own
   `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and time lapse are always Blaze's.
-  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played is free
-  (not at the table, a bar or a door, standing, not winded or going to the toilet), holsters guns first, then hands
-  the controls, camera, vitals card and turn to the other where they stand; a "Now playing: X" notice. An outfit
+  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played has
+  finished what they are in the middle of (the table, a bar, a door, a holster/draw, a reload, winded, the toilet),
+  then hands the controls, vitals card and turn to the other where they stand; a "Now playing: X" notice. EACH HOLDS
+  THEIR OWN (Joshua, 2026-11-21: "save the last known heading... each one should save independently"; "hold poses and
+  last actions"; main.ts `Character` `cam`, `stance`, `holstered`): their CAMERA (heading and tip, back at once; the
+  first time, the way they face), their STANCE (crouched or down they stay so) and their GUNS (in hand or holstered).
+  John's guns start holstered, as hers do. An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
   `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
   played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as
@@ -612,18 +616,24 @@ use the game's single copy of three.js.
   is drawn at the player's level NOW within 20 m on a phone (a touch screen), then stepped down one offered level at a
   time to 1 % over the next 10 m (no flicker: a step changes only three quarters into the next); on a computer always
   the player's level. `?other_near=<m>` sets the 20 m for a test. Measured on the phone setting: 21 m 30 %, 24 m 10 %,
-  27 m 3 %, 35 m 1 %; back beside her 30 % again (once rebuilt). COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  27 m 3 %, 35 m 1 %; back beside her 30 % again (once rebuilt). SHIPPED BODY FILE (v0.2.127): `models/male-base.glb` (17 MB) is in `Game/charb-files.json`; v0.2.126 left it out, so
+  the BUILT game had no John (the dev server reads Char_B directly). If he cannot be made, a notice says why. v0.2.128: JOHN ALWAYS FROM HIS SHARP SET (fastHeroine.ts `want`): on the
+  iPhone his plain set did not draw (only near the camera, or in first person, was he seen); his levels do not lighten
+  anyway (about 88 K triangles each). GRAPHICS TROUBLE ON SCREEN (core/glTrouble.ts): a shader the phone will not
+  build, or lost graphics, shows as a notice. THE PAGE NEVER FROM THE BROWSER'S CACHE (sw.js navigate `no-store`): his
+  iPhone showed 127's loading screen and then 126's game. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
   NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
   breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
   trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.
-- REVERTED TO v0.2.126 (Joshua, 2026-11-21, 14:50: v0.2.129 crashed on his iPhone a split second after both characters
-  showed, and with `?john=off` too; "revert to v126... if that works again like it did... then let's start over...
-  and re-add the fixes afterwards"). Everything after it is kept on the branch `after-126-fixes`: v0.2.127 (John's body
-  file `models/male-base.glb` in charb-files.json: v0.2.126 itself does not ship it, so the built game has no John),
-  v0.2.128 (John always from his sharp set; core/glTrouble.ts; the page `no-store` in sw.js), v0.2.129 (each
-  character's own camera, stance and guns on a swap), v0.2.130 (John held at one detail level; his crash guard; TEST
-  TOOLS John on/off) and a WIP commit (core/startupLog.ts, core/gpuTally.ts, builder v0.9.70, the builder's squat).
-  Add them back one at a time, each tested on his iPhone.
+- BACK TO v0.2.129 (Joshua, 2026-11-21, 15:11): after crashes on his iPhone the game went back to v0.2.126 (14:51),
+  which then ran again ("It's working now... on v126"), so the crashes look like the phone's state (memory, stored
+  files) more than the code; then "revert to v129... that will be easier". Kept on other branches, not live:
+  `after-126-fixes` (v0.2.130: John held at one detail level, his crash guard, TEST TOOLS John on/off; builder v0.9.70
+  and the builder's squat) and `wip-131` (v0.2.130 + core/startupLog.ts, core/gpuTally.ts (estimated GPU memory),
+  skin height stored as one channel (about 64 MB less per character), `?fresh=1`, the live body run only for the
+  one played and the one standing by worked out 15 times a second). Measured on a desktop with gpuTally: the first
+  frame uploads every picture, about 480 MB est. with Blaze alone, 770 with John; the biggest are 4096 x 4096
+  pictures (each look's albedo and skin height).
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

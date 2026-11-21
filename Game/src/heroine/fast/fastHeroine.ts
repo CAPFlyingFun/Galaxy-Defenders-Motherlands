@@ -1119,7 +1119,10 @@ if (uHideHead > 0.5) {
    * first person) it is the level with her face, bust and belly kept sharp; further off the plain one. 100 % is one.
    */
   const want = (detail: Detail): void => {
-    const sharp = keepSharp && (near || firstPerson);
+    // (JOHN ALWAYS FROM HIS SHARP SET, 2026-11-21: on Joshua's iPhone he was drawn only near the camera (his sharp set)
+    //  and further off only his belt, sneakers and shadow showed: his plain set did not draw there. His levels do not
+    //  lighten anyway (about 88,000 triangles sharp or plain, the male body's layout), so his sharp set costs nothing more.)
+    const sharp = keepSharp && (near || firstPerson || male);
     const key = detail === 100 || sharp ? detail : detail + PLAIN_KEY;
     wantedKey = key;
     if (key === drawnKey) return;

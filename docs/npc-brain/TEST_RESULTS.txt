@@ -1,0 +1,29 @@
+Motherlands NPC Brain Template v0.1
+Compiled and tested offline on 2026-11-21 using Node 22 + global TypeScript tsc.
+
+Commands:
+  tsc --noEmit
+  npm test
+
+Results:
+  10/10 tests passed.
+
+Coverage:
+  - sequential navigation and scan
+  - priority interruption / navigation resumption
+  - player takeover
+  - urgent bathroom planner + queue deduplication
+  - story lock and scripted mode
+  - exactly-once food consumption
+  - exactly-once bladder relief after squat
+  - no bathroom use without safe location
+  - automatic shooting restricted without combat permission
+  - GDM DoorUse start and completion through existing door callback
+
+NOT yet tested:
+  - Actual GDM/CCBS runtime integration
+  - Pathfinding around island obstacles
+  - Door rail callback against real door geometry
+  - Real ammo/projectile/line-of-sight callback
+  - Actual on-phone memory/FPS
+  - Character switching or long-running save/load

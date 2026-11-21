@@ -607,7 +607,8 @@ use the game's single copy of three.js.
   THEIR OWN (Joshua, 2026-11-21: "save the last known heading... each one should save independently"; "hold poses and
   last actions"; main.ts `Character` `cam`, `stance`, `holstered`): their CAMERA (heading and tip, back at once; the
   first time, the way they face), their STANCE (crouched or down they stay so) and their GUNS (in hand or holstered).
-  John's guns start holstered, as hers do. An outfit
+  John's guns start holstered, as hers do. (EACH HOLDS THEIR OWN is v0.2.129: NOT LIVE since the step back to v0.2.128,
+  kept on `backup-v129`.) An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
   `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
   played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as
@@ -634,6 +635,16 @@ use the game's single copy of three.js.
   one played and the one standing by worked out 15 times a second). Measured on a desktop with gpuTally: the first
   frame uploads every picture, about 480 MB est. with Blaze alone, 770 with John; the biggest are 4096 x 4096
   pictures (each look's albedo and skin height).
+- BACK TO v0.2.128 (Joshua, 2026-11-21, 15:52): v0.2.129 kept crashing on his iPhone ("Let's not change the textures
+  yet... as it was working before... there must be another issue"); then "Revert back to v128 but save your work as a
+  backup". v0.2.128 is the last version he played with both characters drawn (he swapped between them and asked for
+  the saved camera headings). Game/ is v0.2.128's exactly; this file is kept current. Kept, not live: `backup-v129`
+  (v0.2.129: each character keeps its own camera, stance and guns; John's guns holstered at the start),
+  `texture-memory` (v0.2.132 candidate on v0.2.129: skin height as one channel, each big picture's unpacked copy let go
+  of once it is on the graphics chip (`freeAfterUpload`, bakedLook.ts), `navigator.storage.persist()`; built, not tested
+  on a phone), and `after-126-fixes`, `wip-131` as above. Proposed, not yet asked for: a build of 128 with switches,
+  `?john_sharp=off` (127's detail sets), `?nosw=1` (no offline copy), `?john=off`; each opened twice (the first open
+  after an update, then a second).
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

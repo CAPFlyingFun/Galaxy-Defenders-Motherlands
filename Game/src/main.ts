@@ -418,15 +418,6 @@ async function start(): Promise<void> {
     readonly ownTurn: BodyTurn;
     /** Where they stand and face while they are not played (metres, radians). */
     x: number; z: number; yaw: number;
-    /** THEIR OWN CAMERA, kept while they are not played (Joshua, 2026-11-21: "each one should save independently and on
-     *  swap back, will resume the same last heading"): its heading and tip (radians) and the view it was in; null until
-     *  they have been played (then the camera starts looking the way they face). */
-    cam: { yaw: number; pitch: number; mode: string } | null;
-    /** THEIR OWN POSE, held while they are not played and taken up again (Joshua, 2026-11-21: "hold poses and last
-     *  actions"): standing, crouched or down (prone, or all fours for Blaze when pregnant), and which guns are holstered
-     *  (the others stay in their hands). */
-    stance: 'stand' | 'crouch' | 'down';
-    holstered: { left: boolean; right: boolean };
   }
   let john: Character | null = null, blaze: Character | null = null;
   /** Who is being played now (Blaze until the first swap). */
@@ -598,7 +589,7 @@ async function start(): Promise<void> {
   // the card along the top of the screen.
   const pace = new Pace();
   let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base, cam: null, stance: 'stand', holstered: { left: true, right: true } };
+  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base };
   playing = blaze;
 
   // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
@@ -614,22 +605,13 @@ async function start(): Promise<void> {
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base, cam: null, stance: 'stand', holstered: { left: true, right: true } };
+      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base };
       john.ownTurn.reset(john.yaw);
       body.setFacing?.(john.ownTurn);
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));
       body.setYaw(john.yaw);
       body.setSkinShine?.(skinOilyOf(graphics.skinShine));
-      // (his guns start in their holsters, as hers do (holsterUse.ts `startHolstered`): put straight into their seats,
-      //  as holsterUse `reseat` does; `john.holstered` says so)
-      for (const hand of ['left', 'right'] as const) {
-        const seat = body.hands?.holster(hand);
-        if (!seat) { john.holstered[hand] = false; continue; }
-        const gun = body.hands!.releaseGun(hand, seat.bone);
-        gun.matrix.copy(seat.seat);
-        gun.matrixWorldNeedsUpdate = true;
-      }
       scene.add(body.root);
       applyShadows();
     } catch (error) {
@@ -972,34 +954,31 @@ async function start(): Promise<void> {
 
   /**
    * 🔄 SWAP CHARACTER (Joshua, 2026-11-21, as Beyond Extinction does it): the camera, the sticks and the vitals card go
-   * to the other one; the one left stays where they were, their vitals running on. Asked while the one played is in the
-   * middle of something (a bar, a door, the table, a reload, a holster or draw, the bathroom, winded), it waits until
-   * that is done. EACH HOLDS THEIR POSE (Joshua, 2026-11-21: "hold poses and last actions"): crouched or down they stay
-   * so, guns in hand stay in hand, and swapped back to they take it all up again; their camera too (`cam`).
+   * to the other one; the one left stays standing where they were, their vitals running on. Asked while the one played
+   * is busy (a bar, a door, the table, a reload, the bathroom, down on the ground, winded), it waits until they are
+   * not; guns in hand are holstered first. Each keeps their own guns, belt and vitals.
    */
   let swapWanted = false;
   const swapCharacter = (): void => {
     const from = playing, to = bystander();
     if (!from || !to) return;
-    // (in the middle of something: wait, tried again each frame until it is done)
-    if (!idleForChange() || holsterUse.busy || beltReload.busy || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging) {
-      if (!swapWanted) hud.showNotice(`${from.name} finishes first…`);
+    // (busy: wait. Guns in hand: put away first. Either way it is tried again each frame until it can be done)
+    const h = heroine.hands, gunInHand = !!h && holsterUse.hasHolsters && (h.hasGun('left') || h.hasGun('right'));
+    if (!idleForChange() || stance !== 'stand' || pace.holdLeft > 0 || mustGoNow || frozen || outfitChanging || gunInHand) {
+      if (!swapWanted) hud.showNotice(gunInHand ? `${from.name} holsters first…` : `${from.name} finishes first…`);
+      if (gunInHand && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+      if (stance !== 'stand') stance = 'stand';
       swapWanted = true;
       return;
     }
     swapWanted = false;
     // the one left behind: where they stand now, facing their own way, standing easy
     from.x = motion.x; from.z = motion.z; from.yaw = turn.base;
-    // (and where the camera looked while they were played, to be looked again when they are played again)
-    from.cam = { yaw: rig.yaw, pitch: rig.pitch, mode: rig.mode };
     from.ownTurn.reset(from.yaw);
     from.body.setFacing?.(from.ownTurn);
     from.body.setFirstPerson(false);
     from.body.setWinded?.(0, 0);
-    // (their pose is HELD: their body keeps the stance it was given, their guns stay where they are; written down here
-    //  so it is taken up again when they are played)
-    from.stance = stance;
-    from.holstered = { left: holsterUse.holstered.left, right: holsterUse.holstered.right };
+    from.body.setStance?.('stand');
     // the one now played: the player's motion, facing and vitals are theirs
     playing = to;
     bodyNow = to.body;
@@ -1008,19 +987,10 @@ async function start(): Promise<void> {
     motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
     turn.reset(to.yaw);
     to.body.setFacing?.(turn);
-    // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: it kept the other one's heading, up
-    // to 180 degrees off them), at once; the first time, the way they face. The tip only if it was in this same view
-    // (first and third person tip from different starting points).
-    if (to.cam) rig.faceAtOnce(to.cam.yaw, to.cam.mode === rig.mode ? to.cam.pitch : undefined);
-    else rig.faceAtOnce(to.yaw);
     // (the one played takes the Detail chosen in Settings; the one left follows the player's level by distance)
     to.body.setDetail?.(graphics.detail);
     otherDetail.reset();
     bathroomLeft = 0;
-    // (their own pose taken up again: their stance, and which of their guns are holstered)
-    stance = to.stance;
-    holsterUse.holstered.left = to.holstered.left;
-    holsterUse.holstered.right = to.holstered.right;
     applyView();
     holsterUse.reseat();
     tableUse.reseat();

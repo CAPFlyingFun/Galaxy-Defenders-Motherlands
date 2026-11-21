@@ -25,7 +25,7 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { EYE_RANGE, FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -428,7 +428,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -505,8 +505,9 @@ export class Hud {
     sliderRow('1st person FOV', 'fovFirst', FOV_RANGE.least, FOV_RANGE.most, 1, (v) => `${v}°`);
     // (Joshua, 2026-11-20: "add an offset forward/back... slider and I can adjust in the game and then share the exact
     //  offset": the first-person camera sits on her head just clear of her face; this moves it forward or back)
-    sliderRow('1st person eye offset', 'eyeForward', EYE_RANGE.least, EYE_RANGE.most, 0.5, (v) => `${v > 0 ? '+' : ''}${v} cm`);
-    element('small', 'gd-note', settings, 'The first-person camera rides on her head at her eyes\' height, just clear of her face (0). Forward (+) or back (-) in centimetres; tell Claude the number you like.');
+    sliderRow('1st person eye forward', 'eyeForward', EYE_RANGE.least, EYE_RANGE.most, 0.5, (v) => `${v > 0 ? '+' : ''}${v} cm`);
+    sliderRow('1st person eye height', 'eyeHigher', EYE_HEIGHT_RANGE.least, EYE_HEIGHT_RANGE.most, 0.5, (v) => `${v > 0 ? '+' : ''}${v} cm`);
+    element('small', 'gd-note', settings, 'The first-person camera rides on her head at her eyes (0, 0). Forward (+) or back (-) along her face, and up (+) or down (-), in centimetres; tell Claude the numbers you like.');
     sliderRow('3rd person zoom', 'zoomThird', ZOOM_MIN, 1, 0.005, (v) => `${thirdPersonDistance(v).toFixed(1)} m`);
     element('small', 'gd-note', settings, 'Field of view: how wide each view sees (50-120°). Zoom: how far behind her the 3rd person camera starts (1.6 m to 23 m); pinch to zoom in play.');
     // ---- Settings: the weapon table (Joshua, 2026-11-17: "how can you adjust the table height") ----------------

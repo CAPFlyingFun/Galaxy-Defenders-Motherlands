@@ -236,7 +236,7 @@ export interface HeroineBody {
   /** The world pitch her head can look at now, radians [down, up]: her neck's reach from her torso's own line. */
   headPitchRange?(): readonly [number, number];
   /** The player's own forward (+) or back offset for that camera, metres (Settings -> CAMERA). */
-  setEyeForward?(metres: number): void;
+  setEyeOffset?(forward: number, higher: number): void;
   /**
    * The player turned the first-person view: her own looks give way (a look down at a kick, bowed winded) and her head
    * goes where the player looks (winded: until she stands up).

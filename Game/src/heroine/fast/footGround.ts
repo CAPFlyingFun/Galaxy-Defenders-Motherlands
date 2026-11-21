@@ -357,7 +357,8 @@ export class FootGround {
   squareUp(seconds: number): void {
     if (this.squareClock >= 0) return;
     this.squareClock = 0;
-    this.squareSeconds = Math.max(0.05, seconds);
+    // (0: at once, home in the next frame)
+    this.squareSeconds = Math.max(1e-3, seconds);
     this.squareBegun = false;
   }
 

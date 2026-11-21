@@ -98,11 +98,12 @@ const EYE_ABOVE = 0.051;
 /**
  * FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
  * touch and keep same eye height like in Beyond Extinction... as it can only bend what the head can do"): the camera is
- * fixed to her skull, at her eyes' height, moved forward until it is just clear of her face (her nose's tip, measured
- * on her own skin: `measureFace`), plus this much more, metres. It turns, tips and bobs with her head; her head is
- * drawn. Settings -> CAMERA -> 1st person eye offset moves it forward or back (`setEyeForward`).
+ * fixed to her skull AT HER EYES (the middle of her eyeballs). It turns, tips and bobs with her head; her head is drawn,
+ * and her own face, closer than the camera's nearest 6 cm, is never seen (and its inside faces away). First it was
+ * moved forward until just clear of her face (her nose's tip, `measureFace`, 3.7 cm on Blaze, plus 5 mm), but looking
+ * down that took it 4 cm lower still, by her chin (Joshua: "Camera seems too low"). Settings -> CAMERA -> 1st person
+ * eye forward and eye height move it from there (`setEyeOffset`): along her face and her head's own up.
  */
-const FACE_CLEAR = 0.005;
 /**
  * HER NECK'S REACH (Joshua, 2026-11-20: "neck motion is roughly 45-60 upward, 70-80 downward, and 70-90 to either
  * side"; measured studies agree: about 127 degrees from full flexion to full extension, 146 of rotation in all):
@@ -610,7 +611,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   /** How far ahead of the middle of her eyes her face (her nose's tip) is, metres: measured from her skin, once. */
   let faceAhead = NaN;
   /** The player's own offset for the first-person camera, forward (+) or back, metres (Settings). */
-  let eyeForward = 0;
+  let eyeForward = 0, eyeHigher = 0;
   // HER BACK, for turning her shoulders further than her belly: every bone from her lower spine up to her chest (the
   // bone her arms and neck hang from), found by walking down from her chest. Her neck up to her skull, for her head.
   // And the bone that is turned for her hips: the one her legs and her spine both hang from, or the bone above it
@@ -1313,15 +1314,17 @@ if (uHideHead > 0.5) {
       skullFrame();
       return out.copy(headForwardLocal).multiplyScalar(EYE_AHEAD).addScaledVector(headUpLocal, EYE_ABOVE).applyQuaternion(eyeQ).add(eyeSkull);
     },
-    // THE FIRST-PERSON CAMERA ON HER HEAD (see FACE_CLEAR): at her eyes' height, just clear of her face, plus the
-    // player's offset; turned as her head is, looking where her head looks.
+    // THE FIRST-PERSON CAMERA ON HER HEAD (see EYE_AHEAD): at her eyes, plus the player's offsets; turned as her head
+    // is, looking where her head looks.
     eyeView(position: THREE.Vector3, quaternion: THREE.Quaternion): void {
       skullFrame();
       if (!Number.isFinite(faceAhead)) faceAhead = measureFace();
-      position.copy(headForwardLocal).multiplyScalar(EYE_AHEAD + faceAhead + FACE_CLEAR + eyeForward).addScaledVector(headUpLocal, EYE_ABOVE).applyQuaternion(eyeQ).add(eyeSkull);
+      // (height along her head's own up, so it stays clear of her face as her head bows: straight up in the world, a
+      //  bowed head's own face came into view from above it)
+      position.copy(headForwardLocal).multiplyScalar(EYE_AHEAD + eyeForward).addScaledVector(headUpLocal, EYE_ABOVE + eyeHigher).applyQuaternion(eyeQ).add(eyeSkull);
       quaternion.copy(eyeQ).multiply(cameraInHead);
     },
-    setEyeForward(metres: number): void { eyeForward = metres; },
+    setEyeOffset(forward: number, higher: number): void { eyeForward = forward; eyeHigher = higher; },
     headPitchRange(): readonly [number, number] { headRange[0] = -HEAD_DOWN_MOST - torsoLean; headRange[1] = HEAD_UP_MOST - torsoLean; return headRange; },
     freeLook(): void { if (windedW > 0) windedLookFree = true; bellyHand.stopLook(); },
 
@@ -1333,7 +1336,7 @@ if (uHideHead > 0.5) {
     setFirstPerson(on: boolean): void {
       if (on === firstPerson) return;
       firstPerson = on;
-      // (her head and hair stay drawn: the camera is on her head, just clear of her face: FACE_CLEAR)
+      // (her head and hair stay drawn: the camera is at her eyes, her face nearer than its nearest 6 cm)
       headUniforms.uHideHead.value = 0;
       showHair();
     },

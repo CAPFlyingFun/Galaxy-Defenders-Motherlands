@@ -25,16 +25,18 @@ use the game's single copy of three.js.
   bone, offset so looking down shows her belly, as in Beyond Extinction; manual aim and fire). No jumping.
   FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
   touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
-  `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL at her eyes' height (7.5 cm ahead of and 5.1 cm above its
-  base), just in front of her face (measured from her own skin at load: "[first person] her face stands X cm ahead of her
-  eyes", Blaze 3.7) plus 5 mm; it turns, tips and bobs with her head; her head and hair are drawn. Where the player looks
+  `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL AT HER EYES (7.5 cm ahead of and 5.1 cm above its base);
+  it turns, tips and bobs with her head; her head and hair are drawn, her face nearer than the camera's nearest 6 cm so
+  never seen. (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
+  Joshua: "Camera seems too low".) Where the player looks
   is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
   same for all directions"): 75 degrees down, 55 up (`HEAD_DOWN_MOST`, `HEAD_UP_MOST`; his research: 45-60 up, 70-80
   down), her torso's lean (`torsoLean`, pelvis to neck) added, so bent over 42 winded her head reaches 117 down in the
   world, and on all fours (67) level is past her reach (12 down). Sideways: the five yaw bands (her head 90, then her
   body turns). Her own looks (at a kick, bowed winded) move her head and so the view; turning the view frees her head
-  where it is (`freeLook`), firing ends a kick look. Settings -> CAMERA -> 1st person eye offset (`gdm.eyeForward`,
-  `?eye=`, -6..10 cm): Joshua tunes it in game and sends the number.
+  where it is (`freeLook`), firing ends a kick look. Settings -> CAMERA -> 1st person eye forward (`gdm.eyeAhead`,
+  `?eye=`, -6..12 cm, along her face) and eye height (`gdm.eyeHigher`, `?eye_up=`, -6..20 cm, along her head's own up:
+  straight up in the world showed a bowed head's own face): Joshua tunes them in game and sends the numbers.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.
@@ -59,9 +61,10 @@ use the game's single copy of three.js.
   (maybe 0.3s or variable depending on speed) to both feet side by side then plays the next one... as soon as you
   release the stick or it centers, it also puts the feet in the normal standing state"; main.ts `gait`, `GAIT_*`,
   footGround.ts 11 `squareUp`, bodyMotion.ts `standCap`): her move (stand / ahead / back / left / right with her facing
-  held / go) changing from a move to anything else sets both feet side by side at home TOGETHER first, over a moment at a
-  walk (shorter faster), her walk faded out with them and restarted from the stride's beginning; she
-  waits meanwhile (0.1 s, 0.07 at least: Joshua, 0.3 "was slightly too long"). The 4-way stick keeps its move until another is 1.4x nearer (`GAIT_KEEP`), so a diagonal does not
+  held / go) changing from a move to anything else sets both feet side by side at home TOGETHER first,
+  her walk faded out with them and restarted from the stride's beginning; INSTANT
+  (Joshua: 0.3 "was slightly too long", then 0.1, then "make it 0.0"): her feet snap home in a frame and the next move
+  starts at once. The 4-way stick keeps its move until another is 1.4x nearer (`GAIT_KEEP`), so a diagonal does not
   flick. Measured: her ankles never closer than 0.28 m (her stance 0.30). (A shuffle
   and a skip are built in `footGround.ts` but not used.) She stands with her feet her shoulder width apart (measured
   from her own bones). Holding a door, her facing is held too (the same four moves).

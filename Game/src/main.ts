@@ -113,7 +113,7 @@ type GameHeroine = HeroineBody & {
  * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
  * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false): Promise<GameHeroine> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false, headDetail?: number): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin' && !onlyFast) return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
@@ -141,6 +141,8 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         hairStrands: settings.hairStrands !== 'off',
         skinTexture: settings.skinTexture !== 'off',
         faceLocks: settings.faceLocks === 'on',
+        // (the head at its own detail when the level is lighter: John's face, JOHN_HEAD_DETAIL; unset for Blaze)
+        headDetail,
         onProgress: (stage) => say(`Loading ${who}: ${stage}…`),
       });
     } catch (error) {
@@ -418,6 +420,11 @@ async function start(): Promise<void> {
     readonly ownTurn: BodyTurn;
     /** Where they stand and face while they are not played (metres, radians). */
     x: number; z: number; yaw: number;
+    /** THEIR OWN CAMERA, kept while they are not played (Joshua, 2026-11-21: "each one should save independently and on
+     *  swap back, will resume the same last heading"; again in v0.2.134, on its own: v0.2.129's held stances and guns
+     *  are not brought back): its heading and tip (radians) and the view it was in; null until they have been played
+     *  (then the camera starts looking the way they face). */
+    cam: { yaw: number; pitch: number; mode: string } | null;
   }
   let john: Character | null = null, blaze: Character | null = null;
   /** Who is being played now (Blaze until the first swap). */
@@ -439,6 +446,11 @@ async function start(): Promise<void> {
   const JOHN_DETAIL: 1 | null = 1;
   /** John's face, hands and the rest kept sharp at his fixed level (fastHeroine.ts `sharpParts`): none, for now. */
   const JOHN_SHARP_PARTS = false;
+  /** HIS FACE AT 30 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
+   *  30%"): his head, above his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts
+   *  `headDetail`, detailLevels.ts `headPart`: the rest lightened first with his head held, then his head alone).
+   *  Next, if it runs: other parts (hands...) at their own percent the same way. null: his head goes with the rest. */
+  const JOHN_HEAD_DETAIL: number | null = 30;
   /** The Detail a character is drawn at while PLAYED: John's fixed one, or the Settings choice (Blaze). */
   const detailFor = (c: Character | null): HeroineSettings['detail'] => (c && c === john && JOHN_DETAIL !== null ? JOHN_DETAIL : graphics.detail);
   /** Blaze is the one being played (always, without John). */
@@ -602,7 +614,7 @@ async function start(): Promise<void> {
   // the card along the top of the screen.
   const pace = new Pace();
   let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base };
+  blaze = { name: 'Blaze', body: bodyNow, vitals, ownTurn: new BodyTurn(), x: motion.x, z: motion.z, yaw: turn.base, cam: null };
   playing = blaze;
 
   // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
@@ -616,11 +628,11 @@ async function start(): Promise<void> {
     try {
       // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
       const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
-      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true);
+      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true, JOHN_DETAIL !== null ? JOHN_HEAD_DETAIL ?? undefined : undefined);
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base };
+      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), ownTurn: new BodyTurn(), x, z, yaw: turn.base, cam: null };
       john.ownTurn.reset(john.yaw);
       body.setFacing?.(john.ownTurn);
       if (island) body.setGround?.(island.standAt);
@@ -989,6 +1001,8 @@ async function start(): Promise<void> {
     swapWanted = false;
     // the one left behind: where they stand now, facing their own way, standing easy
     from.x = motion.x; from.z = motion.z; from.yaw = turn.base;
+    // (and where the camera looked while they were played, to be looked again when they are played again)
+    from.cam = { yaw: rig.yaw, pitch: rig.pitch, mode: rig.mode };
     from.ownTurn.reset(from.yaw);
     from.body.setFacing?.(from.ownTurn);
     from.body.setFirstPerson(false);
@@ -1002,6 +1016,12 @@ async function start(): Promise<void> {
     motion.x = to.x; motion.z = to.z; motion.speed = 0; motion.heading = null;
     turn.reset(to.yaw);
     to.body.setFacing?.(turn);
+    // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: it kept the other one's heading, up
+    // to 180 degrees off them; "they need to save and resume their last camera position per character"), at once; the
+    // first time, the way they face. The tip only if it was in this same view (first and third person tip from
+    // different starting points).
+    if (to.cam) rig.faceAtOnce(to.cam.yaw, to.cam.mode === rig.mode ? to.cam.pitch : undefined);
+    else rig.faceAtOnce(to.yaw);
     // (the one played takes the Detail chosen in Settings, John his fixed one; the one left follows the player's level
     //  by distance, or, while John's is fixed, keeps its own: Blaze her Settings choice, John his JOHN_DETAIL)
     to.body.setDetail?.(detailFor(to));

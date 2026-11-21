@@ -58,7 +58,7 @@ import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
-import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
+import { DetailLevels, DetailMaker, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
@@ -196,6 +196,9 @@ const VIEW_BALL_RADIUS = 1.5;
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
 /** How many detail levels are kept made at once besides her full 100 % (the ones she wore last). */
 const KEEP_LEVELS = 3;
+/** Her shoulders and neck kept at this percent near the camera when she is lighter (detailLevels.ts `shoulderPart`):
+ *  30, where the lab showed them round (Joshua, 2026-11-21: "Her shoulder looks off" at the lower levels). */
+const SHOULDERS_DETAIL = 30;
 /** The heaviest level AUTO LIVE draws her at. */
 const AUTO_LIVE_TOP: Detail = 30;
 
@@ -217,6 +220,10 @@ export interface FastHeroineOptions {
   readonly targetFps?: TargetFps;
   /** Her face, bust and belly kept as fine as at 100% at every level (detailLevels.ts `sharpParts`). Default true. */
   readonly sharpParts?: boolean;
+  /** The head kept at THIS detail (percent) when the level is lighter, the rest of the body at the level
+   *  (detailLevels.ts `headPart`; Joshua, 2026-11-21: John at 1 % with "only his face details to 30%", main.ts
+   *  JOHN_HEAD_DETAIL). Unset: the head goes with the rest (or with `sharpParts`, kept at 100 %). */
+  readonly headDetail?: number;
   /** The catsuit's knit in place of her look's own (outfitMaterial.ts SUIT_KNITS), for looks that wear a live knit. */
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
@@ -412,7 +419,13 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // `SHARP_WITHIN` of her, and lightened all over like before (mesh 2), for the camera further off. Each is made only
   // when first wanted. With "Sharp face, bust & belly" off, the plain set alone.
   const keepSharp = options.sharpParts !== false;
-  maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves) : null);
+  // (and the head at its own detail, if one is asked for: `headDetail`, John's face at 30 % while he is at 1 %)
+  const ownParts = options.headDetail ? [{ points: headPart(look.shape.position, box), detail: options.headDetail }] : [];
+  // HER SHOULDERS AND NECK AT 30 % in the sharp set (detailLevels.ts `shoulderPart`; Joshua, 2026-11-21: "Her shoulder
+  // looks off"): between her sharp head and arms they folded flat under 30 % near the camera. Only with the sharp set:
+  // further off (the plain set) all of her is lightened alike and it does not show.
+  if (keepSharp) ownParts.push({ points: shoulderPart(look.shape.position, box), detail: SHOULDERS_DETAIL });
+  maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves) : null, ownParts);
   const levels = new DetailLevels(maker, 0, fullIndex);
   if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null);
   const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;

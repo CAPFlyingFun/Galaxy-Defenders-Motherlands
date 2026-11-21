@@ -104,6 +104,9 @@ async function start(): Promise<void> {
       // (her real suit; ?suit=tee wears the DEV Room's painted tee instead: see fast/devRoomLook.ts)
       painted: asked.get('suit') === 'tee' ? BLAZE_PAINTED : undefined,
       detail: detail === 'auto' ? 'auto' : detail === 'autoLive' ? 'autoLive' : nearestDetail(Number(detail ?? 100) || 100),
+      // (?sharp_parts=off: nothing kept at 100 %; ?head=30: the head kept at 30 % when the level is lighter, as John is)
+      sharpParts: asked.get('sharp_parts') !== 'off',
+      headDetail: asked.has('head') ? Number(asked.get('head')) : undefined,
       onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
     });
     scene.add(heroine.root);

@@ -470,6 +470,13 @@ use the game's single copy of three.js.
   HER ARMS TOO (Joshua, 2026-11-20, Look 2 at 25% near: "her arm is flat like a pancake"): her left upper arm lightened to
   a flat strip; locked (shoulders to wrists, out at her sides) it stays round. More weight in the lightening alone
   (`skinImportance` `arm`, kept for the far levels) was not enough.
+  HER SHOULDERS AND NECK AT 30 % NEAR (v0.2.134; Joshua, 2026-11-21, a close-up with John in the game: "Her shoulder
+  looks off"): between her sharp head and arms, the band from the top of her chest to her head was lightened with the
+  rest, and in the lab at 10, 5 and 1 % each shoulder's top folded into one flat slab with a sharp corner and the
+  collar's edge went jagged (round at 30 %). With John in, the frame rate is lower and Auto live took her under 30 %.
+  Now that band (detailLevels.ts `shoulderPart`, from `SHOULDERS_FROM` 0.76 of her height to her head) is a PART kept
+  at 30 % (fastHeroine.ts `SHOULDERS_DETAIL`) in the sharp set only: about 2,300 triangles more (Shadow Operative at
+  1 % near: 103,643 -> 105,991), round at every level.
 - HER HAIR AS STRANDS AND LOCKS (Joshua, 2026-11-19: "add lines in it, add depth to look better than a shiny hat";
   `Game/src/heroine/fast/hairStrands.ts`, chained after the builder's own hair patches, game only): locks a few mm wide
   across the strands (the hair picture's U; strands run down its V) with darker grooves, 0.8 mm of bump depth, and hair's
@@ -608,7 +615,10 @@ use the game's single copy of three.js.
   last actions"; main.ts `Character` `cam`, `stance`, `holstered`): their CAMERA (heading and tip, back at once; the
   first time, the way they face), their STANCE (crouched or down they stay so) and their GUNS (in hand or holstered).
   John's guns start holstered, as hers do. (EACH HOLDS THEIR OWN is v0.2.129: NOT LIVE since the step back to v0.2.128,
-  kept on `backup-v129`.) An outfit
+  kept on `backup-v129`; THEIR OWN CAMERA alone came back in v0.2.134, Joshua: "they need to save and resume their last
+  camera position per character": `Character.cam`, saved and restored in `swapCharacter`, cameraRig.ts
+  `faceAtOnce(yaw, pitch)`. Their held stance and guns, and John's guns holstered at startup, are still only on
+  `backup-v129`.) An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
   `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
   played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as
@@ -656,6 +666,14 @@ use the game's single copy of three.js.
   34 K), 30 % 98 K, 10 % to 1 % about 92 K (his face, chest, belly, hands and arms locked held about 57 K of skin);
   now about 2 K of skin at 1 %, about 36 K with his gear. NEXT (his plan): certain parts of him (face, hands) at
   10-15 %, a lock that lightens them less rather than keeping them at 100 %.
+  v0.2.133 RAN ON HIS iPHONE ("Yay, I am in!", 46-48 FPS), his face a blank blob at 1 %. PARTS AT THEIR OWN DETAIL
+  (v0.2.134; Joshua: "Let's try raising only his face details to 30%"): detailWorker.ts `parts` ({ points, detail }),
+  `lighten` in passes (every part held while the rest goes to the level, then each part alone, everything else held, to
+  its own percent: the simplifier itself knows only locked or free); detailLevels.ts `headPart` (above `HEAD_FROM`,
+  0.875 of the height, the line `sharpParts` uses), fastHeroine.ts option `headDetail`, main.ts `JOHN_HEAD_DETAIL` 30.
+  Measured in the lab (`heroine-lab.html?heroine=fast&look=john&detail=1&sharp_parts=off&head=30`, the lab now takes
+  `sharp_parts` and `head`): John at 1 % 5,849 triangles in all, with his head at 30 % 13,063: a real face again (a
+  few colour patches where his skin picture's pieces meet). Next the same way: hands, and so on.
 - OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new

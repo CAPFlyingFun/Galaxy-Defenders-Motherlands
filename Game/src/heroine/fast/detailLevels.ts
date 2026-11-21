@@ -25,7 +25,7 @@
 // worker (detailWorker.ts) and the level is handed over when ready.
 // ============================================================================
 import * as THREE from 'three';
-import { lighten, type DetailRequest, type DetailResult, type DetailSetup } from './detailWorker';
+import { lighten, type DetailRequest, type DetailResult, type DetailSetup, type Kept, type KeptPart } from './detailWorker';
 
 /**
  * The detail levels offered, percent of her triangles: the DEV Room's own list, with 30 and 15 added (Joshua,
@@ -84,6 +84,41 @@ export function skinImportance(points: Float32Array, box: THREE.Box3, shape: Sha
   return weight;
 }
 
+/** Where the head begins, as a share of the body's height from its feet (above the neck): `sharpParts`, `headPart`. */
+export const HEAD_FROM = 0.875;
+
+/**
+ * THE HEAD, above the neck (John's face and the rest of his head: he has no hair to cover it), as a part that can be
+ * kept at its own detail (detailWorker.ts `parts`; Joshua, 2026-11-21: "Let's try raising only his face details to
+ * 30%"). The same line as `sharpParts` uses for her head.
+ */
+export function headPart(points: Float32Array, box: THREE.Box3): Uint8Array {
+  const n = points.length / 3, H = box.max.y - box.min.y;
+  const inside = new Uint8Array(n);
+  for (let v = 0; v < n; v++) if ((points[v * 3 + 1] - box.min.y) / H > HEAD_FROM) inside[v] = 1;
+  return inside;
+}
+
+/** Where her shoulders' band begins (the top of her chest), as a share of her height: `shoulderPart`. */
+export const SHOULDERS_FROM = 0.76;
+
+/**
+ * HER SHOULDERS AND NECK, the band from the top of her chest to her head (Joshua, 2026-11-21, his close-up of Blaze with
+ * John in the game: "Her shoulder looks off"). Her head and arms are kept sharp (`sharpParts`) but this band between
+ * them was not: measured in the lab, at 10 %, 5 % and 1 % the top of each shoulder folded into one flat slab with a
+ * sharp corner and the collar's edge went jagged; at 30 % they were round. With John in, the frame rate is lower, so
+ * Auto live took her under 30 % and it showed. Kept at its own percent (detailWorker.ts `parts`), not at 100 %.
+ */
+export function shoulderPart(points: Float32Array, box: THREE.Box3): Uint8Array {
+  const n = points.length / 3, H = box.max.y - box.min.y;
+  const inside = new Uint8Array(n);
+  for (let v = 0; v < n; v++) {
+    const yr = (points[v * 3 + 1] - box.min.y) / H;
+    if (yr > SHOULDERS_FROM && yr <= HEAD_FROM) inside[v] = 1;
+  }
+  return inside;
+}
+
 /**
  * HER FACE, HANDS, ARMS, BUST AND BELLY KEPT SHARP (Joshua, 2026-11-19: "is it possible to exempt the belly, breast and head from the
  * details even when at 1%... at 1% her face and belly looks bad... a compromise of speed and quality"): the points of
@@ -97,7 +132,7 @@ export function sharpParts(points: Float32Array, box: THREE.Box3, shape: ShapeMo
   const lock = new Uint8Array(n);
   for (let v = 0; v < n; v++) {
     const xr = Math.abs(points[v * 3] - cx) / H, yr = (points[v * 3 + 1] - box.min.y) / H;
-    if (yr > 0.875) lock[v] = 1; // her head, above her neck
+    if (yr > HEAD_FROM) lock[v] = 1; // her head, above her neck
     // HER HANDS (Joshua, 2026-11-19, of her fingers round a bar at 1%: "the hands look weird holding the pole... are the
     // hands included?"): out at her sides below her wrists, as `skinImportance` finds them
     if (xr > 0.13 && yr > 0.38 && yr < 0.57) lock[v] = 1;
@@ -164,7 +199,7 @@ export class DetailMaker {
   private nextTicket = 1;
   private readonly asked = new Map<number, { done: (index: Uint32Array) => void; fail: (error: Error) => void }>();
   /** What was sent to the worker, kept so the main thread can do the work itself if the worker dies. */
-  private readonly bodies = new Map<number, { points: Float32Array; extras: Float32Array | null; extrasPerPoint: number; extraWeights: number[]; index: Uint32Array; lock: Uint8Array | null }>();
+  private readonly bodies = new Map<number, Kept>();
   /** True while levels are being made in a worker (false: on the main thread). */
   get inWorker(): boolean { return this.worker !== null; }
 
@@ -197,7 +232,7 @@ export class DetailMaker {
    * Give the maker one mesh. `uv` (her texture layout) and `importance` are optional: her skin has both, her hair neither.
    * `box` is the mesh's bounding box in the points' own units.
    */
-  setMesh(mesh: number, points: Float32Array, index: Uint32Array, box: THREE.Box3, uv: Float32Array | null, importance: Float32Array | null, lock: Uint8Array | null = null): void {
+  setMesh(mesh: number, points: Float32Array, index: Uint32Array, box: THREE.Box3, uv: Float32Array | null, importance: Float32Array | null, lock: Uint8Array | null = null, parts: readonly KeptPart[] = []): void {
     const n = points.length / 3;
     let extras: Float32Array | null = null;
     let extraWeights: number[] = [];
@@ -217,10 +252,11 @@ export class DetailMaker {
       }
       extraWeights = [H * 1.5, H * 1.5, 1, 1, 1];
     }
-    const body = { points, extras, extrasPerPoint: 5, extraWeights, index, lock };
+    // (`parts`: pieces of the body kept at their own detail when the level is lighter, detailWorker.ts)
+    const body: Kept = { points, extras, extrasPerPoint: 5, extraWeights, index, lock, parts };
     this.bodies.set(mesh, body);
     // (the worker gets its own copies; the main thread keeps these for the fallback)
-    this.worker?.postMessage({ kind: 'setup', mesh, points, extras, extrasPerPoint: 5, extraWeights, index, lock } satisfies DetailSetup);
+    this.worker?.postMessage({ kind: 'setup', mesh, points, extras, extrasPerPoint: 5, extraWeights, index, lock, parts } satisfies DetailSetup);
   }
 
   /** Work out one level's triangle list. */

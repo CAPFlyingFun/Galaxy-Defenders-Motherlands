@@ -421,13 +421,15 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const keepSharp = options.sharpParts !== false;
   // (and the head at its own detail, if one is asked for: `headDetail`, John's face at 30 % while he is at 1 %)
   const ownParts = options.headDetail ? [{ points: headPart(look.shape.position, box), detail: options.headDetail }] : [];
-  // HER SHOULDERS AND NECK AT 30 % in the sharp set (detailLevels.ts `shoulderPart`; Joshua, 2026-11-21: "Her shoulder
-  // looks off"): between her sharp head and arms they folded flat under 30 % near the camera. Only with the sharp set:
-  // further off (the plain set) all of her is lightened alike and it does not show.
-  if (keepSharp) ownParts.push({ points: shoulderPart(look.shape.position, box), detail: SHOULDERS_DETAIL });
+  // HER SHOULDERS AND NECK AT 30 % in EVERY set of hers (detailLevels.ts `shoulderPart`; Joshua, 2026-11-21: "Her
+  // shoulder looks off"): under 30 % they folded into flat slabs with sharp corners. v0.2.134 kept them only near the
+  // camera (the sharp set); his next picture, from about 3 m (the plain set, past SHARP_LEAVE), still showed them:
+  // "Her shoulders still aren't fixed yet". Now in the plain set too. (Not on a male body: John is held at his own.)
+  const shoulders = male ? null : { points: shoulderPart(look.shape.position, box), detail: SHOULDERS_DETAIL };
+  if (shoulders) ownParts.push(shoulders);
   maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves) : null, ownParts);
   const levels = new DetailLevels(maker, 0, fullIndex);
-  if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null);
+  if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null, shoulders ? [shoulders] : []);
   const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;
 
   // Her skin starts at full detail: the file's own geometry (all 43 shapes) is swapped for her baked one.

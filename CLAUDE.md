@@ -476,7 +476,9 @@ use the game's single copy of three.js.
   collar's edge went jagged (round at 30 %). With John in, the frame rate is lower and Auto live took her under 30 %.
   Now that band (detailLevels.ts `shoulderPart`, from `SHOULDERS_FROM` 0.76 of her height to her head) is a PART kept
   at 30 % (fastHeroine.ts `SHOULDERS_DETAIL`) in the sharp set only: about 2,300 triangles more (Shadow Operative at
-  1 % near: 103,643 -> 105,991), round at every level.
+  1 % near: 103,643 -> 105,991), round at every level. v0.2.135: IN HER FAR (PLAIN) SET TOO (Joshua, his picture from
+  about 3 m: "Her shoulders still aren't fixed yet": past SHARP_LEAVE she wears the plain set, which v0.2.134 left
+  out); lab at 3 m, 1 %: round, 14,113 triangles in all. Not on a male body.
 - HER HAIR AS STRANDS AND LOCKS (Joshua, 2026-11-19: "add lines in it, add depth to look better than a shiny hat";
   `Game/src/heroine/fast/hairStrands.ts`, chained after the builder's own hair patches, game only): locks a few mm wide
   across the strands (the hair picture's U; strands run down its V) with darker grooves, 0.8 mm of bump depth, and hair's

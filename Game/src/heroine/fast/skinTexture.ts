@@ -24,7 +24,7 @@
 // -> HEROINE -> Skin depth turns it off.
 // ============================================================================
 import * as THREE from 'three';
-import { bakedLookFolder } from './bakedLook';
+import { bakedLookFolder, freeAfterUpload } from './bakedLook';
 
 /** The builder's numbers (Char_B skinDetail.ts SKIN_DETAIL): kept as they are unless Joshua changes them. */
 export const SKIN_TEXTURE = Object.freeze({
@@ -54,12 +54,20 @@ export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): S
   const own = loader.load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
     (t) => { t.needsUpdate = true; });
   own.colorSpace = THREE.NoColorSpace;
+  // ONE CHANNEL, NOT FOUR (Joshua's iPhone, 2026-11-21: the game was closed by iOS a moment after both characters were
+  // drawn). It is a grey height, read only as `.r` in the shader below, but was kept on the graphics chip as red, green,
+  // blue and alpha: about 85 MB for a 4096 x 4096 picture with its smaller copies. Kept as red alone (RedFormat, one
+  // byte a pixel) it is the very same picture at a quarter of the memory, about 21 MB. (Every character: Blaze and John.)
+  own.format = THREE.RedFormat;
   own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
   own.anisotropy = sharp;
+  freeAfterUpload(own);   // (and its 64 MB unpacked copy in the page let go of once it is sent: bakedLook.ts)
   const tile = loader.load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
   tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
   tile.colorSpace = THREE.NoColorSpace;
+  tile.format = THREE.RedFormat;   // (read as `.r` too: one channel, the same picture)
   tile.anisotropy = sharp;
+  freeAfterUpload(tile);
   return { own, tile };
 }
 

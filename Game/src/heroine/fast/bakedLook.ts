@@ -92,6 +92,32 @@ async function fetchOk(url: string): Promise<Response> {
   return response;
 }
 
+/**
+ * LET GO OF A PICTURE'S DECODED COPY ONCE IT IS ON THE GRAPHICS CHIP (Joshua's iPhone, 2026-11-21: the game was closed
+ * by iOS a moment after both characters were drawn, the "loads, resets, loads again, crashes" of a page over its memory).
+ *
+ * A picture is held twice once it is drawn: (1) unpacked in the page's own memory (a 4096 x 4096 picture is 64 MB there,
+ * whatever its file size), and (2) on the graphics chip, where it is actually drawn from. Only (2) is needed after it is
+ * sent: three.js sends a texture once (unless told to again with `needsUpdate`, which nothing does for these), and it
+ * then calls the texture's `onUpdate`. So (1) is let go right there: an ImageBitmap is closed at once, a plain image is
+ * left for the browser to free. A stand-in that knows only the picture's size is kept in its place (three.js may still
+ * ask a texture how big it is). On an iPhone the graphics chip and the page share the same memory, so this is real.
+ *
+ * Use only for a picture that is never sent again (never `needsUpdate` after it is drawn, never shared by a copied
+ * texture with other settings). Its texture's own `dispose` still lets go of the graphics chip's copy.
+ */
+export function freeAfterUpload(texture: THREE.Texture): void {
+  texture.onUpdate = () => {
+    const image = texture.image as unknown;
+    const bitmap = typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap ? image : null;
+    const plain = typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement ? image : null;
+    if (!bitmap && !plain) return;   // (nothing to free, or already a stand-in)
+    const size = { width: (bitmap ?? plain)!.width, height: (bitmap ?? plain)!.height };
+    bitmap?.close();      // (an ImageBitmap: its unpacked pixels are freed now)
+    texture.image = size; // (a plain image: nothing holds it now, so the browser frees it)
+  };
+}
+
 /** Load one picture as a texture, set up the way the body file's own textures are (not flipped, repeating). */
 async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture> {
   const blob = await (await fetchOk(url)).blob();
@@ -106,6 +132,8 @@ async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture>
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = true;
   texture.needsUpdate = true;
+  // (once it is on the graphics chip, its 64 MB unpacked copy here is let go of: see above)
+  freeAfterUpload(texture);
   return texture;
 }
 
@@ -138,7 +166,8 @@ export async function loadBakedLook(look: string): Promise<BakedLook> {
     manifest, albedo, normal, surface, shape, pieces, piecePictures,
     megabytes: fetchedBytes / 1048576,
     dispose(): void {
-      for (const t of [albedo, normal, surface, ...piecePictures.values()]) { (t.image as ImageBitmap | undefined)?.close?.(); t.dispose(); }
+      // (a picture never drawn still holds its unpacked copy: closed here; one drawn is already a stand-in)
+      for (const t of [albedo, normal, surface, ...piecePictures.values()]) { (t.image as { close?: () => void } | undefined)?.close?.(); t.dispose(); }
     },
   };
 }

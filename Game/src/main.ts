@@ -1935,6 +1935,12 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((error: unknown) => {
       console.warn('The game could not be kept on this device (service worker not registered).', error);
     });
+    // ASK THE PHONE TO KEEP THE GAME'S FILES (2026-11-21, from Joshua's reading on iOS web apps): Safari may wipe a
+    // site's stored files after about 7 days without a visit, and the next start then fetches every file again WHILE
+    // the game loads (about 70 MB: outfits, the builder's bodies, the island), on top of the heaviest moment there is.
+    // Asking for "persistent" storage asks it not to; the phone may still say no, which changes nothing else.
+    navigator.storage?.persist?.().then((kept) => console.info(`[storage] files kept on this device: ${kept ? 'yes' : 'not promised'}`))
+      .catch(() => { /* an older browser: nothing to ask */ });
   });
 }
 

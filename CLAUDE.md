@@ -605,7 +605,8 @@ use the game's single copy of three.js.
   (not at the table, a bar or a door, standing, not winded or going to the toilet), holsters guns first, then hands
   the controls, camera, vitals card and turn to the other where they stand; a "Now playing: X" notice. An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
-  `gdm.cast()`. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Detail, Target FPS and Skin shine go to
+  both bodies, played or standing by (main.ts onGraphicsChange). COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
   NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
   breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
   trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.

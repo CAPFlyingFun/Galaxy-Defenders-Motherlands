@@ -1016,15 +1016,17 @@ async function start(): Promise<void> {
       }
       // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
       // heroine, so the game starts again with it.
-      if (key === 'detail') heroine.setDetail?.(graphics.detail);
-      else if (key === 'targetFps') heroine.setTargetFps?.(graphics.targetFps);
+      // (detail and the target frame rate are EVERYONE'S, Blaze's and John's, played or standing by: Joshua, 2026-11-21,
+      //  "link up him to the same detail %"; before, only the one played took a change)
+      if (key === 'detail') { for (const c of [blaze, john]) c?.body.setDetail?.(graphics.detail); }
+      else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
       else if (key === 'shadows') applyShadows();
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
       else if (key === 'tableHeight') tableUse.setHeight(graphics.tableHeight);
       else if (key === 'autoFire') applyView();
-      else if (key === 'skinShine') heroine.setSkinShine?.(skinOilyOf(graphics.skinShine));
+      else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
       else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
       else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);

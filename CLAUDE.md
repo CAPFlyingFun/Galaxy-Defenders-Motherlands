@@ -601,9 +601,13 @@ use the game's single copy of three.js.
   `Character` { name, body, vitals, ownTurn, x, z, yaw }: `blaze`, `john`, `playing`; the one not played stands where
   left, drawn and updated, his or her OWN vitals stepped (standing still) and fed to the body. His vitals are his own
   `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and time lapse are always Blaze's.
-  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played is free
-  (not at the table, a bar or a door, standing, not winded or going to the toilet), holsters guns first, then hands
-  the controls, camera, vitals card and turn to the other where they stand; a "Now playing: X" notice. An outfit
+  🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played has
+  finished what they are in the middle of (the table, a bar, a door, a holster/draw, a reload, winded, the toilet),
+  then hands the controls, vitals card and turn to the other where they stand; a "Now playing: X" notice. EACH HOLDS
+  THEIR OWN (Joshua, 2026-11-21: "save the last known heading... each one should save independently"; "hold poses and
+  last actions"; main.ts `Character` `cam`, `stance`, `holstered`): their CAMERA (heading and tip, back at once; the
+  first time, the way they face), their STANCE (crouched or down they stay so) and their GUNS (in hand or holstered).
+  John's guns start holstered, as hers do. An outfit
   change while John is played waits for Blaze ("Blaze changes when you swap back to her"). Test pages:
   `gdm.cast()`. SETTINGS FOR BOTH (Joshua: "link up him to the same detail %"): Target FPS and Skin shine go to both bodies,
   played or standing by (main.ts onGraphicsChange). DETAIL IS THE PLAYER'S (Joshua: "anyone within 5m is the same as

@@ -230,9 +230,11 @@ export class CameraRig {
     this.fitFov();
   }
 
-  /** Look this way at once (no easing round to it): where she arrives on a map. */
-  faceAtOnce(yaw: number): void {
+  /** Look this way at once (no easing round to it): where she arrives on a map. With `pitch`, tipped that far at once
+   *  too (a character swapped back to: main.ts `swapCharacter`). */
+  faceAtOnce(yaw: number, pitch?: number): void {
     this.yaw = this.easedYaw = yaw;
+    if (pitch !== undefined) this.pitch = this.easedPitch = pitch;
   }
 
   /** Where the third-person zoom is (0 closest .. 1 furthest): the camera goes there now (a pinch moves it after). */

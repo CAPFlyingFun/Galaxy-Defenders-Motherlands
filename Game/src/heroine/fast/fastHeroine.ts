@@ -56,6 +56,7 @@ import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
+import { poseBirth } from '@charb/actor/humanBirth';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
@@ -173,11 +174,15 @@ const HEAD_GLSL_BONES = 8;
  */
 const SHARP_WITHIN = 2.0;
 /**
- * SQUATTING ON PURPOSE (Joshua, 2026-11-19: until there is a toilet, "she can just sit or squat down for 5s and then
- * stand up"): she gets down to a point this far above her floor and ahead of her (metres), low enough for lowerBody.ts
- * to choose its squat (the Character Builder's, which works for every belly) and not so low that she kneels.
+ * HER SQUAT IS THE CHARACTER BUILDER'S (Joshua, 2026-11-21: "swap the GDM squat pose to the CCBS squat pose... update
+ * the animation to be smooth to the new pose"): the builder's own deep squat (Char_B actor/humanBirth.ts, `squat`: down
+ * on her heels, thighs swung forward and out round her belly, wider the bigger it is, knees bent 112 degrees, feet flat
+ * and turned out, back upright), laid over her pose and eased in and out (smoothstep), her feet kept flat on the ground
+ * all the way down and up. (Before, she got down by lowerBody.ts reaching for a point 0.32 m above the
+ * floor and 0.22 m ahead of her, its own squat.)
+ *   inSeconds / outSeconds  how long going down and coming back up take
  */
-const SQUAT_POINT = Object.freeze({ up: 0.32, ahead: 0.22 });
+const SQUAT_EASE = Object.freeze({ inSeconds: 1.2, outSeconds: 1.3 });
 const SHARP_LEAVE = 2.3;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
 const VIEW_BALL_RADIUS = 1.5;
@@ -462,6 +467,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let waterDepth = 0;
   /** Seconds left of squatting on purpose (`squatFor`: the bathroom, for now). */
   let squatLeft = 0;
+  /** How far into the builder's squat she is (0 standing .. 1 down: SQUAT_EASE), and its turns, written each frame. */
+  let squatW = 0;
+  const squatOut: MutableJointTurn[] = [];
+  /** How high her lower ankle stands over the ground when she is not squatting (metres): squatting, it is kept so. */
+  let ankleRest = -1;
   if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
   skin.castShadow = false;
@@ -1747,6 +1757,29 @@ if (uHideHead > 0.5) {
         if (under > 0) { fit.position.y += under / Math.max(1e-6, root.scale.y); fit.updateMatrixWorld(true); }
       } else if (fit.rotation.x !== 0) { fit.rotation.x = 0; fit.position.z = 0; }
 
+      // HER SQUAT, THE BUILDER'S (SQUAT_EASE; the bathroom for now): eased in while she is asked to squat, out after.
+      // Her ankles' height over the ground is learned while she stands; squatting, her whole body is lowered so her
+      // lower ankle stays at that height (her feet flat on the floor as her knees bend), whatever the blend between.
+      {
+        const wantDown = squatLeft > 0 && downW <= 0;
+        squatW = Math.min(1, Math.max(0, squatW + (wantDown ? frame.dt / SQUAT_EASE.inSeconds : -frame.dt / SQUAT_EASE.outSeconds)));
+        const squatS = squatW * squatW * (3 - 2 * squatW);
+        root.updateMatrixWorld(true);
+        const ankleY = (): number => Math.min(bones[joints.ankleL].getWorldPosition(padAt).y, bones[joints.ankleR].getWorldPosition(padAt).y);
+        const floorY = ground.groundAt ? ground.groundAt(root.position.x, root.position.z) : NaN;
+        const floor = Number.isFinite(floorY) ? floorY : root.position.y;
+        if (squatS <= 0) {
+          // (standing: learn how high her ankles sit over the floor in her shoes)
+          if (downW <= 0 && crouchW <= 0 && motion.speed < 0.05) ankleRest = ankleRest < 0 ? ankleY() - floor : ankleRest + (ankleY() - floor - ankleRest) * Math.min(1, frame.dt * 2);
+        } else {
+          motion.overlay(poseBirth(motion.measure, motion.bind, { style: 'squat', seconds: breathClock, bump: body.belly / 100 }, squatOut), squatS);
+          root.updateMatrixWorld(true);
+          const rest = ankleRest >= 0 ? ankleRest : STANCE.groundPad.ankle;
+          fit.position.y += (floor + rest - ankleY()) / Math.max(1e-6, root.scale.y);
+          fit.updateMatrixWorld(true);
+        }
+      }
+
       // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than
       // her shoulders (her neck and skull). Each is a turn about the upright axis, laid over her pose.
       // (lying down or on all fours, none of this: her body faces the way it lies; her eyes and aim do the looking)
@@ -1810,11 +1843,12 @@ if (uHideHead > 0.5) {
         for (const i of [0, 1] as const) if (reach.hasJob(i) && !stayUp[i] && reach.jobPoint(i, reachOne)) { reachPoint.add(reachOne); count++; }
         // (SQUATTING ON PURPOSE: the bathroom, until there is a toilet: a point just above the floor in front of her,
         //  which is what makes lowerBody.ts choose its squat)
-        if (squatLeft > 0) { squatLeft -= frame.dt; root.localToWorld(reachPoint.set(0, SQUAT_POINT.up, SQUAT_POINT.ahead)); count = 1; }
+        // (now the builder's own squat, above: her hands reach for nothing meanwhile)
+        if (squatLeft > 0) { squatLeft -= frame.dt; count = 0; }
         // (WINDED: bent over, her knees a little bent, her hands going to her knees: groundPose.ts WINDED; her body
         //  bends as it does to reach for anything, and leans in a little more if her hands still fall short)
         if (windedRising && windedS > 0) lower.bendOver(WINDED.drop * motion.legMetres, WINDED.lean * (Math.PI / 180), WINDED.leanMost * (Math.PI / 180));
-        else lower.aimAt(count > 0 ? (squatLeft > 0 ? reachPoint : reachPoint.multiplyScalar(1 / count)) : null, armClear.eggs[0] ?? null, body.belly);
+        else lower.aimAt(count > 0 ? reachPoint.multiplyScalar(1 / count) : null, armClear.eggs[0] ?? null, body.belly);
         lower.apply(frame.dt, body.belly);
         // HER BELLY KEPT OFF THE TABLE (Joshua: "so it doesn't matter the belly size"): its point nearest the table's
         // face; if that is closer than KEEP_GAP (and her belly is low enough to meet the table, not above its top),

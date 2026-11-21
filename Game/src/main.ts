@@ -21,6 +21,8 @@ import { restartGame, setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
 import { onGlTrouble, watchGlTrouble } from './core/glTrouble';
+import { GpuTimer, installGpuTally } from './core/gpuTally';
+import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart } from './core/startupLog';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -300,6 +302,13 @@ async function start(): Promise<void> {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   // (a shader the phone will not build, or the graphics lost, said on screen: core/glTrouble.ts)
   watchGlTrouble(renderer.domElement);
+  // MEASURING, NOT GUESSING (Joshua and ChatGPT's review, 2026-11-21: the iPhone closes the game a split second after
+  // both characters are drawn): every picture and buffer handed to the graphics chip is counted (an estimate in MB,
+  // core/gpuTally.ts), the chip's own time a frame where the phone offers it, and each step of this start written
+  // down as it is reached (core/startupLog.ts), so the next start can say where a closed one stopped.
+  const gpuTally = installGpuTally(renderer.getContext() as WebGL2RenderingContext);
+  const gpuTimer = new GpuTimer(renderer.getContext() as WebGL2RenderingContext);
+  beginStartLog(VERSION_NUMBER, () => gpuTally.totalMB());
   // (if loading fails part-way and the splash's "tap to try again" reloads, the graphics chip is let go of first;
   //  once the game is up, `restart` below takes over with the full clean-up)
   setRestart(() => {
@@ -346,6 +355,7 @@ async function start(): Promise<void> {
     });
     await breathe();
   }
+  markStart(island ? 'island' : 'town');
   /**
    * Where her feet go, metres: 0 on the flat town; on the island the ground, or in a deep river or lake, held up in the
    * water to her shoulders (islandWorld.ts standAt). The last good height if a tile is not in yet.
@@ -410,6 +420,7 @@ async function start(): Promise<void> {
    * with no new hand-over: they all ask `heroine.hands`, `heroine.root` and so on afresh each time.
    */
   let bodyNow: GameHeroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
+  markStart('Blaze');
   /**
    * THE TWO OF THEM (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character to change and switch
    * between like how Beyond Extinction does it"). Blaze and John, Blaze's husband (heroine/looks/john.ts), each with
@@ -487,6 +498,7 @@ async function start(): Promise<void> {
       const live = await openLiveBody(renderer, LOOKS[lookKey(outfitNow)], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
       heroine.attachLive(live);
       liveOpened = true;
+      markStart('live body');
     } catch (error) {
       console.error('The live body could not be opened; she carries on without it.', error);
       liveNote = 'live body: could not open';
@@ -660,6 +672,7 @@ async function start(): Promise<void> {
       }
       scene.add(body.root);
       applyShadows();
+      markStart('John');
     } catch (error) {
       console.error('John could not be made; Blaze plays on alone.', error);
       john = null;
@@ -1168,6 +1181,8 @@ async function start(): Promise<void> {
   // (🔄 shows once there is someone to swap to: John, made beside her)
   hud.setSwap(john ? 'John' : null);
   if (johnFailed) hud.showNotice(johnFailed.startsWith('left out') ? `John ${johnFailed}` : `John couldn't load: ${johnFailed.slice(0, 60)}`, 10);
+  // (and where the last start stopped, if the phone closed it: core/startupLog.ts; after John's notice, if any)
+  { const closed = lastStartClosed(); if (closed) window.setTimeout(() => hud.showNotice(closed, 14), johnFailed ? 10500 : 0); }
   onGlTrouble((line) => hud.showNotice(line, 12));
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
@@ -1255,6 +1270,10 @@ async function start(): Promise<void> {
   meter.step('first picture', 'Drawing the first picture…');
   /** How many frames have begun. The first one is drawn behind the splash; the game starts with the second. */
   let framesBegun = 0;
+  /** For the startup log and the performance lines: frames drawn, when play began, and the steps already written. */
+  let framesDrawn = 0, playingSince = 0, marked5 = false, marked30 = false;
+  /** This frame's milliseconds: the game's own work before drawing, and handing the drawing to the chip (smoothed). */
+  let jsMs = 0, drawMs = 0, frameMs = 0;
   // PAUSING (src/ui/pauseMenu.ts): "if it starts in portrait or you rotate from landscape to portrait, it will pause
   // and basically open up and pause menu if in the game already". The pause menu is made as the game starts (so a
   // phone that is upright at that moment starts paused). While `pause.paused` is true the loop below does nothing.
@@ -1312,6 +1331,13 @@ async function start(): Promise<void> {
   const frame = (now: number) => {
     if (restarting) return; // (the game is letting go of everything before it starts again: the loop stops)
     requestAnimationFrame(frame);
+    const frameBegan = performance.now();
+    // (the first frames and seconds of play, written down as reached: core/startupLog.ts)
+    framesDrawn++;
+    if (framesDrawn === 1 || framesDrawn === 2 || framesDrawn === 5 || framesDrawn === 30) markStart(`frame ${framesDrawn}`);
+    if (framesDrawn === 1) playingSince = now;
+    if (!marked5 && now - playingSince > 5000) { marked5 = true; markStart('5 s'); }
+    if (!marked30 && now - playingSince > 30000) { marked30 = true; markStart(START_SURVIVED); }
 
     // ---- LOADING ENDS, AND PAUSED? (see just above the loop) --------------------------------------------------
     // The second frame beginning means the first picture has been drawn: the splash lifts and the game starts.
@@ -1909,7 +1935,14 @@ async function start(): Promise<void> {
 
     // 6. Draw.
     dome.update(info);
+    const drawBegan = performance.now();
+    gpuTimer.begin();
     renderer.render(scene, rig.camera);
+    gpuTimer.end();
+    const drawEnded = performance.now();
+    jsMs += (drawBegan - frameBegan - jsMs) * 0.1;
+    drawMs += (drawEnded - drawBegan - drawMs) * 0.1;
+    frameMs += (realDt * 1000 - frameMs) * 0.1;
 
     // 7. The FPS line under her vitals card (always), and the full readout (Show full readout), twice a second.
     readoutTimer += realDt;
@@ -1928,6 +1961,13 @@ async function start(): Promise<void> {
         // (Joshua, 2026-11-17: two long lines added here had made it grow over the gear and the view switch.)
         // The game's version is beside the FPS, so it can be read without opening Settings.
         const lines = [`${renderer.info.render.calls} draws · ${renderer.info.render.triangles.toLocaleString()} tris`];
+        // PERFORMANCE (core/gpuTally.ts): graphics memory asked for, an ESTIMATE ("est."), pictures and buffers; this
+        // frame's time, the game's own work, handing the drawing over, and the chip's own time where it is offered
+        lines.push(`GPU est ${Math.round(gpuTally.totalMB())}MB · tex ${Math.round(gpuTally.textureBytes / 1048576)} buf ${Math.round(gpuTally.bufferBytes / 1048576)}`);
+        lines.push(`${gpuTally.textures} tex · ${gpuTally.buffers} bufs · ${renderer.info.programs?.length ?? 0} shaders`);
+        lines.push(`${frameMs.toFixed(0)}ms · js ${jsMs.toFixed(1)} · draw ${drawMs.toFixed(1)} · gpu ${gpuTimer.available ? (gpuTimer.ms === null ? '…' : gpuTimer.ms.toFixed(1)) : 'n/a'}`);
+        // (the last start, if the phone closed it: its last steps)
+        for (const step of lastStartSteps()) lines.push(`last: ${step}`);
         // the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
         const her = heroine.stats?.();
         if (her) {

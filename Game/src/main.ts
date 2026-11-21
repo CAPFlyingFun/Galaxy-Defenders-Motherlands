@@ -20,6 +20,7 @@ import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
+import { onGlTrouble, watchGlTrouble } from './core/glTrouble';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -290,6 +291,8 @@ async function start(): Promise<void> {
   // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
   const graphics = loadHeroineSettings();
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // (a shader the phone will not build, or the graphics lost, said on screen: core/glTrouble.ts)
+  watchGlTrouble(renderer.domElement);
   // (if loading fails part-way and the splash's "tap to try again" reloads, the graphics chip is let go of first;
   //  once the game is up, `restart` below takes over with the full clean-up)
   setRestart(() => {
@@ -1101,6 +1104,7 @@ async function start(): Promise<void> {
   // (🔄 shows once there is someone to swap to: John, made beside her)
   hud.setSwap(john ? 'John' : null);
   if (johnFailed) hud.showNotice(`John couldn't load: ${johnFailed.slice(0, 60)}`, 8);
+  onGlTrouble((line) => hud.showNotice(line, 12));
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
   function grabBar(which: 'both' | Hand = 'both'): void {
     {

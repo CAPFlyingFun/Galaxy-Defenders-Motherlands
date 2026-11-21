@@ -613,7 +613,11 @@ use the game's single copy of three.js.
   time to 1 % over the next 10 m (no flicker: a step changes only three quarters into the next); on a computer always
   the player's level. `?other_near=<m>` sets the 20 m for a test. Measured on the phone setting: 21 m 30 %, 24 m 10 %,
   27 m 3 %, 35 m 1 %; back beside her 30 % again (once rebuilt). SHIPPED BODY FILE (v0.2.127): `models/male-base.glb` (17 MB) is in `Game/charb-files.json`; v0.2.126 left it out, so
-  the BUILT game had no John (the dev server reads Char_B directly). If he cannot be made, a notice says why. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  the BUILT game had no John (the dev server reads Char_B directly). If he cannot be made, a notice says why. v0.2.128: JOHN ALWAYS FROM HIS SHARP SET (fastHeroine.ts `want`): on the
+  iPhone his plain set did not draw (only near the camera, or in first person, was he seen); his levels do not lighten
+  anyway (about 88 K triangles each). GRAPHICS TROUBLE ON SCREEN (core/glTrouble.ts): a shader the phone will not
+  build, or lost graphics, shows as a notice. THE PAGE NEVER FROM THE BROWSER'S CACHE (sw.js navigate `no-store`): his
+  iPhone showed 127's loading screen and then 126's game. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
   NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
   breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
   trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.

@@ -156,6 +156,10 @@
   font: 600 14px system-ui, -apple-system, sans-serif;
   letter-spacing: 0.04em;
   pointer-events: none;
+  /* (a long one wraps in the gap between the vitals card and the 🔄 / gear, not over them) */
+  max-width: 22vw;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 .gd-notice[hidden] { display: none; }
 /* THE BATHROOM BUTTON (Joshua, 2026-11-19): left of the gear (and of 🔄), only when she needs to go; pulsing red when it is strong */

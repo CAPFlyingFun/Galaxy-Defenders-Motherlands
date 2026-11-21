@@ -86,12 +86,14 @@ function template(id: string, change: Record<string, unknown>) {
  * 0.7, within 45 degrees of her front's middle). It only ever lies on the suit or on the gap the builder left, so its
  * own rough edge is the suit's colour on the suit's colour and never shows.
  */
-const fillCleavage = (neckFront: number): MaskPainter => (surface) => {
+export const fillCleavage = (neckFront: number, from = 0.7, half = 45): MaskPainter => (surface) => {
   const inside = new Float32Array(surface.count).fill(-1);
   const place = { along: 0, turn: 0, radius: 0 };
   for (let v = 0; v < surface.count; v++) {
     if (!surface.trunkPlace(v, place)) continue;
-    inside[v] = Math.min(place.along - 0.7, (45 - Math.abs(place.turn)) / 180, neckFront - place.along) * 0.5;
+    // (from `from` up her trunk to the neckline, within `half` degrees of her front's middle; John's gap, on his
+    //  differently proportioned trunk, wanted a wider, lower fill: john.ts)
+    inside[v] = Math.min(place.along - from, (half - Math.abs(place.turn)) / 180, neckFront - place.along) * 0.5;
   }
   return inside;
 };

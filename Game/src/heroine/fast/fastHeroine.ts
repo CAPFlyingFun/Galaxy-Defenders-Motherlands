@@ -44,7 +44,8 @@ import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
 import { loadBakedLook, type BakedLook } from './bakedLook';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
-import { loadBodyFile } from './bodyFile';
+import { bodyFileFor, loadBodyFile } from './bodyFile';
+import { LOOKS } from '../looks';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist, type CrabMove } from './footGround';
 import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
@@ -336,7 +337,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
 
   // ---- 1. everything she is made from, fetched together -----------------------------------------------------------
   const painted = options.painted ?? null;
-  const [file, baked] = await Promise.all([loadBodyFile(say), painted ? Promise.resolve(null) : loadBakedLook(options.look)]);
+  // (whose body: hers, or his for a look on the builder's male body -- John, 2026-11-21)
+  const male = LOOKS[options.look]?.body.model === 'male-base';
+  const [file, baked] = await Promise.all([loadBodyFile(say, bodyFileFor(male ? 'male-base' : 'v2-body')), painted ? Promise.resolve(null) : loadBakedLook(options.look)]);
   const skin = file.skin;
   const fileGeometry = skin.geometry;
   const count = fileGeometry.getAttribute('position').count;

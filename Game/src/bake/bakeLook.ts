@@ -38,7 +38,7 @@ import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
 import { ROOM_UNITS, openBuilderRoom } from '../heroine/builderRoom';
 import { findPaintedSkin } from '../heroine/paintMask';
 import { LOOKS, lookKey } from '../heroine/looks';
-import { BODY_FILE, findBodySkin } from '../heroine/fast/bodyFile';
+import { bodyFileFor, findBodySkin } from '../heroine/fast/bodyFile';
 import type { BakedLookManifest } from '../heroine/fast/bakedLook';
 import { packShape } from '../heroine/fast/shapeFile';
 import { bakeSkinnedUV } from './skinnedUvBake';
@@ -113,7 +113,8 @@ async function start(): Promise<void> {
   say(`Baking "${key}": checking against the body file…`);
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const file = await loader.loadAsync(`${import.meta.env.BASE_URL}${BODY_FILE}`);
+  // (hers, or his for a look on the male body)
+  const file = await loader.loadAsync(`${import.meta.env.BASE_URL}${bodyFileFor(look.body.model)}`);
   const fileSkin = findBodySkin(file.scene);
   if (!fileSkin) throw new Error('the body file has no skin mesh');
   const fileTriangles = fileSkin.geometry.index?.array;
@@ -168,7 +169,13 @@ async function start(): Promise<void> {
   // (her hair comes from its own file; the two pieces between her legs are under her leggings and are never seen)
   // (a look may leave the fabric across her cleavage out: on a high-necked suit painted on her skin, graySuit.ts, the
   //  strip's edges came out in her skin's colour, and the suit's paint already runs into her cleavage)
-  const isExtraPiece = (mesh: THREE.Mesh): boolean => !/^sarah(Hair|Vulva|Vagina)$/.test(mesh.name) && mesh.name !== 'finger-fills'
+  // (and a second copy of the body file's own mesh, 'Mesh_0', which the room keeps beside his skin on the MALE body: a
+  //  plain copy of his 123,023 points that would have been baked as a 9 MB "piece" over him. John, 2026-11-21)
+  // (and on the MALE body, two pieces the room lays for HER that it leaves standing on him: the strip across her cleavage,
+  //  baked on him as a skin-coloured patch on his chest and a black spike down between his legs, and her tunic's drape,
+  //  white flecks at his waist. John, 2026-11-21)
+  const herPieceOnHim = (mesh: THREE.Mesh): boolean => look.body.model === 'male-base' && /^(cleavageBridge|tunicDrape)$/.test(mesh.name);
+  const isExtraPiece = (mesh: THREE.Mesh): boolean => !/^sarah(Hair|Vulva|Vagina)$/.test(mesh.name) && mesh.name !== 'finger-fills' && mesh.name !== 'Mesh_0' && !herPieceOnHim(mesh)
     && !(look.noCleavageBridge && mesh.name === 'cleavageBridge') && !(look.onlyNamedPieces && !mesh.name);
   const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece);
   // the lowest point of anything she stands on (her sneakers' soles), over the room's floor
@@ -201,6 +208,7 @@ async function start(): Promise<void> {
   // ---- 5. write the files ------------------------------------------------------------------------------------------------
   say(`Baking "${key}": writing the files…`);
   const head = normaliseHead(look.body.head);
+  const male = look.body.model === 'male-base';
   // her NAVEL control's setting: one of the numbers in her look's body shape (the builder's own text)
   let navel = 0;
   let settings: Record<string, number> = {};
@@ -222,7 +230,10 @@ async function start(): Promise<void> {
     motion: { walkBob: percent('walkBob'), walkSway: percent('walkSway'), breastBounce: percent('breastBounce') },
     weeks,
     normalScale: [roomMaterial.normalScale?.x ?? 1, roomMaterial.normalScale?.y ?? 1],
-    hair: head.hair.style === HAIR_STYLE_NONE ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
+    // (no hair on the male body: the builder draws none on him, and his export has no head, which would otherwise read
+    //  as her default ponytail)
+    hair: male || head.hair.style === HAIR_STYLE_NONE ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
+    body: look.body.model,
     files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null },
     facts: {
       drawnInTheRoom: drawn,

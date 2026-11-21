@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "look": "john",
+  "bakedAt": "2026-11-21T18:54:46.735Z",
+  "builderVersion": "0.9.68",
+  "belly": 50,
+  "vertexCount": 123023,
+  "barefootHeightMetres": 1.7593113872111923,
+  "navel": -3,
+  "motion": {
+    "walkBob": 100,
+    "walkSway": 100,
+    "breastBounce": 85
+  },
+  "weeks": 0,
+  "normalScale": [
+    1,
+    -1
+  ],
+  "hair": null,
+  "body": "male-base",
+  "files": {
+    "albedo": "albedo.webp",
+    "normal": "normal.webp",
+    "surface": "surface.webp",
+    "shape": "shape.bin",
+    "pieces": "pieces.bin"
+  },
+  "facts": {
+    "drawnInTheRoom": [
+      "Mesh_0 | Material_0 | 221817 triangles | HER SKIN | skinned, 123023 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/_cloth_cover/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 2 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "finger-fills | finger-fills | 5137 triangles | skinned, 2797 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
+      "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
+      "tunicDrape | MeshStandardMaterial | 6560 triangles | skinned, 8400 points, attrs position/normal/fabricRest/fabricRestNormal/color/drapeCut/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
+      "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
+      "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false"
+    ],
+    "extraPieces": [
+      "sneakerL-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
+      "sneakerL-plain: 4090 points, 7280 triangles",
+      "sneakerR-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
+      "sneakerR-plain: 4090 points, 7280 triangles"
+    ],
+    "lowestPointOverTheFloorMetres": 0.0019189883587634338,
+    "solesOverTheFloorMetres": 0.018545025080202837,
+    "crownOverTheFloorMetres": 1.7778564122913951,
+    "pointsTheBuilderMoved": 102054,
+    "movedMostGeometryUnits": 0.03698929198650145,
+    "pointsWithChangedBones": 3791,
+    "restSkinSpread": 0.13812496424793425,
+    "captureMissing": {
+      "position": 0,
+      "normal": 0
+    },
+    "albedoCoveredTexels": 7837284,
+    "textureIslands": 330,
+    "islandsShrunkTo": 0.8254819869995118
+  }
+}

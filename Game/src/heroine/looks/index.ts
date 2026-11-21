@@ -12,6 +12,7 @@ import { BLAZE_CATSUIT_LOOK } from './blazeCatsuit';
 import { SPACE_HEROINE_LOOK } from './spaceHeroine';
 import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
 import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
+import { JOHN_LOOK } from './john';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
@@ -36,6 +37,8 @@ export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** The same catsuit in more colours, and two tones (catsuitStyles.ts). */
   ...COLOUR_CATSUIT_LOOKS,
   ...TWO_TONE_LOOKS,
+  /** John, Blaze's husband, as Joshua saved him (john.ts): the builder's male body. */
+  john: JOHN_LOOK,
 };
 
 /** The look the game's heroine wears when the address does not name one. */

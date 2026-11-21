@@ -51,7 +51,8 @@ export interface SkinPictures { readonly own: THREE.Texture; readonly tile: THRE
 export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): SkinPictures {
   const loader = new THREE.TextureLoader();
   const sharp = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  const own = loader.load(bakedLookFolder(look) + 'skinHeight.webp', (t) => { t.needsUpdate = true; });
+  const own = loader.load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
+    (t) => { t.needsUpdate = true; });
   own.colorSpace = THREE.NoColorSpace;
   own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
   own.anisotropy = sharp;

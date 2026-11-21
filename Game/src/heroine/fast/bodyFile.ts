@@ -24,6 +24,10 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 
 /** The body file, relative to the game's page. It must be listed in Game/charb-files.json or the built game will not have it. */
 export const BODY_FILE = 'charb/models/sarah-v2-body-slim.glb';
+/** HIS body file: the builder's Male Base Model (Char_B/public/models/male-base.glb; John, 2026-11-21). */
+export const MALE_BODY_FILE = 'charb/models/male-base.glb';
+/** The body file for a look's `body.model`: hers, or his for 'male-base'. */
+export const bodyFileFor = (model: string): string => (model === 'male-base' ? MALE_BODY_FILE : BODY_FILE);
 /** A hairstyle's file, from the path the builder's own list gives it (hairStyles.ts: 'models/hair/ponytail.glb'). */
 export const hairFile = (builderPath: string): string => `charb/${builderPath}`;
 
@@ -74,10 +78,11 @@ export interface BodyFile {
 }
 
 /** Load the body file and throw away her underwear pieces. */
-export async function loadBodyFile(onProgress?: (stage: string) => void): Promise<BodyFile> {
+export async function loadBodyFile(onProgress?: (stage: string) => void, bodyFile: string = BODY_FILE): Promise<BodyFile> {
   onProgress?.('body');
-  const response = await fetch(`${import.meta.env.BASE_URL}${BODY_FILE}`);
-  if (!response.ok) throw new Error(`[heroine] the body file did not load (${response.status}): ${BODY_FILE}`);
+  // (hers, or his: `bodyFileFor` a look's body.model)
+  const response = await fetch(`${import.meta.env.BASE_URL}${bodyFile}`);
+  if (!response.ok) throw new Error(`[heroine] the body file did not load (${response.status}): ${bodyFile}`);
   const bytes = await response.arrayBuffer();
   onProgress?.('unpacking her body');
   const gltf = await newLoader().parseAsync(bytes, '');

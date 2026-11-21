@@ -24,7 +24,8 @@ export interface HeroineLook {
    * exactly as an export has it; left out, she has the builder's default head and ponytail.
    */
   readonly body: {
-    readonly model: 'v2-body';
+    /** Which of the builder's bodies: 'v2-body' hers (the Female Base Model), 'male-base' his (the Male Base Model). */
+    readonly model: 'v2-body' | 'male-base';
     readonly bump: number;
     readonly shape: string;
     readonly refine: boolean;

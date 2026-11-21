@@ -582,6 +582,23 @@ use the game's single copy of three.js.
   CRASHES her energy as it fades (12% for a full fade). MOOD from her needs (Sims style), shown only. TEMPERATURE,
   37 C at rest, to 38.8 working her hardest, cooler wet (0.4) and in water (1 at 1 m), shown only. Effort and fear were
   there already, now shown. TEST: FOOD & DRINK -> Make tired (energy 10%).
+- JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
+  Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
+  `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:
+  123,023 points, 69 bones, his spine one bone longer, only 2 body shapes: his belly is drawn by the builder's
+  `maleBelly.ts`, baked at his 50%), baked as `public/heroines/john/` (5 MB). PHASE 1 IN PROGRESS: he loads and walks as
+  the fast heroine (`bodyFileFor`, `LOOKS[look].body.model`; bones by role, `measureHuman`). Found on the way:
+  (1) BUILDER BUG: a save card on another body loads it at once, and the room's held-back first load loaded him AGAIN:
+  two of him, one bare, and his outfit dropped. builderRoom.ts lets that load go only for her body. (2) Her pieces the
+  room leaves on him (`cleavageBridge`, `tunicDrape`) are not baked on the male body (bakeLook.ts `herPieceOnHim`); the
+  gap the builder's tops leave at the chest is filled in his shirt's navy (`fillCleavage(0.966, 0.5, 70)`). (3) No hair
+  on the male body (the manifest's `hair` null; `body: 'male-base'`). Next: his own vitals (no pregnancy), her
+  breast-only systems off for him, both on the map, the 🔄 swap, memory on the iPhone. ChatGPT's NPC brain template is
+  kept in `docs/npc-brain/` for after he is stable.
+- OUTFIT FILES ARE NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit re-baked in v0.2.123 still showed its
+  specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
+  `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new
+  addresses and no cache (Safari's or one on the way) can hand back the old picture.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

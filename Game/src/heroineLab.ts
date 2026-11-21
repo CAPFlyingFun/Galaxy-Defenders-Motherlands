@@ -24,6 +24,7 @@
 // ============================================================================
 import { BLAZE_LOOK } from './heroine/looks/blaze';
 import { BLAZE_SUIT_LOOK } from './heroine/looks/blazeSuit';
+import { LOOKS } from './heroine/looks';
 import { DEFAULT_BELLY, type HeroineLook } from './heroine/heroineLook';
 import * as THREE from 'three';
 import { WeaponTable } from './world/weaponTable';
@@ -86,7 +87,8 @@ async function start(): Promise<void> {
   const began = performance.now();
   const body = asked.get('body');
   // The saved looks this page can show, by the name in the address (?look=blaze, ?look=blazeSuit).
-  const looks: Record<string, HeroineLook> = { blaze: BLAZE_LOOK, blazeSuit: BLAZE_SUIT_LOOK };
+  // (every saved look the game knows, John's too: src/heroine/looks/index.ts)
+  const looks: Record<string, HeroineLook> = { blaze: BLAZE_LOOK, blazeSuit: BLAZE_SUIT_LOOK, ...LOOKS };
   const look: HeroineLook | undefined = looks[asked.get('look') ?? ''];
   // The belly she starts with: a look's own (Blaze is 100), else the address's ?belly, else the default heroine's.
   const startBelly = look ? look.body.bump : asked.has('belly') ? Number(asked.get('belly')) : DEFAULT_BELLY;

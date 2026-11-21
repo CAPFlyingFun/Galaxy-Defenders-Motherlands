@@ -51,6 +51,11 @@ export interface BakedLookManifest {
   readonly weeks?: number;
   /** Her hair: the builder's style id, its colour ('#rrggbb', or null for the file's own copper) and length (0 shortest - 1). Null: no hair. */
   readonly hair: { readonly style: string; readonly colour: string | null; readonly length: number } | null;
+  /**
+   * Which of the builder's bodies the look is on: 'v2-body' hers, 'male-base' his (John, 2026-11-21). Left out of a look
+   * baked before then: hers.
+   */
+  readonly body?: 'v2-body' | 'male-base';
   /** File names, beside look.json. */
   readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null };
   /** Anything the bake measured that a person may want to read later (never used by the game). */
@@ -108,13 +113,19 @@ async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture>
 export async function loadBakedLook(look: string): Promise<BakedLook> {
   const folder = bakedLookFolder(look);
   fetchedBytes = 0;
-  const manifest = (await (await fetchOk(`${folder}look.json`)).json()) as BakedLookManifest;
+  // NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit, re-baked in v0.2.123, still showed its old specks on
+  // his iPhone in v0.2.124). Every file is asked for with a mark of WHICH bake it is: look.json with the game's version,
+  // the rest with the bake's own time. A re-baked look's files then have new addresses, so neither Safari's own cache
+  // nor any other copy on the way can hand back the old picture. (The game's offline store ignores the mark: it is
+  // emptied anyway whenever any outfit file changes, vite.config.ts `pwa`.)
+  const manifest = (await (await fetchOk(`${folder}look.json?v=${encodeURIComponent(__APP_VERSION__)}`)).json()) as BakedLookManifest;
+  const bake = `?bake=${encodeURIComponent(manifest.bakedAt)}`;
   if (manifest.version !== 1) throw new Error(`baked look "${look}" is version ${String(manifest.version)}, which this game does not read`);
-  const bytesOf = (name: string): Promise<ArrayBuffer> => fetchOk(folder + name).then((r) => r.arrayBuffer()).then((b) => { fetchedBytes += b.byteLength; return b; });
+  const bytesOf = (name: string): Promise<ArrayBuffer> => fetchOk(folder + name + bake).then((r) => r.arrayBuffer()).then((b) => { fetchedBytes += b.byteLength; return b; });
   const [albedo, normal, surface, shapeBytes, pieceBytes] = await Promise.all([
-    loadPicture(folder + manifest.files.albedo, true),
-    loadPicture(folder + manifest.files.normal, false),
-    loadPicture(folder + manifest.files.surface, false),
+    loadPicture(folder + manifest.files.albedo + bake, true),
+    loadPicture(folder + manifest.files.normal + bake, false),
+    loadPicture(folder + manifest.files.surface + bake, false),
     bytesOf(manifest.files.shape),
     manifest.files.pieces ? bytesOf(manifest.files.pieces) : Promise.resolve(null),
   ]);
@@ -122,7 +133,7 @@ export async function loadBakedLook(look: string): Promise<BakedLook> {
   const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
   // the pieces' own pictures (her two sneakers share one)
   const piecePictures = new Map<string, THREE.Texture>();
-  await Promise.all([...new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))].map(async (name) => { piecePictures.set(name, await loadPicture(folder + name, true)); }));
+  await Promise.all([...new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))].map(async (name) => { piecePictures.set(name, await loadPicture(folder + name + bake, true)); }));
   return {
     manifest, albedo, normal, surface, shape, pieces, piecePictures,
     megabytes: fetchedBytes / 1048576,

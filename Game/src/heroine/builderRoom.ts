@@ -234,7 +234,13 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
   if (!press(CHARACTER_ACTION.load(options.look.name))) throw new Error('[heroine] the Character Builder has no save card for the heroine (its LIBRARY panel changed?)');
   // A built-in outfit is chosen the same way: by pressing its card in the room's OUTFIT panel.
   if (builtIn >= 0 && !press(OUTFIT_ACTION.builtin(OUTFITS[builtIn].name))) throw new Error(`[heroine] the Character Builder offers no card for the outfit "${options.outfit}"`);
-  releaseLoad();
+  // ANOTHER BODY LOADS ITSELF (John, 2026-11-21). A save card on a body other than the room's own (hers, 'v2-body')
+  // makes the room switch to that body and load it AT ONCE (SarahLabScene.ts `putOnBody` -> `loadSarah`). Let go as
+  // well, the room's held-back first load then loaded him a SECOND time: two of him in the room, one painted and one
+  // bare, drawn over each other in patches, and the second load dropped the outfit the card had just asked for (he
+  // came out in navy scraps and bare skin). So for another body the held-back load is never let go: the card's load
+  // is his only one. (BUILDER BUG: loadSarah lets two loads of the same file both land; reported to its agent.)
+  if (options.look.body.model === 'v2-body') releaseLoad();
 
   // ---- 5. Run the room until she is dressed --------------------------------------------------------------------
   let disposed = false;

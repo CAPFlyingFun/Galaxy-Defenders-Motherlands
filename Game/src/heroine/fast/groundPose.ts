@@ -49,8 +49,8 @@ export type Stance = 'stand' | 'crouch' | 'prone' | 'fours';
 export const WINDED = {
   /** How far she bends forward, degrees (most of it at her hips, the rest up her back: lowerBody.ts, as any bend). */
   lean: 40,
-  /** ...and at most, leaning in a little more if her hands still fall short of her knees, degrees. */
-  leanMost: 60,
+  /** ...and at most, leaning in a little more if her hands still fall short of her knees, degrees (never her hips forward). */
+  leanMost: 50,
   /** How far her hips come down, a share of her leg's length (her knees bend to keep her feet on the ground). */
   drop: 0.36,
   /** Where her palms rest: this far up her thigh from her knee, metres, and on its front. */
@@ -58,11 +58,12 @@ export const WINDED = {
   /** How far in toward her middle her fingers point down her thighs (0 straight down them). */
   fingersIn: 0.45,
   /**
-   * Her head tipped down this much further than her bent back has it, degrees (Joshua: "look more at her feet which would
-   * naturally make her look at her chest/belly"; 50 was "too high up").
+   * HER EYES ON HER FEET (Joshua: "look more at her feet which would naturally make her look at her chest/belly"): her
+   * gaze this far below level, degrees; her head tips down by what her bent back does not already give (a fixed 70
+   * on top of her bend had her face pointing back at her shins once she leaned in further).
    */
-  headDown: 70,
-  /** ...as far as her neck bends then, degrees (her chin to her chest: Joshua, "it's too high up"). */
+  gaze: 100,
+  /** ...as far as her neck bends then, degrees (her chin to her chest). */
   headDownMost: 75,
   /** Her thigh's front, from its bone, just above her knee, metres (her palm rests on it). */
   thighFront: 0.06,

@@ -190,9 +190,9 @@ type Gait = 'stand' | 'ahead' | 'back' | 'left' | 'right' | 'go';
  * SQUARED UP BETWEEN MOVES (Joshua, 2026-11-20): her feet are set side by side over this long at a walk, seconds; going
  * faster than GAIT_RESET_SPEED, shorter by as much (never under GAIT_RESET_LEAST).
  */
-const GAIT_RESET = 0.3;
+const GAIT_RESET = 0.1;        // (Joshua, 2026-11-20: 0.3 "was slightly too long... try 0.1s"; his first instinct 0.07)
 const GAIT_RESET_SPEED = 1.1;
-const GAIT_RESET_LEAST = 0.15;
+const GAIT_RESET_LEAST = 0.07;
 /** Her facing held, the stick stays on its move until another is this many times nearer (about 54 degrees, not 45). */
 const GAIT_KEEP = 1.4;
 /** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds, and straightens up over the hold's last so many. */

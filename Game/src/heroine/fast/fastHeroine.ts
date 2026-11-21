@@ -1478,8 +1478,12 @@ if (uHideHead > 0.5) {
         headTip += (Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)) - headTip) * looking;
       }
       // WINDED, SHE LOOKS DOWN AT HER FEET (Joshua, 2026-11-20: "make her head look more at her feet which would
-      // naturally make her look at her chest/belly"): her head tipped down WINDED.headDown more than her bent back has it
-      if (windedS > 0) headTip += (-WINDED.headDown * (Math.PI / 180) - headTip) * windedS;
+      // naturally make her look at her chest/belly"): her head tipped down to WINDED.gaze below level, less what her bent back gives
+      // (her eyes on her feet: her gaze WINDED.gaze below level, of which her bent back already gives `bentNow`)
+      if (windedS > 0) {
+        const down = Math.max(0, Math.min(WINDED.headDownMost * (Math.PI / 180), WINDED.gaze * (Math.PI / 180) - lower.bentNow));
+        headTip += (-down - headTip) * windedS;
+      }
       const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));

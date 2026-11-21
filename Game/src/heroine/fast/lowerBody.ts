@@ -188,6 +188,10 @@ export class LowerBody {
   private wantHingeMost = 0;
   /** Her lean-in fades out when a new reach begins, instead of dropping to nothing at once. */
   private leanInFading = false;
+  /** Bent over on purpose (`bendOver`): leaning in only bends her further, never moves her hips forward. */
+  private bending = false;
+  /** How far she is bent forward now, radians (hips and back together, eased in): her head looks down from there. */
+  bentNow = 0;
   /** How far her hips are held back to keep her belly off something in front of her (a table), metres. */
   private pushBack = 0;
   /**
@@ -231,6 +235,7 @@ export class LowerBody {
    * @param belly  her belly's egg (armClear.ts: her own frame), for where mid-belly is; `bellyPercent` 0-200
    */
   aimAt(target: THREE.Vector3 | null, belly: Egg | null, bellyPercent: number): void {
+    this.bending = false;
     if (!target) { this.wantDown = false; return; }
     this.wantDown = true;
     // the target in her own frame (height above her floor, how far in front of her hips)
@@ -306,6 +311,7 @@ export class LowerBody {
     this.wantDown = true;
     this.wantMode = 'low';
     this.wantDrop = drop; this.wantHinge = hinge; this.wantBack = 0; this.wantHingeMost = most;
+    this.bending = true;
     this.lastTargetY = NaN;
     this.leanInFading = false;
   }
@@ -336,7 +342,9 @@ export class LowerBody {
   stillShort(short: number, dt: number): void {
     if (this.weight < 0.5 || !this.wantDown) return;
     const down = this.mode === 'squat' || this.mode.startsWith('kneel');
-    const most = this.trunk * this.hingeMost + LOWER.hipsForwardMost + (down ? LOWER.extraDropMost : 0);
+    // (bent over on purpose: no further than the most bend asked for, and never her hips forward: winded, with them
+    //  forward she tipped right over her toes, "over halfway to fall over", Joshua 2026-11-20)
+    const most = this.bending ? this.trunk * Math.max(0, this.hingeMost - this.hinge) : this.trunk * this.hingeMost + LOWER.hipsForwardMost + (down ? LOWER.extraDropMost : 0);
     if (short > 0.004) this.leanIn = Math.min(most, this.leanIn + short * LOWER.leanInPerSecond * dt);
   }
 
@@ -367,7 +375,7 @@ export class LowerBody {
     //  knees in part way up, a jolt; by the time it does go, her legs are nearly straight and well inside it)
     const p0 = Math.min(1, k * LEG_EASE_IN);
     this.passive = this.mode === 'squat' || kneeling ? p0 * p0 * (3 - 2 * p0) : 0;
-    if (k <= 0) { if (!this.wantDown) { this.lastTargetY = NaN; this.pushBack = 0; } return; }
+    if (k <= 0) { this.bentNow = 0; if (!this.wantDown) { this.lastTargetY = NaN; this.pushBack = 0; } return; }
 
     // Her frame now: her left, her forward.
     this.root.getWorldQuaternion(rootQ);
@@ -393,6 +401,7 @@ export class LowerBody {
 
     // 2. bent forward: most at her hips, the rest shared up her back (a turn about her left axis tips her forward)
     const hinge = (this.hinge + moreBend) * k;
+    this.bentNow = hinge;
     turnInWorld(this.hips, turn.setFromAxisAngle(leftAxis, hinge * LOWER.hingeAtHips));
     const rest = hinge * (1 - LOWER.hingeAtHips) / Math.max(1, this.backBones.length);
     for (const b of this.backBones) turnInWorld(b, turn.setFromAxisAngle(leftAxis, rest));

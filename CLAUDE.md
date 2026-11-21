@@ -54,9 +54,9 @@ use the game's single copy of three.js.
   (maybe 0.3s or variable depending on speed) to both feet side by side then plays the next one... as soon as you
   release the stick or it centers, it also puts the feet in the normal standing state"; main.ts `gait`, `GAIT_*`,
   footGround.ts 11 `squareUp`, bodyMotion.ts `standCap`): her move (stand / ahead / back / left / right with her facing
-  held / go) changing from a move to anything else sets both feet side by side at home TOGETHER first, over 0.3 s at a
-  walk (shorter faster, at least 0.15), her walk faded out with them and restarted from the stride's beginning; she
-  waits meanwhile. The 4-way stick keeps its move until another is 1.4x nearer (`GAIT_KEEP`), so a diagonal does not
+  held / go) changing from a move to anything else sets both feet side by side at home TOGETHER first, over a moment at a
+  walk (shorter faster), her walk faded out with them and restarted from the stride's beginning; she
+  waits meanwhile (0.1 s, 0.07 at least: Joshua, 0.3 "was slightly too long"). The 4-way stick keeps its move until another is 1.4x nearer (`GAIT_KEEP`), so a diagonal does not
   flick. Measured: her ankles never closer than 0.28 m (her stance 0.30). (A shuffle
   and a skip are built in `footGround.ts` but not used.) She stands with her feet her shoulder width apart (measured
   from her own bones). Holding a door, her facing is held too (the same four moves).
@@ -305,9 +305,11 @@ use the game's single copy of three.js.
   toward its own side, fingers forward and in, as far under as her arm reaches (`startSupport` searches the egg),
   until she slows below a jog-and-a-half (main.ts SUPPORT_*); the other hand keeps its gun and fires.
   WINDED (Joshua, 2026-11-20; groundPose.ts `WINDED`, input/pace.ts `windedHoldSeconds` now 10): bent over 40 degrees
-  (lowerBody.ts `bendOver`: most at her hips, leaning in to 60 if her hands fall short), a deeper squat (Joshua: "a
+  (lowerBody.ts `bendOver`: most at her hips, leaning in to 50 if her hands fall short, NEVER her hips forward: with
+  them forward she tipped over her toes, "over halfway to fall over"), a deeper squat (Joshua: "a
   slight more squat so her hands are closer to her knee"; hips down 0.36 of her leg, knees out round her belly), both
-  palms (guns and all) on her thighs 7 cm above her knees, her head down 50 more at her feet ("look more at her feet"; 70 more, to 75 at most: 50 was "too high up"); eased in 0.6 s, back up over the
+  palms (guns and all) on her thighs 7 cm above her knees, her eyes on her feet, 100 degrees below level, her head tipping down by what her bend does not give (at most 75;
+  "look more at her feet"); eased in 0.6 s, back up over the
   hold's last 1 s; no aiming or firing; first person the view tips down to 85 degrees (her chest, belly and feet)
   unless turned. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together

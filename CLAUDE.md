@@ -241,7 +241,9 @@ use the game's single copy of three.js.
   square to her left or right side at her middle's height, turning with her (eased), so her whole profile and belly
   show. In them, aimed by hand, dragging up and down TIPS HER HEAD within her neck's reach, as first person does
   (Joshua, 2026-11-20: "For the side views, can we make up and down work for the head?"; main.ts `sideView`,
-  cameraRig.ts applyLook); left and right already turned it. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
+  cameraRig.ts applyLook); left and right already turned it. ZOOM IN TWICE AS CLOSE, EVERY STYLE (Joshua, 2026-11-21: "double how close you can zoom in with all the cameras";
+  cameraRig.ts `ZOOM_MIN`, `styleSpan`): follow/orbit to 0.8 m (was 1.6), shoulder 0.38 m (0.75), side 0.9 m (1.8), top 3 m
+  (6), drone 1.25 m up (2.5); zoom 0 to 1 as before. AIMED BY HAND (manual) CAM now shows in third person too and goes round its own few styles (shoulder, follow,
   side L, side R; `gdm.cameraStyleManual`); while FIRE is held and 1.2 s after, the camera is over her shoulder whatever
   is chosen, and away from it she aims level the way she was turned and the crosshair is hidden.
 - GUNS AT THE START, AND AT REST IN THIRD PERSON MANUAL (Joshua, 2026-11-20: "Why are the guns always raised and ready
@@ -344,8 +346,13 @@ use the game's single copy of three.js.
   slope), chest propped on her elbows, head up; the ARMY CRAWL, one elbow reaching as the opposite knee is drawn up,
   0.35 m/s; aims and fires only while still. ALL FOURS (pregnant): hands and knees, her back about level, knees wider
   round her belly, the diagonal crawl, 0.55 m/s; her guns holstered going down and before she moves; still, one may be
-  drawn (L, R or the main button draws the right). Down and up go through her crouch (1.0 s down, 1.2 s up, still while
-  she does). The camera comes down with her (cameraRig.ts `lower`). Busy at the table, a bar or a door, she stands. Her
+  drawn (L, R or the main button draws the right). Down and up go through her crouch, STEP BY STEP (Joshua, 2026-11-21:
+  "a more realistic transition from standing to crawling without the body sinking underground"; groundPose.ts `KNEEL`,
+  `kneelTurns`, `downSteps`): crouch, then KNEELING (knees to the ground, body upright, hands on her thighs), then hands
+  forward to ALL FOURS, then (prone) down onto her elbows; all fours 1.3 s down / 1.4 up, prone 1.8 / 1.9, still while she
+  does. NEVER UNDER THE GROUND (`STANCE.groundPad`): each frame getting down or up her knees, feet, hands, elbows, head
+  and hips are measured against the ground under them and her whole body lifted by any that would be under. Measured in
+  the lab: her ankles at least 7 cm up all the way (before: 0, through the floor, as she tipped like a falling plank). The camera comes down with her (cameraRig.ts `lower`). Busy at the table, a bar or a door, she stands. Her
   body's yaw bands and her arms' keeping clear of her belly are off while she is down. NOTE: the BUILDER'S ELBOW BEND
   (about Y) only twists this body file's forearm (its arms already hang in the bind): the game bends elbows about X.
   The buttons sit just above FIRE (movable in Edit controls); PRONE reads ALL 4s while Pregnancy is on.

@@ -55,7 +55,7 @@ import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
-import { STANCE, WINDED, foursHips, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, sharpParts, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
@@ -578,7 +578,16 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     return { thigh: hip.distanceTo(knee), shin: knee.distanceTo(ankle), arm: shoulder.distanceTo(elbow) + elbow.distanceTo(wrist) + 0.08,
       hipHeight: hip.y - base, shoulderHeight: shoulder.y - base };
   })();
-  const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
+    /** Getting down: how far along each step she is (groundPose.ts `downSteps`), and where a joint is (reused). */
+  const steps = { kneel: 0, fours: 0, prone: 0 };
+  const padAt = new THREE.Vector3();
+  /** The joints kept above the ground getting down, with the flesh round each (STANCE.groundPad). */
+  const GROUND_PADS: ReadonlyArray<readonly [keyof typeof joints, number]> = [
+    ['kneeL', STANCE.groundPad.knee], ['kneeR', STANCE.groundPad.knee], ['ankleL', STANCE.groundPad.ankle], ['ankleR', STANCE.groundPad.ankle],
+    ['wristL', STANCE.groundPad.wrist], ['wristR', STANCE.groundPad.wrist], ['elbowL', STANCE.groundPad.elbow], ['elbowR', STANCE.groundPad.elbow],
+    ['head', STANCE.groundPad.head], ['pelvis', STANCE.groundPad.pelvis],
+  ];
+const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
   // HER SHOULDER WIDTH (shoulder joint to shoulder joint, as she stands now): her feet stand this far apart, and a crab
   // step goes this far (footGround.ts)
   ground.shoulderWidth = new THREE.Vector3().setFromMatrixPosition(arms.left.upper.matrixWorld)
@@ -1555,9 +1564,9 @@ if (uHideHead > 0.5) {
         const wantDown = stanceAsked === 'prone' || stanceAsked === 'fours';
         if (wantDown && (downW === 0 || downKind === stanceAsked)) {
           crouchW = Math.min(1, crouchW + frame.dt / STANCE.crouchSeconds);
-          if (crouchW >= 1) { if (downW === 0) downKind = stanceAsked as 'prone' | 'fours'; downW = Math.min(1, downW + frame.dt / STANCE.downSeconds); }
+          if (crouchW >= 1) { if (downW === 0) downKind = stanceAsked as 'prone' | 'fours'; downW = Math.min(1, downW + frame.dt / STANCE.downSeconds[downKind]); }
         } else {
-          downW = Math.max(0, downW - frame.dt / STANCE.upSeconds);
+          downW = Math.max(0, downW - frame.dt / STANCE.upSeconds[downKind]);
           if (downW === 0) crouchW = stanceAsked === 'stand' ? Math.max(0, crouchW - frame.dt / STANCE.crouchSeconds) : Math.min(1, crouchW + frame.dt / STANCE.crouchSeconds);
         }
       }
@@ -1603,13 +1612,21 @@ if (uHideHead > 0.5) {
         turnAbout(bone(joints.neck), leanAxis, -lean * 0.8);
       }
 
-      // ON HER BELLY OR ON ALL FOURS (groundPose.ts): her own pose for it laid over her crouch, and her whole body
-      // tipped forward about her hips and set down to the stance's height, eased together; on a slope, along it
-      if (downS > 0) {
+      // ON HER BELLY OR ON ALL FOURS (groundPose.ts): STEP BY STEP, as a person gets down (Joshua, 2026-11-21: "a more
+      // realistic transition from standing to crawling without the body sinking underground"): from her crouch her
+      // knees go to the ground (KNEELING, body upright), then her hands go forward (ALL FOURS), and for prone she lowers
+      // onto her elbows. Each step's pose is laid over the one before, her whole body tipped forward about her hips and
+      // set down to that step's height, eased together; on a slope, along it. (Before, her crouch was blended straight
+      // into the last pose: halfway she tipped forward like a falling plank, her feet and shins through the floor.)
+      if (downW > 0) {
         const going = Math.min(1, Math.abs(along) / Math.max(1e-4, frame.dt) / 0.15);
         crawlPhase = (crawlPhase + along / (downKind === 'prone' ? STANCE.proneStride : STANCE.foursStride) + 1) % 1;
-        const tip = tipOf(downKind, sizes);
-        motion.overlay(stanceTurns(downKind, crawlPhase, going, body.belly / 100, tip, motion.measure, motion.bind, stanceOut), downS);
+        downSteps(downKind, downW, steps);
+        // the poses, one over the other: kneeling over her crouch, all fours over kneeling, prone over all fours
+        motion.overlay(kneelTurns(body.belly / 100, motion.measure, motion.bind, stanceOut), steps.kneel);
+        const foursTip = tipOf('fours', sizes);
+        if (steps.fours > 0) motion.overlay(stanceTurns('fours', downKind === 'fours' ? crawlPhase : 0, downKind === 'fours' ? going : 0, body.belly / 100, foursTip, motion.measure, motion.bind, stanceOut), steps.fours);
+        if (steps.prone > 0) motion.overlay(stanceTurns('prone', crawlPhase, going, body.belly / 100, tipOf('prone', sizes), motion.measure, motion.bind, stanceOut), steps.prone);
         // (the ground's slope along the way she faces: her body lies along it)
         let slope = 0;
         if (ground.groundAt) {
@@ -1617,15 +1634,33 @@ if (uHideHead > 0.5) {
           const ahead = ground.groundAt(x + ax, z + az), behind = ground.groundAt(x - ax, z - az);
           if (Number.isFinite(ahead) && Number.isFinite(behind)) slope = Math.atan2(ahead - behind, 1.4);
         }
-        const tipNow = (tip - slope) * downS;
+        // her tip and her hips' height, step by step: kneeling's small lean, all fours' level back, prone's flat
+        let tipWant = kneelTip() * steps.kneel;
+        tipWant += (foursTip - tipWant) * steps.fours;
+        tipWant += (tipOf('prone', sizes) - tipWant) * steps.prone;
+        let hipsWant = kneelHips(sizes);
+        hipsWant += (foursHips(sizes) - hipsWant) * steps.fours;
+        hipsWant += (STANCE.proneHips - hipsWant) * steps.prone;
+        const tipNow = tipWant - slope * downS;
         fit.rotation.x = tipNow;
         hipsTipped.copy(hipsInFit).applyQuaternion(tipQ.setFromAxisAngle(X_AXIS, tipNow));
-        const hipsY = downKind === 'prone' ? STANCE.proneHips : foursHips(sizes);
-        // (from where her crouch has her, to her hips at the stance's height, where they were across the ground)
-        fit.position.x *= 1 - downS;
-        fit.position.y += (hipsY - hipsTipped.y - fit.position.y) * downS;
+        // (from where her crouch has her, to her hips at the step's height, where they were across the ground)
+        fit.position.x *= 1 - steps.kneel;
+        fit.position.y += (hipsWant - hipsTipped.y - fit.position.y) * steps.kneel;
         fit.position.z = hipsInFit.z - hipsTipped.z;
         fit.updateMatrixWorld(true);
+        // NEVER UNDER THE GROUND: the lowest of her knees, feet, hands, elbows, head and hips (each with the flesh round
+        // its joint, STANCE.groundPad) is found against the ground under it, and her whole body lifted by as much as it
+        // is under (never lowered: the steps above set her down). Measured, not guessed: whatever the blend does
+        // between two poses, nothing of her goes through the floor.
+        let under = 0;
+        for (const [name, pad] of GROUND_PADS) {
+          bones[joints[name]].getWorldPosition(padAt);
+          const floor = ground.groundAt ? ground.groundAt(padAt.x, padAt.z) : NaN;
+          const below = (Number.isFinite(floor) ? floor : root.position.y) + pad - padAt.y;
+          if (below > under) under = below;
+        }
+        if (under > 0) { fit.position.y += under / Math.max(1e-6, root.scale.y); fit.updateMatrixWorld(true); }
       } else if (fit.rotation.x !== 0) { fit.rotation.x = 0; fit.position.z = 0; }
 
       // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than

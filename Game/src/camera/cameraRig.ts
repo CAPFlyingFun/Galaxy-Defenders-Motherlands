@@ -103,11 +103,21 @@ const DISTANCE_FAR = 23; // ...and at zoom 1
 const PIVOT_NEAR = 2.1; // height of the pivot at zoom 0
 const PIVOT_FAR = 9; // ...and at zoom 1: zooming out also lifts the camera, to see over the plaza
 /**
- * The closest the third-person camera comes: HALF the old closest distance (Joshua, 2026-11-17: "make zoom double for
- * zoom inward... Out is good"). Zoom 0 is still where it was (3.2 m), so everything set before keeps its place; the
- * zoom simply goes on below 0 to here, the pivot staying at its lowest above her head.
+ * The closest the third-person camera comes: a QUARTER of zoom 0's distance, 0.8 m (Joshua, 2026-11-17: "make zoom
+ * double for zoom inward... Out is good", which made it half, 1.6 m; then 2026-11-21: "double how close you can zoom in
+ * with all the cameras"). Zoom 0 is still where it was (3.2 m), so everything set before keeps its place; the zoom
+ * simply goes on below 0 to here, the pivot staying at its lowest above her head.
  */
-export const ZOOM_MIN = -(DISTANCE_NEAR / 2) / (DISTANCE_FAR - DISTANCE_NEAR);
+export const ZOOM_MIN = -(DISTANCE_NEAR * 0.75) / (DISTANCE_FAR - DISTANCE_NEAR);
+/**
+ * THE OTHER STYLES' DISTANCES at a zoom (Joshua, 2026-11-21: "double how close you can zoom in with all the cameras"):
+ * from zoom 0 to 1 their own closest to furthest, as before; below 0 on in to HALF their old closest at ZOOM_MIN (shoulder
+ * 0.75 -> 0.38 m, side 1.8 -> 0.9 m, top 6 -> 3 m, drone 2.5 -> 1.25 m up). (They used to stop at zoom 0.)
+ */
+function styleSpan(near: number, far: number, zoom: number): number {
+  if (zoom >= 0) return near + (far - near) * Math.min(1, zoom);
+  return near * (1 - 0.5 * Math.min(1, zoom / ZOOM_MIN));
+}
 /** How far behind the pivot the third-person camera is at a zoom, metres (for Settings to show). */
 export function thirdPersonDistance(zoom: number): number {
   return DISTANCE_NEAR + (DISTANCE_FAR - DISTANCE_NEAR) * zoom;
@@ -370,7 +380,7 @@ export class CameraRig {
   /** The styles other than follow and orbit (shoulder, top, drone, cinematic). */
   private placeStyle(dt: number, heroine: HeroineBody, ease: number): void {
     const feet = heroine.root.position;
-    const zoom = clamp(this.easedZoom, 0, 1);
+    const zoom = clamp(this.easedZoom, ZOOM_MIN, 1);
     if (this.style === 'shoulder') {
       // LOCKED TO HER HEAD: looking where it looks (the middle of the screen is where she looks and aims), from behind
       // her right shoulder, a little below her eyes; it turns and tips with her head
@@ -378,7 +388,7 @@ export class CameraRig {
       const pitch = clamp(this.head.valid ? this.head.pitch : this.easedPitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax);
       this.setLook(yaw, pitch);
       const down = Math.max(0, -pitch);
-      const back = STYLE.shoulderNear + (STYLE.shoulderFar - STYLE.shoulderNear) * zoom + down * STYLE.shoulderBackPerDown;
+      const back = styleSpan(STYLE.shoulderNear, STYLE.shoulderFar, zoom) + down * STYLE.shoulderBackPerDown;
       const rightX = -Math.cos(yaw), rightZ = Math.sin(yaw);
       if (this.head.valid) this.pivot.copy(this.head.at); else this.pivot.set(feet.x, feet.y + STYLE.shoulderUp + 0.1, feet.z);
       this.pivot.x += rightX * STYLE.shoulderSide;
@@ -401,7 +411,7 @@ export class CameraRig {
       this.sideYaw += turn * (1 - Math.exp(-STYLE.sideFollow * dt));
       const out = this.style === 'sideLeft' ? 1 : -1;
       const sideX = Math.cos(this.sideYaw) * out, sideZ = -Math.sin(this.sideYaw) * out;
-      const back = STYLE.sideNear + (STYLE.sideFar - STYLE.sideNear) * zoom;
+      const back = styleSpan(STYLE.sideNear, STYLE.sideFar, zoom);
       this.easedLower += (this.lower - this.easedLower) * (1 - Math.exp(-3 * dt));
       const up = Math.max(0.25, STYLE.sideUp - this.easedLower * 0.6);
       this.camera.position.set(feet.x + sideX * back, feet.y + up, feet.z + sideZ * back);
@@ -414,7 +424,7 @@ export class CameraRig {
     if (this.style === 'top') {
       // high up, looking down at her at its own angle; the zoom takes it further up and back
       this.setLook(this.easedYaw, STYLE.topPitch);
-      const back = STYLE.topNear + (STYLE.topFar - STYLE.topNear) * zoom;
+      const back = styleSpan(STYLE.topNear, STYLE.topFar, zoom);
       this.pivot.set(feet.x, feet.y + 0.8, feet.z);
       this.camera.position.copy(this.pivot).addScaledVector(this.look, -back);
       return;
@@ -426,7 +436,7 @@ export class CameraRig {
       const step = STYLE.droneSpeed * dt;
       this.drone.x += (fx * this.droneStick.y - fz * this.droneStick.x) * step;
       this.drone.z += (fz * this.droneStick.y + fx * this.droneStick.x) * step;
-      const height = STYLE.droneLow + (STYLE.droneHigh - STYLE.droneLow) * zoom;
+      const height = styleSpan(STYLE.droneLow, STYLE.droneHigh, zoom);
       this.drone.y += (feet.y + height - this.drone.y) * ease; // (its height over her feet)
       // (near her: no further than its range)
       let dx = this.drone.x - feet.x, dz = this.drone.z - feet.z, d = Math.hypot(dx, dz);

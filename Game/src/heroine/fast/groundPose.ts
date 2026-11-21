@@ -70,9 +70,19 @@ export const STANCE = {
   crouchLean: 24,
   /** Seconds to crouch (and to stand up from a crouch). */
   crouchSeconds: 0.45,
-  /** Seconds to get down from a crouch onto her belly or hands and knees, and to get back up to a crouch. */
-  downSeconds: 1.0,
-  upSeconds: 1.2,
+  /**
+   * Seconds to get down from a crouch onto her hands and knees, and onto her belly (through kneeling and all fours:
+   * `downSteps`), and to get back up to a crouch (the same steps backward). (Was 1.0 and 1.2 for both, blended
+   * straight across; with real steps a little longer.)
+   */
+  downSeconds: { fours: 1.3, prone: 1.8 },
+  upSeconds: { fours: 1.4, prone: 1.9 },
+  /**
+   * NEVER UNDER THE GROUND (Joshua, 2026-11-21): getting down or up, if a knee, foot, hand, elbow or her head would go
+   * below the ground, her whole body is lifted until it does not. How far each joint's middle sits above the ground
+   * when it rests on it, metres (the flesh round the joint).
+   */
+  groundPad: { knee: 0.05, ankle: 0.05, wrist: 0.03, elbow: 0.04, head: 0.1, pelvis: 0.08 },
   /** Her top speeds, metres a second: crouch-walking, crawling on her belly, on all fours. */
   crouchSpeed: 0.9,
   proneSpeed: 0.35,
@@ -179,6 +189,68 @@ export function stanceTurns(
   }
   out.length = n;
   return out;
+}
+
+/**
+ * KNEELING, THE STEP BETWEEN HER CROUCH AND THE GROUND (Joshua, 2026-11-21: "a more realistic transition from standing
+ * to crawling without the body sinking underground"). As a person gets down: from the crouch her knees go to the
+ * ground first, her body still upright (leaning `KNEEL.lean` forward), her thighs straight down under her hips, her
+ * shins back along the ground, her feet on their tops, her hands on her thighs; THEN her hands go forward to the
+ * ground (all fours), and from all fours she lowers onto her elbows (prone). Before, her crouch was blended straight
+ * into the final pose, and halfway she tipped forward like a falling plank with her feet and shins through the floor.
+ */
+export const KNEEL = {
+  /** Her body's forward lean kneeling, degrees (her thighs kept straight down under it). */
+  lean: 12,
+  /** Her knees' bend: her shins straight back along the ground. */
+  knee: 92,
+  /** Her upper arms forward and her elbows bent so her hands rest on her thighs, degrees. */
+  armForward: 30,
+  elbow: 35,
+} as const;
+
+/** Her pose kneeling (see KNEEL), as turns from her bind pose, written into `out`. */
+export function kneelTurns(carry: number, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
+  while (out.length < 17) out.push({ joint: -1, ax: 0, ay: 1, az: 0, radians: 0 });
+  const j = measure.joints;
+  const left = measure.leftSign < 0 ? -1 : 1;
+  const lean = KNEEL.lean * DEG;
+  let n = 0;
+  const put = (joint: number, ax: number, ay: number, az: number, radians: number): void => {
+    const t = out[n++]; t.joint = joint; t.ax = ax; t.ay = ay; t.az = az; t.radians = radians;
+  };
+  put(j.pelvis, 0, 1, 0, 0);
+  putXZ(put, j.spine, 0, 0);
+  putXZ(put, j.chest, 0, 0);
+  // (her head kept looking ahead over her small lean)
+  putXZ(put, j.neck, -lean, 0);
+  for (const side of [0, 1] as const) {
+    const xSign = side === 0 ? left : -left;
+    arm(put, bind, side === 0 ? j.shoulderL : j.shoulderR, side === 0 ? j.elbowL : j.elbowR, side === 0 ? j.wristL : j.wristR, xSign,
+      (KNEEL.armForward + KNEEL.lean) * DEG, KNEEL.elbow * DEG, 8 * DEG);
+  }
+  // (her knees a little apart, wider round her belly, as on all fours)
+  const wide = (6 + 10 * Math.min(2, Math.max(0, carry))) * DEG;
+  for (const side of [0, 1] as const) {
+    const s = side === 0 ? left : -left;
+    leg(put, side === 0 ? j.hipL : j.hipR, side === 0 ? j.kneeL : j.kneeR, side === 0 ? j.ankleL : j.ankleR, s,
+      lean, wide, 0, KNEEL.knee * DEG, 50 * DEG);
+  }
+  out.length = n;
+  return out;
+}
+/** Kneeling: her whole body's forward tip, radians (her lean), and her hips' height (her thigh down to her knee). */
+export function kneelTip(): number { return KNEEL.lean * DEG; }
+export function kneelHips(sizes: BodySizes): number { return foursHips(sizes); }
+
+/**
+ * HOW FAR ALONG EACH STEP OF GETTING DOWN SHE IS, from how far down she is (`down`, 0 crouched .. 1 down): kneeling,
+ * then all fours, then (prone only) onto her elbows, each 0..1, overlapping a little so it flows.
+ */
+export function downSteps(kind: 'prone' | 'fours', down: number, out: { kneel: number; fours: number; prone: number }): void {
+  const part = (from: number, to: number): number => { const t = Math.max(0, Math.min(1, (down - from) / (to - from))); return t * t * (3 - 2 * t); };
+  if (kind === 'fours') { out.kneel = part(0, 0.5); out.fours = part(0.42, 1); out.prone = 0; }
+  else { out.kneel = part(0, 0.34); out.fours = part(0.28, 0.62); out.prone = part(0.56, 1); }
 }
 
 /** The forward tip of her whole body in a stance, radians (prone: flat; on all fours: her back about level). */

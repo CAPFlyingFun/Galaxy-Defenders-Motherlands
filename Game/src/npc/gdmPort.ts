@@ -78,6 +78,12 @@ export class GdmActorPort implements NpcPort {
 
   locate(id: string): Point | null { return this.actor.locate(id); }
 
+  /** How many shots a fire order has fired so far (for the thought bubble, npc/thoughts.ts). */
+  firedFor(commandId: string): number {
+    const start = this.shotsAtStart.get(commandId);
+    return start === undefined ? 0 : this.actor.wants.shots - start;
+  }
+
   /** Walking: the port only says where; the character's frame walks them there (and the walls stop them). */
   moveTo(point: Point, stopDistance: number): TaskResult {
     const p = this.actor.position();

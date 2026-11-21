@@ -658,6 +658,15 @@ use the game's single copy of three.js.
   stick). Checked in the town map: John standing by in AUTO drew and fired on his own; swapped to, his brain stood
   down ("Player takeover"); swapped back, he fought on. Test pages: `gdm.swap()`, `gdm.brain('john')`, `gdm.kitOf(name)`.
   NOT YET: they do not walk anywhere on their own (no places for food, water or rest), no cover or dodging.
+  THE THOUGHT BUBBLE (v0.2.137; Joshua, 2026-11-21: "draw over John his state of mind 🧠 that way I can know what it's
+  'Thinking' and if it's working"; Blaze runs the same brain while John is played): `ui/thoughtBubble.ts` (+ .css), its
+  words from `npc/thoughts.ts` `thoughtLines`: who, AUTO/MANUAL and rounds; what the brain does NOW (its active order,
+  shots fired / seconds left); WHY (🎯 `AutoCombat.thought`, 🩺 `NeedsRoutine.thought`: the last decision of each, for
+  show only); the next order; how the last ended (✓ / ⏸ / ✗ and the reason); needs and danger as the brain sees them. A
+  page element over the one STANDING BY's head (their eye + 0.3 m, projected each frame; words 10 a second), never
+  below 55% of the screen, under every control, no touch. OUT OF VIEW (aside, behind, past 80 m) it DOCKS at the top
+  middle with ◀ or ▶ their way (pushed to the edge it hid under the vitals card or 🔄/⚙️ at 932 x 430). Settings ->
+  TEST TOOLS -> AI thoughts (`gdm.npcThoughts`, `?thoughts=off`; on by default while the brain is tested; live).
 - BACK TO v0.2.129 (Joshua, 2026-11-21, 15:11): after crashes on his iPhone the game went back to v0.2.126 (14:51),
   which then ran again ("It's working now... on v126"), so the crashes look like the phone's state (memory, stored
   files) more than the code; then "revert to v129... that will be easier". Kept on other branches, not live:

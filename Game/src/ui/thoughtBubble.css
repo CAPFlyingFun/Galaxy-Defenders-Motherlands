@@ -1,0 +1,48 @@
+/* ============================================================================
+   thoughtBubble.css -- the look of the thought bubble over the one standing by (thoughtBubble.ts).
+
+   A small dark card with a teal edge (the HUD's colours) and a little tail under its middle pointing at their head.
+   It never takes a touch (pointer-events: none), so it can never get in the way of a drag or a button.
+   ============================================================================ */
+
+.gd-thought {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* (thoughtBubble.ts moves it with a transform: to their head on screen, then up by its own height) */
+  transform: translate(-9999px, -9999px);
+  pointer-events: none;
+  max-width: 200px;
+  padding: 3px 7px 4px;
+  border: 1px solid rgba(94, 232, 200, 0.55);
+  border-radius: 8px;
+  background: rgba(16, 26, 46, 0.78);
+  color: #eaf2ff;
+  font: 10px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  /* (a gap under it for the tail) */
+  margin-top: -8px;
+  will-change: transform;
+}
+.gd-thought[hidden] { display: none; }
+/* DOCKED at the top middle (they are out of view): no tail, a little fainter, so it reads as "over there" */
+.gd-thought.is-docked { opacity: 0.85; }
+.gd-thought.is-docked::after { display: none; }
+.gd-thought pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+}
+/* THE TAIL: a small turned square under the card's middle, the card's colour and edge */
+.gd-thought::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  background: rgba(16, 26, 46, 0.78);
+  border-right: 1px solid rgba(94, 232, 200, 0.55);
+  border-bottom: 1px solid rgba(94, 232, 200, 0.55);
+  transform: rotate(45deg);
+}

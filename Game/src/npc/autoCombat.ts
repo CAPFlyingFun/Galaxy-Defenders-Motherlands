@@ -23,6 +23,12 @@ export const AUTO_COMBAT = {
 
 export class AutoCombat {
   private since = 0;
+  /**
+   * WHAT IT IS THINKING (Joshua, 2026-11-21: "draw over John his state of mind 🧠 that way I can know what it's
+   * 'Thinking' and if it's working"): the reason for its last decision, in a few words, for the thought bubble over
+   * them (ui/thoughtBubble.ts, npc/thoughts.ts). Only read for show: nothing decides by it.
+   */
+  thought = '';
 
   /**
    * @param brain  this character's brain
@@ -34,36 +40,42 @@ export class AutoCombat {
     private readonly pick: () => string | null) {}
 
   tick(dt: number): void {
-    if (this.brain.controlMode !== 'ai') return;
+    if (this.brain.controlMode !== 'ai') { this.thought = 'Player has control'; return; }
     this.since += dt;
     if (this.since < AUTO_COMBAT.everySeconds) return;
     this.since = 0;
     const a = this.actor;
     // (MANUAL: nothing of their own; guns lowered if this was aiming them)
     if (!a.auto()) {
+      this.thought = 'MANUAL: holding fire';
       if (this.brain.hasGroup('auto')) this.brain.cancelGroup('auto');
       if (a.wants.aimAt || a.wants.fire) this.port.stopFiring();
       return;
     }
     // (one fight order at a time; and not over something more important, or while their hands are taken)
-    if (this.brain.hasGroup('auto')) return;
+    if (this.brain.hasGroup('auto')) return;   // (its thought stays the one that gave that order)
     const doing = this.brain.active;
-    if (doing && doing.priority > AUTO_COMBAT.priority) return;
-    if (a.occupied()) { if (a.wants.aimAt) this.port.stopFiring(); return; }
+    if (doing && doing.priority > AUTO_COMBAT.priority) { this.thought = 'A need comes first'; return; }
+    if (a.occupied()) { this.thought = 'Hands busy: waiting'; if (a.wants.aimAt) this.port.stopFiring(); return; }
     const order = { group: 'auto', priority: AUTO_COMBAT.priority, source: 'routine' as const };
     // guns away: out they come
     if (!a.hasGun('left') && !a.hasGun('right')) {
-      if (a.holstered('left') || a.holstered('right')) this.brain.enqueue({ kind: 'draw', ...order, timeoutSeconds: 6 });
+      if (a.holstered('left') || a.holstered('right')) {
+        this.thought = 'Guns holstered: drawing';
+        this.brain.enqueue({ kind: 'draw', ...order, timeoutSeconds: 6 });
+      } else this.thought = 'No guns: on the table?';
       return;
     }
     // both guns empty: reload (the belt first, else the table)
     if (a.rounds('left') <= 0 && a.rounds('right') <= 0) {
-      if (!a.reloading()) this.brain.enqueue({ kind: 'reload', ...order, timeoutSeconds: 40 });
+      if (!a.reloading()) { this.thought = 'Both guns empty: reload'; this.brain.enqueue({ kind: 'reload', ...order, timeoutSeconds: 40 }); }
+      else this.thought = 'Reload under way';
       return;
     }
     // a target: fire at it
     const target = this.pick();
-    if (target === null) { this.port.stopFiring(); return; }
+    if (target === null) { this.thought = 'No target in sight'; this.port.stopFiring(); return; }
+    this.thought = `${target.replace(':', ' ')} is nearest: fire`;
     this.brain.enqueue({ kind: 'fireAt', targetId: target, mode: 'utility', maxShots: AUTO_COMBAT.shotsPerOrder, ...order, timeoutSeconds: 8 });
   }
 }

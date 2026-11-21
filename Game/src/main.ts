@@ -54,7 +54,8 @@ import type { BeltGear } from './heroine/fast/beltGear';
 import { BurstFire } from './world/burstFire';
 import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 // (the NPC brain, ChatGPT's template fitted to this game: one per character, src/npc/)
-import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, type ActorHooks, type ActorWants } from './npc';
+import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, thoughtLines, type ActorHooks, type ActorWants } from './npc';
+import { ThoughtBubble } from './ui/thoughtBubble';
 
 /**
  * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
@@ -447,6 +448,12 @@ async function start(): Promise<void> {
   /** The detail of the one standing by: the player's within 20 m on a phone (always on a computer), then down to 1 %
    *  over 10 m (heroine/fast/otherDetail.ts). */
   const otherDetail = new OtherDetail();
+  /** THE THOUGHT BUBBLE over the one standing by: what their brain is thinking (ui/thoughtBubble.ts; Settings -> TEST
+   *  TOOLS -> AI thoughts). Put into the UI layer first, so every control is drawn over it. */
+  const thoughtBubble = new ThoughtBubble(uiHost);
+  const thoughtAt = new THREE.Vector3();
+  /** How far above their eyes the bubble's tail points, metres (clear of the top of the head). */
+  const THOUGHT_ABOVE = 0.3;
   /**
    * JOHN'S DETAIL, FIXED (Joshua, 2026-11-21: v0.2.128 froze on his iPhone about 10 s in; "Put him at 1% detail. If that
    * works, then we can do the face and hands only and try again… and slowly add more"). John is drawn at this ONE level,
@@ -2176,6 +2183,22 @@ async function start(): Promise<void> {
       const week = plan.lapseWeek;
       hud.showBelly(belly, week === null ? null : weekText(week), true);
       if (week === null) saveSetting('belly', graphics.belly); // (it has stopped at her delivery week: kept)
+    }
+
+    // THE THOUGHT BUBBLE over the one standing by (Settings -> TEST TOOLS -> AI thoughts): just above their head, now
+    // that the camera has moved for this frame; their brain's lines (npc/thoughts.ts), written 10 times a second
+    {
+      const other = bystander();
+      if (other && other.brain && other.port && graphics.npcThoughts === 'on') {
+        other.body.eye(thoughtAt);
+        thoughtAt.y += THOUGHT_ABOVE;
+        const h = other.body.hands, k = other.kit;
+        thoughtBubble.update(realDt, rig.camera, thoughtAt, () => thoughtLines({
+          name: other.name, brain: other.brain!, port: other.port!, combat: other.combat, needs: other.needs,
+          auto: other.autoFire === 'on',
+          rounds: { left: h?.hasGun('left') ? k.tableUse.rounds.left : null, right: h?.hasGun('right') ? k.tableUse.rounds.right : null },
+        }));
+      } else thoughtBubble.hide();
     }
 
     // 6. Draw.

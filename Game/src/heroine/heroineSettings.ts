@@ -134,6 +134,12 @@ export interface HeroineSettings {
   vitalsStyle: 'list' | 'gauges';
   /** Units for her speed and temperature (Joshua: "Both, with imperial and metric units in settings"). Live. */
   units: 'imperial' | 'metric' | 'both';
+  /**
+   * THE THOUGHT BUBBLE over the one standing by (Joshua, 2026-11-21: "draw over John his state of mind 🧠 that way I can
+   * know what it's 'Thinking' and if it's working"; ui/thoughtBubble.ts, npc/thoughts.ts). On while the brain is being
+   * tested. Live.
+   */
+  npcThoughts: 'on' | 'off';
 }
 
 
@@ -234,6 +240,7 @@ export const SETTING_KEYS = Object.freeze({
   bodyClock: 'gdm.bodyClock',
   vitalsStyle: 'gdm.vitalsStyle',
   units: 'gdm.units',
+  npcThoughts: 'gdm.npcThoughts',
 });
 
 function read(key: string): string | null {
@@ -321,5 +328,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     // (the list unless the gauges were chosen; both units unless one was)
     vitalsStyle: (address.get('vitals') ?? read(SETTING_KEYS.vitalsStyle)) === 'gauges' ? 'gauges' : 'list',
     units: ((v) => (v === 'imperial' || v === 'metric' ? v : 'both'))(address.get('units') ?? read(SETTING_KEYS.units)),
+    // (on unless hidden: it is for testing the brain)
+    npcThoughts: (address.get('thoughts') ?? read(SETTING_KEYS.npcThoughts)) === 'off' ? 'off' : 'on',
   };
 }

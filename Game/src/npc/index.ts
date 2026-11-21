@@ -5,3 +5,4 @@ export * from './brain';
 export * from './routines';
 export * from './gdmPort';
 export * from './autoCombat';
+export * from './thoughts';

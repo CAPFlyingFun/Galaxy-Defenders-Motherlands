@@ -33,17 +33,20 @@ export const DEFAULT_PREFERENCES: NpcPreferences = Object.freeze({
 
 export class NeedsRoutine {
   private since = 0;
+  /** WHAT IT IS THINKING about their needs, in a few words, for the thought bubble (npc/thoughts.ts). Only for show. */
+  thought = '';
   constructor(private readonly brain: NpcBrain, private readonly places: DailyLocations = {},
     private readonly preferences: NpcPreferences = DEFAULT_PREFERENCES) {}
 
   tick(dt: number): void {
-    if (this.brain.controlMode !== 'ai') return;
+    if (this.brain.controlMode !== 'ai') { this.thought = ''; return; }
     this.since += dt;
     if (this.since < this.preferences.checkEverySeconds) return;
     this.since = 0;
     const o = this.brain.port.observe();
-    if (o.storyLocked || o.incapacitated) return;
+    if (o.storyLocked || o.incapacitated) { this.thought = o.storyLocked ? 'The story has them' : 'Cannot act'; return; }
     const p = this.preferences, n = o.needs;
+    const pct = (v: number): string => `${Math.round(v * 100)}%`;
     /** A need's orders: walk to its place first if it has one, then the action; all in one group, done once. */
     const seq = (group: string, priority: number, destination: string | undefined, actions: Command[]): void => {
       if (this.brain.hasGroup(group)) return;
@@ -53,10 +56,16 @@ export class NeedsRoutine {
     };
     // THE BATHROOM comes first even in danger (the game's own rule: at full she goes whatever is happening)
     if (n.bathroom >= p.bathroomHigh) {
+      this.thought = `🚽 ${pct(n.bathroom)}: has to go${n.bathroom >= 0.97 ? ' NOW' : ''}`;
       seq('need:bathroom', n.bathroom >= 0.97 ? 99 : 82, this.places.bathroomId, [{ kind: 'holster' }, { kind: 'useBathroom', seconds: 10 }]);
       return;
     }
-    if (o.danger > 0.4) return;
+    if (o.danger > 0.4) { this.thought = 'Danger: needs can wait'; return; }
+    // (what they would do if they could: food, water and rest wait for places to go to)
+    this.thought = n.water < p.waterLow ? `💧 ${pct(n.water)}: thirsty${this.places.waterStationId ? '' : ', no water here'}`
+      : n.food < p.foodLow ? `🍽️ ${pct(n.food)}: hungry${this.places.foodStationId ? '' : ', no food here'}`
+      : n.energy < p.energyLow ? `🔋 ${pct(n.energy)}: tired${this.places.bedId ? '' : ', no bed here'}`
+      : 'Needs are fine';
     if (n.water < p.waterLow && this.places.waterStationId) {
       seq('need:water', 75, this.places.waterStationId, [{ kind: 'drink', waterMl: 250, seconds: 2 }]);
     } else if (n.food < p.foodLow && this.places.foodStationId) {

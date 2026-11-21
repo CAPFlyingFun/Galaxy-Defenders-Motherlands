@@ -58,13 +58,11 @@ export const WINDED = {
   /** How far in toward her middle her fingers point down her thighs (0 straight down them). */
   fingersIn: 0.45,
   /**
-   * HER EYES ON HER FEET (Joshua: "look more at her feet which would naturally make her look at her chest/belly"): her
-   * gaze this far below level, degrees; her head tips down by what her bent back does not already give (a fixed 70
-   * on top of her bend had her face pointing back at her shins once she leaned in further).
+   * HER HEAD BOWED AS FAR AS IT GOES, ON HER BENT BACK (Joshua, 2026-11-20: "have it at the max downward angle
+   * relative to the torso as the head doesn't offset off the torso"): her chin to her chest, degrees from her back's
+   * own line, whatever her bend; first person the view looks the same way (past straight down: src/main.ts).
    */
-  gaze: 100,
-  /** ...as far as her neck bends then, degrees (her chin to her chest). */
-  headDownMost: 75,
+  headDown: 65,
   /** Her thigh's front, from its bone, just above her knee, metres (her palm rests on it). */
   thighFront: 0.06,
 } as const;

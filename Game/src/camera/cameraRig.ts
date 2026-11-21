@@ -253,7 +253,8 @@ export class CameraRig {
     this.yaw -= pixelsX * LOOK_SPEED;
     this.pitch -= pixelsY * LOOK_SPEED;
     this.pitch =
-      this.mode === 'first' ? clamp(this.pitch, FIRST_PITCH_MIN, FIRST_PITCH_MAX)
+      // (first person: never pulled up past the limit at a jump, if her bowed head had the view further down: main.ts)
+      this.mode === 'first' ? clamp(this.pitch, Math.min(FIRST_PITCH_MIN, this.pitch + pixelsY * LOOK_SPEED), FIRST_PITCH_MAX)
         : this.style === 'top' ? STYLE.topPitch // (top looks down at its own angle: a drag turns it only)
         : this.style === 'shoulder' ? clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax)
         : this.style === 'drone' ? clamp(this.pitch, -1.5, 0.6)

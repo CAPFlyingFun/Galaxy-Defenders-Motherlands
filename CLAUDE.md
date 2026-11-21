@@ -308,10 +308,12 @@ use the game's single copy of three.js.
   (lowerBody.ts `bendOver`: most at her hips, leaning in to 50 if her hands fall short, NEVER her hips forward: with
   them forward she tipped over her toes, "over halfway to fall over"), a deeper squat (Joshua: "a
   slight more squat so her hands are closer to her knee"; hips down 0.36 of her leg, knees out round her belly), both
-  palms (guns and all) on her thighs 7 cm above her knees, her eyes on her feet, 100 degrees below level, her head tipping down by what her bend does not give (at most 75;
-  "look more at her feet"); eased in 0.6 s, back up over the
-  hold's last 1 s; no aiming or firing; first person the view tips down to 85 degrees (her chest, belly and feet)
-  unless turned. HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  palms (guns and all) on her thighs 7 cm above her knees, her head bowed as far as it goes ON HER BENT BACK, chin to chest, 65 degrees from her back's line
+  (Joshua: "the max downward angle relative to the torso as the head doesn't offset off the torso"; `WINDED.headDown`); eased in 0.6 s, back up over the
+  hold's last 1 s; no aiming or firing; FIRST PERSON the view looks the same way, her bend (`bentNow`) plus her head's bow, PAST
+  STRAIGHT DOWN (about 115 degrees: her chest, belly and hands on her knees), the camera's own YXZ turn keeping her
+  forward at the top of the screen as a bowed head does; turning the view gives it up where it is (the first-person
+  limit is otherwise 89 down, 83 up; no side limit except at the table, bars and door, 90 each way, 70 up and down). HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all

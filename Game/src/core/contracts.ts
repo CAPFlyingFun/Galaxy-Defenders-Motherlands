@@ -228,6 +228,8 @@ export interface HeroineBody {
    * game eases it in and out.
    */
   setWinded?(weight: number): void;
+  /** How far she is bent forward now, radians (her hips and back together); 0 standing. */
+  bentNow?(): number;
   /** Wet her all over at once (Settings -> TEST TOOLS -> Get wet). */
   soakSkin?(): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

@@ -1153,6 +1153,8 @@ if (uHideHead > 0.5) {
     stopBellyLook(): void { bellyHand.stopLook(); },
     // WINDED (groundPose.ts WINDED): bent over, hands on her knees, by this much (0..1; the game eases it)
     setWinded(weight: number): void { windedW = Math.max(0, Math.min(1, weight)); },
+    // (how far she is bent forward now, radians: her hips and back, as lowerBody.ts bends her)
+    bentNow(): number { return lower.bentNow; },
     // (for test pages: where her main joints are now, world metres)
     jointsNow(): Record<string, [number, number, number]> {
       const out: Record<string, [number, number, number]> = {}, v = new THREE.Vector3();
@@ -1477,13 +1479,9 @@ if (uHideHead > 0.5) {
         headYaw += wrap(Math.atan2(dx, dz) - headYaw) * looking * Math.min(1, flat / 0.15);
         headTip += (Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)) - headTip) * looking;
       }
-      // WINDED, SHE LOOKS DOWN AT HER FEET (Joshua, 2026-11-20: "make her head look more at her feet which would
-      // naturally make her look at her chest/belly"): her head tipped down to WINDED.gaze below level, less what her bent back gives
-      // (her eyes on her feet: her gaze WINDED.gaze below level, of which her bent back already gives `bentNow`)
-      if (windedS > 0) {
-        const down = Math.max(0, Math.min(WINDED.headDownMost * (Math.PI / 180), WINDED.gaze * (Math.PI / 180) - lower.bentNow));
-        headTip += (-down - headTip) * windedS;
-      }
+      // WINDED, HER HEAD BOWED AS FAR AS IT GOES ON HER BENT BACK (Joshua, 2026-11-20: "have it at the max downward
+      // angle relative to the torso as the head doesn't offset off the torso"): chin to chest, WINDED.headDown
+      if (windedS > 0) headTip += (-WINDED.headDown * (Math.PI / 180) - headTip) * windedS;
       const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
       if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
@@ -1494,7 +1492,7 @@ if (uHideHead > 0.5) {
         const yaw = headYaw;
         tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
         // (looking down at her belly her neck bends further than it does otherwise: LOOK_TIP_MOST)
-        const most = Math.max(HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * looking, HEAD_TIP_MOST + (WINDED.headDownMost * (Math.PI / 180) - HEAD_TIP_MOST) * windedS);
+        const most = Math.max(HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * looking, HEAD_TIP_MOST + (WINDED.headDown * (Math.PI / 180) - HEAD_TIP_MOST) * windedS);
         const angle = Math.max(-most, Math.min(most, tip));
         for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, angle * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
       }

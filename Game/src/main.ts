@@ -18,7 +18,7 @@ import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
-import { STANCE } from './heroine/fast/groundPose';
+import { STANCE, WINDED } from './heroine/fast/groundPose';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -198,11 +198,6 @@ const GAIT_KEEP = 1.4;
 /** WINDED (Joshua, 2026-11-20): she bends over in this long, seconds, and straightens up over the hold's last so many. */
 const WINDED_IN = 0.6;
 const WINDED_OUT = 1.0;
-/**
- * ...and in first person the view tips down this far with her, at her chest and belly and on to her feet (radians, 85
- * degrees: Joshua, "make her head look more at her feet"; 75 was "too high up"), unless the player turns it.
- */
-const WINDED_VIEW_PITCH = -85 * Math.PI / 180;
 /**
  * HOLDING HER BELLY UP AS SHE RUNS (Joshua, 2026-11-20: "from a run and up"; "anything over 30 weeks"): on from this
  * pace level (3 is a run: most of the way there), off again below the other (a little room, so it does not flicker), and
@@ -1472,7 +1467,10 @@ async function start(): Promise<void> {
           wantPitch = (Math.atan2(lookSpot.y - eyeAt.y, Math.max(0.05, flat)) - basePitch) * w;
         } else if (windedWeight > 0 && !g.windedOff) {
           if (looked) g.windedOff = true;
-          else wantPitch = Math.min(0, WINDED_VIEW_PITCH - basePitch) * windedWeight;
+          // (WINDED, FIRST PERSON: the view looks the way her bowed head does, her bend and her head's own bow together
+          //  (Joshua: "the max downward angle relative to the torso"): past straight down, at her chest, belly and
+          //  knees; the camera's own turn about its side keeps her forward at the top of the screen, as a bowed head does)
+          else wantPitch = Math.min(0, -(heroine.bentNow?.() ?? 0) - WINDED.headDown * Math.PI / 180 - basePitch) * windedWeight;
         }
       }
       if (looked && (g.yaw !== 0 || g.pitch !== 0)) {

@@ -23,13 +23,18 @@ use the game's single copy of three.js.
   for later themes (island, countryside).
 - Cameras: third person (default: drag to rotate, pinch to zoom, auto-aim) and first person (camera at her head
   bone, offset so looking down shows her belly, as in Beyond Extinction; manual aim and fire). No jumping.
-  FIRST PERSON AT HER REAL EYES (Joshua, 2026-11-19: "measure at the eye balls... tilt the head down 70 degrees, how far
-  forward... place the camera accordingly"; `fastHeroine.ts` `eye(out, pitch)`): measured on her, the middle of her
-  eyeballs is 7.5 cm ahead of and 5.1 cm above the base of her skull (1.595 m standing); the camera's tilt is half her
-  neck bending at its base, half her head nodding, so 70 degrees down brings her eyes 6.4 cm (2.5") forward and 13.7 cm
-  (5.4") lower (Joshua's own guess for himself: 6" forward, 4" lower). Before, the eye sat 2 cm in front of her face.
-  RAISED 10 cm (Joshua, 2026-11-19: "part of the lens is cutting into her chest"; `EYE_LIFT`): straight up from there,
-  so her bust stays outside the camera's nearest 6 cm looking down.
+  FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
+  touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
+  `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL at her eyes' height (7.5 cm ahead of and 5.1 cm above its
+  base), just in front of her face (measured from her own skin at load: "[first person] her face stands X cm ahead of her
+  eyes", Blaze 3.7) plus 5 mm; it turns, tips and bobs with her head; her head and hair are drawn. Where the player looks
+  is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
+  same for all directions"): 75 degrees down, 55 up (`HEAD_DOWN_MOST`, `HEAD_UP_MOST`; his research: 45-60 up, 70-80
+  down), her torso's lean (`torsoLean`, pelvis to neck) added, so bent over 42 winded her head reaches 117 down in the
+  world, and on all fours (67) level is past her reach (12 down). Sideways: the five yaw bands (her head 90, then her
+  body turns). Her own looks (at a kick, bowed winded) move her head and so the view; turning the view frees her head
+  where it is (`freeLook`), firing ends a kick look. Settings -> CAMERA -> 1st person eye offset (`gdm.eyeForward`,
+  `?eye=`, -6..10 cm): Joshua tunes it in game and sends the number.
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.
@@ -298,8 +303,8 @@ use the game's single copy of three.js.
   hollow), none in her.
   WHEN, AND WHICH HANDS (Joshua, 2026-11-20, bellyTouch.ts `BELLY_TOUCH`): 35% of kicks call a hand, 3-7 s after the
   kick; it rests 3-7 s; on 40% of touches she LOOKS, 2-3 s after her hand lands (1 s down, 0.5 s, 1 s up) and her hands
-  let go as her head comes back up. First person the view does the look (main.ts `herLook`, laid over the player's view,
-  taken off again each frame); turning the view stops it where it is, firing eases it back; no look while firing, 3 s
+  let go as her head comes back up. First person the view does the look (the camera is her head); turning the view frees her
+  head where it is, firing eases it back; no look while firing, 3 s
   after, or from a run. With both hands free, 1 in 3 touches put the other hand opposite round her belly (180 degrees
   +-25). HOLDING HER BELLY UP (Joshua: "from a run and up", "anything over 30 weeks"): a free hand under its low curve
   toward its own side, fingers forward and in, as far under as her arm reaches (`startSupport` searches the egg),
@@ -310,10 +315,9 @@ use the game's single copy of three.js.
   slight more squat so her hands are closer to her knee"; hips down 0.36 of her leg, knees out round her belly), both
   palms (guns and all) on her thighs 7 cm above her knees, her head bowed as far as it goes ON HER BENT BACK, chin to chest, 65 degrees from her back's line
   (Joshua: "the max downward angle relative to the torso as the head doesn't offset off the torso"; `WINDED.headDown`); eased in 0.6 s, back up over the
-  hold's last 1 s; no aiming or firing; FIRST PERSON the view looks the same way, her bend (`bentNow`) plus her head's bow, PAST
-  STRAIGHT DOWN (about 115 degrees: her chest, belly and hands on her knees), the camera's own YXZ turn keeping her
-  forward at the top of the screen as a bowed head does; turning the view gives it up where it is (the first-person
-  limit is otherwise 89 down, 83 up; no side limit except at the table, bars and door, 90 each way, 70 up and down). HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  hold's last 1 s; no aiming or firing; FIRST PERSON the view is her bowed head (about 117 degrees down in the world: her chest,
+  belly and hands on her knees); turning the view frees her head (no side limit except at the table, bars and door, 90
+  each way, 70 up and down). HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all

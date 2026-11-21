@@ -131,6 +131,10 @@ function clamp(value: number, low: number, high: number): number {
 
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
+  /** First person: the pitch her head can look at, radians [down, up] (her neck's reach; until she says, the old limits). */
+  private readonly firstRange: [number, number] = [FIRST_PITCH_MIN, FIRST_PITCH_MAX];
+  /** Which way the camera looks now (a unit direction, world). */
+  get lookDirection(): THREE.Vector3 { return this.look; }
   mode: ViewMode = 'third';
   /** The third-person camera's style (CAM button). */
   style: CameraStyle = 'follow';
@@ -253,8 +257,8 @@ export class CameraRig {
     this.yaw -= pixelsX * LOOK_SPEED;
     this.pitch -= pixelsY * LOOK_SPEED;
     this.pitch =
-      // (first person: never pulled up past the limit at a jump, if her bowed head had the view further down: main.ts)
-      this.mode === 'first' ? clamp(this.pitch, Math.min(FIRST_PITCH_MIN, this.pitch + pixelsY * LOOK_SPEED), FIRST_PITCH_MAX)
+      // (first person: as far up and down as her neck reaches from her torso's line, as it was last frame)
+      this.mode === 'first' ? clamp(this.pitch, this.firstRange[0], this.firstRange[1])
         : this.style === 'top' ? STYLE.topPitch // (top looks down at its own angle: a drag turns it only)
         : this.style === 'shoulder' ? clamp(this.pitch, STYLE.shoulderPitchMin, STYLE.shoulderPitchMax)
         : this.style === 'drone' ? clamp(this.pitch, -1.5, 0.6)
@@ -269,9 +273,21 @@ export class CameraRig {
   /** Once per frame, after the heroine has moved: put the camera where it belongs. */
   update(dt: number, heroine: HeroineBody): void {
     if (this.mode === 'first') {
-      // (her eyes as her head and neck would carry them looking this far up or down: fastHeroine.ts `eye`)
-      heroine.eye(this.camera.position, this.pitch);
-      this.setLook(this.yaw, this.pitch);
+      // FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head... offset forward at touch and keep same eye
+      // height like in Beyond Extinction... as it can only bend what the head can do"): the camera is fixed to her
+      // skull, just clear of her face (fastHeroine.ts `eyeView`); it turns, tips and bobs with her head. Where the
+      // player looks (yaw, pitch) is where her head is asked to look; the pitch is kept within her neck's reach from
+      // her torso's line, so dragging past it does nothing (left and right: past 90 degrees her body turns).
+      const range = heroine.headPitchRange?.();
+      if (range) { this.firstRange[0] = range[0]; this.firstRange[1] = range[1]; }
+      this.pitch = clamp(this.pitch, this.firstRange[0], this.firstRange[1]);
+      if (heroine.eyeView) {
+        heroine.eyeView(this.camera.position, this.camera.quaternion);
+        this.look.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+      } else {
+        heroine.eye(this.camera.position, this.pitch);
+        this.setLook(this.yaw, this.pitch);
+      }
       return;
     }
 

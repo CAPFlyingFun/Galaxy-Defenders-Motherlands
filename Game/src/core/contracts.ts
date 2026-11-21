@@ -228,8 +228,27 @@ export interface HeroineBody {
    * game eases it in and out.
    */
   setWinded?(weight: number): void;
+  /**
+   * FIRST PERSON IS HER HEAD (Joshua, 2026-11-20): the camera's place and turn, fixed to her skull at her eyes' height,
+   * just clear of her face; it looks where her head looks (her neck's reach is her view's limit).
+   */
+  eyeView?(position: THREE.Vector3, quaternion: THREE.Quaternion): void;
+  /** The world pitch her head can look at now, radians [down, up]: her neck's reach from her torso's own line. */
+  headPitchRange?(): readonly [number, number];
+  /** The player's own forward (+) or back offset for that camera, metres (Settings -> CAMERA). */
+  setEyeForward?(metres: number): void;
+  /**
+   * The player turned the first-person view: her own looks give way (a look down at a kick, bowed winded) and her head
+   * goes where the player looks (winded: until she stands up).
+   */
+  freeLook?(): void;
   /** How far she is bent forward now, radians (her hips and back together); 0 standing. */
   bentNow?(): number;
+  /**
+   * How far her torso leans forward of how she stands, radians (+ forward), whatever her pose: first person, her
+   * head's up and down limits go with it (Joshua, 2026-11-20: "relative to the torso's angle").
+   */
+  torsoLean?(): number;
   /** Wet her all over at once (Settings -> TEST TOOLS -> Get wet). */
   soakSkin?(): void;
   /** Her belly's size now, percent (optional: a body that does not say is taken to be at its look's own size). */

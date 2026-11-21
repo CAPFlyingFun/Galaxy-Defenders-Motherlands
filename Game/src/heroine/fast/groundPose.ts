@@ -57,12 +57,8 @@ export const WINDED = {
   aboveKnee: 0.07,
   /** How far in toward her middle her fingers point down her thighs (0 straight down them). */
   fingersIn: 0.45,
-  /**
-   * HER HEAD BOWED AS FAR AS IT GOES, ON HER BENT BACK (Joshua, 2026-11-20: "have it at the max downward angle
-   * relative to the torso as the head doesn't offset off the torso"): her chin to her chest, degrees from her back's
-   * own line, whatever her bend; first person the view looks the same way (past straight down: src/main.ts).
-   */
-  headDown: 65,
+  // (HER HEAD BOWED AS FAR AS IT GOES ON HER BENT BACK: her neck's own reach down from her torso's line,
+  //  fastHeroine.ts `HEAD_DOWN_MOST`; first person the camera is her head, so the view goes with it)
   /** Her thigh's front, from its bone, just above her knee, metres (her palm rests on it). */
   thighFront: 0.06,
 } as const;

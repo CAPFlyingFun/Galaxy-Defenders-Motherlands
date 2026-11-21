@@ -18,7 +18,7 @@ import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showSplashError } from './ui/splash';
 import { setRestart } from './core/restart';
-import { STANCE, WINDED } from './heroine/fast/groundPose';
+import { STANCE } from './heroine/fast/groundPose';
 import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
@@ -582,11 +582,7 @@ async function start(): Promise<void> {
   let headDoing = 0;
   /** First person: how far the view is tipped down on top of the player's look, glancing at a holster (radians). */
   let fpGlance = 0;
-  // FIRST PERSON, HER OWN LOOKS LAID OVER THE PLAYER'S VIEW (Joshua, 2026-11-20): down at her hand where the baby
-  // kicked (heroine/fast/bellyTouch.ts), and down while she is bent over winded. Each frame's is taken off again
-  // before the next is laid on, so the player's own aim is never moved; turning the view gives way at once (the view
-  // stays where it is, `off`), and while it is laid on, it was not the player who moved it.
-  const herLook = { yaw: 0, pitch: 0, off: false, windedOff: false };
+  // (where her look down at a kick is: heroine/fast/bellyTouch.ts)
   const lookSpot = new THREE.Vector3();
   /** Holding her belly up as she runs (Joshua: "from a run and up"; "anything over 30 weeks"), with a little room each way. */
   let supporting = false;
@@ -1350,7 +1346,10 @@ async function start(): Promise<void> {
       }
     }
     actionPitch += (actionPitchWant - actionPitch) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
-    turn.headPitch = rig.mode === 'third' ? actionPitch : 0;
+    // (first person her head looks where the player looks, up and down too: the camera is on her head, so the view is
+    //  what her neck can reach: fastHeroine.ts `eyeView`)
+    turn.headPitch = rig.mode === 'third' ? actionPitch : rig.pitch;
+    heroine.setEyeForward?.(graphics.eyeForward / 100);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)
     keyLight.position.set(motion.x - 4, feetY + 10, motion.z + 6);
@@ -1448,39 +1447,17 @@ async function start(): Promise<void> {
       // (following a target, the view's own look is worked out from the last frame's: the glance is not a drag)
       if (busyView.on) busyView.setPitch = rig.pitch;
     }
-    // FIRST PERSON, HER LOOK DOWN AT A KICK, AND BENT OVER WINDED (see `herLook`): laid over the player's view
+    // HER OWN LOOKS GIVE WAY TO THE PLAYER (first person is her head now: fastHeroine.ts `eyeView`): firing stops a look
+    // down at a kick (eased back); turning the view in first person frees her head (a look at a kick, or bowed over
+    // winded) and it goes on from where the view is, so nothing jumps
     {
-      const g = herLook;
-      const baseYaw = busyView.on ? rig.yaw : rig.yaw - g.yaw, basePitch = busyView.on ? rig.pitch : rig.pitch - g.pitch;
-      let wantYaw = 0, wantPitch = 0;
       const w = heroine.bellyLook?.(lookSpot) ?? 0;
-      if (w <= 0) g.off = false;
-      // (firing stops her look, eased back; turning the view stops it where the view is)
-      if (w > 0 && (controls.fireHeld || (looked && rig.mode === 'first'))) { heroine.stopBellyLook?.(); if (looked) g.off = true; }
-      if (windedWeight <= 0) g.windedOff = false;
-      if (rig.mode === 'first') {
-        if (w > 0 && !g.off) {
-          heroine.eye(eyeAt);
-          const dx = lookSpot.x - eyeAt.x, dz = lookSpot.z - eyeAt.z, flat = Math.hypot(dx, dz);
-          // (a spot nearly straight below says little about which way: the view turns only as far as it says)
-          wantYaw = Math.atan2(Math.sin(Math.atan2(dx, dz) - baseYaw), Math.cos(Math.atan2(dx, dz) - baseYaw)) * w * Math.min(1, flat / 0.15);
-          wantPitch = (Math.atan2(lookSpot.y - eyeAt.y, Math.max(0.05, flat)) - basePitch) * w;
-        } else if (windedWeight > 0 && !g.windedOff) {
-          if (looked) g.windedOff = true;
-          // (WINDED, FIRST PERSON: the view looks the way her bowed head does, her bend and her head's own bow together
-          //  (Joshua: "the max downward angle relative to the torso"): past straight down, at her chest, belly and
-          //  knees; the camera's own turn about its side keeps her forward at the top of the screen, as a bowed head does)
-          else wantPitch = Math.min(0, -(heroine.bentNow?.() ?? 0) - WINDED.headDown * Math.PI / 180 - basePitch) * windedWeight;
-        }
+      if (w > 0 && controls.fireHeld) heroine.stopBellyLook?.();
+      if (looked && rig.mode === 'first' && (w > 0 || windedWeight > 0)) {
+        const d = rig.lookDirection;
+        rig.pitch = Math.atan2(d.y, d.x * Math.sin(rig.yaw) + d.z * Math.cos(rig.yaw));
+        heroine.freeLook?.();
       }
-      if (looked && (g.yaw !== 0 || g.pitch !== 0)) {
-        // (the player took the view: it stays where it is, her look given up into it)
-        g.yaw = 0; g.pitch = 0;
-      } else {
-        rig.yaw = baseYaw + wantYaw; rig.pitch = basePitch + wantPitch;
-        g.yaw = wantYaw; g.pitch = wantPitch;
-      }
-      if (busyView.on) { busyView.setYaw = rig.yaw; busyView.setPitch = rig.pitch; }
     }
     // THE OVER-THE-SHOULDER CAMERA IS LOCKED TO HER HEAD (Joshua, 2026-11-18): it sits behind her right shoulder and
     // looks where her head looks, turning and tipping with it. Up and down: where the player aims (aimed by hand),

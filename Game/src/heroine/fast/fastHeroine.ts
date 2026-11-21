@@ -96,18 +96,21 @@ import { MOTION_SHAPES, ShapedBody } from './shapedBody';
 const EYE_AHEAD = 0.075;
 const EYE_ABOVE = 0.051;
 /**
- * LOOKING DOWN (or up) is not her head alone: her neck bends too. This share of the camera's tilt is her neck bending
- * at its base, the rest her head nodding on her skull. Tilted down 70 degrees her eyes then come 6.4 cm (2.5") forward
- * and 13.7 cm (5.4") lower; her head alone would bring them no further forward and 10.4 cm (4.1") lower, her neck
- * alone 9.8 cm (3.9") forward and 20 cm (8") lower.
+ * FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
+ * touch and keep same eye height like in Beyond Extinction... as it can only bend what the head can do"): the camera is
+ * fixed to her skull, at her eyes' height, moved forward until it is just clear of her face (her nose's tip, measured
+ * on her own skin: `measureFace`), plus this much more, metres. It turns, tips and bobs with her head; her head is
+ * drawn. Settings -> CAMERA -> 1st person eye offset moves it forward or back (`setEyeForward`).
  */
-const EYE_NECK_SHARE = 0.5;
+const FACE_CLEAR = 0.005;
 /**
- * THE CAMERA RAISED ABOVE HER EYES (Joshua, 2026-11-19: "raise it up about 0.1 meters, part of the lens is cutting
- * into her chest"): at her real eyes, looking down, her bust came inside the camera's nearest 6 cm and was cut away.
- * Straight up, metres, whichever way she looks.
+ * HER NECK'S REACH (Joshua, 2026-11-20: "neck motion is roughly 45-60 upward, 70-80 downward, and 70-90 to either
+ * side"; measured studies agree: about 127 degrees from full flexion to full extension, 146 of rotation in all):
+ * her head tips up and down at most this far FROM HER TORSO'S OWN LINE, whatever her pose (standing, crouched, bent
+ * over, on all fours). Her head's turn to the side stays Joshua's five bands (input/bodyTurn.ts).
  */
-const EYE_LIFT = 0.10;
+const HEAD_UP_MOST = (55 * Math.PI) / 180;
+const HEAD_DOWN_MOST = (75 * Math.PI) / 180;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
@@ -120,10 +123,6 @@ const JUMP_METRES = 1.5;
  */
 const BACK_TURN_SHARES = [0.8, 0.1, 0.1];
 const HEAD_TURN_SHARES = [0.4, 0.6];
-/** The most her head tips up or down (radians, 45 degrees); she looks further with her eyes and her bend. */
-const HEAD_TIP_MOST = Math.PI / 4;
-/** Looking down at her own belly where the baby kicked (bellyTouch.ts), her head and neck bend down this far at most. */
-const LOOK_TIP_MOST = (65 * Math.PI) / 180;
 /**
  * Guards (the game's rule keeps well within these): the most her hips, her upper legs and her feet are turned from
  * the way her root faces, and the most her shoulders are turned from her belly and her head from her shoulders.
@@ -592,9 +591,26 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // carries her skull, face and hair is its parent.
   const crown = bone(joints.head);
   const skull = crown.parent && (crown.parent as THREE.Bone).isBone && crown.parent !== bone(joints.neck) ? (crown.parent as THREE.Bone) : crown;
-  // (the base of her neck, for the first-person eye's look down: `eye`)
+  // (the base of her neck: her torso's line runs from her pelvis to it)
   const neckBone = bone(joints.neck);
-  const eyeSkull = new THREE.Vector3(), eyeNeck = new THREE.Vector3();
+  // HER HEAD'S OWN FORWARD AND UP, in her skull's own space (her skull as she stands, level, facing ahead): her head's
+  // tip is measured along it, and the first-person camera looks down it. Her camera's turn in that space follows.
+  skull.updateWorldMatrix(true, false);
+  const headForwardLocal = new THREE.Vector3(), headUpLocal = new THREE.Vector3(), cameraInHead = new THREE.Quaternion();
+  {
+    const q = skull.getWorldQuaternion(new THREE.Quaternion()).invert(), r = root.getWorldQuaternion(new THREE.Quaternion());
+    headForwardLocal.set(0, 0, 1).applyQuaternion(r).applyQuaternion(q).normalize();
+    headUpLocal.set(0, 1, 0).applyQuaternion(r).applyQuaternion(q);
+    headUpLocal.addScaledVector(headForwardLocal, -headUpLocal.dot(headForwardLocal)).normalize();
+    // (a camera looks down its own -Z with +Y up: those, in her skull's space)
+    const back = headForwardLocal.clone().negate(), right = new THREE.Vector3().crossVectors(headUpLocal, back);
+    cameraInHead.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, headUpLocal, back));
+  }
+  const eyeSkull = new THREE.Vector3(), eyeQ = new THREE.Quaternion();
+  /** How far ahead of the middle of her eyes her face (her nose's tip) is, metres: measured from her skin, once. */
+  let faceAhead = NaN;
+  /** The player's own offset for the first-person camera, forward (+) or back, metres (Settings). */
+  let eyeForward = 0;
   // HER BACK, for turning her shoulders further than her belly: every bone from her lower spine up to her chest (the
   // bone her arms and neck hang from), found by walking down from her chest. Her neck up to her skull, for her head.
   // And the bone that is turned for her hips: the one her legs and her spine both hang from, or the bone above it
@@ -646,7 +662,7 @@ if (uHideHead > 0.5) {
   const showHair = (detail: Detail = drawnDetail): void => {
     if (!hair) return;
     hair.show(detail, true);
-    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(firstPerson ? SHADOW_ONLY_LAYER : 0);
+    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(0);
   };
   const pelvisBone = bone(joints.pelvis);
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
@@ -1043,6 +1059,23 @@ if (uHideHead > 0.5) {
   // (`setWinded`, eased by the game), smoothed; last frame's (straightening up: her hands come off her knees); and which
   // hands are on her knees
   let windedW = 0, windedS = 0, windedWas = 0, windedRising = false;
+  // HER TORSO'S LEAN forward of how she stands, radians (+ forward): the line from her pelvis to the base of her neck,
+  // along the way she faces, against how it lies as she stands (measured the first time). Worked out each frame once
+  // her body is bent and lowered; her head's up and down are measured from it.
+  let torsoLean = 0, leanBase = NaN;
+  const leanFrom = new THREE.Vector3(), leanTo = new THREE.Vector3();
+  const measureLean = (): void => {
+    bone(joints.pelvis).getWorldPosition(leanFrom);
+    neckBone.getWorldPosition(leanTo).sub(leanFrom);
+    const yaw = root.rotation.y;
+    const raw = Math.atan2(leanTo.x * Math.sin(yaw) + leanTo.z * Math.cos(yaw), leanTo.y);
+    if (!Number.isFinite(leanBase)) leanBase = raw;
+    torsoLean = raw - leanBase;
+  };
+  // WINDED: the player turned the view (first person): her head is theirs again until she stands up (`freeLook`)
+  let windedLookFree = false;
+  const headRange: [number, number] = [0, 0];
+  const skullQ = new THREE.Quaternion(), headFwd = new THREE.Vector3();
   const windedJob: [boolean, boolean] = [false, false];
   const windedPose: [THREE.Matrix4, THREE.Matrix4] = [new THREE.Matrix4(), new THREE.Matrix4()];
   const kneeAt = new THREE.Vector3(), hipAt = new THREE.Vector3(), thighWay = new THREE.Vector3(), thighFront = new THREE.Vector3();
@@ -1084,7 +1117,39 @@ if (uHideHead > 0.5) {
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
   let disposed = false;
-  const skullPlace = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
+  const skullPlace = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1), skullScale = new THREE.Vector3();
+  /** Her skull's place and turn now, at its true size (it may be shrunk: the old first person folded it away). */
+  const skullFrame = (): void => {
+    skull.parent?.updateWorldMatrix(true, false);
+    skullPlace.compose(skull.position, skull.quaternion, one);
+    if (skull.parent) skullPlace.premultiply(skull.parent.matrixWorld);
+    skullPlace.decompose(eyeSkull, eyeQ, skullScale);
+  };
+  /**
+   * HOW FAR HER FACE STANDS AHEAD OF HER EYES, metres: of her skin's points carried by her skull, as she is posed now,
+   * those within 2 cm of the line straight ahead from between her eyes (side to side) and 5 cm of it (up and down), the
+   * furthest forward: the tip of her nose. Once, the first time the camera is placed.
+   */
+  const measureFace = (): number => {
+    skullFrame();
+    const eyeAt = new THREE.Vector3().copy(headForwardLocal).multiplyScalar(EYE_AHEAD).addScaledVector(headUpLocal, EYE_ABOVE).applyQuaternion(eyeQ).add(eyeSkull);
+    const fwd = headForwardLocal.clone().applyQuaternion(eyeQ), up = headUpLocal.clone().applyQuaternion(eyeQ), side = new THREE.Vector3().crossVectors(fwd, up);
+    const index = skin.geometry.getAttribute('skinIndex'), weight = skin.geometry.getAttribute('skinWeight');
+    const skullIndex = skin.skeleton.bones.indexOf(skull);
+    skin.updateMatrixWorld(true);
+    const v = new THREE.Vector3();
+    let most = 0.01;
+    for (let i = 0; i < index.count; i++) {
+      let top = 0, heaviest = weight.getX(i);
+      for (let j = 1; j < 4; j++) { const w = weight.getComponent(i, j); if (w > heaviest) { heaviest = w; top = j; } }
+      if (index.getComponent(i, top) !== skullIndex) continue;
+      skin.localToWorld(skin.getVertexPosition(i, v)).sub(eyeAt);
+      if (Math.abs(v.dot(side)) > 0.02 || Math.abs(v.dot(up)) > 0.05) continue;
+      most = Math.max(most, v.dot(fwd));
+    }
+    console.info('[first person] her face stands', (most * 100).toFixed(1), 'cm ahead of her eyes');
+    return most;
+  };
   const megabytes = file.megabytes + look.megabytes + (hair?.megabytes ?? 0);
   const seconds = (performance.now() - began) / 1000;
 
@@ -1155,6 +1220,8 @@ if (uHideHead > 0.5) {
     setWinded(weight: number): void { windedW = Math.max(0, Math.min(1, weight)); },
     // (how far she is bent forward now, radians: her hips and back, as lowerBody.ts bends her)
     bentNow(): number { return lower.bentNow; },
+    // (how far her torso leans forward of how she stands, radians: any pose, bending, crouching, on her belly...)
+    torsoLean(): number { return torsoLean; },
     // (for test pages: where her main joints are now, world metres)
     jointsNow(): Record<string, [number, number, number]> {
       const out: Record<string, [number, number, number]> = {}, v = new THREE.Vector3();
@@ -1240,30 +1307,23 @@ if (uHideHead > 0.5) {
       return out.copy(gun.tip).applyMatrix4(gun.object.matrixWorld);
     },
 
-    eye(out: THREE.Vector3, pitch = 0): THREE.Vector3 {
-      // The base of her skull (the joint her head nods on). Her skull bone may be shrunk to nothing (first person), so
-      // its place is worked out with its true size: parent x (position, rotation, size 1).
-      skull.parent?.updateWorldMatrix(true, false);
-      skullPlace.compose(skull.position, skull.quaternion, one);
-      if (skull.parent) skullPlace.premultiply(skull.parent.matrixWorld);
-      eyeSkull.setFromMatrixPosition(skullPlace);
-      eyeNeck.setFromMatrixPosition(neckBone.matrixWorld);
-      // Her eyes from there, the way her head faces, as measured; then turned by the look down (or up): the neck's share
-      // swings her whole head about the base of her neck, the rest nods it about the base of her skull. Each turn is in
-      // the upright plane she faces along: (ahead, up) -> (ahead cos a - up sin a, ahead sin a + up cos a), a > 0 up.
-      const yaw = facing?.head ?? root.rotation.y;
-      const fx = Math.sin(yaw), fz = Math.cos(yaw);
-      const turn = (ahead: number, up: number, a: number): [number, number] => [ahead * Math.cos(a) - up * Math.sin(a), ahead * Math.sin(a) + up * Math.cos(a)];
-      // the skull from the neck (ahead, up), swung by the neck's share
-      const skullAhead = (eyeSkull.x - eyeNeck.x) * fx + (eyeSkull.z - eyeNeck.z) * fz, skullUp = eyeSkull.y - eyeNeck.y;
-      const [sa, su] = turn(skullAhead, skullUp, pitch * EYE_NECK_SHARE);
-      // the eyes from the skull, swung by the whole tilt (the neck's share and the nod)
-      const [ea, eu] = turn(EYE_AHEAD, EYE_ABOVE, pitch);
-      // (sideways, the skull keeps its own place beside the line she faces along)
-      const side = (eyeSkull.x - eyeNeck.x) * fz - (eyeSkull.z - eyeNeck.z) * fx;
-      out.set(eyeNeck.x + fx * (sa + ea) + fz * side, eyeNeck.y + su + eu + EYE_LIFT, eyeNeck.z + fz * (sa + ea) - fx * side);
-      return out;
+    // HER EYES (the middle of them), where her head has them now: from the base of her skull, as measured on her
+    // standing (EYE_AHEAD, EYE_ABOVE), turned with her head. (`pitch` was for the old camera; her head does that now.)
+    eye(out: THREE.Vector3, _pitch = 0): THREE.Vector3 {
+      skullFrame();
+      return out.copy(headForwardLocal).multiplyScalar(EYE_AHEAD).addScaledVector(headUpLocal, EYE_ABOVE).applyQuaternion(eyeQ).add(eyeSkull);
     },
+    // THE FIRST-PERSON CAMERA ON HER HEAD (see FACE_CLEAR): at her eyes' height, just clear of her face, plus the
+    // player's offset; turned as her head is, looking where her head looks.
+    eyeView(position: THREE.Vector3, quaternion: THREE.Quaternion): void {
+      skullFrame();
+      if (!Number.isFinite(faceAhead)) faceAhead = measureFace();
+      position.copy(headForwardLocal).multiplyScalar(EYE_AHEAD + faceAhead + FACE_CLEAR + eyeForward).addScaledVector(headUpLocal, EYE_ABOVE).applyQuaternion(eyeQ).add(eyeSkull);
+      quaternion.copy(eyeQ).multiply(cameraInHead);
+    },
+    setEyeForward(metres: number): void { eyeForward = metres; },
+    headPitchRange(): readonly [number, number] { headRange[0] = -HEAD_DOWN_MOST - torsoLean; headRange[1] = HEAD_UP_MOST - torsoLean; return headRange; },
+    freeLook(): void { if (windedW > 0) windedLookFree = true; bellyHand.stopLook(); },
 
     setKnitStitch(stitch: number): void {
       // (only the baked-look materials have a live knit; the DEV Room's way has none)
@@ -1273,8 +1333,8 @@ if (uHideHead > 0.5) {
     setFirstPerson(on: boolean): void {
       if (on === firstPerson) return;
       firstPerson = on;
-      // Her head folded away in the camera's picture only (her shadow keeps it); her hair moved to the shadow-only layer.
-      headUniforms.uHideHead.value = on ? 1 : 0;
+      // (her head and hair stay drawn: the camera is on her head, just clear of her face: FACE_CLEAR)
+      headUniforms.uHideHead.value = 0;
       showHair();
     },
 
@@ -1397,6 +1457,7 @@ if (uHideHead > 0.5) {
       const downS = smooth(downW), crouchS = smooth(crouchW);
       windedS = downS > 0 ? 0 : smooth(windedW);
       windedRising = windedW > 0 && windedW >= windedWas - 1e-6;
+      if (windedW <= 0) windedLookFree = false;
       windedWas = windedW;
       lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
       reach.advance(frame.dt);
@@ -1467,10 +1528,10 @@ if (uHideHead > 0.5) {
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
       const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
       // SHE LOOKS DOWN AT HER HAND WHERE THE BABY KICKED (bellyTouch.ts `look`; Joshua, 2026-11-20), over where she was
-      // looking: her head turned and tipped toward the spot by as much as the look is on (third person: in first person
-      // the view does it, main.ts)
+      // looking: her head turned and tipped toward the spot by as much as the look is on (in first person too: the
+      // camera is on her head)
       let headYaw = facing ? facing.head : yawNow, headTip = facing?.headPitch ?? 0;
-      const looking = !firstPerson ? bellyHand.look(lookSpot) * upright : 0;
+      const looking = bellyHand.look(lookSpot) * upright;
       if (looking > 0) {
         skull.updateWorldMatrix(true, false);
         skull.getWorldPosition(skullAt);
@@ -1479,23 +1540,10 @@ if (uHideHead > 0.5) {
         headYaw += wrap(Math.atan2(dx, dz) - headYaw) * looking * Math.min(1, flat / 0.15);
         headTip += (Math.atan2(lookSpot.y - skullAt.y, Math.max(0.05, flat)) - headTip) * looking;
       }
-      // WINDED, HER HEAD BOWED AS FAR AS IT GOES ON HER BENT BACK (Joshua, 2026-11-20: "have it at the max downward
-      // angle relative to the torso as the head doesn't offset off the torso"): chin to chest, WINDED.headDown
-      if (windedS > 0) headTip += (-WINDED.headDown * (Math.PI / 180) - headTip) * windedS;
       const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       if (Math.abs(backTurn) > 1e-4) for (let i = 0; i < backBones.length; i++) turnUpright(backBones[i], backTurn * (BACK_TURN_SHARES[i + BACK_TURN_SHARES.length - backBones.length] ?? 0));
-      if (Math.abs(headTurn) > 1e-4 && !firstPerson) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
-      // HER HEAD TIPPED UP OR DOWN (where she looks while she does something), shared between her neck and skull as the
-      // turn is, about the line across her head (square to the way it faces), within HEAD_TIP_MOST
-      const tip = headTip * (1 - downS);
-      if (Math.abs(tip) > 1e-4 && !firstPerson) {
-        const yaw = headYaw;
-        tipAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).cross(UP_AXIS).normalize();
-        // (looking down at her belly her neck bends further than it does otherwise: LOOK_TIP_MOST)
-        const most = Math.max(HEAD_TIP_MOST + (LOOK_TIP_MOST - HEAD_TIP_MOST) * looking, HEAD_TIP_MOST + (WINDED.headDown * (Math.PI / 180) - HEAD_TIP_MOST) * windedS);
-        const angle = Math.max(-most, Math.min(most, tip));
-        for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, angle * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
-      }
+      if (Math.abs(headTurn) > 1e-4) for (let i = 0; i < neckBones.length; i++) turnUpright(neckBones[i], headTurn * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+      // (her head's tip up or down comes after her body is bent and lowered, below: it is measured from her torso)
 
       // GETTING DOWN TO WHAT HER HANDS REACH FOR (lowerBody.ts): toward the middle of the hands that have a job.
       root.updateMatrixWorld(true);
@@ -1519,6 +1567,30 @@ if (uHideHead > 0.5) {
           const meets = bellyLow.y < keepFace.top + KEEP_GAP;
           lower.keepOff(meets ? KEEP_GAP - clear : -1, frame.dt);
         } else lower.keepOff(-1, frame.dt);
+      }
+
+      // HER HEAD TIPPED UP OR DOWN, MEASURED FROM HER TORSO (Joshua, 2026-11-20: her head's limits are "relative to the
+      // torso's angle... same for all directions"; "neck motion is roughly 45-60 upward, 70-80 downward"): now that her
+      // body is bent and lowered, her torso's lean is measured (the line from her pelvis to her neck, forward of how it
+      // stands); the way she wants to look (world: the player's view in first person, what she is doing in third, a
+      // kick on her belly) is taken as an angle from her torso's own line and held within HEAD_UP_MOST and
+      // HEAD_DOWN_MOST of it; WINDED, her head is bowed all the way down (chin to chest: "the max downward angle relative
+      // to the torso"). Her head is turned from where her pose has it to there, shared between her neck and her skull.
+      {
+        measureLean();
+        let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
+        if (windedS > 0 && !windedLookFree) rel += (-HEAD_DOWN_MOST - rel) * windedS;
+        // (how far her pose already has her head tipped from her torso's line: her forward's pitch, plus her lean)
+        skull.updateWorldMatrix(true, false);
+        skull.getWorldQuaternion(skullQ);
+        headFwd.copy(headForwardLocal).applyQuaternion(skullQ);
+        const nowRel = Math.asin(Math.max(-1, Math.min(1, headFwd.y))) + torsoLean;
+        const tip = rel - nowRel;
+        if (Math.abs(tip) > 1e-4) {
+          tipAxis.set(Math.sin(headYaw), 0, Math.cos(headYaw)).cross(UP_AXIS).normalize();
+          for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], tipAxis, tip * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+          root.updateMatrixWorld(true);
+        }
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

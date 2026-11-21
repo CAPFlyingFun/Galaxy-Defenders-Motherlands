@@ -56,6 +56,11 @@ export interface HeroineSettings {
    */
   fovThird: number;
   fovFirst: number;
+  /**
+   * THE FIRST-PERSON CAMERA'S OFFSET, forward (+) or back from just clear of her face, centimetres (Joshua, 2026-11-20:
+   * "add an offset forward/back... slider and I can adjust in the game and then share the exact offset"): EYE_RANGE.
+   */
+  eyeForward: number;
   zoomThird: number;
   /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
   tableHeight: number;
@@ -120,6 +125,8 @@ export const TABLE_RANGE = Object.freeze({ least: 0.05, most: 1.1, start: 0.78 }
 
 /** The field of view a player may choose, degrees, and each view's own to begin with (the game's view before). */
 export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first: 58 });
+/** The first-person camera's offset from just clear of her face, centimetres: back (-) to forward (+). */
+export const EYE_RANGE = Object.freeze({ least: -6, most: 10 });
 /** Where the third-person zoom begins unless the player chose (the camera's own start before). */
 export const ZOOM_START_DEFAULT = 0.17;
 
@@ -181,6 +188,7 @@ export const SETTING_KEYS = Object.freeze({
   liveBody: 'gdm.liveBody',
   fovThird: 'gdm.fovThird',
   fovFirst: 'gdm.fovFirst',
+  eyeForward: 'gdm.eyeForward',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
@@ -257,6 +265,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     liveBody: (address.get('live') ?? read(SETTING_KEYS.liveBody)) === 'off' ? 'off' : 'on',
     fovThird: asNumber(read(SETTING_KEYS.fovThird), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.third,
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
+    eyeForward: asNumber(address.get('eye') ?? read(SETTING_KEYS.eyeForward), EYE_RANGE.least, EYE_RANGE.most) ?? 0,
     zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.1, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")

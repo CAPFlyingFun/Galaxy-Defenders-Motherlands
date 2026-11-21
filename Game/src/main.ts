@@ -215,9 +215,8 @@ const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
 const FIRST_PERSON_BUSY_PITCH = -0.8;
 /** ...and the most it tips down to see her hands (radians, about 80 degrees: never quite straight down). */
 const FIRST_PERSON_BUSY_PITCH_MOST = 1.4;
-/** ...and how far the player may still look round meanwhile: 90 degrees to each side of it, 70 up and down. */
+/** ...and how far the player may still look round meanwhile: 90 degrees to each side of it (up and down: her neck's reach). */
 const BUSY_LOOK_SIDE = Math.PI / 2;
-const BUSY_LOOK_UP_DOWN = 70 * Math.PI / 180;
 /**
  * ...and once the player lets go of the camera, it is back on her look this long after (seconds), starting at once;
  * a look turned further than BUSY_LOOK_RETURN_PER (radians, 60 degrees) takes longer in proportion, up to
@@ -1351,6 +1350,7 @@ async function start(): Promise<void> {
     //  what her neck can reach: fastHeroine.ts `eyeView`)
     turn.headPitch = rig.mode === 'third' ? actionPitch : rig.pitch;
     heroine.setEyeOffset?.(graphics.eyeForward / 100, graphics.eyeHigher / 100);
+    rig.steadiness = graphics.fpSteady / 100;
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)
     keyLight.position.set(motion.x - 4, feetY + 10, motion.z + 6);
@@ -1422,10 +1422,15 @@ async function start(): Promise<void> {
       }
       busyView.pitch += (wantPitch - busyView.pitch) * ease;
       // (the player's look is limited while she holds on to something fixed; following a target it is not)
-      const side = busyNow() ? BUSY_LOOK_SIDE : Math.PI, upDown = busyNow() ? BUSY_LOOK_UP_DOWN : 1.5;
+      const side = busyNow() ? BUSY_LOOK_SIDE : Math.PI;
       busyView.lookYaw = Math.max(-side, Math.min(side, busyView.lookYaw));
-      // (up and down: the view's own pitch stays within its limit, so the player's look is held to what fits)
-      busyView.lookPitch = Math.max(-upDown - busyView.pitch, Math.min(upDown - busyView.pitch, busyView.lookPitch));
+      // (up and down: the view's own pitch stays within what HER NECK REACHES from her torso's line, as everywhere in
+      //  first person: leaning on a bar she looks further down than standing. Joshua, 2026-11-20: holding the railing
+      //  "it appears to be not looking down far enough and when I try to look further, it stops me"; it was held to
+      //  70 degrees each way of level)
+      const reach = heroine.headPitchRange?.();
+      const down = reach ? reach[0] : -1.5, up = reach ? reach[1] : 1.5;
+      busyView.lookPitch = Math.max(down - busyView.pitch, Math.min(up - busyView.pitch, busyView.lookPitch));
       // (the look the return starts from is where the view really is: within the limits, not as far as it was dragged)
       if (busyView.dragging) {
         busyView.fromYaw = busyView.lookYaw; busyView.fromPitch = busyView.lookPitch; busyView.dragging = false;

@@ -125,6 +125,21 @@ const FIRST_PITCH_MAX = 1.45; // nearly straight up
 const FOV_PORTRAIT = 72; // a tall phone screen shows more sky
 const FOV_LANDSCAPE = 58;
 
+/**
+ * FIRST PERSON, A STEADY VIEW (Joshua, 2026-11-20: "each step move the camera up/down/left/right which each sway and bob,
+ * and in real life, it really happens like that, but the brain can level out all those motions for a smooth view and we
+ * need to do the same"): at full steadiness (1) the camera's place follows her eyes this many seconds behind, and its
+ * turn the way her head looks this many behind; less steady, shorter in proportion; 0, her head exactly.
+ * The place is eased as an offset from her feet's root (which goes smoothly with her stride), so her going along is
+ * never behind, only her eyes' bob and sway about it. The turn is eased only in how far her HEAD is off where the
+ * player asks her to look, so a drag is never behind either, only her head's wobble round it (and her own slow looks,
+ * at a kick or bowed winded, come through a moment eased). Her head's roll is left out: the view stays level.
+ */
+const STEADY_PLACE_SECONDS = 0.35;
+const STEADY_TURN_SECONDS = 0.2;
+/** ...and past this far from where it was eased to (metres), it is put straight there (she was put somewhere else). */
+const STEADY_JUMP = 0.6;
+
 function clamp(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(high, value));
 }
@@ -136,7 +151,16 @@ export class CameraRig {
   /** Which way the camera looks now (a unit direction, world). */
   get lookDirection(): THREE.Vector3 { return this.look; }
   mode: ViewMode = 'third';
-  /** The third-person camera's style (CAM button). */
+  /** First person: how steady the view is, 0..1 (Settings -> CAMERA -> 1st person steadiness; see STEADY_PLACE_SECONDS). */
+  steadiness = 0.6;
+  /** First person, eased: her eyes' place from her root, and how far her head looks off the player's look (radians). */
+  private readonly steadyAt = new THREE.Vector3();
+  private steadyYaw = 0;
+  private steadyPitch = 0;
+  private steadyOn = false;
+  private readonly headLook = new THREE.Vector3();
+  private readonly headUp = new THREE.Vector3();
+
   style: CameraStyle = 'follow';
   /**
    * HER HEAD, for the over-the-shoulder camera, which is locked to it (Joshua, 2026-11-18): where her eyes are, the
@@ -245,6 +269,7 @@ export class CameraRig {
   setMode(mode: ViewMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
+    this.steadyOn = false; // (first person starts at her eyes, nothing eased yet)
     this.pitch = mode === 'third' ? THIRD_PITCH_START : 0;
     this.easedYaw = this.yaw;
     this.easedPitch = this.pitch;
@@ -283,7 +308,7 @@ export class CameraRig {
       this.pitch = clamp(this.pitch, this.firstRange[0], this.firstRange[1]);
       if (heroine.eyeView) {
         heroine.eyeView(this.camera.position, this.camera.quaternion);
-        this.look.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        this.steady(dt, heroine);
       } else {
         heroine.eye(this.camera.position, this.pitch);
         this.setLook(this.yaw, this.pitch);
@@ -463,6 +488,39 @@ export class CameraRig {
     // (the cinematic camera turns on its own: read the way it really looks)
     if (this.style === 'cinematic' || this.style === 'sideLeft' || this.style === 'sideRight') return Math.atan2(this.look.x, this.look.z);
     return this.easedYaw;
+  }
+
+  /**
+   * FIRST PERSON, THE STEADY VIEW (see STEADY_PLACE_SECONDS): the camera is at her eyes and turned as her head is
+   * (`eyeView`); this eases out her head's bob, sway and wobble, and leaves out its roll.
+   */
+  private steady(dt: number, heroine: HeroineBody): void {
+    const cam = this.camera, root = heroine.root.position;
+    // WHICH WAY HER HEAD LOOKS, as a yaw and a pitch that go on past straight down (bowed, winded, on all fours: her
+    // head's own up points forward then, and it says which way is ahead of her when her face is turned to the ground).
+    // Tipped by p, her look is (ahead cos p, sin p) and her head's up (-ahead sin p, cos p), so ahead is her look's flat
+    // part times cos p less her up's times sin p: cos p is her up's height, sin p her look's.
+    const f = this.headLook.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    const u = this.headUp.set(0, 1, 0).applyQuaternion(cam.quaternion);
+    const aheadX = f.x * u.y - u.x * f.y, aheadZ = f.z * u.y - u.z * f.y, ahead = Math.hypot(aheadX, aheadZ) || 1;
+    const headYaw = Math.atan2(aheadX, aheadZ);
+    const headPitch = Math.atan2(f.y, (f.x * aheadX + f.z * aheadZ) / ahead);
+    // (how far her head is off where the player asks her to look, eased; the player's own look is never eased)
+    const offYaw = Math.atan2(Math.sin(headYaw - this.yaw), Math.cos(headYaw - this.yaw));
+    const offPitch = headPitch - this.pitch;
+    const s = clamp(this.steadiness, 0, 1);
+    const placeAt = cam.position.sub(root);
+    if (!this.steadyOn || s <= 0 || this.steadyAt.distanceTo(placeAt) > STEADY_JUMP) {
+      this.steadyAt.copy(placeAt); this.steadyYaw = offYaw; this.steadyPitch = offPitch; this.steadyOn = true;
+    } else {
+      // (1 - e^(-dt/seconds): the same smoothing at any frame rate)
+      this.steadyAt.lerp(placeAt, 1 - Math.exp(-dt / (STEADY_PLACE_SECONDS * s)));
+      const turn = 1 - Math.exp(-dt / (STEADY_TURN_SECONDS * s));
+      this.steadyYaw += Math.atan2(Math.sin(offYaw - this.steadyYaw), Math.cos(offYaw - this.steadyYaw)) * turn;
+      this.steadyPitch += (offPitch - this.steadyPitch) * turn;
+    }
+    cam.position.copy(root).add(this.steadyAt);
+    this.setLook(this.yaw + this.steadyYaw, this.pitch + this.steadyPitch);
   }
 
   /** Point the camera along (yaw, pitch) and remember that direction in `look`. */

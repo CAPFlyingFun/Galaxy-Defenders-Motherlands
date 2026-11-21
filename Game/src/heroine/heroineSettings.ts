@@ -63,6 +63,11 @@ export interface HeroineSettings {
    */
   eyeForward: number;
   eyeHigher: number;
+  /**
+   * HOW STEADY THE FIRST-PERSON VIEW IS, 0..100 (Joshua, 2026-11-20: "each step move the camera up/down/left/right...
+   * the brain can level out all those motions for a smooth view and we need to do the same"): STEADY_RANGE.
+   */
+  fpSteady: number;
   zoomThird: number;
   /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
   tableHeight: number;
@@ -130,6 +135,8 @@ export const FOV_RANGE = Object.freeze({ least: 50, most: 120, third: 58, first:
 /** The first-person camera's offset from her eyes, centimetres: back (-) to forward (+), and down (-) to up (+). */
 export const EYE_RANGE = Object.freeze({ least: -6, most: 12 });
 export const EYE_HEIGHT_RANGE = Object.freeze({ least: -6, most: 20 });
+/** How steady the first-person view is: 0 every bob and sway of her head as it is, 100 the steadiest. */
+export const STEADY_RANGE = Object.freeze({ least: 0, most: 100, start: 60 });
 /** Where the third-person zoom begins unless the player chose (the camera's own start before). */
 export const ZOOM_START_DEFAULT = 0.17;
 
@@ -193,6 +200,7 @@ export const SETTING_KEYS = Object.freeze({
   fovFirst: 'gdm.fovFirst',
   eyeForward: 'gdm.eyeAhead',
   eyeHigher: 'gdm.eyeHigher',
+  fpSteady: 'gdm.fpSteady',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
@@ -271,6 +279,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     fovFirst: asNumber(read(SETTING_KEYS.fovFirst), FOV_RANGE.least, FOV_RANGE.most) ?? FOV_RANGE.first,
     eyeForward: asNumber(address.get('eye') ?? read(SETTING_KEYS.eyeForward), EYE_RANGE.least, EYE_RANGE.most) ?? 0,
     eyeHigher: asNumber(address.get('eye_up') ?? read(SETTING_KEYS.eyeHigher), EYE_HEIGHT_RANGE.least, EYE_HEIGHT_RANGE.most) ?? 0,
+    fpSteady: asNumber(address.get('steady') ?? read(SETTING_KEYS.fpSteady), STEADY_RANGE.least, STEADY_RANGE.most) ?? STEADY_RANGE.start,
     zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.1, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,
     // (MANUAL unless AUTO was chosen: Joshua, 2026-11-18, "add auto fire off by default for 1st and 3rd person")

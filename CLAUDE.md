@@ -37,6 +37,12 @@ use the game's single copy of three.js.
   where it is (`freeLook`), firing ends a kick look. Settings -> CAMERA -> 1st person eye forward (`gdm.eyeAhead`,
   `?eye=`, -6..12 cm, along her face) and eye height (`gdm.eyeHigher`, `?eye_up=`, -6..20 cm, along her head's own up:
   straight up in the world showed a bowed head's own face): Joshua tunes them in game and sends the numbers.
+  A STEADY VIEW (Joshua, 2026-11-20: "the brain can level out all those motions for a smooth view and we need to do the
+  same"; cameraRig.ts `steady`, `STEADY_*`): the camera's place is eased as an offset from her root (her going along is
+  never behind, only her eyes' bob and sway, 0.35 s at full), its turn only in how far her head is off the player's look
+  (a drag is never behind, only her head's wobble, 0.2 s at full), her head's roll left out. Settings -> CAMERA -> 1st
+  person steadiness 0..100 (`gdm.fpSteady`, `?steady=`, 60 to begin with). AT THE TABLE, BARS AND DOOR the up and down
+  look is her neck's reach too (was 70 each way of level: leaning on a bar she could not look down far enough).
 - Movement (Joshua, 2026-11-17): free movement in both views over the whole map, with the MOVE stick (five rings
   set her pace: walk, jog, run, sprint). The ring track round the plaza and the "free walk in third person"
   setting were removed. Buildings are solid and the dome wall stops her.
@@ -320,7 +326,7 @@ use the game's single copy of three.js.
   (Joshua: "the max downward angle relative to the torso as the head doesn't offset off the torso"; `WINDED.headDown`); eased in 0.6 s, back up over the
   hold's last 1 s; no aiming or firing; FIRST PERSON the view is her bowed head (about 117 degrees down in the world: her chest,
   belly and hands on her knees); turning the view frees her head (no side limit except at the table, bars and door, 90
-  each way, 70 up and down). HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
+  each way; up and down her neck's reach). HER THUMB (Joshua: "the thumb is hidden in the belly"): its curl only folds
   it across her palm, so it is laid by trying its curl AND a tip at its base toward her palm's side together
   (`layThumb`, `tipThumb`, once a touch), measured from its second bone out (its first is under the ball of her palm). Not while she is down. Test pages: `pokeBelly(round, up)`.
   HAND PADS (Joshua: "measure out from each finger and thumb bone to the skin... create that finger offset file for all

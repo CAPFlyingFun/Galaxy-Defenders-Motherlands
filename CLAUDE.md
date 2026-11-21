@@ -26,10 +26,13 @@ use the game's single copy of three.js.
   FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
   touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
   `eyeView`, cameraRig.ts): the camera is FIXED TO HER SKULL AT HER EYES (7.5 cm ahead of and 5.1 cm above its base);
-  it turns and tips with her head, NOTHING EASED; her head and hair are drawn, her face nearer than the camera's nearest
-  6 cm so never seen (Joshua, 2026-11-20: "v0.2.102 had no issues cutting into the face as it was locked to the bone, so,
-  undo what you did about hiding the face and hair": the face poked through only while the camera was eased off her
-  head, v0.2.103-106; `hideHeadPatch` kept, unused). (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
+  it turns and tips with her head, NOTHING EASED. IT DRAWS FROM 1 CM (cameraRig.ts `FIRST_NEAR`; third person 6 cm,
+  `THIRD_NEAR`; the farthest 20 km on the island): at 6 cm her shoulder was cut open turning her head at the bar
+  (Joshua: "Is there a way for the camera to not cut through the clothing"); rendered at 6, 2 and 1 cm. So HER HEAD IS
+  HIDDEN FROM HER OWN CAMERA, NOT MOVED OR SHRUNK (Joshua: "don't scale the head down or anything, just hide it (shadows
+  stay)"; `hideHeadPatch`: a pixel whose point her head's bones carry over half is left out), her hair on the
+  shadow-only layer; her shadow keeps both (at 1 cm her own cheek and nose filled the view). (v0.2.103-106 hid it too,
+  folded into her skull; then it was shown again, v0.2.107-109.) (First it sat just clear of her face, 3.7 cm further on Blaze: looking down that put it by her chin,
   Joshua: "Camera seems too low".) Where the player looks
   is where her head is asked to look, and her NECK'S REACH IS FROM HER TORSO'S LINE (Joshua: "relative to the torso...
   same for all directions"): 75 degrees down, 55 up (`HEAD_DOWN_MOST`, `HEAD_UP_MOST`; his research: 45-60 up, 70-80

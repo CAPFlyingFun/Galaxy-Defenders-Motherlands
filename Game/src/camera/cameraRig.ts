@@ -122,6 +122,14 @@ const FIRST_PITCH_MIN = -1.55; // straight down, at her belly
 const FIRST_PITCH_MAX = 1.45; // nearly straight up
 
 // ---- Field of view -----------------------------------------------------------
+/**
+ * THE NEAREST THE CAMERA DRAWS, metres (Joshua, 2026-11-20: her shoulder "cut through" turning her head at the bar).
+ * First person 1 cm, so her shoulder, arms and belly are whole however near her eyes they come (her own head is hidden
+ * from her camera, fastHeroine.ts `setFirstPerson`); third person 6 cm, as it always was. (The farthest: 20 km on the
+ * island, 2 km in the town: main.ts.)
+ */
+const FIRST_NEAR = 0.01;
+const THIRD_NEAR = 0.06;
 const FOV_PORTRAIT = 72; // a tall phone screen shows more sky
 const FOV_LANDSCAPE = 58;
 
@@ -186,7 +194,7 @@ export class CameraRig {
 
   constructor() {
     // The near distance is small so her own body is not cut away in first person.
-    this.camera = new THREE.PerspectiveCamera(FOV_PORTRAIT, 1, 0.06, 2000);
+    this.camera = new THREE.PerspectiveCamera(FOV_PORTRAIT, 1, THIRD_NEAR, 2000);
     // Turn to the side first (Y), then up or down (X): no rolling.
     this.camera.rotation.order = 'YXZ';
   }
@@ -245,6 +253,9 @@ export class CameraRig {
   setMode(mode: ViewMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
+    // (first person draws from 1 cm, third from 6: see FIRST_NEAR)
+    this.camera.near = mode === 'first' ? FIRST_NEAR : THIRD_NEAR;
+    this.camera.updateProjectionMatrix();
     this.pitch = mode === 'third' ? THIRD_PITCH_START : 0;
     this.easedYaw = this.yaw;
     this.easedPitch = this.pitch;

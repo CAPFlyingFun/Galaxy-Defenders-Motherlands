@@ -631,7 +631,6 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const headUniforms = {
     uHideHead: { value: 0 },
     uHeadBones: { value: Array.from({ length: HEAD_GLSL_BONES }, (_, i) => headBones[i] ?? -1) },
-    uSkullAt: { value: new THREE.Vector3() },
   };
   /** Add the folding to a material's shader (after anything it already adds). Only the camera's picture uses it. */
   const hideHeadPatch = (material: THREE.Material): void => {
@@ -639,20 +638,25 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     material.onBeforeCompile = function (shader, renderer) {
       before.call(this, shader, renderer);
       Object.assign(shader.uniforms, headUniforms);
+      // HIDDEN, NOT MOVED (Joshua, 2026-11-20: "don't scale the head down or anything, just hide it (shadows stay)"):
+      // each point carries the share of it her head's bones move (`vHeadShare`); where that is over half, the camera's
+      // picture leaves the pixel out. Nothing of her is moved or shrunk, her neck included; her shadow is drawn with
+      // three.js's own shader, which this is not in, so it keeps her whole head.
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nuniform float uHideHead;\nuniform float uHeadBones[${HEAD_GLSL_BONES}];\nuniform vec3 uSkullAt;`)
-        // (after her bones have posed her: each point is pulled into the base of her skull by the share of it her head carries)
+        .replace('#include <common>', `#include <common>\nuniform float uHideHead;\nuniform float uHeadBones[${HEAD_GLSL_BONES}];\nvarying float vHeadShare;`)
         .replace('#include <skinning_vertex>', `#include <skinning_vertex>
+vHeadShare = 0.0;
 if (uHideHead > 0.5) {
-  float headShare = 0.0;
   for (int b = 0; b < ${HEAD_GLSL_BONES}; b++) {
     float bone = uHeadBones[b];
     if (bone < 0.0) continue;
-    headShare += (abs(skinIndex.x - bone) < 0.5 ? skinWeight.x : 0.0) + (abs(skinIndex.y - bone) < 0.5 ? skinWeight.y : 0.0)
-               + (abs(skinIndex.z - bone) < 0.5 ? skinWeight.z : 0.0) + (abs(skinIndex.w - bone) < 0.5 ? skinWeight.w : 0.0);
+    vHeadShare += (abs(skinIndex.x - bone) < 0.5 ? skinWeight.x : 0.0) + (abs(skinIndex.y - bone) < 0.5 ? skinWeight.y : 0.0)
+                + (abs(skinIndex.z - bone) < 0.5 ? skinWeight.z : 0.0) + (abs(skinIndex.w - bone) < 0.5 ? skinWeight.w : 0.0);
   }
-  transformed = mix(transformed, uSkullAt, clamp(headShare, 0.0, 1.0) * 0.999);
 }`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\nuniform float uHideHead;\nvarying float vHeadShare;`)
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\nif (uHideHead > 0.5 && vHeadShare > 0.5) discard;`);
     };
     material.customProgramCacheKey = function () { return `${key.call(this)}|hidehead`; };
     material.needsUpdate = true;
@@ -663,7 +667,7 @@ if (uHideHead > 0.5) {
   const showHair = (detail: Detail = drawnDetail): void => {
     if (!hair) return;
     hair.show(detail, true);
-    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(0);
+    for (const mesh of [hair.full, hair.light]) if (mesh) mesh.layers.set(firstPerson ? SHADOW_ONLY_LAYER : 0);
   };
   const pelvisBone = bone(joints.pelvis);
   const hipsBone = pelvisBone.parent && (pelvisBone.parent as THREE.Bone).isBone ? (pelvisBone.parent as THREE.Bone) : pelvisBone;
@@ -1399,11 +1403,12 @@ if (uHideHead > 0.5) {
     setFirstPerson(on: boolean): void {
       if (on === firstPerson) return;
       firstPerson = on;
-      // HER HEAD AND HAIR STAY DRAWN (Joshua, 2026-11-20: "v0.2.102 had no issues cutting into the face as it was locked
-      // to the bone, so, undo what you did about hiding the face and hair in 1st person"): the camera is locked to her
-      // skull at her eyes (`eyeView`), her face nearer than its nearest 6 cm. (The face poked through only while the
-      // camera was eased off her head, v0.2.103-106.) `hideHeadPatch` is kept, unused, should it be wanted again.
-      headUniforms.uHideHead.value = 0;
+      // HER HEAD AND HAIR HIDDEN FROM HER OWN CAMERA, SHADOWS KEPT (Joshua, 2026-11-20: "just hide it (shadows stay)"):
+      // the first-person camera now draws from 1 cm (cameraRig.ts FIRST_NEAR), so her shoulder, arms and belly are
+      // whole however near they come; at 1 cm her own cheek and nose filled the view. The camera stays locked to her
+      // skull at her eyes (`eyeView`); her hair goes on the shadow-only layer. (Hidden in v0.2.103-106 too, when the
+      // eased camera had let her face poke through; nothing is eased now.)
+      headUniforms.uHideHead.value = on ? 1 : 0;
       showHair();
       // NO BOB OR SWAY IN FIRST PERSON (Joshua, 2026-11-20: "the body naturally has a bob and sway adjustment like what
       // you were trying to do... in 1st person, make 0% Bob, Sway, but show it in 3rd person"): her look's own Bob and
@@ -1740,11 +1745,6 @@ if (uHideHead > 0.5) {
       // Her fingers closed onto a bar she holds, each until it touches (fingerTouch.ts): last, over her finished pose.
       touch.apply(frame.dt, reach.grip, [reach.progress(0), reach.progress(1)]);
 
-      // First person: where the base of her skull is now, in her skin's own space (her head is folded into it).
-      if (firstPerson) {
-        skull.getWorldPosition(headUniforms.uSkullAt.value);
-        skin.worldToLocal(headUniforms.uSkullAt.value);
-      }
 
       // Her detail level: the fixed one asked for, or AUTO's.
       // AUTO LIVE: Smart FPS turns her detail, from 30 % down to 1 %, by the frame rate alone.

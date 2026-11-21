@@ -1659,7 +1659,6 @@ async function start(): Promise<void> {
     heroine.setVitals?.(reading);
     vitalsPanel.show(reading, {
       speed: motion.speed,
-      pace: pace.name,
       week: pregnantNow() ? plan.weekFor(heroine.bellyNow?.() ?? graphics.belly ?? plan.start) : null,
       kick: (heroine.liveInfo?.()?.kicks ?? 0) > 0,
       winded: pace.holdLeft > 0,

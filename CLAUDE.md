@@ -565,6 +565,10 @@ use the game's single copy of three.js.
   temperature, effort; an URGENT one (bathroom from 85%, energy under 15%, fear over 75%, mood under 15%, temperature
   out of 35.8-38.5 C) SWAPS with the least important big one until it is not; what needs her attention pulses. CHIPS
   under the card only while they apply: 🤰 WEEK, 👶 KICK, 😮‍💨 WINDED, 🤕 PAIN, 🍽️ HUNGRY, 💧 THIRSTY. Checked at 932 x 430.
+  UNITS KEPT TOGETHER (Joshua, 2026-11-21: "like 2.6mph(7.6km), or 96.6F(31.6C)"): 13.5 mph (21.8 km/h), 101.4 °F
+  (38.6°C), one line in the list (under it on the gauges card, or it is 50 px wider); her pace's name is NOT on the card
+  (it is over the MOVE stick; WINDED has its chip). The list's rows are a FIXED width (his screenshots: it grew with
+  SPRINT/WINDED and 100.4°F ran into its name). Everything but the beating heart is written 10 times a second.
   THE NEW STATS (`heroineVitals.ts` VITALS_TUNING): ENERGY, her tiredness over the day on her body clock: drains moving
   (awake 16 h, plus effort squared a bar per 8 h, 30% faster late in a pregnancy), back STANDING STILL (empty to full
   in 3 h; his pick until beds and sleep); under half it caps how far her stamina refills (to 50% at empty) and lowers

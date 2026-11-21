@@ -35,8 +35,6 @@ export type VitalsUnits = 'imperial' | 'metric' | 'both';
 export interface VitalsExtra {
   /** her ground speed, metres a second */
   readonly speed: number;
-  /** her pace's name ('WALK' .. 'SPRINT', 'Winded'; '' standing) */
-  readonly pace: string;
   /** the week of her pregnancy, or null when she is not pregnant */
   readonly week: number | null;
   /** the baby is kicking now */
@@ -129,8 +127,10 @@ function viewOf(key: VitalsStat, r: VitalsReading, units: VitalsUnits): StatView
       // (the ring is half full at 37 C, empty at 35, full at 39)
       const share = clamp01((c - 35) / 4);
       const gauge = units === 'metric' ? `${c.toFixed(1)}°` : `${Math.round(f)}°`;
-      const number = units === 'metric' ? `${c.toFixed(1)}°C` : `${f.toFixed(1)}°F`;
-      const name = units === 'both' ? `temp · ${c.toFixed(1)}°C` : 'temp';
+      // (its units kept together, Joshua: "keep the units together like... 96.6F(31.6C)": 100.4 °F (38.0°C). The 🌡️
+      //  says what it is, so the name is left out and the line stays short.)
+      const number = units === 'metric' ? c.toFixed(1) : f.toFixed(1);
+      const name = units === 'both' ? `°F (${c.toFixed(1)}°C)` : units === 'metric' ? '°C' : '°F';
       const out = c < 35.8 || c > 38.5;
       return { emoji: '🌡️', share, colour: tempColour(c), gauge, number, name, alert: out, urgent: out };
     }
@@ -167,11 +167,10 @@ const STYLE = `
 .gd-vitals-dim { color: #9aa6b8; }
 .gd-vitals-heart { display: inline-block; transform-origin: center; }
 /* GAUGES: the plain numbers on the left */
-.gd-vitals-left { display: flex; flex-direction: column; gap: 4px; width: 84px; }
+.gd-vitals-left { display: flex; flex-direction: column; gap: 6px; width: 100px; white-space: nowrap; }
 .gd-vitals-left b { font-weight: 600; font-size: 15px; }
 .gd-vitals-left b.is-big { font-size: 18px; }
-.gd-vitals-left .gd-vitals-sub { margin-left: 18px; }
-.gd-vitals-pace { color: #5dcaa5; letter-spacing: .06em; }
+.gd-vitals-left small { display: block; margin-left: 20px; font-size: 10.5px; }
 .gd-vitals-gauges { position: relative; width: 230px; height: 126px; }
 .gd-vitals-gauges svg { position: absolute; left: 0; top: 0; overflow: visible; }
 .gd-vitals-mid { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
@@ -181,8 +180,11 @@ const STYLE = `
 .gd-vitals-ring.is-alert { animation: gd-vitals-pulse 1.2s ease-in-out infinite; }
 @keyframes gd-vitals-pulse { 50% { opacity: .35; } }
 /* LIST: two columns of icon, number, name */
-.gd-vitals-list { display: grid; grid-template-columns: repeat(2, auto); column-gap: 14px; }
-.gd-vitals-row { display: grid; grid-template-columns: 18px 46px auto; align-items: center; line-height: 16px; white-space: nowrap; }
+.gd-vitals-list { display: grid; grid-template-columns: repeat(2, auto); column-gap: 10px; }
+/* (FIXED widths, Joshua's screenshots 2026-11-21: the card grew and shrank with "SPRINT" or "WINDED" and "100.4°F" ran
+    into its name. Now every row is the same width whatever it says; anything longer is cut with "...".) */
+.gd-vitals-row { display: grid; grid-template-columns: 18px 40px 98px; align-items: center; line-height: 16px; white-space: nowrap; }
+.gd-vitals-row i { overflow: hidden; text-overflow: ellipsis; }
 .gd-vitals-row b { font-weight: 600; font-size: 12px; text-align: right; padding-right: 5px; font-variant-numeric: tabular-nums; }
 .gd-vitals-row i { font-style: normal; color: #9aa6b8; letter-spacing: .02em; }
 .gd-vitals-row.is-alert b { animation: gd-vitals-pulse 1.2s ease-in-out infinite; }
@@ -245,18 +247,18 @@ export class VitalsPanel {
   private readonly gSpeed: HTMLElement;
   private readonly gSpeedUnit: HTMLElement;
   private readonly gSpeedOther: HTMLElement;
-  private readonly gPace: HTMLElement;
   private readonly slots: GaugeSlot[] = [];
-  /** LIST: its rows: heart, breathing, speed, speed in the other unit, then the eleven stats. */
+  /** LIST: its rows: heart, breathing, speed, then the eleven stats. */
   private readonly lRate: ListRow;
   private readonly lBreath: ListRow;
   private readonly lSpeed: ListRow;
-  private readonly lSpeedOther: ListRow;
   private readonly lStats: ListRow[] = [];
   /** CHIPS */
   private readonly chips: Record<ChipKey, HTMLElement>;
   /** What was last written, so the page is only touched when something really changes. */
   private last = new Map<string, string>();
+  /** When everything but the heart was last written (ms). */
+  private lastFull = -Infinity;
 
   constructor() {
     if (!document.getElementById('gd-vitals-style')) {
@@ -289,8 +291,10 @@ export class VitalsPanel {
     const speedLine = make('div', '', left, '🏃‍♀️ ');
     this.gSpeed = make('b', 'gd-vitals-num', speedLine);
     this.gSpeedUnit = make('span', 'gd-vitals-dim', speedLine);
-    this.gSpeedOther = make('div', 'gd-vitals-sub gd-vitals-dim gd-vitals-num', left);
-    this.gPace = make('div', 'gd-vitals-sub gd-vitals-pace', left);
+    // (the other unit with it, in brackets: Joshua, "keep the units together like 2.6mph(7.6km)"; on the gauges card
+    //  just under it, as on one line it made the card 50 px wider. Her pace's name is not on the card: it is over the
+    //  MOVE stick already, and WINDED has its chip.)
+    this.gSpeedOther = make('small', 'gd-vitals-dim gd-vitals-num', speedLine);
     const gauges = make('div', 'gd-vitals-gauges', this.gaugesCard);
     const svg = document.createElementNS(SVG, 'svg');
     svg.setAttribute('width', '230');
@@ -343,7 +347,6 @@ export class VitalsPanel {
     this.lBreath = row(columnA, '🫁');
     this.lBreath.name.textContent = 'br/min';
     this.lSpeed = row(columnA, '🏃‍♀️');
-    this.lSpeedOther = row(columnA);
     for (let i = 0; i < VITALS_PRIORITY.length; i++) this.lStats.push(row(i < BIG ? columnA : columnB));
 
     // ---- CHIPS ----------------------------------------------------------------------------------------------------
@@ -387,15 +390,19 @@ export class VitalsPanel {
   }
 
   /** Show a reading. Call it every frame; it only touches the page when something changed. */
-  show(reading: VitalsReading, extra: VitalsExtra = { speed: 0, pace: '', week: null, kick: false, winded: false }): void {
+  show(reading: VitalsReading, extra: VitalsExtra = { speed: 0, week: null, kick: false, winded: false }): void {
     const units = this.units;
     // Her heart swells with each beat (her real heartbeat, so it speeds up as she works).
     this.set('beat', (1 + 0.28 * reading.beat).toFixed(2), (v) => this.hearts.forEach((h) => (h.style.transform = `scale(${v})`)));
+    // Everything else ten times a second, not every frame: the numbers read just as well, and the phone redraws the
+    // card (and its emoji) a sixth as often. (A change of layout or units shows at once: `last` is emptied then.)
+    const now = performance.now();
+    if (this.last.size > 1 && now - this.lastFull < 100) return;
+    this.lastFull = now;
     const rate = reading.heartRate.toFixed(0), breaths = reading.breathsPerMinute.toFixed(0);
     // Her speed: mph and km/h (Both shows mph first, km/h under it)
     const mph = (extra.speed * 2.23694).toFixed(1), kmh = (extra.speed * 3.6).toFixed(1);
     const [speedMain, unitMain] = units === 'metric' ? [kmh, 'km/h'] : [mph, 'mph'];
-    const pace = extra.pace ? extra.pace.toUpperCase() : 'STAND';
 
     // Her eleven stats, and their order now.
     const views = new Map<VitalsStat, StatView>();
@@ -407,8 +414,7 @@ export class VitalsPanel {
       this.set('g.breath', breaths, (v) => (this.gBreath.textContent = v));
       this.set('g.speed', speedMain, (v) => (this.gSpeed.textContent = v));
       this.set('g.unit', unitMain, (v) => (this.gSpeedUnit.textContent = ` ${v}`));
-      this.set('g.other', units === 'both' ? `${kmh} km/h` : '', (v) => { this.gSpeedOther.textContent = v; this.gSpeedOther.hidden = !v; });
-      this.set('g.pace', pace, (v) => (this.gPace.textContent = v));
+      this.set('g.other', units === 'both' ? `(${kmh} km/h)` : '', (v) => (this.gSpeedOther.textContent = v));
       order.forEach((key, i) => {
         const view = views.get(key)!, slot = this.slots[i];
         this.set(`g${i}.emoji`, view.emoji, (v) => (slot.emoji.textContent = v));
@@ -428,16 +434,9 @@ export class VitalsPanel {
     } else {
       this.set('l.rate', rate, (v) => (this.lRate.number.textContent = v));
       this.set('l.breath', breaths, (v) => (this.lBreath.number.textContent = v));
-      this.set('l.speed', `${speedMain}|${unitMain} · ${pace}`, (v) => {
-        const [n, name] = v.split('|');
-        this.lSpeed.number.textContent = n;
-        this.lSpeed.name.textContent = name;
-      });
-      this.set('l.other', units === 'both' ? kmh : '', (v) => {
-        this.lSpeedOther.row.hidden = !v;
-        this.lSpeedOther.number.textContent = v;
-        this.lSpeedOther.name.textContent = 'km/h';
-      });
+      // (13.5 mph (21.8 km/h): its units together on one line)
+      this.set('l.speed', speedMain, (v) => (this.lSpeed.number.textContent = v));
+      this.set('l.unit', units === 'both' ? `mph (${kmh} km/h)` : unitMain, (v) => (this.lSpeed.name.textContent = v));
       order.forEach((key, i) => {
         const view = views.get(key)!, row = this.lStats[i];
         this.set(`l${i}.emoji`, view.emoji, (v) => (row.emoji.textContent = v));

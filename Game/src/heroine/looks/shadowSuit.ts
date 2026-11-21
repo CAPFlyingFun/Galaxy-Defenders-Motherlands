@@ -188,7 +188,11 @@ const ARM_STRIPE = through([[0, 75], [0.5, 85], [1, 80]]);
  * Where the trunk's stripes end, up near the tops of her shoulders, with rounded ends: short of the base of her neck,
  * where her trunk's measure stops (run into it, they ended in a ragged edge along her shoulders' tops).
  */
-const STRIPE_TOP = Object.freeze({ front: 0.92, back: 0.88 });
+// (THE BACK STRIPE ENDS UNDER HER ARM, Joshua, 2026-11-21: "on each side of her back shoulders, there is a hole in
+//  her outfit". Not a hole: up to 0.88 the back stripe's top ran on past her armpit, where her skin belongs to her
+//  ARM, so it was cut there, and its last bit came back out on the back of her shoulder as a lone red speck in its
+//  black border. It now ends where it goes under her arm.)
+const STRIPE_TOP = Object.freeze({ front: 0.92, back: 0.8 });
 
 /**
  * How far inside the red stripes a point is, with each stripe made `wider` (leg lengths) on each side: 0 the stripes

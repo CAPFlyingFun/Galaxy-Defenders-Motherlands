@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "shadowSuit",
-  "bakedAt": "2026-11-19T23:05:21.255Z",
-  "builderVersion": "0.9.49",
+  "bakedAt": "2026-11-21T17:29:53.196Z",
+  "builderVersion": "0.9.60",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7136624552171795,
+  "barefootHeightMetres": 1.7135813318933677,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -31,21 +31,21 @@
   },
   "facts": {
     "drawnInTheRoom": [
-      "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
-      "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors true, colour #ffffff, rough 1, side 2, patched true",
-      "(no name) | Material_0 | 4026 triangles | skinned, 115710 points, attrs jiggle/skinIndex/position/normal/uv/skinWeight/_cloth_cover/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors true, colour #ffffff, rough 1, side 2, patched true",
+      "(no name) | Material_0 | 4032 triangles | skinned, 115710 points, attrs jiggle/skinIndex/position/normal/uv/skinWeight/_cloth_cover/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
       "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.700299681052316,
+    "crownOverTheFloorMetres": 1.700218557728504,
     "pointsTheBuilderMoved": 73382,
-    "movedMostGeometryUnits": 0.15041542056603854,
+    "movedMostGeometryUnits": 0.15444307445634142,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16351130655826226,
+    "restSkinSpread": 0.16347278823308042,
     "captureMissing": {
       "position": 0,
       "normal": 0

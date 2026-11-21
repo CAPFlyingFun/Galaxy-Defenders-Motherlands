@@ -240,6 +240,10 @@ use the game's single copy of three.js.
   See-through: nipple 0.43, navel 0.81 (Joshua, 2026-11-19: "I can't really see the belly button at 150%"; was halved to 0.225/0.4). His plain catsuit, nothing added, is the look `blazeCatsuit` (to compare).
   `trunkPlace` turns round her trunk's MEASURED middle at each height (her back plus half her usual depth); round a
   line straight up from her hips, her upper back read as her side and stripes spilled across it in ragged bands.
+  THE "HOLES" ON HER BACK SHOULDERS (Joshua, 2026-11-21) were a lone red speck in its black border on each: the back
+  stripe's top ran on past her armpit (where her skin is her ARM's), was cut, and its end came out on the back of her
+  shoulder. It now ends under her arm (`STRIPE_TOP.back` 0.88 -> 0.8). Re-baked on builder v0.9.60 (front unchanged)
+  and its skin height remade.
 - SENSITIVITY (Joshua, 2026-11-21: "lower the camera sensitivity (ahh, make movement and camera sensitivity adjustable in
   settings)... then I can tweak both"): Settings -> CAMERA -> Camera sensitivity (`gdm.lookSensitivity`, 20-200%, starts
   at 60%, 100% the old speed: cameraRig.ts `lookScale` on drags and the camera stick) and Move stick sensitivity

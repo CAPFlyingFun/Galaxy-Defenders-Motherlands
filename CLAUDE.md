@@ -621,7 +621,11 @@ use the game's single copy of three.js.
   iPhone his plain set did not draw (only near the camera, or in first person, was he seen); his levels do not lighten
   anyway (about 88 K triangles each). GRAPHICS TROUBLE ON SCREEN (core/glTrouble.ts): a shader the phone will not
   build, or lost graphics, shows as a notice. THE PAGE NEVER FROM THE BROWSER'S CACHE (sw.js navigate `no-store`): his
-  iPhone showed 127's loading screen and then 126's game. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
+  iPhone showed 127's loading screen and then 126's game. v0.2.130 (Joshua: v0.2.129 "loads once... resets another time... then crashes", the iPhone out of memory): HELD AT ONE
+  DETAIL LEVEL (main.ts `JOHN_DETAIL` 30 %, never following Auto live or the player: his levels do not lighten, so more
+  levels were only more copies of him); a CRASH GUARD (`JOHN_START_KEY` 'loading' until 30 s run with him; found
+  'loading' at a start, he is left out, `JOHN_OFF_KEY`, with a notice) and Settings -> TEST TOOLS -> John on/off
+  (restarts the game); `?john=on` forces him in. COST: about 120-300 K more triangles (his detail follows the frame rate like hers) and 34 draw calls.
   NOT YET: the one not played does not act on needs (bladder held) until the NPC brain; his belly fixed at 50%; his
   breathing uses her thorax data. LATER (Joshua): a one-piece suit for him, dark hunter green or camouflage with neon
   trim. ChatGPT's NPC brain template is kept in `docs/npc-brain/`: next, once John is stable on his iPhone.

@@ -33,7 +33,7 @@ import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
 
 /** What the dome test buttons can ask for. */
-export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
+export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet' | 'john';
 /** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
 export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'mustGo' | 'bathroom' | 'tired';
 
@@ -561,6 +561,8 @@ export class Hud {
     tool('Shatter', 'shatter');
     tool('Repair all', 'repair-all');
     tool('Get wet', 'wet');
+    // (John in or out of the game; the game starts again: main.ts, his crash guard)
+    tool('John on/off', 'john');
 
     this.setView('third');
   }

@@ -26,6 +26,7 @@ import { createOcean, WATER_Y, type Ocean } from './ocean';
 import { CarveData } from './carve';
 import { KauaiHydro } from './hydro';
 import { IslandTrees } from './trees';
+import { createSkyPicture, type SkyPicture } from './skyPicture';
 import type { Landscaping } from './treeObjects';
 
 /** The arrival point in the island's own metres (Beyond Extinction's spawn, from its manifest). */
@@ -167,15 +168,19 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   // the rivers are; Settings -> WORLD -> Landscaping picks photos, 3D trees near her, 3D only, or none (live)
   const trees = new IslandTrees(waterGroup, base, options.landscaping ?? 'hybrid');
 
-  // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze
+  // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze.
+  // Drawn straight from the picture (skyPicture.ts, v0.2.147): as `scene.background` three.js turned it into a
+  // 1024 cube with six depth buffers, about 48 MB more on the graphics chip for the same sky.
   scene.background = new THREE.Color(HAZE);
   scene.fog = new THREE.Fog(HAZE, FOG_NEAR, FOG_FAR);
   let skyPicture: THREE.Texture | null = null;
+  let sky: SkyPicture | null = null;
+  let gone = false; // (the island let go before the picture arrived: it is not put up)
   void new THREE.TextureLoader().loadAsync(`${base}sky/daysky_bg.jpg`).then((picture) => {
-    picture.mapping = THREE.EquirectangularReflectionMapping;
-    picture.colorSpace = THREE.SRGBColorSpace;
+    if (gone) { picture.dispose(); return; }
     skyPicture = picture;
-    scene.background = picture;
+    sky = createSkyPicture(picture);
+    scene.add(sky.mesh); // (the haze colour stays as the background, under it: seen only if the picture never comes)
   }).catch(() => { /* the plain haze colour stays */ });
 
   const groundAt = (x: number, z: number): number => tiles.heightAt(x, z);
@@ -220,6 +225,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       far.geometry.dispose();
       (far.material as THREE.Material).dispose();
       ocean.dispose();
+      gone = true;
+      sky?.dispose();
       skyPicture?.dispose();
     },
   };

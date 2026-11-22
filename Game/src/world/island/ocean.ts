@@ -103,6 +103,9 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
   const loader = new THREE.TextureLoader();
   void loader.loadAsync(`${base}kauai/coast_mask.png`).then((picture) => {
     picture.colorSpace = THREE.NoColorSpace; // (heights, not colours)
+    // ONE CHANNEL ON THE GRAPHICS CHIP (v0.2.147): the shader reads only its red (`.r` below), so only red is sent:
+    // 2048 x 2048 as R8 is 5.3 MB with its smaller copies, as RGBA it was 21.3 MB. The values are the same bytes.
+    picture.format = THREE.RedFormat;
     picture.wrapS = picture.wrapT = THREE.ClampToEdgeWrapping;
     picture.flipY = false; // (its first row is the north edge, as the shader reads it)
     picture.needsUpdate = true;

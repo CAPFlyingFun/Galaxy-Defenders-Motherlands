@@ -122,7 +122,7 @@ type GameHeroine = HeroineBody & {
  * If the fast heroine cannot be made (a look that has not been baked, a missing file) the Visual one is tried; if
  * that fails too the stand-in takes her place, so the game always starts.
  */
-async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false, parts: { headDetail?: number; handsDetail?: number } = {}): Promise<GameHeroine> {
+async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, settings: HeroineSettings, say: (text: string) => void, outfit: string | null, onlyFast = false, parts: { headDetail?: number; handsDetail?: number; oneLevel?: boolean } = {}): Promise<GameHeroine> {
   const asked = new URLSearchParams(location.search);
   if (asked.get('heroine') === 'standin' && !onlyFast) return createStandInHeroine();
   const { lookKey, LOOKS } = await import('./heroine/looks');
@@ -158,6 +158,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         //  JOHN_HANDS_DETAIL; unset for Blaze)
         headDetail: parts.headDetail,
         handsDetail: parts.handsDetail,
+        oneLevel: parts.oneLevel,
         onProgress: (stage) => say(`Loading ${who}: ${stageOf(stage)}…`),
       });
     } catch (error) {
@@ -836,7 +837,8 @@ async function start(): Promise<void> {
       // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
       const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
       const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true,
-        JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined } : {});
+        // (held at one detail, he keeps only that one level: fastHeroine.ts `oneLevel`, v0.2.147)
+        JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined, oneLevel: true } : {});
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);

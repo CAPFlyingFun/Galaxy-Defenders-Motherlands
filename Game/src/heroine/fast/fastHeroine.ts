@@ -230,6 +230,15 @@ export interface FastHeroineOptions {
    *  (detailLevels.ts `handPart`; Joshua, 2026-11-21, John: "Do face at 70%, hands at 15%", main.ts JOHN_HANDS_DETAIL).
    *  With the sharp set it replaces the 100 % `sharpParts` holds them at. Unset: as before. */
   readonly handsDetail?: number;
+  /**
+   * ONE LEVEL ONLY (v0.2.147; Joshua, 2026-11-22: the memory plan, "John letting go of his full-size body once his 1 %
+   * body is made"): a body held at ONE detail for good (John, main.ts JOHN_DETAIL) keeps only the level it wears. Every
+   * other body keeps its full 100 % as well (and the last few it wore), to go back to at once; John never goes back,
+   * and his 100 % level (his first, worn while his 1 % was made) was kept for nothing: its points in the page and its
+   * buffers on the graphics chip, about 15 MB each. Let go, it is made again if it is ever wanted (from its kept list
+   * of triangles, as any level let go).
+   */
+  readonly oneLevel?: boolean;
   /** The catsuit's knit in place of her look's own (outfitMaterial.ts SUIT_KNITS), for looks that wear a live knit. */
   readonly suitKnit?: keyof typeof SUIT_KNITS;
   /** Her hair drawn as strands and locks (hairStrands.ts). Default true. */
@@ -1167,6 +1176,9 @@ if (uHideHead > 0.5) {
       worn = worn.filter((k) => k !== key);
       worn.unshift(key);
       for (const old of worn.splice(KEEP_LEVELS)) if (old !== 100 && old !== key) body.release(old);
+      // (one level only: everything but the one worn now is let go, its 100 % too; `oneLevel` above)
+      //  (her first level, 100 %, is built as she is made, not worn through here, so it is named as well as `before`)
+      if (options.oneLevel) { for (const old of new Set([...worn, before, 100])) if (old !== key) body.release(old); worn = [key]; }
     }
     skin.material = detail >= FINE_FROM_DETAIL ? materials.fine : materials.plain;
     showHair(detail);

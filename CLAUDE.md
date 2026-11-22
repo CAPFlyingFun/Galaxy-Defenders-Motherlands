@@ -679,6 +679,29 @@ use the game's single copy of three.js.
   v0.2.144's splash and clear (the manual button) with v0.2.145's distance lines in the AI bubble. Kept, not live:
   branch `auto-fresh-start-wip` (v0.2.145) and git stash "v0.2.146 wip" (the held load, sw.js 'gdm-give-up', a 3 s cap
   on the unregister). IF THE MANUAL CLEAR EVER HANGS, that queue is why: the stash has the fix.
+- THE MEMORY PLAN, AFTER TRADDOMIUM (v0.2.147; Joshua, 2026-11-22: crashes still random right after the first picture,
+  "I'm curious still on what all loads", then "how did we split the GPU/CPU usage... and use something that works as a
+  template"). MEASURED on the built game (fresh browser, the island, both of them; /tmp scripts, a GL hook and a heap
+  snapshot): WHAT LOADS, 115 MB in 120 files: Blaze's live body 46 (builder files; her 15.4 MB body file a second time,
+  under `?r=`: the offline copy keys by path, so the phone stores it once and downloads it twice only with nothing kept),
+  Blaze 37, John 33, island 12, code 1.3, breathing 0.8. AT THE FIRST PICTURE: graphics chip 317 MB (his phone's line
+  said 311-328), page about 710 (Chrome: buffers 603 + JS 106). After a clean-up the page's buffers are 491 MB: Blaze's
+  LIVE BODY 213 (all builder internals: her 43 body shapes as floats, its build fields, fabric and fit data), Blaze's
+  fast body 137 (70 of it her 43 shapes, packed Int16, kept to follow the builder's weights: HER SHAPES ARE HELD TWICE),
+  John 56, three.js's copies 34 (morph textures' data 15.5), breathing decoded 14.4, island 12. ON THE CHIP: both looks'
+  packed pictures 99, the island SKY 59 (three.js turns an equirect background into a 1024 cube and keeps six depth
+  buffers), shadow map 32, coast mask 21, ground/river/tree pictures about 45, buffers 30.
+  TRADDOMIUM'S SPLIT (its docs/PERFORMANCE.md, sea/OceanView.ts, world/sea/swell.ts, assets/textureQuality.ts,
+  detailQuality.ts): ONE formula (the swell) that the graphics chip evaluates per vertex every frame and the processor
+  only at the few points gameplay asks; and TWO separate ladders, TEXTURES (memory: a cliff, the tab is killed) and
+  DETAIL (vertices a frame: a slope), each texture rung a quarter of the one above, Ultra never offered on a phone.
+  STEP 1, SAME LOOK, LESS MEMORY (this version): the sky drawn straight from its picture (`world/island/skyPicture.ts`,
+  a camera-turned box reading the picture per pixel, seam-free mip steps; PIXEL-IDENTICAL to the cube, compared),
+  the coast mask sent as one channel (ocean.ts `RedFormat`: the shader reads .r), John keeps only the level he wears
+  (fastHeroine.ts `oneLevel`: his 100 % was built as he was made and kept for nothing). Graphics est. 317 -> 252 MB;
+  page buffers after clean-up 491 -> 467 MB. NEXT (his call): step 2 a TEXTURES setting separate from Detail with phone
+  rungs (her skin-depth picture to 2048 first); step 3 HER LIVE BODY (TRADDOMIUM: keep the formula, not the whole body;
+  Joshua's idea from Anthill Airways: Live / Frozen / Auto, frozen between changes of her belly).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

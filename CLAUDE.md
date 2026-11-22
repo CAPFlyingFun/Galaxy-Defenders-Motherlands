@@ -300,7 +300,10 @@ use the game's single copy of three.js.
   and pelvis, and the male body's outfits; checked in the BUILT game, her hidden live body running. Before that v0.9.60, 2026-11-20, `main` bae4157: the catsuit DRAWN, smooth edges; its
   neckline from a low U/V to a turtleneck, neck shape and width; a CHEST CUTOUT, oval, diamond or keyhole; its room now
   disposes its head panel, the 350 MB leak; before that v0.9.51, skin depth's hybrid; v0.9.49, the hybrid pregnancy
-  curve, kicks, exact belly %; Joshua says when to copy a newer one). Since v0.9.45 it can UPLOAD AN IMAGE as a
+  curve, kicks, exact belly %; Joshua says when to copy a newer one). EVERY OUTFIT RE-BAKED ON v0.9.71 (v0.2.142, his
+  standing rule): all 19 looks and John, skin heights, packed pictures (45-65 dB, all marked packed) and thumbnails; before/after
+  pictured. `blaze` (the all-pink two-piece, `?look=blaze`, not in Settings' list) had last been baked on v0.9.40 at a
+  100% belly (week 37); it is now baked at its look's 10% (Joshua's export of 2026-11-19), as every other look is. Since v0.9.45 it can UPLOAD AN IMAGE as a
   piece's texture (kept with a saved character) and EXPORT one, several or all characters, as a zip with the pictures
   and the JSON when an image was uploaded. For later (Joshua): reference images painted on her body by its UVs and
   scaled to size, for more exact looks.
@@ -600,6 +603,33 @@ use the game's single copy of three.js.
   CRASHES her energy as it fades (12% for a full fade). MOOD from her needs (Sims style), shown only. TEMPERATURE,
   37 C at rest, to 38.8 working her hardest, cooler wet (0.4) and in water (1 at 1 m), shown only. Effort and fear were
   there already, now shown. TEST: FOOD & DRINK -> Make tired (energy 10%).
+- SOUND, AND HER BREATHING HEARD (v0.2.142; Joshua, 2026-11-21: his ElevenLabs breathing loops, "verify the breathing
+  rate and maybe between the numbers speed up or slow down fading into the next one… level the sound effects across all
+  of them"; he approved the preview: "sounds good to me and can add to the game"). THE GAME'S FIRST SOUND.
+  `audio/sound.ts`: one Web Audio context, woken by the first touch (and again whenever an iPhone puts it to sleep),
+  suspended while paused or changing outfit; Settings -> SOUND -> Master volume (`gdm.soundVolume`, `?sound=`, 80%) and
+  Breathing volume (`gdm.breathVolume`, `?breath=`, 70%), both live. The ring/silent switch mutes it on an iPhone.
+  THE FILES: his sources in `docs/reference/audio/breathing/female-<asked>.mp3`; `scripts/make_breathing.py` MEASURES
+  each one's real rate (every in- and out-breath is a sound between dips of quiet, round the loop; they alternate in all
+  seven), tells in from out (the shorter of a pair, or the brighter), lists every breath ([in, out, end]), turns the loop
+  to start at a breath in and smooths its old loop point (a click in the 45 and 40), LEVELS all to -23 LUFS (a quick
+  limiter holds the few sharp peaks under -1.5 dBFS), one channel, MP3 80k, and puts a 0.1 s pad with a tick in front so
+  the game finds where the breaths start whatever the browser's decoder did (`markerAt`). MEASURED (asked -> real):
+  15 -> 16, 20 -> 24, 25 -> 30, 30 -> 28, 35 -> 58, 40 -> 78, 45 -> 116 a minute: ElevenLabs did not keep to the numbers;
+  her range is 14 (16 pregnant) to 50 (about 70 with fear, pain, adrenaline), so the 45 is left out (`FASTEST_USED` 90)
+  and 30-57 is a gap (he may make 35/40/45/50 files; the prompt given says seconds per breath). Out:
+  `public/audio/breathing/female-*.mp3` + `female.json` (about 860 KB; kept on first use like the outfits, sw.js `audio/`).
+  HOW IT PLAYS (`audio/breathSound.ts`, `BREATH_SOUND`): NOT a loop. Breath by breath with her chest: her vitals' breath
+  cycle (`VitalsReading.breathCycle`, `breathInShare`, added for this) starting again plays a breath IN over her
+  in-share of the breath; reaching it, that breath's OUT over the rest. Each breath from the file whose measured rate is
+  nearest hers (ratio), kept until another is 12% nearer, each file's breaths in turn; a change of file only ever between
+  breaths (never two of her at once). Sped up or slowed to fit (Web Audio playback rate, 0.8-1.25x); too long fades out,
+  too short leaves a pause. Loudness by the air she moves (`quietest` 0.3 at rest .. 1 from 80 L a minute: about 9 dB
+  between calm and her hardest), then by the camera's distance (full within 1 m, half at 4 m; first person full). Blaze
+  only (`BREATH_VOICES` in main.ts; John when Joshua makes the male files), played or standing by. Test pages:
+  `gdm.breathing()`. `scripts/preview_breathing.py` plays the same rules over a made-up run into an MP3 (the one he
+  approved). Checked in the browser: the game's own BreathSound recorded off its master (21 breaths in 40 s, the files
+  switching as in the preview, calm -34 / hard -25 dB RMS); in the game the files load and the tick is found (start 0.1000).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:
@@ -689,6 +719,14 @@ use the game's single copy of three.js.
   HIS HEAD AT 100 % (same version; Joshua: "Can you put John's head at 100% detail"): main.ts `JOHN_HEAD_DETAIL` 100 (a
   part at 100 % is kept whole, detailWorker.ts skips its second pass), and his HAIR GOES WITH HIS HEAD (fastHeroine.ts
   `showHair`: the full haircut, not the light one his 1 % would pick). Lab: John at 1 % 64,241 triangles, his hair 27,886.
+  HIS OWN SKIN (v0.2.142; Joshua, 2026-11-21: "Why does his face look like that and spotty?"): he was wearing HER skin
+  picture. The builder's room puts the FACE tab's skin (all hers; EVEN = `sarah-v2-skin-even-2048.webp`) on any body it
+  loads (`applySkin` in `loadSarah`) while it fetches his own (`MALE_EVEN_SKIN`); the last to land is worn, and hers did
+  (MEASURED: still hers 8 s after loading). Read through HIS texture layout her picture scattered pieces of her skin
+  over him: a brown speck under his left eye, a strip down his forehead, patches on his jaw and neck (not detail: with
+  his normal map and skin depth off they stayed). builderRoom.ts 5c now waits for that skin to land and puts his own on
+  (`HIS_SKIN`, in `charb-files.json`); re-baked, his face is clean. BUILDER BUG: `applySkin` should give a male body his
+  own skin (sent to its agent through Joshua).
 - BACK TO v0.2.129 (Joshua, 2026-11-21, 15:11): after crashes on his iPhone the game went back to v0.2.126 (14:51),
   which then ran again ("It's working now... on v126"), so the crashes look like the phone's state (memory, stored
   files) more than the code; then "revert to v129... that will be easier". Kept on other branches, not live:

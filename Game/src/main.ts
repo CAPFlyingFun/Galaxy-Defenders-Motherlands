@@ -56,6 +56,8 @@ import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 // (the NPC brain, ChatGPT's template fitted to this game: one per character, src/npc/)
 import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, thoughtLines, type ActorHooks, type ActorWants } from './npc';
 import { ThoughtBubble } from './ui/thoughtBubble';
+import { Sound } from './audio/sound';
+import { BreathSound } from './audio/breathSound';
 
 /**
  * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
@@ -297,6 +299,10 @@ async function start(): Promise<void> {
   // per CSS pixel: a phone's 3x screen would triple the work for little gain.
   // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
   const graphics = loadHeroineSettings();
+  // THE GAME'S SOUND (audio/sound.ts): one Web Audio context, woken by the first touch, at Settings -> SOUND's master
+  // volume. Her breathing is its first sound (audio/breathSound.ts, `playBreaths` in the loop).
+  const sound = new Sound();
+  sound.setVolume(graphics.soundVolume / 100);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   // (a shader the phone will not build, or the graphics lost, said on screen: core/glTrouble.ts)
   watchGlTrouble(renderer.domElement);
@@ -456,6 +462,26 @@ async function start(): Promise<void> {
   const thoughtAt = new THREE.Vector3();
   /** How far above their eyes the bubble's tail points, metres (clear of the top of the head). */
   const THOUGHT_ABOVE = 0.3;
+  /**
+   * THEIR BREATHING, HEARD (Joshua, 2026-11-21: his ElevenLabs breathing files; audio/breathSound.ts): one breath at a
+   * time with their own chest, from their own vitals, quieter the farther the camera is (`playBreaths`, every frame).
+   * Blaze's voice is 'female'; John has none yet (Joshua makes the male files later): BREATH_VOICES names who has one.
+   */
+  const BREATH_VOICES: Readonly<Record<string, string>> = { Blaze: 'female' };
+  const breaths = new Map<Character, BreathSound>();
+  const breathAt = new THREE.Vector3();
+  const playBreaths = (): void => {
+    for (const c of [blaze, john]) {
+      if (!c) continue;
+      let b = breaths.get(c);
+      const voice = BREATH_VOICES[c.name];
+      if (!b && voice) { b = new BreathSound(sound, voice, __APP_VERSION__); breaths.set(c, b); }
+      if (!b) continue;
+      // (her own camera in first person: no distance at all)
+      const metres = c === playing && rig.mode === 'first' ? 0 : c.body.eye(breathAt).distanceTo(rig.camera.position);
+      b.update(c.vitals.reading, metres, graphics.breathVolume / 100);
+    }
+  };
   /**
    * JOHN'S DETAIL, FIXED (Joshua, 2026-11-21: v0.2.128 froze on his iPhone about 10 s in; "Put him at 1% detail. If that
    * works, then we can do the face and hands only and try again… and slowly add more"). John is drawn at this ONE level,
@@ -1286,6 +1312,9 @@ async function start(): Promise<void> {
       else if (key === 'autoFire') { if (playing) playing.autoFire = graphics.autoFire === 'on' ? 'on' : 'off'; applyView(); }
       else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
       else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
+      // (sound: the master at once; her breathing's own is read every frame, `playBreaths`)
+      else if (key === 'soundVolume') sound.setVolume(graphics.soundVolume / 100);
+      else if (key === 'breathVolume') { /* live: read every frame */ }
       else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
@@ -1423,6 +1452,8 @@ async function start(): Promise<void> {
       // (each one's brain: what it is doing and what it has done, for the test pages)
       brain: (name: 'blaze' | 'john') => { const c = name === 'john' ? john : blaze; return c?.brain ? { ...c.brain.inspect(), events: c.brain.events.slice(-8) } : null; },
       kitOf: (name: 'blaze' | 'john') => (name === 'john' ? john : blaze)?.kit ?? null,
+      // (her breathing, heard: whether the sound is running, and what each breather has played)
+      breathing: () => ({ sound: sound.context?.state ?? 'none', who: [...breaths].map(([c, b]) => ({ name: c.name, ...b.stats() })) }),
       // (for the test scripts: change her outfit as Settings does, and whether a change is running)
       changeOutfit: (key: string) => { graphics.outfit = key; saveSetting('outfit', key); return changeOutfit(); },
       outfitChanging: () => outfitChanging };
@@ -1625,6 +1656,7 @@ async function start(): Promise<void> {
     if (pause?.paused) {
       last = now;
       wasPaused = true;
+      sound.setPaused(true);   // (the sound stops with the game, and carries on with it)
       controls.takeLookX(); controls.takeLookY(); controls.takeZoom(); controls.takeClicks();
       if (pause.wantsPicture(now)) renderer.render(scene, rig.camera);
       return;
@@ -1635,10 +1667,11 @@ async function start(): Promise<void> {
     if (frozen) {
       last = now;
       wasPaused = true;
+      sound.setPaused(true);
       controls.takeLookX(); controls.takeLookY(); controls.takeZoom(); controls.takeClicks();
       return;
     }
-    if (wasPaused) { wasPaused = false; heroine.resumed?.(); }
+    if (wasPaused) { wasPaused = false; heroine.resumed?.(); sound.setPaused(false); }
     // ---- (the game, as before) ---------------------------------------------------------------------------------
 
     const dt = document.hidden ? 0 : Math.min(MAX_STEP, Math.max(0, (now - last) / 1000));
@@ -2205,6 +2238,8 @@ async function start(): Promise<void> {
         }));
       } else thoughtBubble.hide();
     }
+    // THEIR BREATHING, now that their vitals have moved on and the camera is where it is this frame
+    playBreaths();
 
     // 6. Draw.
     dome.update(info);

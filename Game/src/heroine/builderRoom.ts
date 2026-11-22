@@ -45,6 +45,10 @@ const TEE_DRESS_SECONDS = 6;
 const HIDDEN_STEP = 1 / 30;
 /** Give up on loading after this long (milliseconds): a file that never arrives must not hang the game for ever. */
 const LOAD_TIMEOUT_MS = 180_000;
+/** The male body's own skin picture (the builder's `MALE_EVEN_SKIN`, SarahLabScene.ts), relative to the builder's files. */
+const HIS_SKIN = 'models/skins/male-base-skin-even-2048.webp';
+/** How long the room is given for its FACE skin to land on the male body before his own is put on (seconds). */
+const HIS_SKIN_WAIT_S = 15;
 
 export interface BuilderRoomOptions {
   /** The game's renderer. The room compiles her materials with it; nothing is drawn by the room itself. */
@@ -333,6 +337,51 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
       scene.dispose();
       dropPageListeners();
       throw new Error(`[heroine] her code-painted layers could not be made: ${String((error as Error)?.message ?? error)}`);
+    }
+  }
+
+  // ---- 5c. HIS OWN SKIN on the male body -----------------------------------------------------------------------
+  // (Joshua, 2026-11-21, of John in the game: "Why does his face look like that and spotty?") When the room loads a
+  // body it puts on the skin chosen in its FACE tab (SarahLabScene.ts `applySkin`, called from `loadSarah`), and those
+  // are all HER pictures, painted for HER body's texture layout. For the male body it also fetches his own even skin
+  // (`MALE_EVEN_SKIN`) at the same moment: whichever picture lands last is the one he wears, and hers landed last
+  // (MEASURED: his skin's map was `sarah-v2-skin-even-2048.webp` 8 s after loading, both in the room and in the bake).
+  // Her picture read through HIS layout scatters pieces of her skin over him: the brown speck under his left eye, the
+  // strip down his forehead, the patches on his jaw and neck. With his own picture put back his face is clean (pictured
+  // side by side). So for the male body the room waits for that skin to land and then gives him his own.
+  // (BUILDER BUG: `applySkin` should give a male body his own skin; reported to its agent.)
+  if (options.look.body.model === 'male-base') {
+    const skin = findPaintedSkin(model);
+    const material = skin && (Array.isArray(skin.material) ? skin.material[0] : skin.material) as THREE.MeshStandardMaterial;
+    if (material) {
+      /** Which picture the skin wears now: a builder skin picture has an address; his file's own does not. */
+      const wearing = (): string => {
+        const image = material.map?.image as { currentSrc?: string; src?: string } | undefined;
+        return image?.currentSrc || image?.src || '';
+      };
+      // her FACE skin lands a moment after "dressed": wait for any builder skin picture (at most HIS_SKIN_WAIT_S)
+      const waitFrom = performance.now();
+      while (!wearing().includes('/models/skins/') && performance.now() - waitFrom < HIS_SKIN_WAIT_S * 1000) {
+        step(HIDDEN_STEP);
+        await nextFrame();
+      }
+      if (!wearing().includes(HIS_SKIN)) {
+        say('putting his own skin on');
+        const own = material.map;
+        const his = await new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}charb/${HIS_SKIN}`);
+        // set up as the builder sets up any skin picture it puts on (SarahLabScene.ts `likeOwn`): glTF's way up, his
+        // file's colour space, wrapping and texture channel
+        his.flipY = false;
+        his.colorSpace = own?.colorSpace ?? THREE.SRGBColorSpace;
+        if (own) {
+          his.wrapS = own.wrapS; his.wrapT = own.wrapT; his.channel = own.channel; his.anisotropy = own.anisotropy;
+          his.offset.copy(own.offset); his.repeat.copy(own.repeat); his.rotation = own.rotation; his.center.copy(own.center);
+        }
+        his.needsUpdate = true;
+        material.map = his;
+        material.needsUpdate = true;
+        // (her picture is not disposed: the room keeps it as its fetched FACE skin and frees it itself)
+      }
     }
   }
   say('ready');

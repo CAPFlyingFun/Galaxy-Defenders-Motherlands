@@ -258,6 +258,12 @@ export interface VitalsReading {
   readonly breathLitres: number;
   /** her breath this instant: 0 all out .. 1 all in (her chest and belly follow this) */
   readonly breath: number;
+  /**
+   * How far through this breath she is, 0 .. 1 (0 = she starts breathing in), and the share of it spent breathing in
+   * (the builder's 0.4 at rest .. 0.48 at her hardest): her breathing's SOUND follows these (audio/breathSound.ts).
+   */
+  readonly breathCycle: number;
+  readonly breathInShare: number;
   /** her heart's squeeze this instant, 0 .. 1 */
   readonly beat: number;
   /** stamina: the energy she has left, 0 empty .. 1 fresh */
@@ -638,6 +644,8 @@ export class HeroineVitals {
       breathsPerMinute: this.now.breathsPerMinute,
       breathLitres: this.now.tidalL,
       breath: this.now.breath,
+      breathCycle: this.vitals.cycle,
+      breathInShare: this.now.inShare,
       beat: this.now.beat,
       stamina: this.vitals.energy,   // (her own, after the game's extra drain)
       effort: this.now.felt,

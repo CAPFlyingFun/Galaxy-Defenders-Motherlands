@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "blazeCatsuit",
-  "bakedAt": "2026-11-19T13:12:29.321Z",
-  "builderVersion": "0.9.40",
+  "bakedAt": "2026-11-22T02:46:35.935Z",
+  "builderVersion": "0.9.71",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.699901526043348,
+  "barefootHeightMetres": 1.6999965021657908,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -22,6 +22,7 @@
     "colour": "#1c1b1d",
     "length": 1
   },
+  "body": "v2-body",
   "files": {
     "albedo": "albedo.webp",
     "normal": "normal.webp",
@@ -31,12 +32,12 @@
   },
   "facts": {
     "drawnInTheRoom": [
-      "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
       "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0_1, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
-      "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
+      "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
       "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
@@ -49,11 +50,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.7159739662287146,
-    "pointsTheBuilderMoved": 53331,
-    "movedMostGeometryUnits": 0.14997782762111,
+    "crownOverTheFloorMetres": 1.7160689423511573,
+    "pointsTheBuilderMoved": 53327,
+    "movedMostGeometryUnits": 0.15006958673162252,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16316337735573402,
+    "restSkinSpread": 0.16331441676722958,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -68,6 +69,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-22T00:54:48+00:00"
+    "packedAt": "2026-11-22T02:48:35+00:00"
   }
 }

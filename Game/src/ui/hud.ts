@@ -445,7 +445,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'lookSensitivity' | 'moveSensitivity' | 'zoomThird' | 'tableHeight' | 'skinShine'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'lookSensitivity' | 'moveSensitivity' | 'zoomThird' | 'tableHeight' | 'skinShine' | 'soundVolume' | 'breathVolume'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -521,6 +521,11 @@ export class Hud {
     element('h2', 'gd-settings-part', settings, 'HUD');
     choiceRow('Vitals style', 'vitalsStyle', [['List', 'list'], ['Gauges', 'gauges']], 'List: each stat as an icon, its number and its name, in two columns. Gauges: the four most important as round gauges, the rest as hexagons. An urgent one moves up into the first places. Changes at once.');
     choiceRow('Units', 'units', [['Both', 'both'], ['Imperial (mph, °F)', 'imperial'], ['Metric (km/h, °C)', 'metric']], 'Her speed and her body temperature.');
+    // ---- Settings: sound (Joshua, 2026-11-21: her breathing, the game's first sound; audio/sound.ts, breathSound.ts)
+    element('h2', 'gd-settings-part', settings, 'SOUND');
+    sliderRow('Master volume', 'soundVolume', 0, 100, 5, (v) => (v === 0 ? 'off' : `${v}%`));
+    sliderRow('Breathing volume', 'breathVolume', 0, 100, 5, (v) => (v === 0 ? 'off' : `${v}%`));
+    element('small', 'gd-note', settings, 'Her breathing follows her chest, breath by breath: soft when she is calm, full when she is out of breath, quieter the farther the camera is. On an iPhone the silent switch mutes the game.');
     element('h2', 'gd-settings-part', settings, 'CAMERA');
     // (Joshua, 2026-11-21: "make movement and camera sensitivity adjustable in settings... then I can tweak both")
     sliderRow('Camera sensitivity', 'lookSensitivity', SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most, 5, (v) => `${v}%`);

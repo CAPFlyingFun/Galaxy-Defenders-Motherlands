@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "catsuitGold",
-  "bakedAt": "2026-11-20T17:17:31.164Z",
-  "builderVersion": "0.9.60",
+  "bakedAt": "2026-11-22T03:48:38.307Z",
+  "builderVersion": "0.9.71",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7134627257793762,
+  "barefootHeightMetres": 1.7134317165160209,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -22,6 +22,7 @@
     "colour": "#1c1b1d",
     "length": 1
   },
+  "body": "v2-body",
   "files": {
     "albedo": "albedo.webp",
     "normal": "normal.webp",
@@ -40,11 +41,11 @@
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7000999516145126,
+    "crownOverTheFloorMetres": 1.7000689423511575,
     "pointsTheBuilderMoved": 73401,
-    "movedMostGeometryUnits": 0.15010509874066266,
+    "movedMostGeometryUnits": 0.15006958673162252,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16335546913083757,
+    "restSkinSpread": 0.16331441676722958,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -59,6 +60,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-22T01:06:31+00:00"
+    "packedAt": "2026-11-22T03:49:49+00:00"
   }
 }

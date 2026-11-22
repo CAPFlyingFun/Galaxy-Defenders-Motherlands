@@ -128,6 +128,12 @@ export interface HeroineSettings {
   /** HER BODY'S CLOCK: game hours per real hour for her stomach and gut (Joshua, 2026-11-19, to test). Takes hold at once. */
   bodyClock: number;
   /**
+   * SOUND (Joshua, 2026-11-21: her breathing, the game's first sound): the MASTER volume and her BREATHING's own,
+   * percent (0 = off). Both take hold at once (audio/sound.ts, audio/breathSound.ts).
+   */
+  soundVolume: number;
+  breathVolume: number;
+  /**
    * HER VITALS CARD'S LAYOUT (Joshua, 2026-11-21: "create two layouts to choose from"; "Layout B as default"): 'list' a
    * clean two-column list of icon, number and name; 'gauges' round and hexagon gauges (vitals/vitalsPanel.ts). Live.
    */
@@ -154,6 +160,8 @@ export const EYE_HEIGHT_RANGE = Object.freeze({ least: -6, most: 20 });
 /** The sensitivity sliders' range, percent, and where each starts (camera lowered: Joshua, "lower the camera sensitivity"). */
 export const SENSITIVITY_RANGE = Object.freeze({ least: 20, most: 200 });
 export const SENSITIVITY_START = Object.freeze({ look: 60, move: 100 });
+/** SOUND: where the master and breathing volumes start, percent (GAME TUNING until Joshua has heard them). */
+export const SOUND_START = Object.freeze({ master: 80, breath: 70 });
 /** Where the third-person zoom begins unless the player chose (the camera's own start before). */
 export const ZOOM_START_DEFAULT = 0.17;
 
@@ -238,6 +246,8 @@ export const SETTING_KEYS = Object.freeze({
   faceLocks: 'gdm.faceLocks',
   skinShine: 'gdm.skinShine',
   bodyClock: 'gdm.bodyClock',
+  soundVolume: 'gdm.soundVolume',
+  breathVolume: 'gdm.breathVolume',
   vitalsStyle: 'gdm.vitalsStyle',
   units: 'gdm.units',
   npcThoughts: 'gdm.npcThoughts',
@@ -325,6 +335,9 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
     // (15: what the game has run at; Joshua's real-life plan is 6)
     bodyClock: asNumber(address.get('clock') ?? read(SETTING_KEYS.bodyClock), 1, 60) ?? 15,
+    // (`?sound=0` starts the game silent, for test pages)
+    soundVolume: asNumber(address.get('sound') ?? read(SETTING_KEYS.soundVolume), 0, 100) ?? SOUND_START.master,
+    breathVolume: asNumber(address.get('breath') ?? read(SETTING_KEYS.breathVolume), 0, 100) ?? SOUND_START.breath,
     // (the list unless the gauges were chosen; both units unless one was)
     vitalsStyle: (address.get('vitals') ?? read(SETTING_KEYS.vitalsStyle)) === 'gauges' ? 'gauges' : 'list',
     units: ((v) => (v === 'imperial' || v === 'metric' ? v : 'both'))(address.get('units') ?? read(SETTING_KEYS.units)),

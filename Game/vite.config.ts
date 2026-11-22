@@ -200,8 +200,8 @@ function pwa(): Plugin {
       // (the test and bake pages are not kept at all)
       const LAB_PAGES = ['armor-lab.html', 'bake.html', 'heroine-lab.html', 'vitals-lab.html'];
       // THE BIG FILES, kept as they are first used, each by its own fingerprint: her outfits, fabrics and their pictures
-      // in Settings (about 135 small ones), the builder's files, the island's tiles
-      const isBig = (f: string) => /^(heroines|fabrics|thumbs|charb|island)\//.test(f);
+      // in Settings (about 135 small ones), the builder's files, the island's tiles, the sounds (audio/: her breathing)
+      const isBig = (f: string) => /^(heroines|fabrics|thumbs|charb|island|audio)\//.test(f);
       const app = files.filter((f) => !isBig(f) && !LAB_PAGES.includes(f));
       const big = files.filter(isBig);
       const hashes: Record<string, string> = {};

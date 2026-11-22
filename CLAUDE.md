@@ -606,7 +606,7 @@ use the game's single copy of three.js.
 - SOUND, AND HER BREATHING HEARD (v0.2.142; Joshua, 2026-11-21: his ElevenLabs breathing loops, "verify the breathing
   rate and maybe between the numbers speed up or slow down fading into the next one… level the sound effects across all
   of them"; he approved the preview: "sounds good to me and can add to the game"). THE GAME'S FIRST SOUND.
-  `audio/sound.ts`: one Web Audio context, woken by the first touch (and again whenever an iPhone puts it to sleep),
+  `audio/sound.ts`: one Web Audio context (made as a step of the load, v0.2.144), woken by the first touch (and again whenever an iPhone puts it to sleep),
   suspended while paused or changing outfit; Settings -> SOUND -> Master volume (`gdm.soundVolume`, `?sound=`, 80%) and
   Breathing volume (`gdm.breathVolume`, `?breath=`, 70%), both live. The ring/silent switch mutes it on an iPhone.
   THE FILES: his sources in `docs/reference/audio/breathing/female-<asked>.mp3`; `scripts/make_breathing.py` MEASURES
@@ -647,8 +647,10 @@ use the game's single copy of three.js.
   outfit tried. main.ts `keepWornOutfits` tells the worker ('gdm-keep-outfits', her folder as baked, BAKED_AS, and
   'john') 8 s into play and after every outfit change; sw.js `keepOnlyOutfits` lets every other heroines/<folder>/ file
   go. Tested on the built game: a third outfit's files dropped, the worn two kept.
-  (5) NOTHING OF THE SOUND WHILE LOADING: the Web Audio context is made only when the first sound is wanted
-  (`Sound.start`), her breathing fetched BREATH_AFTER_S (12) s after play begins, its files decoded one at a time.
+  (5) THE SOUND: the Web Audio context is made only when first wanted (`Sound.start`), her breathing files decoded one
+  at a time. v0.2.143 held them back until 12 s into play; v0.2.144 LOADS THEM AS A STEP OF THE LOAD (Joshua: "load
+  the audio on start… don't wait until after in the game… that doesn't make sense"): 'Loading her breathing…' before
+  the first picture, at most 20 s (never a reason not to start), so she is heard from her first breath.
   (6) BLAZE'S LIVE BODY ONLY WHEN SOMEONE IS NEAR HER (Joshua: "only if playing her, or within 12m as another character
   ... It will freeze her live portions until close again"): main.ts `wakeBlazesLiveBody`, LIVE_NEAR 12 m (asleep past
   12.5) between the one played and her; fastHeroine.ts `setLiveAwake`: asleep, her live body is not stepped at all,

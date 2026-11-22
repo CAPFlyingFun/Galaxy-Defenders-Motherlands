@@ -14,9 +14,9 @@
 // NOTE: on an iPhone the ring/silent switch mutes web sound; with the switch
 // on silent the game is quiet (as most web games are).
 //
-// NOTHING AT LOAD (v0.2.143; Joshua, 2026-11-22: v0.2.142 "keeps crashing on
-// load"): the context is only made when the first sound is wanted (`start`,
-// a little after play begins), never while the game is loading.
+// MADE WHEN FIRST WANTED (`start`): as a step of the load, where her breathing
+// files are fetched and decoded (Joshua, 2026-11-22: "load the audio on
+// start"; v0.2.143 had held it back until 12 s into play).
 // ============================================================================
 
 /** The page's own events that count as the player's touch (any of them may wake the sound). */

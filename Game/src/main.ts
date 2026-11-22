@@ -59,7 +59,7 @@ import { GrabBars, GrabUse, type BarName } from './world/grabBars';
 import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, thoughtLines, type ActorHooks, type ActorWants } from './npc';
 import { ThoughtBubble } from './ui/thoughtBubble';
 import { Sound } from './audio/sound';
-import { BreathSound } from './audio/breathSound';
+import { BreathSound, loadBreathVoice } from './audio/breathSound';
 
 /**
  * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
@@ -506,11 +506,7 @@ async function start(): Promise<void> {
    * Blaze's voice is 'female'; John has none yet (Joshua makes the male files later): BREATH_VOICES names who has one.
    */
   const BREATH_VOICES: Readonly<Record<string, string>> = { Blaze: 'female' };
-  /**
-   * NOT WHILE LOADING (v0.2.143; Joshua, 2026-11-22: v0.2.142 "keeps crashing on load"): the sound is made, and her
-   * breathing files fetched and decoded one at a time, only this many seconds after play begins.
-   */
-  const BREATH_AFTER_S = 12;
+  // (her breathing files are loaded as a step of the load, 'Loading her breathing…' below; each one decoded in turn)
   const breaths = new Map<Character, BreathSound>();
   const breathAt = new THREE.Vector3();
   /**
@@ -535,8 +531,7 @@ async function start(): Promise<void> {
     if (awake !== blazeLiveAwake) { blazeLiveAwake = awake; blaze.body.setLiveAwake?.(awake); markStart(awake ? 'Blaze live awake' : 'Blaze live asleep'); }
   };
   const playBreaths = (): void => {
-    if (!(playingSince > 0) || performance.now() - playingSince < BREATH_AFTER_S * 1000) return;
-    if (!sound.start()) return;   // (no Web Audio here: silent)
+    if (!(playingSince > 0) || !sound.start()) return;   // (from the first frame of play; no Web Audio here: silent)
     for (const c of [blaze, john]) {
       if (!c) continue;
       let b = breaths.get(c);
@@ -1554,6 +1549,15 @@ async function start(): Promise<void> {
   // slowest: every shape and picture is handed to the chip as it is first drawn). The splash lifts when that
   // picture is done: see the top of the loop below.
   await breathe();
+  // HER BREATHING, LOADED WITH EVERYTHING ELSE (Joshua, 2026-11-22: "load the audio on start… don't wait until after in
+  // the game… that doesn't make sense"): the sound is made and her breathing files fetched and decoded (one at a time)
+  // as a step of the load, so she is heard from her first breath. (v0.2.143 had them wait until 12 s into play.)
+  if (sound.start()) {
+    meter.step('breathing', 'Loading her breathing…');
+    // (never a reason not to start: given 20 s at most, after which the files go on loading in play)
+    const voices = Object.entries(BREATH_VOICES).filter(([name]) => [blaze, john].some((c) => c?.name === name)).map(([, voice]) => voice);
+    await Promise.race([Promise.all(voices.map((voice) => loadBreathVoice(sound, voice, __APP_VERSION__))), new Promise((enough) => setTimeout(enough, 20000))]);
+  }
   meter.step('picture', 'Getting the picture ready…');
   try {
     // (never waited on for more than 5 seconds, and never a reason not to start: it is only a head start)

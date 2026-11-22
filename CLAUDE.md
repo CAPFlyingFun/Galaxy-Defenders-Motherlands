@@ -670,14 +670,15 @@ use the game's single copy of three.js.
   as far as Settings. Tested on the built game: the stores emptied, the game reloaded and downloaded everything.
   WHY THE DOWNLOAD JUMPS ("5mb to 50mb, slowly up to 52mb, jump to 100mb"): files the phone already keeps arrive in a
   moment, new or changed ones at the network's speed.
-  (9) A CLOSED START STARTS FRESH BY ITSELF (v0.2.145; Joshua, 2026-11-22: "if it crashes, the default will be to
-  redownload everything again and clear the cache... and maybe a 5s cancel button if you want to skip it"; splash.ts
-  `showLastStart`, `FRESH_AFTER_CLOSE_S` 5): under the amber line the splash (and the rotate cover) counts down "its
-  saved files will be cleared and the whole game downloaded again in N s", with Cancel (keep them; the load goes on) and
-  Clear now; at 0, `clearAndStartFresh`. So it is not set off by mistake, a start that ended ON PURPOSE is not counted
-  as closed (startupLog.ts `ENDED_ON_PURPOSE`): the page hidden or shut ('left': put away, or closed while away) or the
-  game restarting itself ('restart', core/restart.ts `markRestart`). Tested on the built game: leaving a start shows
-  nothing; a start with no ending counts down; Cancel keeps the files and the game loads.
+  (9) TRIED AND TAKEN OUT: A CLOSED START STARTING FRESH BY ITSELF (v0.2.145; Joshua, 2026-11-22: "if it crashes, the
+  default will be to redownload everything again and clear the cache... and maybe a 5s cancel button"): a 5 s count
+  under the amber line, then the clear. On his phone the load went on behind the count and the clear came part-way
+  through ("there was a race between the 5s and it already loading"); a v0.2.146 that held the load for the choice also
+  found the clear sat on "Clearing saved files…" (a new version's install waits for 'gdm-up', and the browser queues the
+  unregister behind it). Then Joshua: "Remove that automatic feature for now (leave manual as that works)": v0.2.146 is
+  v0.2.144's splash and clear (the manual button) with v0.2.145's distance lines in the AI bubble. Kept, not live:
+  branch `auto-fresh-start-wip` (v0.2.145) and git stash "v0.2.146 wip" (the held load, sw.js 'gdm-give-up', a 3 s cap
+  on the unregister). IF THE MANUAL CLEAR EVER HANGS, that queue is why: the stash has the fix.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

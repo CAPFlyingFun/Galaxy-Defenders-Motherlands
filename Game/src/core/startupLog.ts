@@ -14,14 +14,6 @@
 const KEY = 'gdm.startLog';
 /** The last step: reached, the start is counted as one that worked. */
 export const START_SURVIVED = '30 s';
-/**
- * A start that ENDED ON PURPOSE is not one the phone closed (v0.2.145: a closed start now clears the saved files and
- * downloads everything again, so it must really have been closed): 'left' (the app was put away or shut by the player:
- * the page was hidden, and if it is closed while away that is the phone tidying up, not a crash) and 'restart' (the
- * game started itself again: a setting that needs it, or Clear saved files). A start whose LAST step is one of these
- * is not counted as closed; one that came back after 'left' and went on is judged by its later steps.
- */
-const ENDED_ON_PURPOSE = new Set(['left', 'restart']);
 
 interface Step {
   /** the step */
@@ -54,19 +46,11 @@ export function beginStartLog(version: string, mb: () => number, dl: () => numbe
   downloaded = dl;
   try {
     const before = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Log | null;
-    const last = before && Array.isArray(before.steps) ? before.steps[before.steps.length - 1] : null;
-    if (before && last && !before.steps.some((step) => step.s === START_SURVIVED) && !ENDED_ON_PURPOSE.has(last.s)) lastClosed = before;
+    if (before && Array.isArray(before.steps) && before.steps.length && !before.steps.some((step) => step.s === START_SURVIVED)) lastClosed = before;
   } catch { /* nothing readable: nothing to say */ }
   log = { version, steps: [] };
   markStart('page');
-  // (put away or shut by the player: see ENDED_ON_PURPOSE)
-  const away = (): void => { if (document.visibilityState === 'hidden') markStart('left'); };
-  document.addEventListener('visibilitychange', away);
-  window.addEventListener('pagehide', () => markStart('left'));
 }
-
-/** The game is starting itself again ON PURPOSE (core/restart.ts): not a start the phone closed. */
-export function markRestart(): void { markStart('restart'); }
 
 /** A step reached: written down at once (so it is there even if the phone closes the game the next moment). */
 export function markStart(step: string): void {

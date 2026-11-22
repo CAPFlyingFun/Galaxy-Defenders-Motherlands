@@ -12,8 +12,6 @@
 // reload is all there is (nothing heavy is held yet).
 // ============================================================================
 
-import { markRestart } from './startupLog';
-
 let letGoAndReload: (() => void) | null = null;
 
 /** main.ts: the job that lets go of the game's graphics and then reloads the page (replaces any earlier one). */
@@ -23,8 +21,6 @@ export function setRestart(job: () => void): void {
 
 /** Start the game again, letting go of everything it holds first. */
 export function restartGame(): void {
-  // (a start ended on purpose: the next one is not told the phone closed it, core/startupLog.ts)
-  markRestart();
   if (letGoAndReload) letGoAndReload();
   else location.reload();
 }

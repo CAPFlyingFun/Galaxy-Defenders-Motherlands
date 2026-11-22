@@ -26,10 +26,14 @@
 //                    arrived, as the whole is not known yet.
 //   the last start   if the phone CLOSED the game while it started last time,
 //                    where it had got to (core/startupLog.ts): a screenshot of
-//                    the splash then says where it stopped.
+//                    the splash then says where it stopped. With it, a button
+//                    to CLEAR THE SAVED FILES AND START FRESH (core/freshStart.ts;
+//                    Joshua, 2026-11-22), there when the game cannot get as far
+//                    as Settings.
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
 import { restartGame } from '../core/restart';
+import { clearAndStartFresh } from '../core/freshStart';
 
 export interface Splash {
   /** The game is ready: the bar fills, the splash fades away and is taken off the page. */
@@ -85,11 +89,25 @@ export function bytesText(bytes: number, expected: number | null, perSecond: num
   return `${megabytes(bytes)} / ${megabytes(whole)} MB · ${Math.floor((bytes / whole) * 100)}%${speed}`;
 }
 
-/** Show where the LAST start stopped, if the phone closed it (core/startupLog.ts), on the splash and the cover. */
+/**
+ * Show where the LAST start stopped, if the phone closed it (core/startupLog.ts), on the splash and the cover, and with
+ * it the button that clears the game's saved files and starts fresh (core/freshStart.ts).
+ */
 export function showLastStart(text: string | null): void {
   for (const id of ['splash-last', 'rotate-last']) {
     const node = document.getElementById(id);
     if (node) node.textContent = text ?? '';
+  }
+  for (const id of ['splash-fresh', 'rotate-fresh']) {
+    const button = document.getElementById(id) as HTMLButtonElement | null;
+    if (!button) continue;
+    button.hidden = !text;
+    button.onclick = (event) => {
+      event.stopPropagation();
+      button.disabled = true;
+      button.textContent = 'Clearing saved files…';
+      void clearAndStartFresh();
+    };
   }
 }
 

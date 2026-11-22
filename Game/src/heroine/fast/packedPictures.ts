@@ -68,6 +68,9 @@ function doneWith(): void {
  * game's other pictures are: rows as the bake wrote them (never flipped), repeating, smooth between its copies.
  * @param colour  true for colours (her albedo: read as sRGB), false for numbers (heights, normals, shine)
  */
+/** What a packed picture's levels hold in the page once they are on the graphics chip (`packedTexture`). */
+const NOTHING = new Uint8Array(0);
+
 export async function packedTexture(bytes: ArrayBuffer, colour: boolean, renderer: THREE.WebGLRenderer): Promise<THREE.CompressedTexture> {
   const l = loaderFor(renderer);
   busy++;
@@ -84,7 +87,20 @@ export async function packedTexture(bytes: ArrayBuffer, colour: boolean, rendere
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = texture.mipmaps && texture.mipmaps.length > 1 ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
     texture.generateMipmaps = false;   // (its smaller copies are in the file)
+    // (as sharp at a slant as her other pictures: outfitMaterial.ts and skinTexture.ts ask for the same; set before it
+    //  goes up, as a texture's settings are only read as it goes up)
+    texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     texture.needsUpdate = true;
+    // UP TO THE GRAPHICS CHIP NOW, AND THE PAGE'S OWN COPY LET GO (v0.2.144; Joshua, 2026-11-22: the start log showed his
+    // iPhone closing the game right after its FIRST FRAME of play, ~311 MB of graphics asked for). three.js keeps every
+    // texture's data in the page after sending it to the chip, so each packed picture was held twice: on the chip AND
+    // in the page's memory (about 49 MB a character: albedo and skin height 21 MB each, normal 5, surface 1), and all
+    // of them went up together in the first frames. Now each goes up the moment it is unpacked, while she loads, and
+    // the page's copy is dropped at once: the chip's is the only one. (Nothing asks for it to go up again: no setting
+    // of these pictures changes after this. If the phone ever loses its graphics, glTrouble.ts says so and a restart
+    // brings them back.)
+    renderer.initTexture(texture);
+    for (const level of texture.mipmaps ?? []) (level as { data: ArrayBufferView }).data = NOTHING;
     return texture;
   } finally {
     doneWith();

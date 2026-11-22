@@ -80,6 +80,11 @@
   /* how far the LAST start got, when the phone closed it (src/core/startupLog.ts): so a screenshot says where */
   .splash-last { margin-top: 10px; font-size: 11px; line-height: 1.35; color: #ffb35c; text-align: left; }
   .splash-last:empty { display: none; }
+  /* START FRESH (core/freshStart.ts): shown with the last-start line, so it can be tapped when the game cannot get as
+     far as Settings (Joshua, 2026-11-22: "a manual clear local saved data from phone") */
+  .splash-fresh { display: block; margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 179, 92, .6);
+    background: rgba(255, 179, 92, .1); color: #ffb35c; font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+  .splash-fresh[hidden] { display: none; }
   /* Loading failed: the words say so, in gold, and the light stops sweeping. */
   #splash.is-broken .splash-step { white-space: normal; }
   #splash.is-broken .splash-bar::after { animation: none; opacity: 0; }
@@ -173,6 +178,7 @@
     <!-- the game's version (src/ui/versionTag.ts), so the one on the phone can be told at a glance -->
     <div class="splash-version" id="splash-version"></div>
     <div class="splash-last" id="splash-last"></div>
+    <button type="button" class="splash-fresh" id="splash-fresh" hidden>Clear saved files and start fresh</button>
   </div>
 </div>
 
@@ -193,6 +199,7 @@
       <div class="splash-bytes" id="rotate-bytes"></div>
       <div class="splash-version" id="rotate-version"></div>
       <div class="splash-last" id="rotate-last"></div>
+      <button type="button" class="splash-fresh" id="rotate-fresh" hidden>Clear saved files and start fresh</button>
     </div>
     <div class="rotate-title rotate-play">PAUSED</div>
     <p class="rotate-hint rotate-play">Turn your phone on its side to keep playing.</p>

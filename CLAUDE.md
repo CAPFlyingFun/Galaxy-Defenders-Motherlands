@@ -655,6 +655,21 @@ use the game's single copy of three.js.
   ... It will freeze her live portions until close again"): main.ts `wakeBlazesLiveBody`, LIVE_NEAR 12 m (asleep past
   12.5) between the one played and her; fastHeroine.ts `setLiveAwake`: asleep, her live body is not stepped at all,
   her kicks and shape stay as they were. Readout: `Blaze live: asleep (far)`. Tested: John 30 m off, asleep; back, awake.
+  WHAT THE START LOG SHOWED (his iPhone on v0.2.143, 2026-11-22 06:06): "closed after: frame 1 · 12.5 s in · 105.8 MB
+  downloaded · ~311 MB graphics (est.)": the phone closed the game RIGHT AFTER ITS FIRST FRAME OF PLAY, at random (the
+  next starts ran: "the loading and crashes are random on load"). So, v0.2.144:
+  (7) EACH PACKED PICTURE GOES UP AS IT IS UNPACKED, AND THE PAGE'S COPY IS LET GO (packedPictures.ts `packedTexture`:
+  `renderer.initTexture` then every level's data emptied; its anisotropy set first, the same min(4, max) the materials
+  ask for, as a texture's settings are only read as it goes up). three.js keeps a texture's data in the page after
+  sending it to the chip: each packed picture was held twice, about 49 MB a character, all going up together in the
+  first frames. (A lost-graphics restore cannot re-send them: glTrouble.ts says so, a restart brings them back.)
+  (8) START FRESH (Joshua: "a manual clear local saved data from phone, so when I start again, it loads it all from
+  scratch"; `core/freshStart.ts`): this game's stores (gdm-*) and its service worker let go (only this game's: other
+  games share the site), the start log cleared, settings kept; then a restart. Settings -> TEST TOOLS -> Clear saved
+  files (two taps), and on the splash beside the amber last-start line (`splash-fresh`), for when the game cannot get
+  as far as Settings. Tested on the built game: the stores emptied, the game reloaded and downloaded everything.
+  WHY THE DOWNLOAD JUMPS ("5mb to 50mb, slowly up to 52mb, jump to 100mb"): files the phone already keeps arrive in a
+  moment, new or changed ones at the network's speed.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -31,6 +31,7 @@ import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
 import { PACE_TUNING } from '../input/pace';
 import { DETAILS } from '../heroine/fast/detailLevels';
+import { clearAndStartFresh } from '../core/freshStart';
 
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
@@ -566,6 +567,24 @@ export class Hud {
     tool('Shatter', 'shatter');
     tool('Repair all', 'repair-all');
     tool('Get wet', 'wet');
+    // START FRESH (Joshua, 2026-11-22: "a manual clear local saved data from phone, so when I start again, it loads it
+    // all from scratch"; core/freshStart.ts): every file the game keeps on the phone let go, then it starts again and
+    // downloads everything. Two taps, so it is never done by a slip of the finger.
+    {
+      const fresh = element('button', 'gd-button', tools, 'Clear saved files');
+      let armed = 0;
+      tapButton(fresh, () => {
+        if (!armed) {
+          fresh.textContent = 'Tap again to clear';
+          armed = window.setTimeout(() => { armed = 0; fresh.textContent = 'Clear saved files'; }, 3000);
+          return;
+        }
+        window.clearTimeout(armed);
+        fresh.textContent = 'Clearing…';
+        void clearAndStartFresh();
+      });
+    }
+    element('small', 'gd-note', settings, 'Clear saved files: everything the game keeps on this phone (its code, outfits, the builder\'s files, the island) is let go and the game starts again, downloading it all. Your settings are kept.');
     // (THE BRAIN'S THOUGHTS over the one standing by: Joshua, 2026-11-21, "so I can know what it's 'Thinking'")
     choiceRow('AI thoughts', 'npcThoughts', [['Show', 'on'], ['Hide', 'off']], 'A bubble over the one you are not playing (John while you play Blaze, Blaze while you play John): who, AUTO or MANUAL and their rounds; what their brain is doing now; why (🎯 its fight, 🩺 its needs); what is next; how the last order ended (✓ done, ⏸ stopped, ✗ failed and why); and their needs as it sees them (🚽 💧 🍽️ 🔋, ⚠️ danger). Changes at once.');
 

@@ -110,11 +110,14 @@ export function loadBreathVoice(sound: Sound, voice: string, version: string): P
       const response = await fetch(`${folder}${voice}.json?v=${encodeURIComponent(version)}`);
       if (!response.ok) throw new Error(`${voice}.json: ${response.status}`);
       const manifest = (await response.json()) as BreathManifest;
-      const loaded = await Promise.all(manifest.banks.map(async (b) => {
+      // ONE FILE AT A TIME (v0.2.143): each is decoded to about 190 KB a second of sound; decoding them all at once
+      // asked for all of that, and each file's download, together
+      const loaded: Bank[] = [];
+      for (const b of manifest.banks) {
         const buffer = await sound.loadBuffer(`${folder}${b.file}?v=${encodeURIComponent(version)}`);
-        return buffer ? { file: b.file, perMinute: b.perMinute, cycles: b.cycles, buffer, start: breathsStart(buffer, manifest) } : null;
-      }));
-      return loaded.filter((b): b is Bank => b !== null && b.cycles.length > 0);
+        if (buffer && b.cycles.length > 0) loaded.push({ file: b.file, perMinute: b.perMinute, cycles: b.cycles, buffer, start: breathsStart(buffer, manifest) });
+      }
+      return loaded;
     })().catch((error) => { console.warn(`[breath] the ${voice} breathing could not be loaded`, error); return []; });
     voices.set(voice, banks);
   }

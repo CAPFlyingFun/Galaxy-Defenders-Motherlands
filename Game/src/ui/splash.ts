@@ -19,6 +19,14 @@
 //                    first load on a device there is nothing to go by yet, so
 //                    the line says just that (the load is being timed, and
 //                    the next one will show a time)
+//   the size         "62.4 / 98.1 MB · 64% · 5.2 MB/s": downloaded of the whole
+//                    load (as it came to last time on this device), its share
+//                    and the speed now (Joshua, 2026-11-22, as TRADDOMIUM and
+//                    Beyond Extinction show it). The first time: only what has
+//                    arrived, as the whole is not known yet.
+//   the last start   if the phone CLOSED the game while it started last time,
+//                    where it had got to (core/startupLog.ts): a screenshot of
+//                    the splash then says where it stopped.
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
 import { restartGame } from '../core/restart';
@@ -64,6 +72,27 @@ export function timeLeftText(seconds: number | null): string {
   return `about ${minutes} minute${minutes === 1 ? '' : 's'} left`;
 }
 
+/** Megabytes, to a tenth (1 MB = 1,048,576 bytes, as a phone's own Settings count them). */
+const megabytes = (bytes: number): string => (bytes / 1048576).toFixed(1);
+
+/** The size line: "62.4 / 98.1 MB · 64% · 5.2 MB/s" (or, the whole not known, "62.4 MB · 5.2 MB/s"). */
+export function bytesText(bytes: number, expected: number | null, perSecond: number): string {
+  if (bytes <= 0) return '';
+  const speed = perSecond >= 1024 ? ` · ${megabytes(perSecond)} MB/s` : '';
+  // (this load came to more than last time's: the whole is at least what has come)
+  if (expected === null) return `${megabytes(bytes)} MB downloaded${speed}`;
+  const whole = Math.max(expected, bytes);
+  return `${megabytes(bytes)} / ${megabytes(whole)} MB · ${Math.floor((bytes / whole) * 100)}%${speed}`;
+}
+
+/** Show where the LAST start stopped, if the phone closed it (core/startupLog.ts), on the splash and the cover. */
+export function showLastStart(text: string | null): void {
+  for (const id of ['splash-last', 'rotate-last']) {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text ?? '';
+  }
+}
+
 /** Start showing `meter` on the splash. (On a page with no splash this does nothing.) */
 export function connectSplash(meter: LoadMeter): Splash {
   const splash = document.getElementById('splash');
@@ -77,6 +106,11 @@ export function connectSplash(meter: LoadMeter): Splash {
   const writeStep = writer(step);
   const writePercent = writer(percent);
   const writeTime = writer(time);
+  const sizeNode = document.getElementById('splash-bytes'), coverSize = document.getElementById('rotate-bytes');
+  const writeSize = sizeNode ? writer(sizeNode) : (): void => {};
+  const writeCoverSize = coverSize ? writer(coverSize) : (): void => {};
+  /** The size line is worked out a few times a second (the speed would flicker if written every picture). */
+  let sizeAt = 0;
   // The same, on the "rotate your device" cover, for a phone held upright while loading (index.html .rotate-loading).
   const coverFill = document.getElementById('rotate-fill');
   const coverStep = document.getElementById('rotate-step'), coverPercent = document.getElementById('rotate-percent'), coverTime = document.getElementById('rotate-time');
@@ -108,6 +142,13 @@ export function connectSplash(meter: LoadMeter): Splash {
     const timeText = left !== null ? timeLeftText(left) : meter.estimating ? ESTIMATING_NOTE : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '';
     writeTime(timeText);
     writeCoverTime(timeText);
+    const t = performance.now();
+    if (t - sizeAt > 250) {
+      sizeAt = t;
+      const sizeText = bytesText(meter.bytes, meter.bytesExpected, meter.bytesPerSecond());
+      writeSize(sizeText);
+      writeCoverSize(sizeText);
+    }
   };
   const loop = (): void => {
     show();

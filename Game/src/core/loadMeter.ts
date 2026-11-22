@@ -42,6 +42,12 @@
 // background part-way through (its clock would no longer mean anything).
 //
 // A load that went wrong, or was interrupted, is not remembered.
+//
+// THE SIZE (Joshua, 2026-11-22: "TRADDOMIUM, BE would show the (Total Size/Current, % download, ETA)"): the bytes
+// counted so far, against the bytes the whole load came to LAST time on this device (`bytesExpected`; not known on
+// a device's first load, so then only what has arrived is told), and how fast they are arriving now (`bytesPerSecond`,
+// over the last 2 seconds). A file the phone already keeps (the game's offline copy) arrives at once and is counted
+// the same: what matters is that it is IN.
 // ============================================================================
 import { firstTimeRecord } from './loadFirstTime';
 
@@ -87,6 +93,12 @@ export interface LoadMeter {
   readonly firstLoad: boolean;
   /** True once finish() has been called. */
   readonly finished: boolean;
+  /** Bytes of every file this load has fetched so far (from the network or the phone's own store). */
+  readonly bytes: number;
+  /** What the whole load came to last time on this device, bytes; null when that is not known (a first load). */
+  readonly bytesExpected: number | null;
+  /** How fast bytes are arriving now, bytes a second (over the last 2 seconds). */
+  bytesPerSecond(): number;
   /** Everything the meter knows, for the test scripts and the curious (`gdm.meter.report()` with ?debug=1). */
   report(): LoadReport;
 }
@@ -126,6 +138,8 @@ const clamp = (value: number, low: number, high: number): number => Math.max(low
 const EASE_SECONDS = 1.5;
 
 const tidy = (seconds: number): number => Math.round(seconds * 1000) / 1000;
+/** How far back the download speed is judged, seconds. */
+const SPEED_WINDOW = 2;
 
 /**
  * WHICH KIND OF LOAD THIS IS, as a few words: "fast live" (the Performance body with her live body), "fast",
@@ -240,6 +254,10 @@ export function startLoadMeter(kind: string): LoadMeter {
   const notes: Note[] = [];
   let label = '';
   let bytes = 0;
+  /** What the whole load came to last time (the bytes of every mark), when it is remembered. */
+  const bytesExpected = remembered ? last.marks.reduce((sum, mark) => sum + mark[2], 0) : null;
+  /** The bytes counted and when, the last few seconds of them (for the speed). */
+  const arrivals: { at: number; bytes: number }[] = [];
   let finished = false;
   /** The game went into the background while loading: its clock means nothing now. No time left is shown, nothing is remembered. */
   let interrupted = typeof document !== 'undefined' && document.hidden;
@@ -283,6 +301,9 @@ export function startLoadMeter(kind: string): LoadMeter {
   /** `count` more bytes have arrived. */
   const counted = (count: number): void => {
     bytes += count;
+    const t = now();
+    arrivals.push({ at: t, bytes });
+    while (arrivals.length > 1 && t - arrivals[0].at > SPEED_WINDOW) arrivals.shift();
     // Written down against this load's newest mark...
     const newest = mine[mine.length - 1];
     if (newest) {
@@ -381,6 +402,15 @@ export function startLoadMeter(kind: string): LoadMeter {
     get label(): string { return label; },
     get firstLoad(): boolean { return !remembered && !interrupted; },
     get finished(): boolean { return finished; },
+    get bytes(): number { return bytes; },
+    get bytesExpected(): number | null { return bytesExpected !== null && bytesExpected > 0 ? bytesExpected : null; },
+    bytesPerSecond(): number {
+      // (the bytes counted in the last SPEED_WINDOW seconds, over that time; nothing lately: 0)
+      const t = now();
+      const from = arrivals.find((a) => t - a.at <= SPEED_WINDOW);
+      if (!from || t - from.at < 0.25) return 0;
+      return (bytes - from.bytes) / (t - from.at);
+    },
 
     secondsLeft(): number | null {
       if (!remembered || interrupted || finished) return null;

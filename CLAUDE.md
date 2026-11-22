@@ -630,6 +630,29 @@ use the game's single copy of three.js.
   `gdm.breathing()`. `scripts/preview_breathing.py` plays the same rules over a made-up run into an MP3 (the one he
   approved). Checked in the browser: the game's own BreathSound recorded off its master (21 breaths in 40 s, the files
   switching as in the preview, calm -34 / hard -25 dB RMS); in the game the files load and the tick is found (start 0.1000).
+- v0.2.143, AFTER 142 "KEEPS CRASHING ON LOAD" ON HIS iPHONE (Joshua, 2026-11-22; the first start ran, John looked to
+  have "no hair/eyes", every start after closed during loading). Not reproduced here: the BUILT game loads John's crew
+  hair and his face's eyes (no file missing, rendered at 1 % with his head at 100 %). What was done:
+  (1) HOW FAR THE LAST START GOT (`core/startupLog.ts`, first made on wip-131): every step the splash shows, 'Blaze
+  made', 'John made', 'playing', frames 1/5/30, '5 s' and '30 s' written to localStorage AS REACHED, with the seconds,
+  the MB downloaded and the graphics memory asked for (est., `core/gpuTally.ts` from wip-131, installed on the renderer
+  before any upload). A start that never reached '30 s' was closed by the phone: the NEXT splash says, in amber, where
+  it stopped (`splash-last`; the full readout's `last:` lines). Checked: a start closed during John's load is told.
+  (2) THE SIZE ON THE SPLASH (Joshua: "TRADDOMIUM, BE would show the (Total Size/Current, % download, ETA)"):
+  `62.4 / 98.1 MB · 64% · 5.2 MB/s` (loadMeter.ts `bytes`, `bytesExpected` = what the whole load came to last time on
+  this device, `bytesPerSecond` over 2 s); a first load shows what has arrived only. Under the time left.
+  (3) HIS STEPS SAID AS HIS ("when it's John should say he"): main.ts `forHim` ("unpacking his body", "dressing him").
+  (4) ONLY THE OUTFITS WORN ARE KEPT ON THE PHONE (Joshua: "only John and Blaze's last saved outfit... clears the past
+  outfit"): the game only ever FETCHED the worn ones (measured: blazeSuit and john), but the offline copy kept every
+  outfit tried. main.ts `keepWornOutfits` tells the worker ('gdm-keep-outfits', her folder as baked, BAKED_AS, and
+  'john') 8 s into play and after every outfit change; sw.js `keepOnlyOutfits` lets every other heroines/<folder>/ file
+  go. Tested on the built game: a third outfit's files dropped, the worn two kept.
+  (5) NOTHING OF THE SOUND WHILE LOADING: the Web Audio context is made only when the first sound is wanted
+  (`Sound.start`), her breathing fetched BREATH_AFTER_S (12) s after play begins, its files decoded one at a time.
+  (6) BLAZE'S LIVE BODY ONLY WHEN SOMEONE IS NEAR HER (Joshua: "only if playing her, or within 12m as another character
+  ... It will freeze her live portions until close again"): main.ts `wakeBlazesLiveBody`, LIVE_NEAR 12 m (asleep past
+  12.5) between the one played and her; fastHeroine.ts `setLiveAwake`: asleep, her live body is not stepped at all,
+  her kicks and shape stay as they were. Readout: `Blaze live: asleep (far)`. Tested: John 30 m off, asleep; back, awake.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

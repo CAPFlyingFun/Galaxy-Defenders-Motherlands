@@ -16,7 +16,9 @@ import './core/screenFit'; // first: the screen measured once, the game box size
 import { isUpright, keepLandscape, onStageResize, refitNow } from './core/orientation';
 import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
-import { connectSplash, showSplashError } from './ui/splash';
+import { connectSplash, showLastStart, showSplashError } from './ui/splash';
+import { installGpuTally, type GpuTally } from './core/gpuTally';
+import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart } from './core/startupLog';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
@@ -85,7 +87,9 @@ type GameHeroine = HeroineBody & {
   setTargetFps?: (target: HeroineSettings['targetFps']) => void;
   /** The fast heroine only: the hidden live body (heroine/fast/liveBody.ts), and what it costs. */
   attachLive?: (live: import('./heroine/fast/liveBody').LiveBody | null) => void;
-  liveInfo?: () => { stepMs: number; kicks: number } | null;
+  liveInfo?: () => { stepMs: number; kicks: number; awake: boolean } | null;
+  /** The fast heroine only: run her hidden live body, or let it sleep (frozen as it is): see `wakeBlazesLiveBody`. */
+  setLiveAwake?: (awake: boolean) => void;
   /** The fast heroine only: her stride as measured from her foot bones, and her feet on the floor this frame. */
   strideInfo?: () => { walk: { stride: number }; run: { stride: number } } | null;
   strideNow?: () => { stride: number; share: number };
@@ -127,6 +131,10 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   const look = lookKey(outfit);
   // (who: the look's own name, Blaze or John)
   const who = LOOKS[look]?.name ?? 'Blaze';
+  // (and HIS steps said as his, on the male body: Joshua, 2026-11-22, the splash read "Loading John: unpacking her
+  //  body…"; the body's own steps are written for her: `forHim` turns them)
+  const male = LOOKS[look]?.body.model === 'male-base';
+  const stageOf = (stage: string): string => (male ? forHim(stage) : stage);
   say(`Loading ${who}…`);
   if (settings.body === 'performance') {
     try {
@@ -150,7 +158,7 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         //  JOHN_HANDS_DETAIL; unset for Blaze)
         headDetail: parts.headDetail,
         handsDetail: parts.handsDetail,
-        onProgress: (stage) => say(`Loading ${who}: ${stage}…`),
+        onProgress: (stage) => say(`Loading ${who}: ${stageOf(stage)}…`),
       });
     } catch (error) {
       // (John is made only as a fast body: there is no second builder's room for him)
@@ -173,6 +181,20 @@ async function createHeroine(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     console.error('The Character Builder heroine could not be loaded; using the stand-in.', error);
     return createStandInHeroine();
   }
+}
+
+/**
+ * A loading step written for her, said of HIM: "unpacking her body" -> "unpacking his body", "dressing her" ->
+ * "dressing him", "getting her ready to draw" -> "getting him ready to draw". `her` before one of his things is
+ * his; any other `her` is him.
+ */
+function forHim(stage: string): string {
+  return stage
+    .replace(/\bher (body|hair|outfit|suit|clothes|pictures|shape|skin|face|live body|guns|belt)\b/g, 'his $1')
+    .replace(/\bher\b/g, 'him')
+    .replace(/\bHer\b/g, 'His')
+    .replace(/\bshe\b/g, 'he')
+    .replace(/\bShe\b/g, 'He');
 }
 
 /**
@@ -277,6 +299,18 @@ async function start(): Promise<void> {
   // Nothing of the game runs until all of it is in: the controls and the game loop are only made at the end.
   const loadIs = loadKind(loadHeroineSettings()); // which kind of load this is: "fast live", "fast", "room"...
   const meter = startLoadMeter(loadIs);
+  // HOW FAR THE LAST START GOT (Joshua, 2026-11-22: v0.2.142 "keeps crashing on load"; core/startupLog.ts): every step
+  // of this start is written down on the phone as it is reached, with the megabytes downloaded and the graphics memory
+  // asked for (est., `gpuTally`, counted from the moment the renderer is made). If the phone closed the LAST start
+  // before it had played 30 s, the splash says where it stopped.
+  let gpuTally: GpuTally | null = null;
+  beginStartLog(VERSION_NUMBER, () => gpuTally?.totalMB() ?? 0, () => meter.bytes / 1048576);
+  showLastStart(lastStartClosed());
+  {
+    // (every step the splash shows is a step of the start log too)
+    const meterStep = meter.step.bind(meter);
+    meter.step = (key: string, label: string): void => { meterStep(key, label); markStart(label); };
+  }
   meter.step('world', 'Building the dome and the city…');
   /**
    * A SHORT BREAK between loading steps (Joshua, 2026-11-17). The page can only redraw (a turn of the phone, the
@@ -304,6 +338,9 @@ async function start(): Promise<void> {
   const sound = new Sound();
   sound.setVolume(graphics.soundVolume / 100);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // (the graphics memory the game asks for, an estimate counted from every picture and buffer handed to the chip:
+  //  core/gpuTally.ts; before anything is handed over)
+  gpuTally = installGpuTally(renderer.getContext() as WebGL2RenderingContext);
   // (a shader the phone will not build, or the graphics lost, said on screen: core/glTrouble.ts)
   watchGlTrouble(renderer.domElement);
   // (if loading fails part-way and the splash's "tap to try again" reloads, the graphics chip is let go of first;
@@ -418,6 +455,7 @@ async function start(): Promise<void> {
    * with no new hand-over: they all ask `heroine.hands`, `heroine.root` and so on afresh each time.
    */
   let bodyNow: GameHeroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
+  markStart('Blaze made');
   /**
    * THE TWO OF THEM (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character to change and switch
    * between like how Beyond Extinction does it"). Blaze and John, Blaze's husband (heroine/looks/john.ts), each with
@@ -468,9 +506,37 @@ async function start(): Promise<void> {
    * Blaze's voice is 'female'; John has none yet (Joshua makes the male files later): BREATH_VOICES names who has one.
    */
   const BREATH_VOICES: Readonly<Record<string, string>> = { Blaze: 'female' };
+  /**
+   * NOT WHILE LOADING (v0.2.143; Joshua, 2026-11-22: v0.2.142 "keeps crashing on load"): the sound is made, and her
+   * breathing files fetched and decoded one at a time, only this many seconds after play begins.
+   */
+  const BREATH_AFTER_S = 12;
   const breaths = new Map<Character, BreathSound>();
   const breathAt = new THREE.Vector3();
+  /**
+   * BLAZE'S LIVE BODY ONLY WHEN SOMEONE IS NEAR HER (Joshua, 2026-11-22: "can we have Blaze's body live only if playing
+   * her, or within 12m as another character to automatically stop rendering her live all the time especially if not
+   * near her? It will freeze her live portions until close again"). Her hidden live body (her baby's kicks, her belly's
+   * shape as the builder makes it: heroine/fast/liveBody.ts) is run while she is PLAYED, or while the one played (John)
+   * is within LIVE_NEAR metres of her (her face, bust and belly are drawn sharp within 12 m too: fastHeroine.ts
+   * `SHARP_WITHIN`); farther, it SLEEPS: not stepped at all, frozen as it was, until he comes near again. (It wakes at
+   * LIVE_NEAR and sleeps only past LIVE_NEAR + 0.5 m, so walking along the line does not flick it.)
+   */
+  const LIVE_NEAR = 12;
+  let blazeLiveAwake = true;
+  const wakeBlazesLiveBody = (): void => {
+    if (!blaze) return;
+    let awake = true;
+    if (playing !== blaze && playing) {
+      const dx = playing.kit.motion.x - blaze.kit.motion.x, dz = playing.kit.motion.z - blaze.kit.motion.z;
+      const metres = Math.hypot(dx, dz);
+      awake = blazeLiveAwake ? metres <= LIVE_NEAR + 0.5 : metres <= LIVE_NEAR;
+    }
+    if (awake !== blazeLiveAwake) { blazeLiveAwake = awake; blaze.body.setLiveAwake?.(awake); markStart(awake ? 'Blaze live awake' : 'Blaze live asleep'); }
+  };
   const playBreaths = (): void => {
+    if (!(playingSince > 0) || performance.now() - playingSince < BREATH_AFTER_S * 1000) return;
+    if (!sound.start()) return;   // (no Web Audio here: silent)
     for (const c of [blaze, john]) {
       if (!c) continue;
       let b = breaths.get(c);
@@ -783,6 +849,7 @@ async function start(): Promise<void> {
       // (he starts in MANUAL whatever hers is: standing by in AUTO he would draw and fire the moment the game opens;
       //  swapped to, AUTO is set for him, and kept)
       john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
+      markStart('John made');
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));
       body.setYaw(turn.base);
@@ -1111,6 +1178,26 @@ async function start(): Promise<void> {
   };
   /** An outfit chosen in Settings while John was played: Blaze puts it on when she is played again (`swapCharacter`). */
   let outfitPending = false;
+  /**
+   * ONLY THE OUTFITS WORN NOW ARE KEPT ON THE PHONE (Joshua, 2026-11-22: "only John and Blaze's last saved outfit from
+   * the PWA... it also clears the past outfit so if you did Shadow, the Pink and back to Shadow, when you returned to
+   * shadow it would redownload and remove the pink"). The game only ever FETCHES the outfits being worn (her outfit
+   * now and John's); the offline copy (sw.js, vite.config.ts `pwa()`) kept every outfit fetched since. This tells it
+   * which outfit folders to keep: every other outfit's files are let go. Sent once she has played a few seconds
+   * (`tellGameIsUp`) and after every change of outfit. (Only in the published game: there is no offline copy while
+   * developing.)
+   */
+  const keepWornOutfits = (): void => {
+    void Promise.all([import('./heroine/looks'), import('./heroine/looks/bakedAs')]).then(([{ lookKey }, { BAKED_AS }]) => {
+      // (each outfit's files are in the folder it was BAKED as: a two-tone catsuit is drawn over another's bake)
+      const hers = lookKey(outfitNow);
+      const folders = [BAKED_AS[hers] ?? hers];
+      if (john) folders.push('john');
+      tellOfflineCopy({ type: 'gdm-keep-outfits', folders });
+    }).catch(() => {});
+  };
+  wornOutfitsNow = keepWornOutfits;
+
   const changeOutfit = async (): Promise<void> => {
     // (her outfits are BLAZE's: chosen while John is played, she changes when she is swapped back to)
     if (!playingBlaze()) { outfitPending = true; hud.showNotice('Blaze changes when you swap back to her'); return; }
@@ -1118,6 +1205,8 @@ async function start(): Promise<void> {
     outfitChanging = true;
     try {
       do { outfitAgain = false; await swapBody(); } while (outfitAgain);
+      // (the outfit she had on is let go of on the phone too: only the outfits worn now are kept, `keepWornOutfits`)
+      keepWornOutfits();
     } catch (error) {
       // (if anything went wrong part-way, the game starts again cleanly instead: she is never left half changed)
       console.error('The outfit could not be changed while playing; starting again with it.', error);
@@ -1483,7 +1572,11 @@ async function start(): Promise<void> {
   let wasPaused = false;
   /** The small canvas the portrait strip's picture is copied down into (see `snapshot`). */
   const snapshotCanvas = document.createElement('canvas');
+  /** THE START LOG past loading (core/startupLog.ts): when play began, and which marks of it are written down. */
+  let playingSince = 0, framesPlayed = 0, marked5 = false, marked30 = false;
   const beginPlaying = (): void => {
+    playingSince = performance.now();
+    markStart('playing');
     // (this load is remembered as a guide for the next only if it went the way its kind says it should)
     meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
     splash.done();
@@ -1650,6 +1743,13 @@ async function start(): Promise<void> {
     // ---- LOADING ENDS, AND PAUSED? (see just above the loop) --------------------------------------------------
     // The second frame beginning means the first picture has been drawn: the splash lifts and the game starts.
     if (framesBegun < 2 && ++framesBegun === 2) beginPlaying();
+    // (the start log: the first frames of play, then 5 and 30 s; at 30 s this start counts as one that worked)
+    if (playingSince > 0 && !marked30) {
+      framesPlayed++;
+      if (framesPlayed === 1 || framesPlayed === 5 || framesPlayed === 30) markStart(`frame ${framesPlayed}`);
+      if (!marked5 && now - playingSince > 5000) { marked5 = true; markStart('5 s'); }
+      if (now - playingSince > 30000) { marked30 = true; markStart(START_SURVIVED); }
+    }
     // PAUSED: no time passes. `last` is kept at "now", so when the game resumes it carries on from this instant
     // and does not try to catch up (nothing jumps). Anything dragged or clicked meanwhile is thrown away. The
     // still picture is drawn again only when it is wanted (after the screen changed size, and now and then).
@@ -2240,6 +2340,8 @@ async function start(): Promise<void> {
     }
     // THEIR BREATHING, now that their vitals have moved on and the camera is where it is this frame
     playBreaths();
+    // (and Blaze's live body run only while someone is near her: next frame's step)
+    wakeBlazesLiveBody();
 
     // 6. Draw.
     dome.update(info);
@@ -2271,7 +2373,8 @@ async function start(): Promise<void> {
         }
         // (the hidden live body: what its step costs each frame, and whether her baby is kicking)
         const liveNow = heroine.liveInfo?.();
-        if (liveNow) lines.push(`live body ${liveNow.stepMs.toFixed(1)} ms` + (liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : ''));
+        if (liveNow) lines.push(liveNow.awake ? `live body ${liveNow.stepMs.toFixed(1)} ms` + (liveNow.kicks ? ` · ${liveNow.kicks} kick${liveNow.kicks > 1 ? 's' : ''}` : '') : 'live body asleep (far)');
+        else if (blaze && blaze !== playing && blaze.body.liveInfo?.()?.awake === false) lines.push('Blaze live: asleep (far)');
         else if (liveNote) lines.push(liveNote);
         // (her feet: her stride now, metres, with the share of it a foot is down, and how fast she is really going; then which way she
         //  faces: body North and her head, and in third person whether her auto-aim has a target she can turn to)
@@ -2286,6 +2389,10 @@ async function start(): Promise<void> {
         // (the island's forest: trees drawn, in how many draws)
         const forest = island?.treeCounts();
         if (forest) lines.push(`trees ${forest.trees} · ${forest.draws} draws`);
+        // (graphics memory asked for, an ESTIMATE: core/gpuTally.ts; and where the last start stopped, if the phone
+        //  closed it: core/startupLog.ts)
+        if (gpuTally) lines.push(`GPU est ${Math.round(gpuTally.totalMB())}MB · tex ${Math.round(gpuTally.textureBytes / 1048576)}`);
+        for (const step of lastStartSteps()) lines.push(`last: ${step}`);
         hud.setReadout(lines.join('\n'));
         readoutTimer = 0;
         readoutFrames = 0;
@@ -2312,10 +2419,19 @@ const tellWorkers = (registration: ServiceWorkerRegistration | undefined): void 
   if (!registration) return;
   for (const worker of [registration.installing, registration.waiting, registration.active]) worker?.postMessage('gdm-up');
 };
+/** Which outfits are worn now, told to the offline copy (set by the game once it has made them: `keepWornOutfits`). */
+let wornOutfitsNow: (() => void) | null = null;
+/** A message for the game's RUNNING offline copy (the active service worker), if there is one. */
+function tellOfflineCopy(message: unknown): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  void navigator.serviceWorker.getRegistration().then((registration) => registration?.active?.postMessage(message)).catch(() => {});
+}
 function tellGameIsUp(): void {
   if (gameIsUp || !import.meta.env.PROD || !('serviceWorker' in navigator)) return;
   gameIsUp = true;
   void navigator.serviceWorker.getRegistration().then(tellWorkers).catch(() => {});
+  // (and which outfits to keep: every other one is let go of on the phone)
+  wornOutfitsNow?.();
 }
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

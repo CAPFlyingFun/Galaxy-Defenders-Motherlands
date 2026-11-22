@@ -293,8 +293,14 @@ export interface FastHeroine extends HeroineBody {
    * outfit on the same body (main.ts `changeOutfit`), so the slow hidden room is not opened again for the new one.
    */
   detachLive(): LiveBody | null;
-  /** The live body's cost and state, for the debug readout: milliseconds a step (smoothed), kicks showing; null if none. */
-  liveInfo(): { stepMs: number; kicks: number } | null;
+  /** The live body's cost and state, for the debug readout: milliseconds a step (smoothed), kicks showing, awake; null if none. */
+  liveInfo(): { stepMs: number; kicks: number; awake: boolean } | null;
+  /**
+   * RUN HER LIVE BODY, OR LET IT SLEEP (Joshua, 2026-11-22: "Blaze's body live only if playing her, or within 12m as
+   * another character... It will freeze her live portions until close again"): asleep, her hidden live body is not
+   * stepped at all (no cost), and everything it gives her (her baby's kicks, her belly's shape) stays as it was.
+   */
+  setLiveAwake(awake: boolean): void;
   /** Change the frame rate AUTO detail holds. */
   setTargetFps(target: TargetFps): void;
   /**
@@ -610,6 +616,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let vitals: BodyVitals | null = null;
   /** The hidden live body, once it has been opened and attached; and how long its steps take, milliseconds, smoothed. */
   let live: LiveBody | null = null, liveMs = 0;
+  /** Her live body is stepped (awake) or left as it is (asleep): `setLiveAwake`. */
+  let liveAwake = true;
   /** A clock that runs at the speed of her breathing, for her bones' own small breathing move (the builder's stand). */
   let breathClock = 0;
 
@@ -1589,7 +1597,8 @@ if (uHideHead > 0.5) {
     setVitals(now: BodyVitals): void { vitals = now; },
     attachLive(body: LiveBody | null): void { live = body; liveMs = 0; },
     detachLive(): LiveBody | null { const was = live; live = null; liveMs = 0; return was; },
-    liveInfo(): { stepMs: number; kicks: number } | null { return live ? { stepMs: liveMs, kicks: live.kicking() } : null; },
+    liveInfo(): { stepMs: number; kicks: number; awake: boolean } | null { return live ? { stepMs: liveMs, kicks: live.kicking(), awake: liveAwake } : null; },
+    setLiveAwake(awake: boolean): void { liveAwake = awake; },
     /** Her stride as measured from her foot bones (bodyMotion.ts `measureStrides`), for the lab and the tests. */
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
     strideNow() { return motion.shape; },
@@ -1626,7 +1635,8 @@ if (uHideHead > 0.5) {
       if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
-      if (live) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
+      // (ASLEEP, `setLiveAwake`: not stepped at all; her kicks and shape stay as they were until it wakes)
+      if (live && liveAwake) { liveMs += (live.step(frame.dt) - liveMs) / 20; breath.setKicks(live.kickAt, live.kickDir); }
       // HER BELLY AS THE BUILDER SHAPES IT (Joshua, 2026-11-19: "a pointy belly... it needs to basically rebake the look
       // every second at the new size"): when the hidden live body has settled after a change (liveBody.ts), the weights
       // the builder gives each of her body shapes are read off it and she takes them (shapedBody.ts setBuilderWeights);

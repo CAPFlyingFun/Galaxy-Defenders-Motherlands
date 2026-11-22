@@ -163,6 +163,10 @@ function charb(): Plugin {
 //                           every other file on the phone stays (Joshua, 2026-11-21: "when a new push goes out, I think
 //                           it should probably only update the files that changed"). Before, the whole outfit store
 //                           (or builder, or island store) was thrown away whenever any one of its files changed.
+//                           OUTFITS: ONLY THE ONES WORN NOW ARE KEPT (v0.2.143; Joshua, 2026-11-22): the game tells the
+//                           worker which outfit folders are worn ('gdm-keep-outfits': her outfit and John's, a few
+//                           seconds into play and after every change of outfit), and every other outfit's files are
+//                           let go; wearing one again fetches it again.
 //
 // A NEW VERSION'S INSTALL WAITS FOR THE GAME (Joshua, 2026-11-21: after v0.2.137 it crashed three times in a row near
 // the end of loading, then ran). Safari itself checks for a new sw.js every time the app is opened, so a new version's
@@ -223,8 +227,26 @@ const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).pa
 // THE GAME IS UP: the page says so once it is playing (main.ts, 'gdm-up'); an install waits for it (or 90 s at most)
 let gameIsUp;
 const gameUp = new Promise((up) => { gameIsUp = up; });
-self.addEventListener('message', (event) => { if (event.data === 'gdm-up') gameIsUp(); });
+self.addEventListener('message', (event) => {
+  if (event.data === 'gdm-up') gameIsUp();
+  // ONLY THE OUTFITS WORN NOW ARE KEPT (Joshua, 2026-11-22): the game says which outfit folders are worn (main.ts
+  // \`keepWornOutfits\`); every other outfit's files are let go (fetched again if that outfit is worn again)
+  else if (event.data && event.data.type === 'gdm-keep-outfits' && Array.isArray(event.data.folders)) {
+    event.waitUntil(keepOnlyOutfits(new Set(event.data.folders)));
+  }
+});
 const UP_WAIT_MS = 90000;
+/** Let go of every kept outfit file (heroines/<folder>/...) whose folder is not in \`worn\`. */
+async function keepOnlyOutfits(worn) {
+  const files = await caches.open(FILES);
+  let dropped = 0;
+  for (const request of await files.keys()) {
+    const path = pathOf(new URL(request.url));
+    const folder = path && /^heroines\\/([^/]+)\\//.exec(path);
+    if (folder && !worn.has(folder[1])) { await files.delete(request); dropped++; }
+  }
+  console.log('[sw] outfits kept: ' + [...worn].join(', ') + (dropped ? '; ' + dropped + ' files of others let go' : ''));
+}
 
 // Installing, once the game is up (one file at a time, gently):
 self.addEventListener('install', (event) => {

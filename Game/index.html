@@ -74,6 +74,12 @@
   /* (its line keeps its height when it is empty, so nothing shifts when the time appears) */
   .splash-version { margin-top: 14px; font-size: 11px; letter-spacing: .08em; color: #5d6f94; text-align: center; }
   .splash-time { min-height: 1.4em; margin-top: 4px; text-align: left; font-size: 12px; letter-spacing: .03em; color: #8fa3c8; }
+  /* THE SIZE: downloaded of the whole, its share and the speed (Joshua, 2026-11-22: "Total Size/Current, % download,
+     ETA" as TRADDOMIUM and Beyond Extinction show) */
+  .splash-bytes { min-height: 1.4em; text-align: left; font-size: 12px; letter-spacing: .03em; color: #8fa3c8; font-variant-numeric: tabular-nums; }
+  /* how far the LAST start got, when the phone closed it (src/core/startupLog.ts): so a screenshot says where */
+  .splash-last { margin-top: 10px; font-size: 11px; line-height: 1.35; color: #ffb35c; text-align: left; }
+  .splash-last:empty { display: none; }
   /* Loading failed: the words say so, in gold, and the light stops sweeping. */
   #splash.is-broken .splash-step { white-space: normal; }
   #splash.is-broken .splash-bar::after { animation: none; opacity: 0; }
@@ -163,8 +169,10 @@
       <span class="splash-percent" id="splash-percent">0%</span>
     </div>
     <div class="splash-time" id="splash-time"></div>
+    <div class="splash-bytes" id="splash-bytes"></div>
     <!-- the game's version (src/ui/versionTag.ts), so the one on the phone can be told at a glance -->
     <div class="splash-version" id="splash-version"></div>
+    <div class="splash-last" id="splash-last"></div>
   </div>
 </div>
 
@@ -182,7 +190,9 @@
       <div class="splash-bar"><div class="splash-fill" id="rotate-fill"></div></div>
       <div class="splash-line"><span class="splash-step" id="rotate-step">Starting…</span><span class="splash-percent" id="rotate-percent">0%</span></div>
       <div class="splash-time" id="rotate-time"></div>
+      <div class="splash-bytes" id="rotate-bytes"></div>
       <div class="splash-version" id="rotate-version"></div>
+      <div class="splash-last" id="rotate-last"></div>
     </div>
     <div class="rotate-title rotate-play">PAUSED</div>
     <p class="rotate-hint rotate-play">Turn your phone on its side to keep playing.</p>

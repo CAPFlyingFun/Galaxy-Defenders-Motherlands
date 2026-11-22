@@ -312,22 +312,24 @@ async function start(): Promise<void> {
   // ---- World --------------------------------------------------------------------
   const scene = new THREE.Scene();
   // THE MAP (Joshua, 2026-11-19): the real island (the main game), or the domed town, kept to test in until its place
-  // on the island is chosen (Settings -> WORLD -> Map, or ?map=town). The town's pieces are still made on the island
-  // (the code round them expects them) but are not put in the scene, so they are neither drawn nor in her way.
+  // on the island is chosen (Settings -> WORLD -> Map, or ?map=town). THE TOWN'S PIECES ARE MADE ONLY FOR THE TOWN
+  // (Joshua, 2026-11-21, ChatGPT's review): they used to be made on the island too and never shown, among them the
+  // town's sky, drawn once into a 512-pixel cube on the graphics chip. On the island only the dome's twelve sections
+  // are kept, as numbers (`Dome.sectionsOnly`): the danger she feels and the TEST TOOLS read them.
   const onIsland = graphics.map === 'island';
-  const sky = createSky(renderer);
-  if (!onIsland) {
+  const sky = onIsland ? null : createSky(renderer);
+  if (sky) {
     scene.background = sky.background;
     scene.add(sky.stars);
   }
 
-  const ground = createGround();
-  if (!onIsland) scene.add(ground.mesh);
+  const ground = onIsland ? null : createGround();
+  if (ground) scene.add(ground.mesh);
 
-  const city = createCity();
-  if (!onIsland) scene.add(city.group);
+  const city = onIsland ? null : createCity();
+  if (city) scene.add(city.group);
 
-  const dome = await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`);
+  const dome = onIsland ? Dome.sectionsOnly() : await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`);
   if (!onIsland) scene.add(dome.group);
 
   // THE ISLAND (src/world/island/): its 3 x 3 tiles round her, the coarse far island, the sea and the day sky. The
@@ -533,7 +535,8 @@ async function start(): Promise<void> {
   // WHERE SHE CAN GO: anywhere under the dome (Joshua, 2026-11-17: "so I can like run from one end of the map to
   // the other"). The buildings are solid and the dome's glass stops her: `walls` knows both (src/world/collision.ts)
   // and `motion` asks it where each step really ends.
-  const walls = new CityWalls(city.footprints);
+  // (the town's walls only on the town: on the island its own walls stop her, `island.walls`)
+  const walls = city ? new CityWalls(city.footprints) : null;
   // WHERE SHE STARTS: the island's centre point, the beach, facing inland (the sea behind her); the town's plaza,
   // looking out at the city (+Z). Her movement (`PlayerMotion`) and which way each part of her faces (`BodyTurn`,
   // src/input/bodyTurn.ts) are her own, in her kit (`makeKit`, below).
@@ -1402,7 +1405,7 @@ async function start(): Promise<void> {
     const pixelRatio = Math.min(window.devicePixelRatio || 1, graphics.sharpness);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
-    sky.setPixelRatio(pixelRatio);
+    sky?.setPixelRatio(pixelRatio);
     rig.resize(width, height);
   };
   onStageResize(fit); // the stage tells us when the screen was turned or resized
@@ -1943,7 +1946,7 @@ async function start(): Promise<void> {
     heroine.update(info);
     // (the one NOT being played is stepped further down, once the danger is known: `stepStandingBy`)
     // (her painted blob of a shadow is only for when real shadows are off: moved far away, it is not seen)
-    if (realShadows) ground.setHeroine(1e6, 1e6); else ground.setHeroine(motion.x, motion.z);
+    if (realShadows) ground?.setHeroine(1e6, 1e6); else ground?.setHeroine(motion.x, motion.z);
 
     // 3. Put the camera where it belongs, now that she has moved.
     // FIRST PERSON, WHILE SHE IS BUSY AT THE TABLE OR A BAR (Joshua, 2026-11-18): you are her, so the view turns with
@@ -2254,14 +2257,35 @@ async function start(): Promise<void> {
     }
   };
   requestAnimationFrame(frame);
+  // (8 s into play, past the first frames that send every picture to the graphics chip: a new version may now install)
+  window.setTimeout(tellGameIsUp, 8000);
 }
 
 // THE GAME AS AN APP: in the published game (not while developing), start the service worker the build wrote
 // (dist/sw.js; see pwa() in vite.config.ts). It keeps the game's files on the device, so after the first visit
 // the game opens quickly and works with no signal, and "Add to Home Screen" makes it a full-screen app.
+// A NEW VERSION WAITS FOR THE GAME (Joshua, 2026-11-21: crashes near the end of loading right after an update): Safari
+// checks for a new sw.js as the app opens, and its install used to fetch every file while the game was loading. Now
+// the install waits (vite.config.ts) until this page tells it the game is up: `tellGameIsUp`, called once she has
+// been playing a few seconds. Any worker of this game, installing, waiting or running, is told; one that starts
+// installing later is told as it appears.
+let gameIsUp = false;
+const tellWorkers = (registration: ServiceWorkerRegistration | undefined): void => {
+  if (!registration) return;
+  for (const worker of [registration.installing, registration.waiting, registration.active]) worker?.postMessage('gdm-up');
+};
+function tellGameIsUp(): void {
+  if (gameIsUp || !import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  gameIsUp = true;
+  void navigator.serviceWorker.getRegistration().then(tellWorkers).catch(() => {});
+}
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((error: unknown) => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).then((registration) => {
+      // (a new version found later, the game already up: tell it at once, so it does not wait its 90 s)
+      registration.addEventListener('updatefound', () => { if (gameIsUp) tellWorkers(registration); });
+      if (gameIsUp) tellWorkers(registration);
+    }).catch((error: unknown) => {
       console.warn('The game could not be kept on this device (service worker not registered).', error);
     });
   });

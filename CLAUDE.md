@@ -714,6 +714,22 @@ use the game's single copy of three.js.
   specks on his iPhone in v0.2.124): bakedLook.ts asks for look.json with `?v=<game version>` and every other file with
   `?bake=<its bake time>`, skinTexture.ts the skin height with the version, so a re-baked look's files have new
   addresses and no cache (Safari's or one on the way) can hand back the old picture.
+- CHATGPT'S LOADING REVIEW, DONE IN PART (v0.2.138; Joshua, 2026-11-21, after 137 crashed three times in a row near
+  the end of loading, then ran; he skipped "load the island's tiles progressively" and "start before her live body is
+  ready": the game is up in under a minute, and her live body stays ready at the start). Nothing looks different:
+  (1) A NEW VERSION'S INSTALL WAITS FOR THE GAME AND KEEPS WHAT DID NOT CHANGE (vite.config.ts `pwa()` sw.js; main.ts
+  `tellGameIsUp`): Safari checks for a new sw.js as the app opens, so the install always ran DURING loading, fetching
+  all 4.4 MB of the game's own files again. Now it waits for 'gdm-up' (sent 8 s into play) or 90 s; a file under
+  assets/ with the same name is copied from the old store (the name carries its content's fingerprint), only new
+  names and the few unfingerprinted files (page, icons, manifest, dome model) are fetched, past the browser's cache.
+  Tested on the built game: nothing fetched before 'gdm-up'; on a new version 36 code files copied, 7 fetched. (The
+  stores are on the phone's storage, not in its memory.) (2) THE TOWN ONLY ON THE TOWN MAP (main.ts; dome.ts
+  `Dome.sectionsOnly`): its sky (a 512-pixel cube drawn on the graphics chip), ground, city, walls and dome glass were
+  made on the island too and never shown; on the island the dome is its 12 sections as numbers (danger, TEST TOOLS).
+  (3) LANDSCAPING OFF LOADS NO TREES (trees.ts `started`): the forest's maps and six photos load the first time it is
+  on. (4) ONE PORE TILE FOR BOTH (skinTexture.ts `takePoreTile`, `SkinPictures.release`): counted, let go when the
+  last body gives it back. Not done (his call): texture compression (KTX2), the big memory saver (about 480 MB est. on
+  the graphics chip with Blaze, 770 with John, mostly the 4096 pictures), as he asked to keep the textures for now.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

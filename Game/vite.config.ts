@@ -157,6 +157,18 @@ function charb(): Plugin {
 //                            big files are NOT downloaded again.
 // The page itself (index.html) is asked from the network first, so a new version shows the next time the app is
 // opened online; with no signal the stored page is used and the game still starts.
+//
+// A NEW VERSION'S INSTALL WAITS FOR THE GAME, AND KEEPS WHAT DID NOT CHANGE (Joshua, 2026-11-21: after v0.2.137 it
+// crashed three times in a row near the end of loading, then ran; "when a new push goes out, I think it should
+// probably only update the files that changed"). Once the app is installed, Safari itself checks for a new sw.js every
+// time the app is opened, so a new version's install ALWAYS started while the game was loading, and it fetched all
+// 4.4 MB of the game's own files again, the unchanged ones too. Now:
+//   - the install WAITS until the page says the game is up ('gdm-up', main.ts), or 90 s at most, before it does
+//     anything, so it never competes with the loading;
+//   - a file under assets/ whose name has not changed IS the same file (the build puts a fingerprint of its contents
+//     in its name), so it is copied from the old store, not downloaded; only new names, and the few files that keep
+//     their names (the page, the icons, the dome model), are fetched, past the browser's own cache.
+// (The stores are on the phone's storage, not in its memory: an old and a new copy never add up in the game's memory.)
 // ---------------------------------------------------------------------------------------------------------------------
 function pwa(): Plugin {
   /** Every file under `dir`, as paths relative to it with forward slashes. */
@@ -194,9 +206,35 @@ const ISLAND = 'gdm-island-${fingerprint(islandFiles)}';
 const LOOKS = 'gdm-looks-${fingerprint(lookFiles)}';
 const APP_FILES = ${JSON.stringify(['./', ...app.filter((f) => f !== 'index.html')])};
 
-// Installing: fetch the game's own files and keep them. (Her big files are kept later, as they are first used.)
+// THE GAME IS UP: the page says so once it is playing (main.ts, 'gdm-up'); an install waits for it (or 90 s at most)
+let gameIsUp;
+const gameUp = new Promise((up) => { gameIsUp = up; });
+self.addEventListener('message', (event) => { if (event.data === 'gdm-up') gameIsUp(); });
+const UP_WAIT_MS = 90000;
+
+// Installing: once the game is up, keep the game's own files. A file under assets/ with the same name as before is the
+// same file (its name carries a fingerprint of its contents): copied from the old store. Anything else is fetched past
+// the browser's own cache. One at a time, gently. (Her big files are kept later, as they are first used.)
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(APP).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(Promise.race([gameUp, new Promise((later) => setTimeout(later, UP_WAIT_MS))]).then(async () => {
+    const cache = await caches.open(APP);
+    const older = (await caches.keys()).filter((name) => name.startsWith('gdm-app-') && name !== APP);
+    let copied = 0, fetched = 0;
+    for (const file of APP_FILES) {
+      if (await cache.match(file)) continue;   // (kept already: an install that was stopped and started again)
+      let kept = null;
+      if (file.startsWith('assets/')) {
+        for (const name of older) { kept = await (await caches.open(name)).match(file); if (kept) break; }
+      }
+      if (kept) { await cache.put(file, kept); copied++; continue; }
+      const response = await fetch(file, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('could not fetch ' + file + ' (' + response.status + ')');   // (tried again next time)
+      await cache.put(file, response);
+      fetched++;
+    }
+    console.log('[sw] new version kept: ' + fetched + ' files fetched, ' + copied + ' unchanged files copied');
+    await self.skipWaiting();
+  }));
 });
 
 // Taking over: throw away the stores of older versions of THIS game (other sites' stores are left alone).

@@ -272,6 +272,8 @@ export class IslandTrees {
   private water: Raster | null = null;
   private river: Raster | null = null;
   private ready = false;
+  /** Whether its files have been asked for (not with Landscaping Off: `setMode` asks when it is turned on). */
+  private started = false;
   private disposed = false;
   private readonly cells = new Map<string, Cell>();
   private readonly buildQueue: { ci: number; cj: number }[] = [];
@@ -292,10 +294,9 @@ export class IslandTrees {
     this.group.name = 'island-trees';
     parent.add(this.group);
     this.mode = mode;
-    this.setMode(mode);
     this.quad = new THREE.PlaneGeometry(1, 1);
     this.quad.translate(0, 0.5, 0);   // (its foot at the bottom, so each tree stands on its spot)
-    void this.init();
+    this.setMode(mode);   // (starts loading its files, unless Landscaping is Off)
   }
 
   private async init(): Promise<void> {
@@ -449,6 +450,10 @@ export class IslandTrees {
   setMode(mode: Landscaping): void {
     this.mode = mode;
     this.group.visible = mode !== 'off';
+    // NOTHING LOADED WHILE IT IS OFF (Joshua, 2026-11-21, ChatGPT's review: the six tree photos, about 4 MB, and the
+    // forest's maps were fetched and sent to the graphics chip with Landscaping Off too): the first time it is on, all
+    // of it is loaded, as before
+    if (mode !== 'off' && !this.started) { this.started = true; void this.init(); }
     if (mode === 'hybrid') setFade(this.fade, SWAP_M.start, SWAP_M.end, DRAW_M * 0.75, DRAW_M);
     else setFade(this.fade, 0, 0, DRAW_M * 0.75, DRAW_M);
   }

@@ -44,10 +44,38 @@ const PORE_TILE = 'charb/models/skins/skin-detail-1024.png';
 /** Where the roughness picture reads as cloth (outfitMaterial.ts CLOTH_FROM): below this it is her skin. */
 const SKIN_BELOW = 0.58;
 
-/** Her skin's two pictures for one look: her own skin's height (her picture's layout) and the pore tile (repeating). */
-export interface SkinPictures { readonly own: THREE.Texture; readonly tile: THREE.Texture }
+/**
+ * Her skin's two pictures for one look: her own skin's height (her picture's layout) and the pore tile (repeating).
+ * `release()` when the body is done with them: her own height map is let go, and the shared pore tile once nobody uses it.
+ */
+export interface SkinPictures { readonly own: THREE.Texture; readonly tile: THREE.Texture; release(): void }
 
-/** Load a look's skin height map and the pore tile (both read as plain numbers, not colours). */
+/**
+ * THE PORE TILE IS SHARED (Joshua, 2026-11-21, ChatGPT's review): it is the same picture on every body, and each body
+ * loaded its own copy, about 5 MB on the graphics chip each (1024 x 1024 with its smaller copies). Now one copy is
+ * loaded the first time a body asks, and counted: each body gives it back as it goes (an outfit change, a reload), and
+ * it is let go only when the last one has. (So an outfit change of Blaze's keeps it on the chip for John, and only a
+ * body alone in the game loads it again after a change, as before.)
+ */
+let poreTile: THREE.Texture | null = null;
+let poreTileUsers = 0;
+function takePoreTile(sharp: number): THREE.Texture {
+  if (!poreTile) {
+    const tile = new THREE.TextureLoader().load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
+    tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
+    tile.colorSpace = THREE.NoColorSpace;
+    tile.anisotropy = sharp;
+    poreTile = tile;
+  }
+  poreTileUsers++;
+  return poreTile;
+}
+function giveBackPoreTile(): void {
+  poreTileUsers = Math.max(0, poreTileUsers - 1);
+  if (poreTileUsers === 0 && poreTile) { poreTile.dispose(); poreTile = null; }
+}
+
+/** Load a look's skin height map and take the shared pore tile (both read as plain numbers, not colours). */
 export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): SkinPictures {
   const loader = new THREE.TextureLoader();
   const sharp = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -56,11 +84,14 @@ export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): S
   own.colorSpace = THREE.NoColorSpace;
   own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
   own.anisotropy = sharp;
-  const tile = loader.load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
-  tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
-  tile.colorSpace = THREE.NoColorSpace;
-  tile.anisotropy = sharp;
-  return { own, tile };
+  const tile = takePoreTile(sharp);
+  let released = false;
+  return {
+    own,
+    tile,
+    // (once only: a body let go of twice must not give the tile back twice)
+    release() { if (released) return; released = true; own.dispose(); giveBackPoreTile(); },
+  };
 }
 
 /**

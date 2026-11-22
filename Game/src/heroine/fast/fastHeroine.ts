@@ -1976,7 +1976,7 @@ if (uHideHead > 0.5) {
       skin.onBeforeRender = () => {};
       body.dispose();
       materials.dispose();
-      skinPictures?.own.dispose(); skinPictures?.tile.dispose();
+      skinPictures?.release();   // (her own height map; the shared pore tile once nobody uses it: skinTexture.ts)
       look.dispose();
       maker.dispose();
       motion.dispose();

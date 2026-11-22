@@ -299,17 +299,20 @@ export class Dome {
   /** Radius at ground level, in metres. */
   readonly radius = DOME_RADIUS;
 
-  private readonly material: THREE.ShaderMaterial;
+  /** The glass (null for a dome of sections only: `Dome.sectionsOnly`, on the island). */
+  private readonly material: THREE.ShaderMaterial | null;
   private readonly geometries: THREE.BufferGeometry[];
   // The three lists the shader reads, one number per section.
   private readonly healthList = new Float32Array(DOME_SECTIONS).fill(1);
   private readonly shatterList = new Float32Array(DOME_SECTIONS);
   private readonly flashList = new Float32Array(DOME_SECTIONS);
 
-  private constructor(obj: ObjData) {
+  private constructor(obj: ObjData | null) {
     const sections: DomeSection[] = [];
     for (let i = 0; i < DOME_SECTIONS; i++) sections.push(new DomeSection(i));
     this.sections = sections;
+    // (sections only: no glass to draw, so no model, shader or shapes)
+    if (!obj) { this.material = null; this.geometries = []; return; }
 
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX_SHADER,
@@ -346,6 +349,15 @@ export class Dome {
     return new Dome(parseObj(await response.text()));
   }
 
+  /**
+   * THE DOME'S TWELVE SECTIONS ONLY, no glass (the island: Joshua, 2026-11-21, ChatGPT's review: the town's pieces were
+   * built on the island too, never drawn). Their health, hits and repairs still work: the danger she feels and the
+   * TEST TOOLS read them. Nothing is downloaded and nothing goes to the graphics chip.
+   */
+  static sectionsOnly(): Dome {
+    return new Dome(null);
+  }
+
   /** The section in a compass direction (radians, same convention as a heroine's yaw). */
   sectionAt(azimuth: number): DomeSection {
     return this.sections[sectionIndexAt(azimuth)];
@@ -363,7 +375,7 @@ export class Dome {
 
   /** Once per frame: move the shatter and flash animations along and hand the numbers to the shader. */
   update(frame: FrameInfo): void {
-    this.material.uniforms.uTime.value = frame.elapsed;
+    if (this.material) this.material.uniforms.uTime.value = frame.elapsed;
     for (let i = 0; i < DOME_SECTIONS; i++) {
       const section = this.sections[i];
       if (section.shattered) {
@@ -381,6 +393,6 @@ export class Dome {
 
   dispose(): void {
     for (const geometry of this.geometries) geometry.dispose();
-    this.material.dispose();
+    this.material?.dispose();
   }
 }

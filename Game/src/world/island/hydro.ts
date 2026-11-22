@@ -704,27 +704,37 @@ export class KauaiHydro {
           polygonOffsetUnits: 3,
         }),
     );
-    void this.loadNormals();
-    void this.loadBedTextures();
+    // (its pictures only once she is playing, one at a time: `update` asks for them, v0.2.151; hydro.json is the
+    //  carving's, fetched with the island)
     void this.load();
   }
 
-  /** Load the streambed albedo variants (sand / cobble / silt / algae). */
+  /**
+   * GALAXY DEFENDERS (v0.2.151): the water's pictures are asked for once she is playing (the first `update`), and one
+   * at a time: the ripples, then each streambed. Before, all five were fetched with the island, behind the characters'
+   * loading. (Nothing of the water is built before she plays anyway: islandWorld.ts.)
+   */
+  private picturesAsked = false;
+  private async loadPictures(): Promise<void> {
+    await this.loadNormals();
+    await this.loadBedTextures();
+  }
+
+  /** Load the streambed albedo variants (sand / cobble / silt / algae), one at a time. */
   private async loadBedTextures(): Promise<void> {
-    await Promise.all(
-      BED_TEXTURES.map(async (url, i) => {
-        const tex = await loadWorldColour(this.base + url);
-        if (!tex || this.disposed) { tex?.dispose(); return; }
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        this.bedTexs[i] = tex;
-        this.bedMats[i].map = tex;
-        this.bedMats[i].color.setHex(0xffffff); // let the texture carry the colour
-        this.bedMats[i].needsUpdate = true;
-      }),
-    );
+    for (const [i, url] of BED_TEXTURES.entries()) {
+      const tex = await loadWorldColour(this.base + url);
+      if (this.disposed) { tex?.dispose(); return; }
+      if (!tex) continue; // (that streambed keeps its plain colour; the others still load)
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      tex.needsUpdate = true;
+      this.bedTexs[i] = tex;
+      this.bedMats[i].map = tex;
+      this.bedMats[i].color.setHex(0xffffff); // let the texture carry the colour
+      this.bedMats[i].needsUpdate = true;
+    }
   }
 
   private async loadNormals(): Promise<void> {
@@ -1112,6 +1122,7 @@ export class KauaiHydro {
 
   /** Call every frame after the streamer's update. */
   update(dt: number, streamer: KauaiTileStreamer): void {
+    if (!this.picturesAsked) { this.picturesAsked = true; void this.loadPictures(); }
     this.t += dt;
     if (this.riverNormal) this.riverNormal.offset.set(-this.t * RIVER_SCROLL, 0);
     if (this.lakeNormal) {

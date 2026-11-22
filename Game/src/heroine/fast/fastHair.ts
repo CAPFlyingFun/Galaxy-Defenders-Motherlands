@@ -166,11 +166,10 @@ export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, 
   //  since v0.9.71. John, 2026-11-21: his crew cut)
   const style = hairStyle(choice.style, male);
   if (!style) throw new Error(`[heroine] the Character Builder has no hairstyle called "${choice.style}"`);
-  const [fullFile, lightFile] = await Promise.all([
-    loadHairFile(style.file),
-    // (if the light file is missing she simply keeps her full hair at every level)
-    loadHairFile(style.lightFile).catch(() => null),
-  ]);
+  // (one after the other, v0.2.151: the start does one thing at a time)
+  const fullFile = await loadHairFile(style.file);
+  // (if the light file is missing she simply keeps her full hair at every level)
+  const lightFile = await loadHairFile(style.lightFile).catch(() => null);
   const prepare = (mesh: THREE.SkinnedMesh): THREE.SkinnedMesh => {
     const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
     // the builder's two patches: each lock lit as one round thing from both sides; its strands drawn in her colour

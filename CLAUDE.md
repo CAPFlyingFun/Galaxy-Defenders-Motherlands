@@ -782,6 +782,23 @@ use the game's single copy of three.js.
   by up to 18 cm on steep ground (the coarse edge is straighter), hidden by every tile's hanging skirt, and a neighbour
   is fine before she is within 500 m of it. Graphics est. at the first picture 11 MB, after it 89 (was 97): the
   characters still go up in that one frame (the plan's warm-up, not yet built).
+- v0.2.151: ONE HEAVY STEP AT A TIME, A PAUSE BEFORE EACH (Joshua, 2026-11-22, after v0.2.150's TOWN also failed 5
+  starts in a row, then ran on the island: "keep both characters together, don't split and will leave live alone since
+  it does work… the issue is probably maybe an overlap of reading the files it is bottlenecking the system… split up
+  the loading process like (Light>Heavy>Light>Heavy, etc…) with maybe a 1s break between loading"). His start log: 3
+  of the 5 town starts closed at "Loading John: unpacking his body…" (9-10 s in, 87 MB downloaded, ~17 MB graphics),
+  one at frame 1, one 5 s into play: the phone's memory, as the downloads were done (35-40 MB/s: its own offline
+  copy). `core/loadPace.ts` `loadBreak` (LOAD_BREAK_MS 1000, then two frames); main.ts `pauseBefore(what)`, a step of
+  its own on the splash and in the start log ("A short pause before John…"): before Blaze, her live body, John,
+  getting the picture ready and the first picture. NOTHING OVERLAPS: each character's body file, then a pause, then
+  her pictures (fastHeroine.ts; they were fetched and unpacked TOGETHER with the body file), each picture one at a
+  time (bakedLook.ts; were Promise.all), the hair's two files one after the other; the island's own pictures in its
+  step (ocean.ts `ready`: coast mask then ripples; the sky waited for), the water's pictures only once she plays, one
+  at a time (hydro.ts `loadPictures`). Measured (built game, island and town): every file in order, no errors; about
+  6 s more to the first picture (36 s against 30 in the software test browser); the splash's time left learns the
+  pauses after the first start that gets all the way through. Not done: a picture warm-up before the first frame
+  (measured: the pictures are already up by then; the first frame adds about 33 MB of mesh data and three 4 MB shape
+  tables). Her live body's own loading is the builder's (Char_B, not edited): its four pictures still come together.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

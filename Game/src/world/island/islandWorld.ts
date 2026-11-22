@@ -167,6 +167,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   group.add(far);
   const ocean: Ocean = createOcean(base, islandSize, origin);
   group.add(ocean.mesh);
+  // (the sea's two pictures in before anything else: v0.2.151, nothing of the island left loading behind her)
+  await ocean.ready;
   // THE WATERWAYS (hydro.ts): made in the island's own metres, so their group is shifted by the arrival point
   const waterGroup = new THREE.Group();
   waterGroup.position.set(-origin.x, 0, -origin.y);
@@ -190,7 +192,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   let skyPicture: THREE.Texture | null = null;
   let sky: SkyPicture | null = null;
   let gone = false; // (the island let go before the picture arrived: it is not put up)
-  void new THREE.TextureLoader().loadAsync(`${base}sky/daysky_bg.jpg`).then((picture) => {
+  // (WAITED FOR, v0.2.151: in with the island's own step, not loading behind the characters')
+  await new THREE.TextureLoader().loadAsync(`${base}sky/daysky_bg.jpg`).then((picture) => {
     if (gone) { picture.dispose(); return; }
     skyPicture = picture;
     sky = createSkyPicture(picture);

@@ -66,6 +66,8 @@ function oceanGrid(rings: number, sectors: number, r0: number, rMax: number): TH
 
 export interface Ocean {
   readonly mesh: THREE.Mesh;
+  /** Its two pictures are in (the coast mask, then the ripples: one after the other, v0.2.151); never fails. */
+  readonly ready: Promise<void>;
   /** Every frame: the sea follows the camera, and its waves move on. */
   update(seconds: number, camera: THREE.Camera): void;
   dispose(): void;
@@ -101,7 +103,9 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
   const uTime = { value: 0 };
   const uOrigin = { value: origin };
   const loader = new THREE.TextureLoader();
-  void loader.loadAsync(`${base}kauai/coast_mask.png`).then((picture) => {
+  // (ONE AFTER THE OTHER, and waited for by the island's own loading step, v0.2.151: nothing of the island is still
+  //  loading behind the characters' heavy steps)
+  const ready = loader.loadAsync(`${base}kauai/coast_mask.png`).then((picture) => {
     picture.colorSpace = THREE.NoColorSpace; // (heights, not colours)
     // ONE CHANNEL ON THE GRAPHICS CHIP (v0.2.147): the shader reads only its red (`.r` below), so only red is sent:
     // 2048 x 2048 as R8 is 5.3 MB with its smaller copies, as RGBA it was 21.3 MB. The values are the same bytes.
@@ -110,13 +114,13 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
     picture.flipY = false; // (its first row is the north edge, as the shader reads it)
     picture.needsUpdate = true;
     uCoast.value = picture;
-  }).catch(() => { /* the sea stays everywhere: the island still shows, only the shoreline is plainer */ });
-  void loader.loadAsync(`${base}textures/water_normal.png`).then((picture) => {
-    picture.colorSpace = THREE.NoColorSpace;
-    picture.wrapS = picture.wrapT = THREE.RepeatWrapping;
-    picture.needsUpdate = true;
-    uRipple.value = picture;
-  }).catch(() => { /* no ripples */ });
+  }).catch(() => { /* the sea stays everywhere: the island still shows, only the shoreline is plainer */ })
+    .then(() => loader.loadAsync(`${base}textures/water_normal.png`)).then((picture) => {
+      picture.colorSpace = THREE.NoColorSpace;
+      picture.wrapS = picture.wrapT = THREE.RepeatWrapping;
+      picture.needsUpdate = true;
+      uRipple.value = picture;
+    }).catch(() => { /* no ripples */ });
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSky = { value: sky };
@@ -207,6 +211,7 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
   mesh.frustumCulled = false; // (it is always round the camera)
   mesh.renderOrder = -1;
   return {
+    ready,
     mesh,
     update(seconds, camera) {
       uTime.value += seconds;

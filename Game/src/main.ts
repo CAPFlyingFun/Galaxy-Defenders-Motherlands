@@ -19,6 +19,7 @@ import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showLastStart, showSplashError, showStartCount } from './ui/splash';
 import { installGpuTally, type GpuTally } from './core/gpuTally';
+import { loadBreak } from './core/loadPace';
 import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart, startCountText } from './core/startupLog';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
@@ -335,6 +336,16 @@ async function start(): Promise<void> {
    * (The Character Builder's own long step, opening her live body, cannot be broken up from here.)
    */
   const breathe = (): Promise<void> => new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
+  /**
+   * A PAUSE BEFORE A HEAVY STEP (v0.2.151; Joshua, 2026-11-22: "split up the loading process like (Light>Heavy>Light>
+   * Heavy, etc…) with maybe a 1s break between loading"; core/loadPace.ts): a second of nothing, so the page can clear
+   * what the last step left behind before the next big piece is unpacked. Each is a step of its own on the splash (and
+   * in the start log, so a start the phone closes during one says so).
+   */
+  const pauseBefore = async (what: string): Promise<void> => {
+    meter.step(`pause ${what}`, `A short pause before ${what}…`);
+    await loadBreak();
+  };
   const splash = connectSplash(meter);
   preventPageZoom(); // no double-tap or pinch zoom of the page itself (src/input/noZoom.ts)
   // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
@@ -464,7 +475,8 @@ async function start(): Promise<void> {
 
   // ---- Heroine, camera, controls -----------------------------------------------
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
-  await breathe();
+  // (her body is the first heavy step: a pause before it, v0.2.151)
+  await pauseBefore('Blaze');
   // HER OUTFIT NOW: the address's ?look= wins at the start, else the one chosen in Settings. A change in Settings
   // changes her outfit WHILE THE GAME RUNS (see `changeOutfit` below), and this follows it.
   // (a catsuit in the style chosen under Catsuit style: heroineSettings.ts outfitLook)
@@ -634,7 +646,8 @@ async function start(): Promise<void> {
   let liveOpened = false;
   if (graphics.liveBody === 'on' && heroine.attachLive) {
     try {
-      await breathe();
+      // (the next heavy step: a pause before it, v0.2.151)
+      await pauseBefore('her live body');
       meter.step('live body', 'Blaze\'s live body: fetching its code…');
       const [{ openLiveBody }, { LOOKS, lookKey }] = await Promise.all([import('./heroine/fast/liveBody'), import('./heroine/looks')]);
       const live = await openLiveBody(renderer, LOOKS[lookKey(outfitNow)], (stage) => meter.step(`live body: ${stage}`, `Blaze's live body: ${stage}…`));
@@ -858,6 +871,9 @@ async function start(): Promise<void> {
     try {
       // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
       const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
+      // (the next heavy step, right after her live body: a pause before it, v0.2.151. Three of Joshua's five town starts
+      //  on v0.2.150 were closed at "Loading John: unpacking his body…")
+      await pauseBefore('John');
       const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true,
         // (held at one detail, he keeps only that one level: fastHeroine.ts `oneLevel`, v0.2.147)
         JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined, oneLevel: true } : {});
@@ -1609,6 +1625,8 @@ async function start(): Promise<void> {
     await whenOnItsSide(stage);
     meter.release();
   }
+  // (getting the picture ready and drawing the first one are the last heavy steps: a pause before each, v0.2.151)
+  await pauseBefore('getting the picture ready');
   meter.step('picture', 'Getting the picture ready…');
   try {
     // (never waited on for more than 5 seconds, and never a reason not to start: it is only a head start)
@@ -1616,6 +1634,7 @@ async function start(): Promise<void> {
   } catch (error) {
     console.warn('The materials could not be got ready ahead of time; the first picture does it instead.', error);
   }
+  await pauseBefore('the first picture');
   meter.step('first picture', 'Drawing the first picture…');
   /** How many frames have begun. The first one is drawn behind the splash; the game starts with the second. */
   let framesBegun = 0;

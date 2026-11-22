@@ -183,20 +183,21 @@ export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer
         return loadPicture(folder + webp + bake, colour);
       })
       : loadPicture(folder + webp + bake, colour);
-  const [albedo, normal, surface, shapeBytes, pieceBytes, small] = await Promise.all([
-    picture(manifest.files.albedo, packed?.albedo, true),
-    picture(manifest.files.normal, packed?.normal, false),
-    picture(manifest.files.surface, packed?.surface, false),
-    bytesOf(manifest.files.shape),
-    manifest.files.pieces ? bytesOf(manifest.files.pieces) : Promise.resolve(null),
-    // (her colour for the page to read: the small copy when the big one is packed)
-    packed ? loadBitmap(folder + packed.albedoSmall + packedMark) : Promise.resolve(null),
-  ]);
+  // ONE AT A TIME (v0.2.151; Joshua, 2026-11-22: "split up the loading process"): each picture is fetched, unpacked
+  // and sent up to the graphics chip before the next is asked for (they used to be all at once), so the page never
+  // holds several unpacking pictures together.
+  const albedo = await picture(manifest.files.albedo, packed?.albedo, true);
+  const normal = await picture(manifest.files.normal, packed?.normal, false);
+  const surface = await picture(manifest.files.surface, packed?.surface, false);
+  const shapeBytes = await bytesOf(manifest.files.shape);
+  const pieceBytes = manifest.files.pieces ? await bytesOf(manifest.files.pieces) : null;
+  // (her colour for the page to read: the small copy when the big one is packed)
+  const small = packed ? await loadBitmap(folder + packed.albedoSmall + packedMark) : null;
   const shape = unpackShape(shapeBytes);
   const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
   // the pieces' own pictures (her two sneakers share one)
   const piecePictures = new Map<string, THREE.Texture>();
-  await Promise.all([...new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))].map(async (name) => { piecePictures.set(name, await loadPicture(folder + name + bake, true)); }));
+  for (const name of new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))) piecePictures.set(name, await loadPicture(folder + name + bake, true));
   return {
     manifest, albedo, normal, surface, shape, pieces, piecePictures,
     cpuPicture: small ?? ((albedo.image as CanvasImageSource | undefined) ?? null),

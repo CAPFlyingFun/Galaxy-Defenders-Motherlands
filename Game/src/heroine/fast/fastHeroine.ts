@@ -43,6 +43,7 @@ import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
 import { AutoDetail, type TargetFps } from './autoDetail';
 import { loadBakedLook, type BakedLook } from './bakedLook';
+import { loadBreak } from '../../core/loadPace';
 import { BAREFOOT_HEIGHT_METRES, makePaintedMaterials, shapeFromFile, type PaintedLook } from './devRoomLook';
 import { bodyFileFor, loadBodyFile } from './bodyFile';
 import { LOOKS } from '../looks';
@@ -385,11 +386,21 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const began = performance.now();
   const say = (stage: string) => options.onProgress?.(stage);
 
-  // ---- 1. everything she is made from, fetched together -----------------------------------------------------------
+  // ---- 1. everything she is made from: her body file, a pause, then her pictures -----------------------------------
+  // ONE HEAVY THING AT A TIME (v0.2.151; Joshua, 2026-11-22: "an overlap of reading the files it is bottlenecking the
+  // system... split up the loading process... with maybe a 1s break"): the body file used to be unpacked while her
+  // pictures were being fetched and unpacked at the same moment. Now the body file first, a pause (core/loadPace.ts),
+  // then the pictures, one at a time (bakedLook.ts).
   const painted = options.painted ?? null;
   // (whose body: hers, or his for a look on the builder's male body -- John, 2026-11-21)
   const male = LOOKS[options.look]?.body.model === 'male-base';
-  const [file, baked] = await Promise.all([loadBodyFile(say, bodyFileFor(male ? 'male-base' : 'v2-body')), painted ? Promise.resolve(null) : loadBakedLook(options.look, options.renderer)]);
+  const file = await loadBodyFile(say, bodyFileFor(male ? 'male-base' : 'v2-body'));
+  let baked: BakedLook | null = null;
+  if (!painted) {
+    say('a short pause');
+    await loadBreak();
+    baked = await loadBakedLook(options.look, options.renderer);
+  }
   const skin = file.skin;
   const fileGeometry = skin.geometry;
   const count = fileGeometry.getAttribute('position').count;

@@ -1,0 +1,194 @@
+# Galaxy Defenders: Motherlands — Story & Game Plan
+
+**Last updated:** 2026-11-22
+**Sources:** Joshua's development handoff of 2026-11-22 (his story planning with ChatGPT, and ChatGPT's review of `main`
+at v0.2.148), plus what was measured and fixed in the game the same day.
+**Status:** the story below is PROVISIONAL, not canon until Joshua approves it. The game's running design decisions
+stay in `CLAUDE.md` (the repo's root); this file is the plan: where the game is going, in what order, and why.
+
+---
+
+## 1. Where things stand (2026-11-22)
+
+| | |
+|---|---|
+| Live on `main` | **v0.2.148** (turn first, then load; texture settings for characters and world) |
+| On `claude-work`, not pushed | **v0.2.149**: the all-fours first-person camera fixed; the splash counts each map's starts |
+| Main problem | The game is **closed by the iPhone at random during the start, on the island**. The town does not crash. |
+
+### The island start crash: the evidence so far
+
+- **iPhone 15 Plus, v0.2.148, island.** The splash's "last start" line, after each crash:
+  - *Drawing the first picture…* · 11.1 s and 11.5 s in · 110.8 MB downloaded · ~11 MB graphics (est.) (twice)
+  - *frame 1* · ~11–12 s in · ~99 MB graphics (est.) (three times, the same afternoon)
+  - *Loading John: unpacking his body…* · 9 s in · ~5 MB graphics (est.) (once)
+- **The town** (Settings → WORLD → Map → Domed town), the same version, Blaze and John both in: **three starts in a
+  row with no crash and no restart** (Joshua, 14:24–14:39).
+- **Measured on the built game** (desktop Chrome, phone settings, the island, both characters):
+  - Graphics memory (est.) is **11 MB just before the first picture and 97 MB right after it**: nearly everything is
+    sent to the graphics chip in that one frame, the moment the phone most often closes the game.
+  - The page's own memory peaks at **about 700 MB while loading**: Blaze's live body about 213 MB, Blaze as drawn
+    about 137 MB (her 43 body shapes held twice), John about 56 MB, plus short peaks while each body is unpacked.
+    (Safari does not let a page read its own memory, so the phone's splash cannot show this number.)
+- **In the code** (checked):
+  - `world/island/tileStreamer.ts` `update()` starts `load()` for **every** missing tile of the 3 × 3 round her at once
+    (`RADIUS = 1`), with no limit on how many at a time. Each tile: its height picture, the rivers carved into it, its
+    mesh, and (once its 4 neighbours are in) its river and lake water.
+  - `world/island/groundPaint.ts` loads all its ground pictures together (`Promise.all`).
+  - `world/island/trees.ts` loads its vegetation maps one after another, then **all the species' photos together**
+    (`Promise.all`).
+  - Everything the island makes goes up to the graphics chip with the first picture, together with both characters.
+
+### The island, in numbers
+
+- The whole island is **56 km**, cut into **8 × 8 tiles of 7 km × 7 km** each.
+- Each tile on disk: a 513 × 513 height picture, about **0.43 MB** (27 MB for all 64).
+- In the game: the **3 × 3 tiles round her** (21 km × 21 km). The tile(s) within 1.5 km of her are built as
+  **192 × 192 squares on a phone** (about 36 m each, 37,000 corners; 256 on a computer), the rest at half.
+- Past them, **one coarse mesh of the whole island** (192 × 192, from `overview.png`).
+- Rivers and lakes: one file for the whole island, `hydro.json`, **2.1 MB**.
+- Trees: within 1050 m of the camera (photo trees), 3D trees within 60–80 m (Hybrid).
+
+---
+
+## 2. Direction
+
+1. **Stabilise the island start first.** The town is the control: it works, so it is left as it is and used to
+   compare against.
+2. **Keep the town as a sandbox** for the story's first small scenes while the island is fixed.
+3. **Then a small playable slice of the story:** John's 5–10 minute underground prologue → blackout and title card →
+   Mary at A.R.C.H. headquarters.
+4. **Story systems that can be reused**, in their own folder, not written into `main.ts` chapter by chapter.
+
+No lowering of the approved character quality just to hide the crash (Joshua's standing rule: textures and her look
+are the last things to give).
+
+---
+
+## 3. The crash: suspects, ranked, and how to tell
+
+| # | Suspect | Why | How to tell |
+|---|---|---|---|
+| P0 | **Everything goes up to the graphics chip in the first frame** | Measured: 11 MB before the first picture, 97 MB after it; the phone's crashes stop exactly there | Send each picture and mesh up one at a time, with short breaks, BEFORE the first picture; the first frame then sends nothing new |
+| P1 | **All the island's tiles load at once** | `TileStreamer.update()` starts every missing tile together; the town has nothing like it | Her own tile first, the other 8 one at a time once she is playing |
+| P2 | **Trees and ground pictures load at once** | `Promise.all` in `trees.ts` and `groundPaint.ts` | Start with Landscaping Off (Settings → WORLD); then load them one at a time |
+| P3 | **Island + both characters together pass the phone's limit** | The town (small) never crashes with the same two characters | Island with John off (`?john=off`), then both |
+| P4 | **River and lake water** (carving, levelling, water meshes) | Built per tile as tiles arrive, during the first seconds | A Rivers & lakes switch in Settings (off: none of that code runs) |
+| P5 | **Things kept after leaving a map** | `dispose()` exists; not every resource's release checked | Town → island → town, graphics estimate before and after |
+
+Download size is not memory: a picture or a height map takes much more room once it is unpacked. Compare the start
+log's downloaded MB with its graphics estimate, not either alone.
+
+---
+
+## 4. The next step: v0.2.150, the island started gently (proposed, not built)
+
+1. **Warm-up before the first picture:** every texture and mesh sent up to the graphics chip one at a time
+   (`renderer.initTexture`, one per short break), so the first frame has nothing left to send. Helps both maps.
+2. **Her tile first:** the tile she stands on is loaded before she plays; the other 8 come one at a time after play
+   begins (nearest first), never two at once.
+3. **Ground pictures one at a time**, then **river and lake water**, then **trees**, each only after the one before is
+   in, all after play begins.
+4. **Settings → WORLD → Rivers & lakes** (on/off), to test the water directly (off: no carving, no water meshes).
+5. **The splash's start count** (built in v0.2.149): *"Starts on v0.2.150 that reached 30 s: island 4 of 5 · town 3 of
+   3"*, so the result does not have to be counted by hand.
+
+**Done when:** three island starts in a row on the iPhone with no crash; a few minutes of walking about with no crash
+and at least 30 FPS; the town still works; the graphics estimate does not keep climbing.
+
+**iPhone test checklist for each version:**
+- [ ] Open the game three times on the island (close it fully between). Screenshot the splash each time.
+- [ ] Open it three times on the town.
+- [ ] Note the splash's count line and any amber "last start" line.
+- [ ] Walk a minute on the island; note the FPS.
+
+---
+
+## 5. The story (PROVISIONAL — not canon until Joshua approves)
+
+- **Protagonists:** **Mary "Blaze" Fisher** and **John "Sparks" Fisher**, married. Each is playable, and run by their
+  own AI when not selected (the game's NPC brain, `src/npc/`, already does this for the one standing by).
+- **John's expedition:** he leaves on an A.R.C.H. expedition expected to last about **10 days**. The playable **John
+  prologue is on Day 9–10**, lasts **5–10 minutes**, and ends when an ancient chamber **seals him inside**.
+- **Beyond the chamber:** a vast ancient **underground network**. The expedition's members are **separated** throughout
+  it.
+- **Transition:** blackout → title card → **Mary at A.R.C.H. headquarters**. Mary does not yet know John is trapped.
+- **Later chapters alternate** between chosen Mary and John perspectives (Q41: B), not free switching everywhere.
+- **Rescued expedition teammates:** independent AI that also takes the player's commands (Q44: C). Their
+  **personalities affect their decisions**, and they **say what worries them and what they need** (Q45: B).
+  Important decisions stay readable to the player.
+- **Working pregnancy timeline:** Mary is about **12 weeks** pregnant when John leaves, neither of them knowing; she
+  finds out near **Day 13** (just before 14 weeks); A.R.C.H. formally tells her the expedition is missing around
+  **Day 14**. Exact pacing and mechanics still to be reviewed. (In the game her pregnancy settings already start at
+  10 % = week 12: `heroine/pregnancyPlan.ts`.)
+- **Still open (do not decide by assumption):**
+  - The island's name and history, and any ties to Joshua's other games.
+  - Mother Overlord's identity and motives (unrevealed).
+  - The pregnancy is **not** to be made a villain-targeting plot by assumption.
+  - **Survival difficulty (Q46): not answered.** No option chosen.
+
+---
+
+## 6. The smallest useful playable story slice (after the island is stable)
+
+1. **John's chamber scene:** walking, inspecting a relic, one investigation or puzzle, a warning from the place
+   itself, the chamber sealing.
+2. **Transition:** fade to black and a title card, loading a **separate small scene**, not the whole island.
+3. **Mary's headquarters scene:** talking with a researcher, a first objective, a clue or report that starts her
+   investigation.
+4. **Save and restore:** the chapter, objectives, which character, and important events.
+5. **One companion test:** a separated researcher John finds; follow / stay / interact; their own behaviour and
+   warnings from their personality. Only once the story flow itself works.
+
+### Proposed code layout (new files, not yet made)
+
+```text
+Game/src/story/
+  storyDirector.ts      # chapter progression, events
+  storyState.ts         # what has happened, saved
+  objectives.ts         # objectives and what each needs first
+  chapterLoader.ts      # entering and leaving each small scene, and letting go of it
+  chapters/
+    johnPrologue.ts
+    maryHeadquarters.ts
+```
+
+It uses what is already there rather than copying it: `main.ts`'s character making (Blaze and John), the NPC brain
+(`src/npc/`), the controls (`src/input/`), the builder's bodies, the start log (`core/startupLog.ts`) to measure each
+scene change. A chapter loads only its own scene. Story data is kept apart from the code that builds a scene.
+
+An example of a chapter's data (a sketch, not working code):
+
+```ts
+const johnPrologue = {
+  id: 'john_prologue',
+  character: 'john',
+  world: 'underground_chamber',
+  objectives: ['inspect_relic', 'investigate_signal', 'activate_terminal', 'escape_sealing_chamber'],
+  nextChapter: 'mary_arch_headquarters',
+};
+```
+
+---
+
+## 7. Build order
+
+1. **Island start stable**, with the start log and count to show it (the town kept as the control).
+2. **John's playable prologue**, in its own small scene.
+3. **Mary's A.R.C.H. headquarters** and her first quest.
+4. **One rescued companion**, with commands and personality.
+5. **The underground network grows**, chapters alternating; only then the surface world and more people.
+
+The commander/turret direction of 2026-11-16 (`CLAUDE.md`: dome, waves, turrets, cards) is not replaced by this; how
+the two fit together is still to be decided with Joshua.
+
+---
+
+## 8. How the work is done (Joshua's standing rules, and the handoff's)
+
+- Work on `claude-work`; `main` moves only when Joshua approves. Ask "good to push or wait?" in a normal message.
+  After a push, wait for its deploy to succeed and 5 more minutes before another.
+- `Char_B/` is never edited by hand: it is a copy of the Character Builder, refreshed from its own `main`.
+- Before a change: the exact code it touches, the test that will tell, what result is expected. After: the type check
+  and build pass, an iPhone test checklist, and the evidence (start log lines, screenshots, numbers).
+- Unresolved story choices stay marked as open; nothing above is canon until Joshua says so.

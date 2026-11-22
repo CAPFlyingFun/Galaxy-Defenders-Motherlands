@@ -30,6 +30,9 @@
 //                    to CLEAR THE SAVED FILES AND START FRESH (core/freshStart.ts;
 //                    Joshua, 2026-11-22), there when the game cannot get as far
 //                    as Settings.
+//   the count        how many starts of this version reached 30 s, per map
+//                    (v0.2.149: "town 4 of 5 · island 1 of 3"), for Joshua's
+//                    test of whether the island is behind the crashes.
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
 import { restartGame } from '../core/restart';
@@ -108,6 +111,14 @@ export function showLastStart(text: string | null): void {
       button.textContent = 'Clearing saved files…';
       void clearAndStartFresh();
     };
+  }
+}
+
+/** Show the count of starts of this version that reached 30 s, per map (core/startupLog.ts `startCountText`). */
+export function showStartCount(text: string): void {
+  for (const id of ['splash-count', 'rotate-count']) {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text;
   }
 }
 

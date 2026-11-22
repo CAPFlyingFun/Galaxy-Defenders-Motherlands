@@ -728,6 +728,27 @@ use the game's single copy of three.js.
   `setTextureCaps`; tested: 7 of hers in 42 s in the software test browser, no errors). Full readout:
   `textures 1024 / 512`. MEASURED (built game, phone settings, island, both): graphics est. 252 -> 110 MB; a computer
   202 MB. Pictured at 4096/2048 against 1024/512: the same from her usual view, a touch softer close up.
+- v0.2.149 (2026-11-22; NOT PUSHED, Joshua: "Don't push yet"). (1) THE ALL-FOURS CAMERA (Joshua: "on all 4 looking
+  down the camera was switching between two views and was flashing a lot like it was fighting with something"): first
+  person, past straight down (on all fours her reach is 142 degrees down, crouched 91), the camera swapped between two
+  mirror views every frame. Her AIM was the cause: first person she is always given the crosshair's point
+  (main.ts step 4, guns drawn or not) and her upper body turns up to 30 degrees toward it (aimArms.ts `apply`); past
+  straight down that point is just behind her chest, so it fell left, she turned left, her head and the camera with her,
+  the point fell right, she turned right. Now her upper body does not turn toward the aim while she is down
+  (`ArmAim.torsoShare`, fastHeroine.ts: `upright`; her arms still aim), and a point BEHIND her turns her less and less,
+  none straight behind. Measured on all fours at 80-142 degrees down and crouched to its limit: the same view every
+  frame. (2) THE MAP IN THE START LOG, AND A COUNT OF STARTS (startupLog.ts `startCountText`, splash.ts
+  `showStartCount`): each start writes down its map, and the splash shows, for this version, how many starts on each
+  map reached 30 s ("Starts on v0.2.149 that reached 30 s: town 3 of 3 · island 1 of 4"); the amber line names the
+  map. (Briefly the town was made the starting map for the test; Joshua: "Keep the island", he switches in Settings.)
+  WHY: on v0.2.148 the island kept closing at "Drawing the first picture…" (~11 MB graphics est.) and "frame 1", while
+  the TOWN started three times in a row with both characters. Measured: 11 MB on the graphics chip before the first
+  picture, 97 MB after it; the island's 9 tiles all start loading at once (tileStreamer.ts, no limit), its ground and
+  tree pictures each with Promise.all. THE PLAN, and the story (provisional), are in `docs/plan/MOTHERLANDS_PLAN.md`
+  (Joshua's handoff of 2026-11-22, kept up to date): next, v0.2.150, the island started gently (a warm-up sending
+  everything up before the first picture, her tile first, the rest one at a time after play begins, a Rivers & lakes
+  switch). STILL OPEN: her shoulder looks lighter again near the camera (Joshua, John's view of her at 0.9 m, 30 %):
+  to look into (we had to raise her shoulders' detail before: `SHOULDERS_DETAIL`).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

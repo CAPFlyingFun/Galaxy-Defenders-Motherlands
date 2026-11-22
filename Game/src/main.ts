@@ -17,9 +17,9 @@ import { setTextureCaps, textureCap } from './core/textureSizes';
 import { isUpright, keepLandscape, onStageResize, onUprightChange, refitNow, whenOnItsSide } from './core/orientation';
 import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
-import { connectSplash, showLastStart, showSplashError } from './ui/splash';
+import { connectSplash, showLastStart, showSplashError, showStartCount } from './ui/splash';
 import { installGpuTally, type GpuTally } from './core/gpuTally';
-import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart } from './core/startupLog';
+import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart, startCountText } from './core/startupLog';
 import { setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
@@ -309,15 +309,18 @@ async function start(): Promise<void> {
     for (const id of ['rotate-step', 'splash-step']) { const node = document.getElementById(id); if (node) node.textContent = 'Turn your phone on its side to start'; }
   }
   const waitedForTurn = await whenOnItsSide(stage);
-  const loadIs = loadKind(loadHeroineSettings()); // which kind of load this is: "fast live", "fast", "room"...
+  const startSettings = loadHeroineSettings();
+  const loadIs = loadKind(startSettings); // which kind of load this is: "fast live", "fast", "room"...
   const meter = startLoadMeter(loadIs, waitedForTurn);
   // HOW FAR THE LAST START GOT (Joshua, 2026-11-22: v0.2.142 "keeps crashing on load"; core/startupLog.ts): every step
   // of this start is written down on the phone as it is reached, with the megabytes downloaded and the graphics memory
   // asked for (est., `gpuTally`, counted from the moment the renderer is made). If the phone closed the LAST start
   // before it had played 30 s, the splash says where it stopped.
   let gpuTally: GpuTally | null = null;
-  beginStartLog(VERSION_NUMBER, () => gpuTally?.totalMB() ?? 0, () => meter.bytes / 1048576);
+  // (and WHICH MAP, with a count of this version's starts per map that lasted 30 s: v0.2.149, the town test)
+  beginStartLog(VERSION_NUMBER, () => gpuTally?.totalMB() ?? 0, () => meter.bytes / 1048576, startSettings.map);
   showLastStart(lastStartClosed());
+  showStartCount(startCountText());
   // (every turn of the phone is written down too, so a start the phone closed says whether a turn came just before)
   onUprightChange((upright) => markStart(upright ? 'turned upright' : 'turned on its side'));
   {

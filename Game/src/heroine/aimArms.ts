@@ -126,6 +126,11 @@ export class ArmAim {
    * aim (handReach.ts and the fast heroine set these each frame).
    */
   readonly armWeight = { left: 1, right: 1 };
+  /**
+   * How much of her UPPER BODY'S TURN toward the target is used, 0..1 (the fast heroine: none while she is down on her
+   * belly or all fours, where her body faces the way it lies; her arms still aim). See `apply`.
+   */
+  torsoShare = 1;
   private readonly kick = { left: 0, right: 0 };
   private readonly worldTurn = new THREE.Quaternion();
   /** Where she last aimed: kept so the arms come DOWN from where they were, not from nowhere. */
@@ -161,7 +166,15 @@ export class ArmAim {
     // The bearing is how far round from her own facing the target is, seen from her chest.
     chest.getWorldPosition(a);
     const bearing = wrapAngle(Math.atan2(t.x - a.x, t.z - a.z) - this.facing);
-    const torso = clamp(bearing * AIM.torsoTurnShare, -AIM.torsoTurnMost, AIM.torsoTurnMost);
+    // A TARGET BEHIND HER turns her less and less, none at all straight behind (Joshua, 2026-11-22: on all fours in
+    // first person, looking past straight down, "the camera was switching between two views and was flashing a lot
+    // like it was fighting with something"). The first-person aim point is down the camera's line; past straight down
+    // it lands just behind her chest, where the slightest move sends it from one side of her to the other. Turned the
+    // full 30 degrees toward one side, her chest carried her head and the camera with it, the point jumped to the other
+    // side, and the next frame she turned the full 30 degrees back: two views, every other frame. Faded out toward
+    // straight behind, the turn there is small and settles, whichever side the point is on.
+    const behind = Math.abs(bearing) <= Math.PI / 2 ? 1 : (Math.PI - Math.abs(bearing)) / (Math.PI / 2);
+    const torso = clamp(bearing * AIM.torsoTurnShare, -AIM.torsoTurnMost, AIM.torsoTurnMost) * behind * this.torsoShare;
     this.worldTurn.setFromAxisAngle(UP, torso / 2);
     turnInWorld(spine, this.worldTurn, w);
     turnInWorld(chest, this.worldTurn, w);

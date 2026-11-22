@@ -1942,6 +1942,10 @@ if (uHideHead > 0.5) {
       root.updateMatrixWorld(true);
       if (aim.weight > 0) {
         aim.facing = bellyYaw + backTurn;
+        // (down on her belly or all fours, her body faces the way it lies: only her arms aim, her upper body does not
+        //  turn toward the target, as her other turns are off while she is down. On all fours in first person, looking
+        //  past straight down, that turn fought the camera: aimArms.ts `apply`)
+        aim.torsoShare = upright;
         aim.apply(target);
       }
 

@@ -197,7 +197,69 @@ the two fit together is still to be decided with Joshua.
 
 ---
 
-## 8. How the work is done (Joshua's standing rules, and the handoff's)
+## 8. Later: smaller island tiles, and the underground world (PROVISIONAL — not to be built yet)
+
+From Joshua and ChatGPT, 2026-11-22. **Planning only: nothing here is built until Joshua approves it.** v0.2.150 is
+finished and tested on the iPhone first.
+
+### Smaller tiles, only if the measurements call for it
+
+The island stays 56 × 56 km. If the phone still needs it after v0.2.150, the tiles could be cut smaller:
+
+| Grid | Tile | 3 × 3 round her |
+|---|---|---|
+| 16 × 16 (v0.2.150) | 3.5 km | 10.5 × 10.5 km |
+| 32 × 32 | 1.75 km | 5.25 × 5.25 km |
+| 64 × 64 | 875 m | 2.625 × 2.625 km |
+
+- The game already reads the grid's size from its manifest (`tileStreamer.ts` `across`, `tileSize`), and the same
+  cutting can be done again (257 → 129 → 65 pixels a tile: each picture is cut into its quarters, its middle row and
+  column shared). The ground's grid per tile (`SEG`) would be set to match the smaller tiles.
+- Goals: less work per tile; her tile first; the rest streamed in gradually; tiles far off let go with everything they
+  hold; tile size and ground detail kept as settings; no needless loss of look; the ground, footing, trees and water
+  continuous across seams.
+- **Smaller tiles do not by themselves mean less graphics memory.** Measure on the phone before cutting further.
+
+### Real caves and underground places
+
+In time, chosen places on the island could hold real ways in beneath it: natural caves and tunnels, ancient ruins,
+underground laboratories, large underground cities on several levels, linked passages and hidden ways out. Built as
+their own 3D geometry (not the island's height map), so they can have ceilings, overhangs, several floors and large
+chambers.
+
+### Two ways in
+
+- **Seamless:** she walks straight into a cave and the underground around her streams in. Best for small caves and
+  simple passages.
+- **A scene change:** near a cave mouth, doorway or dark passage a prompt asks "Enter cave?"; yes fades to black, her
+  state and the world's are saved, what the island no longer needs is let go, and the underground scene is loaded.
+  Coming out, the right part of the surface is loaded again.
+- **Start with the scene change** (the safer one for a phone's memory). Both use one shared system of destinations and
+  return places.
+
+### One connected world, and the story
+
+Even where an underground place is its own scene, it stands for a real place under the island: in through a cave on
+one side, through tunnels and old buildings, out somewhere else, back on the surface at the right spot. The underground
+can go down several levels without making the island any bigger. This fits the provisional story (section 5): John
+explores the ancient network after his expedition is trapped, Mary searches from the surface, and their paths may
+meet.
+
+### Order
+
+1. v0.2.150 (16 × 16) finished.
+2. Tested on the iPhone: the start, crossing between tiles, memory.
+3. 32 × 32 or 64 × 64 only if the measurements call for it.
+4. Later, one reusable system for ways in and out and for loading scenes.
+5. One small underground chamber, for John's playable prologue (section 6).
+6. Tested: going in, coming out, saving, loading, and letting go of what is left behind.
+7. Then the linked caves and underground cities, as the story grows.
+
+**The aim:** a large, connected surface and underground world, never all loaded at once. First: 30+ FPS on the phone,
+steady memory, smooth exploring, one set of world coordinates, good-looking characters and places, and systems made
+to be used again rather than one-off scene changes.
+
+## 9. How the work is done (Joshua's standing rules, and the handoff's)
 
 - Work on `claude-work`; `main` moves only when Joshua approves. Ask "good to push or wait?" in a normal message.
   After a push, wait for its deploy to succeed and 5 more minutes before another.

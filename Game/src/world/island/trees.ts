@@ -275,6 +275,11 @@ export class IslandTrees {
   private ready = false;
   /** Whether its files have been asked for (not with Landscaping Off: `setMode` asks when it is turned on). */
   private started = false;
+  /**
+   * Whether the forest may start loading at all (v0.2.150, the island's gentle start: `begin`, called once she is
+   * playing and the tiles round her are in, so its maps and photos never load with the start).
+   */
+  private allowed = false;
   private disposed = false;
   private readonly cells = new Map<string, Cell>();
   private readonly buildQueue: { ci: number; cj: number }[] = [];
@@ -312,7 +317,12 @@ export class IslandTrees {
     if (this.disposed) return;
     // (WORLD pictures by their size setting: core/textureSizes.ts, v0.2.148; a picture's shape, its width over its
     //  height, is the same at every size, so each tree's width below is too)
-    this.pictures = await Promise.all(SPECIES.map((sp) => sizedPictureAsync(`${this.base}${sp.file}`, 'world', (t) => { t.colorSpace = THREE.SRGBColorSpace; }).catch(() => null)));
+    //  ONE AT A TIME (v0.2.150, the island's gentle start), not all six together)
+    this.pictures = [];
+    for (const sp of SPECIES) {
+      this.pictures.push(await sizedPictureAsync(`${this.base}${sp.file}`, 'world', (t) => { t.colorSpace = THREE.SRGBColorSpace; }).catch(() => null));
+      if (this.disposed) break;
+    }
     if (this.disposed) { for (const p of this.pictures) p?.dispose(); return; }
     this.materials = SPECIES.map((sp, s) => {
       const picture = this.pictures[s];
@@ -455,9 +465,20 @@ export class IslandTrees {
     // NOTHING LOADED WHILE IT IS OFF (Joshua, 2026-11-21, ChatGPT's review: the six tree photos, about 4 MB, and the
     // forest's maps were fetched and sent to the graphics chip with Landscaping Off too): the first time it is on, all
     // of it is loaded, as before
-    if (mode !== 'off' && !this.started) { this.started = true; void this.init(); }
+    if (mode !== 'off' && !this.started && this.allowed) { this.started = true; void this.init(); }
     if (mode === 'hybrid') setFade(this.fade, SWAP_M.start, SWAP_M.end, DRAW_M * 0.75, DRAW_M);
     else setFade(this.fade, 0, 0, DRAW_M * 0.75, DRAW_M);
+  }
+
+  /**
+   * THE FOREST MAY LOAD NOW (v0.2.150; Joshua, 2026-11-22: her tile first, "the rest actually in the game not before"):
+   * the island calls this once she is playing and the ground round her is in. Until then nothing of the forest is
+   * fetched (its maps, its six photos, the 3D trees' bark), and none is planted.
+   */
+  begin(): void {
+    if (this.allowed) return;
+    this.allowed = true;
+    this.setMode(this.mode);
   }
 
   /**

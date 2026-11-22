@@ -3,14 +3,29 @@
 // and only those.
 //
 // THE ISLAND (Joshua, 2026-11-19: "import the real island map from Beyond
-// Extinction... true scale"): 56 km across, cut into 8 x 8 tiles of 7 km
-// (columns A..H west to east, rows 1..8 north to south), each a 513 x 513
-// height picture of the real ground (public/island/kauai/, copied from Beyond
-// Extinction: see public/island/COPIED_FROM.md). Far too much to keep on a
-// phone at once, so this keeps the 3 x 3 tiles round her (21 km square; she
-// is always at least 3.5 km from its edge) and drops the rest. Walking onto a
-// new tile, the row ahead is fetched (in a worker: tileWorker.ts) and the row
-// behind let go. Past them the coarse far island stands in (farIsland.ts).
+// Extinction... true scale"): 56 km across. Beyond Extinction cut it into 8 x 8
+// tiles of 7 km (public/island/kauai/height/, copied from it: see
+// public/island/COPIED_FROM.md); SINCE v0.2.150 the game reads them cut again
+// into 16 x 16 tiles of 3.5 km (height16/, made by scripts/make_island_tiles16.py:
+// columns A..P west to east, rows 1..16 north to south, each 257 x 257, every
+// height the same as before). Joshua, 2026-11-22: "instead of a 8x8 grid, we
+// turn it into a 16x16 grid with still the closest 9 smaller grids with the
+// players grid always in the middle". So this keeps the 3 x 3 tiles round her
+// (10.5 km square, a quarter of the 21 km it was; she is always at least
+// 1.75 km from its edge) and drops the rest. Past them the coarse far island
+// stands in (farIsland.ts). The grid's size is read from the manifest, so the
+// same code would draw the 8 x 8.
+//
+// HER TILE FIRST, THEN THE REST ONE AT A TIME ONCE SHE IS PLAYING (v0.2.150;
+// Joshua: "make the current location island tile load first and the rest
+// actually in the game not before"). The island was the map that crashed his
+// iPhone at the start, and all 9 tiles used to be asked for at the same moment
+// (fetched, read, carved and built together, then sent to the graphics chip with
+// the first picture). Now: before play, only the tile she stands on
+// (`startStreaming` not yet called: the others wait); once she plays, one tile
+// at a time, NEAREST FIRST, each started TILE_GAP ms after the last one was
+// built, so no two arrive together. Walking onto a new tile, the new row is
+// queued the same way (in a worker: tileWorker.ts) and the row behind let go.
 //
 // Brought over from Beyond Extinction's KauaiTileStreamer.ts (main at
 // 70f3f97). What is different here:
@@ -29,9 +44,11 @@ import { FAR_TILE_SEG, SEG, renderedSurfaceHeight } from './terrainSampling';
 import { makeGroundMaterial, type GroundPictures } from './groundPaint';
 import type { CarveData } from './carve';
 
-/** The island's list of tiles (public/island/kauai/manifest.json; only what is used here). */
+/** The island's list of tiles (public/island/kauai/manifest16.json since v0.2.150; only what is used here). */
 export interface IslandManifest {
   tileSizeM: number;
+  /** The whole island's side, metres (56,000). */
+  totalM?: number;
   tilePixels: number;
   tiles: { id: string; col: number; row: number; file: string }[];
   spawn?: { tile?: string; x?: number; z?: number };
@@ -43,10 +60,17 @@ const SKIRT_DROP = 6;
 const RADIUS = 1;
 /**
  * A tile is built with the fine grid (SEG) when she is within this many metres of it (standing on it, or near its
- * edge), and with the half grid otherwise. With her near a corner up to four tiles are fine; usually one or two.
- * Phones: one fine tile is 74,000 triangles, a half one 18,000, so the 3 x 3 costs about 220,000 instead of 660,000.
+ * edge), and with the half grid otherwise. With 3.5 km tiles (v0.2.150) a phone's fine grid is 192 squares of 18 m and
+ * the half grid 96 of 36 m (the old FINE grid's squares): her own tile, and a neighbour once she is within 500 m of it;
+ * near a corner up to four. One fine tile is 74,000 triangles, a half one 18,000: usually about 220,000 for the 3 x 3.
+ * (With the 7 km tiles this was 1,500 m: the half grid was then 73 m squares.)
  */
-const FINE_WITHIN = 1500;
+const FINE_WITHIN = 500;
+/**
+ * Milliseconds between one tile being built and the next being started, once she is playing (v0.2.150): each new
+ * tile's mesh goes up to the graphics chip in a frame of its own, and the game breathes between them.
+ */
+const TILE_GAP = 400;
 
 interface Tile {
   id: string;
@@ -66,16 +90,30 @@ interface Tile {
 export class TileStreamer {
   /** Everything the tiles draw: add this to the scene. */
   readonly group = new THREE.Group();
-  /** 8 x 8, one byte a tile: 255 where the tile is drawn in full (the far island leaves those squares out). */
+  /** N x N, one byte a tile: 255 where the tile is drawn in full (the far island leaves those squares out). */
   readonly shown: THREE.DataTexture;
+  /** How many tiles across the island (and down): 16 since v0.2.150 (8 before). */
+  readonly across: number;
+  /** One tile's side, metres (3,500 since v0.2.150). */
+  readonly tileSize: number;
   private readonly S: number;
   private readonly P: number;
+  /** Half the grid in tiles less a half: tile (col, row)'s centre is ((col - mid) * S, (row - mid) * S). */
+  private readonly mid: number;
   private readonly byId = new Map<string, IslandManifest['tiles'][number]>();
   private readonly tiles = new Map<string, Tile>();
   private readonly material: THREE.MeshStandardMaterial;
   /** The skirts' copy, drawn from both sides (a wall's front can face either way, depending on the edge). */
   private readonly skirtMaterial: THREE.MeshStandardMaterial;
-  private readonly shownBytes = new Uint8Array(64);
+  private readonly shownBytes: Uint8Array;
+  /** The tiles still to load round her, nearest first (v0.2.150: one at a time). */
+  private queue: [number, number][] = [];
+  /** A tile is being loaded now (only one at a time). */
+  private busy = false;
+  /** When the next one may start (performance.now(), ms): TILE_GAP after the last one was built. */
+  private nextAt = 0;
+  /** She is playing: tiles other than her own may load (`startStreaming`). */
+  private streaming = false;
   private curCol = -99;
   /** Where she was last told to be (a tile that arrives is built for there). */
   private herX = 0;
@@ -88,25 +126,33 @@ export class TileStreamer {
    * @param carve   the rivers and lakes, cut into each tile's heights as it arrives (null: none)
    */
   constructor(private readonly manifest: IslandManifest, pictures: GroundPictures, private readonly base: string, private readonly origin: THREE.Vector2, private readonly carve: CarveData | null = null) {
-    this.S = manifest.tileSizeM;
+    this.S = this.tileSize = manifest.tileSizeM;
     this.P = manifest.tilePixels;
+    // (the island is 56 km across: 16 tiles of 3.5 km, or Beyond Extinction's 8 of 7 km)
+    this.across = Math.round((manifest.totalM ?? manifest.tileSizeM * 8) / manifest.tileSizeM);
+    this.mid = (this.across - 1) / 2;
+    this.shownBytes = new Uint8Array(this.across * this.across);
     for (const t of manifest.tiles) this.byId.set(t.id, t);
     this.group.name = 'island-tiles';
     this.material = makeGroundMaterial(pictures);
     this.skirtMaterial = makeGroundMaterial(pictures);
     this.skirtMaterial.side = THREE.DoubleSide;
-    this.shown = new THREE.DataTexture(this.shownBytes, 8, 8, THREE.RedFormat, THREE.UnsignedByteType);
+    this.shown = new THREE.DataTexture(this.shownBytes, this.across, this.across, THREE.RedFormat, THREE.UnsignedByteType);
     this.shown.magFilter = this.shown.minFilter = THREE.NearestFilter;
     this.shown.needsUpdate = true;
   }
 
   // ---- Where things are -----------------------------------------------------------------------------------------
   // The game's (x, z) is the island's (x + origin.x, z + origin.y). Tile (col, row) has its centre at
-  // ((col - 3.5) * S, (row - 3.5) * S) in the island's metres.
-  private colOf(gameX: number): number { return Math.round((gameX + this.origin.x) / this.S + 3.5); }
-  private rowOf(gameZ: number): number { return Math.round((gameZ + this.origin.y) / this.S + 3.5); }
+  // ((col - mid) * S, (row - mid) * S) in the island's metres (mid 7.5 for 16 tiles across, 3.5 for 8).
+  private colOf(gameX: number): number { return Math.round((gameX + this.origin.x) / this.S + this.mid); }
+  private rowOf(gameZ: number): number { return Math.round((gameZ + this.origin.y) / this.S + this.mid); }
+  private colAtIsland(ix: number): number { return Math.round(ix / this.S + this.mid); }
   private static key(col: number, row: number): string { return `${col},${row}`; }
+  /** A tile's name: its column's letter (A west) and its row's number (1 north): "N9". */
   private static idOf(col: number, row: number): string { return String.fromCharCode(65 + col) + (row + 1); }
+  /** Kept inside the grid. */
+  private inGrid(n: number): number { return Math.min(this.across - 1, Math.max(0, n)); }
 
   /**
    * The height of the DRAWN ground at a place in the game's world, metres above the sea. NaN where no tile is
@@ -123,16 +169,20 @@ export class TileStreamer {
    * is drawn with for now (so the rivers are levelled once, to the ground she will walk on), and whether a tile is in.
    */
   fineHeightAtIsland(ix: number, iz: number): number {
-    const col = Math.round(ix / this.S + 3.5), row = Math.round(iz / this.S + 3.5);
-    const t = this.tiles.get(TileStreamer.key(col, row));
+    const t = this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)));
     if (!t?.heights) return 0;
     return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, SEG);
   }
   tileReadyAtIsland(ix: number, iz: number): boolean {
-    return !!this.tiles.get(TileStreamer.key(Math.round(ix / this.S + 3.5), Math.round(iz / this.S + 3.5)))?.heights;
+    return !!this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)))?.heights;
   }
 
-  /** How many of the tiles that should be round (gameX, gameZ) are loaded, of how many (for the loading bar). */
+  /** Is the tile she stands on at (gameX, gameZ) loaded? (Before play the game waits for this one only.) */
+  herTileReady(gameX: number, gameZ: number): boolean {
+    return !!this.tiles.get(TileStreamer.key(this.inGrid(this.colOf(gameX)), this.inGrid(this.rowOf(gameZ))))?.heights;
+  }
+
+  /** How many of the tiles that should be round (gameX, gameZ) are loaded, of how many. */
   loadState(gameX: number, gameZ: number): { ready: number; total: number } {
     let ready = 0, total = 0;
     for (const [col, row] of this.ring(gameX, gameZ)) {
@@ -142,28 +192,61 @@ export class TileStreamer {
     return { ready, total };
   }
 
+  /** She is playing: the tiles round her (not only her own) now load, one at a time (v0.2.150). */
+  startStreaming(): void {
+    this.streaming = true;
+  }
+
   /** Call every frame with where she is: when she has crossed onto another tile, the ring round her is redone. */
   update(gameX: number, gameZ: number): void {
     this.herX = gameX;
     this.herZ = gameZ;
     this.refine(gameX, gameZ);
-    const col = Math.min(7, Math.max(0, this.colOf(gameX)));
-    const row = Math.min(7, Math.max(0, this.rowOf(gameZ)));
-    if (col === this.curCol && row === this.curRow) return;
-    this.curCol = col;
-    this.curRow = row;
-    const want = new Set<string>();
-    for (const [c, r] of this.ring(gameX, gameZ)) {
-      const key = TileStreamer.key(c, r);
-      want.add(key);
-      const have = this.tiles.get(key);
-      if (have) have.wanted = true;
-      else void this.load(c, r, key);
+    const col = this.inGrid(this.colOf(gameX));
+    const row = this.inGrid(this.rowOf(gameZ));
+    if (col !== this.curCol || row !== this.curRow) {
+      this.curCol = col;
+      this.curRow = row;
+      const want = new Set<string>();
+      const missing: [number, number][] = [];
+      for (const [c, r] of this.ring(gameX, gameZ)) {
+        const key = TileStreamer.key(c, r);
+        want.add(key);
+        const have = this.tiles.get(key);
+        if (have) have.wanted = true;
+        else missing.push([c, r]);
+      }
+      // NEAREST FIRST: by how far she is from each tile's middle (her own tile first of all)
+      const ix = gameX + this.origin.x, iz = gameZ + this.origin.y;
+      const away = ([c, r]: [number, number]): number => Math.hypot((c - this.mid) * this.S - ix, (r - this.mid) * this.S - iz);
+      this.queue = missing.sort((a, b) => away(a) - away(b));
+      for (const [key, t] of this.tiles) {
+        if (want.has(key)) continue;
+        t.wanted = false;
+        if (t.mesh) this.drop(key, t); // (one still loading is dropped when it arrives)
+      }
     }
-    for (const [key, t] of this.tiles) {
-      if (want.has(key)) continue;
-      t.wanted = false;
-      if (t.mesh) this.drop(key, t); // (one still loading is dropped when it arrives)
+    this.pump();
+  }
+
+  /**
+   * ONE TILE AT A TIME (v0.2.150): start the next tile in the queue if none is loading and TILE_GAP has passed since
+   * the last was built. Before she plays (`startStreaming`), only the tile she stands on.
+   */
+  private pump(): void {
+    if (this.busy || performance.now() < this.nextAt) return;
+    while (this.queue.length) {
+      const [c, r] = this.queue[0];
+      const key = TileStreamer.key(c, r);
+      if (this.tiles.has(key)) { this.queue.shift(); continue; } // (loaded or loading already)
+      if (!this.streaming && (c !== this.curCol || r !== this.curRow)) return; // (before play: hers only)
+      this.queue.shift();
+      this.busy = true;
+      void this.load(c, r, key).finally(() => {
+        this.busy = false;
+        this.nextAt = performance.now() + TILE_GAP;
+      });
+      return;
     }
   }
 
@@ -192,12 +275,13 @@ export class TileStreamer {
 
   /** The tiles (col, row) that should be loaded round a place: those within RADIUS that the island has. */
   private *ring(gameX: number, gameZ: number): Generator<[number, number]> {
-    const col = Math.min(7, Math.max(0, this.colOf(gameX)));
-    const row = Math.min(7, Math.max(0, this.rowOf(gameZ)));
+    const col = this.inGrid(this.colOf(gameX));
+    const row = this.inGrid(this.rowOf(gameZ));
+    const last = this.across - 1;
     for (let dc = -RADIUS; dc <= RADIUS; dc++) {
       for (let dr = -RADIUS; dr <= RADIUS; dr++) {
         const c = col + dc, r = row + dr;
-        if (c < 0 || c > 7 || r < 0 || r > 7 || !this.byId.has(TileStreamer.idOf(c, r))) continue;
+        if (c < 0 || c > last || r < 0 || r > last || !this.byId.has(TileStreamer.idOf(c, r))) continue;
         yield [c, r];
       }
     }
@@ -206,13 +290,13 @@ export class TileStreamer {
   private async load(col: number, row: number, key: string): Promise<void> {
     const id = TileStreamer.idOf(col, row);
     const entry = this.byId.get(id)!;
-    const tile: Tile = { id, col, row, cx: (col - 3.5) * this.S, cz: (row - 3.5) * this.S, seg: FAR_TILE_SEG, wanted: true };
+    const tile: Tile = { id, col, row, cx: (col - this.mid) * this.S, cz: (row - this.mid) * this.S, seg: FAR_TILE_SEG, wanted: true };
     this.tiles.set(key, tile);
     let heights: Float32Array;
     try {
       heights = await readTile(`${this.base}kauai/${entry.file}`, this.P);
     } catch (error) {
-      console.warn(`Island tile ${id} did not load; it is tried again when she next crosses a tile.`, error);
+      console.warn(`Island tile ${id} did not load; it is asked for again.`, error);
       if (this.tiles.get(key) === tile) this.tiles.delete(key);
       this.curCol = -99; // (so the next frame redoes the ring and asks for it again)
       return;
@@ -242,7 +326,7 @@ export class TileStreamer {
   }
 
   private setShown(col: number, row: number, on: boolean): void {
-    this.shownBytes[row * 8 + col] = on ? 255 : 0;
+    this.shownBytes[row * this.across + col] = on ? 255 : 0;
     this.shown.needsUpdate = true;
   }
 

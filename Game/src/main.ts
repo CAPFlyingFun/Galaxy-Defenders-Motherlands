@@ -393,8 +393,8 @@ async function start(): Promise<void> {
   const dome = onIsland ? Dome.sectionsOnly() : await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`);
   if (!onIsland) scene.add(dome.group);
 
-  // THE ISLAND (src/world/island/): its 3 x 3 tiles round her, the coarse far island, the sea and the day sky. The
-  // game waits, behind the splash, until the ground round her arrival point is all in.
+  // THE ISLAND (src/world/island/): its 3 x 3 tiles of 3.5 km round her (v0.2.150: 16 x 16 over the island), the
+  // coarse far island, the sea and the day sky. The game waits, behind the splash, only for the tile under her.
   let island: IslandWorld | null = null;
   if (onIsland) {
     meter.step('island', 'Opening the island…');
@@ -402,10 +402,12 @@ async function start(): Promise<void> {
     island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, { landscaping: graphics.landscaping });
     scene.add(island.group);
     let told = -1;
-    await island.ready(0, 0, (done, of) => {
+    // (HER TILE ONLY before play, v0.2.150: the 8 round her come in one at a time once she is playing, `startStreaming`
+    //  in beginPlaying below)
+    await island.ready(0, 0, (done) => {
       if (done === told) return;
       told = done;
-      meter.step(`island ground ${done}`, `The island: ground ${done} of ${of}…`);
+      meter.step(`island ground ${done}`, done ? 'The island: the ground under her is in' : 'The island: the ground under her…');
     });
     await breathe();
   }
@@ -1630,6 +1632,9 @@ async function start(): Promise<void> {
   const beginPlaying = (): void => {
     playingSince = performance.now();
     markStart('playing');
+    // THE ISLAND'S OTHER TILES, ITS WATER AND ITS FOREST come in now, one at a time (v0.2.150; Joshua, 2026-11-22: "the
+    // rest actually in the game not before"): before play only the tile under her was loaded
+    island?.startStreaming();
     // (this load is remembered as a guide for the next only if it went the way its kind says it should)
     meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
     splash.done();

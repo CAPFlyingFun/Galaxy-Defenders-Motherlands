@@ -10,7 +10,7 @@
 // the island's address, instead of Beyond Extinction's single shared one.
 // All places are in the ISLAND'S own metres.
 // ============================================================================
-import { carveTileHeights, riverCarveDepth, riverCarveRadius, type CarveLakeSpec, type CarveSeg } from './carveCore';
+import { HALF_WORLD, carveTileHeights, riverCarveDepth, riverCarveRadius, type CarveLakeSpec, type CarveSeg } from './carveCore';
 
 /** One river run as baked: the tile it was split into, and its points [x, y, z, width]. */
 export interface HydroRiver {
@@ -89,7 +89,9 @@ export class CarveData {
    */
   applyToTile(h: Float32Array, P: number, S: number, col: number, row: number): void {
     if (!this.loaded) return;
-    const x0 = (col - 4) * S, x1 = x0 + S, z0 = (row - 4) * S, z1 = z0 + S;
+    // (the tile's west and north edges in the island's metres: its column's place from the island's west edge; any grid
+    //  size, the 3.5 km tiles since v0.2.150 as Beyond Extinction's 7 km ones)
+    const x0 = col * S - HALF_WORLD, x1 = x0 + S, z0 = row * S - HALF_WORLD, z1 = z0 + S;
     const segs = this.segs.filter((s) => Math.min(s.ax, s.bx) - s.r < x1 && Math.max(s.ax, s.bx) + s.r > x0 && Math.min(s.az, s.bz) - s.r < z1 && Math.max(s.az, s.bz) + s.r > z0);
     const lakes = this.lakes.filter((l) => l.minX < x1 && l.maxX > x0 && l.minZ < z1 && l.maxZ > z0);
     if (segs.length === 0 && lakes.length === 0) return;

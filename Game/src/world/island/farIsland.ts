@@ -1,7 +1,7 @@
 // ============================================================================
 // farIsland.ts -- the WHOLE island, coarse, for what is past the tiles.
 //
-// Only the 3 x 3 tiles round her are loaded (tileStreamer.ts: 21 km square).
+// Only the 3 x 3 tiles round her are loaded (tileStreamer.ts: 10.5 km square).
 // Looking out from the beach, the mountains and the far coast should still be
 // there, so this draws the whole 56 km island as ONE mesh of 192 x 192 squares
 // (about 290 m each) from one small height picture of all of it
@@ -13,12 +13,13 @@
 // ============================================================================
 import * as THREE from 'three';
 import { decodeElevation } from './terrainSampling';
-import { makeGroundMaterial, type GroundPictures } from './groundPaint';
+import { makeGroundMaterial, type FarCutout, type GroundPictures } from './groundPaint';
 
 /** Squares along each side of the far island. */
 const FAR_SEG = 192;
 
-export async function createFarIsland(base: string, sizeM: number, pictures: GroundPictures, shown: THREE.DataTexture, origin: THREE.Vector2): Promise<THREE.Mesh> {
+export async function createFarIsland(base: string, sizeM: number, pictures: GroundPictures, cutout: FarCutout): Promise<THREE.Mesh> {
+  const origin = cutout.origin;
   // the overview picture's heights (read once, on the game's own thread: it is small)
   const picture = await new THREE.ImageLoader().loadAsync(`${base}kauai/overview.png`);
   const P = picture.width;
@@ -46,7 +47,7 @@ export async function createFarIsland(base: string, sizeM: number, pictures: Gro
   }
   geometry.computeVertexNormals();
   geometry.setAttribute('aElev', new THREE.BufferAttribute(elevation, 1));
-  const mesh = new THREE.Mesh(geometry, makeGroundMaterial(pictures, { shown, origin }));
+  const mesh = new THREE.Mesh(geometry, makeGroundMaterial(pictures, cutout));
   mesh.name = 'island-far';
   // the island's centre is the middle of the picture; the game's centre is where she arrives
   mesh.position.set(-origin.x, 0, -origin.y);

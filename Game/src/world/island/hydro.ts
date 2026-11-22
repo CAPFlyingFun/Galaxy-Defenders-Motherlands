@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { sizedPictureAsync } from "../../core/textureSizes";
 import type { CarveData, HydroRiver, HydroLake } from "./carve";
-import { riverCarveRadius, FLAT_FRAC } from "./carveCore";
+import { riverCarveRadius, FLAT_FRAC, HALF_WORLD } from "./carveCore";
 
 // ============================================================================
 // hydro.ts -- the island's rivers, streams and lakes: their water, their
@@ -16,6 +16,16 @@ import { riverCarveRadius, FLAT_FRAC } from "./carveCore";
 //     tile is drawn with for the moment (tileStreamer.ts);
 //   * its pictures come from public/island/textures/ (`base`), and hydro.json
 //     is fetched once by carve.ts.
+//   * CHUNKED BY THE GAME'S OWN TILES (v0.2.150; Joshua, 2026-11-22: the 16 x 16
+//     grid of 3.5 km tiles). hydro.json's rivers come split at Beyond Extinction's
+//     7 km seams; each run is split again where it passes into another of the
+//     game's tiles (`splitByTile`): a piece keeps the segment that crosses the
+//     seam and ends at the first point beyond it, where the next piece begins, as
+//     Beyond Extinction's own runs join (so the joins, and the white water over
+//     steep seams, work at the new seams as at the old). A chunk's water is built
+//     once every tile its rivers reach is loaded (`needs`), not only once its four
+//     neighbours are: with 3.5 km tiles only the one she stood on would ever have
+//     had water. AT MOST ONE CHUNK IS BUILT A FRAME.
 // ============================================================================
 
 /** What the water needs of the ground (the island's own metres): its height, and whether a tile is loaded. */
@@ -104,7 +114,8 @@ const LAKE_DRIFT = { x: 0.014, y: 0.01 }; // ocean's ripple drift (u/s)
 // centred on the crossing and runs CASCADE_LEN along the flow direction (well
 // past the seam on both sides), so it stays put and looks the same no matter
 // which side's tile faded in first.
-const GRID_LINES = [-21000, -14000, -7000, 0, 7000, 14000, 21000]; // tile seams (m)
+// (the tile seams, metres: every 3.5 km since v0.2.150, set by KauaiHydro from the game's grid; 7 km before)
+let GRID_LINES: number[] = [-21000, -14000, -7000, 0, 7000, 14000, 21000];
 const CASCADE_LEN = 64; // m — whitewater streak length along flow, spanning the seam
 const CASCADE_STATIONS = 12; // vertices along the streak (smooth follow of the bed)
 const CASCADE_SCROLL = 0.55; // v/s — fast tumble so it reads as rapids, not still water
@@ -475,6 +486,31 @@ interface Crossing {
   slope: number; // how steeply the river falls here (metres down per metre along)
 }
 
+/**
+ * GALAXY DEFENDERS (v0.2.150): one of hydro.json's runs split where it passes into another of the game's tiles. A
+ * piece keeps the segment that crosses the seam and ends at the first point beyond it; the next piece begins at that
+ * same point. So each piece's points are in its own tile but for its last, and pieces join at a shared end point,
+ * just as Beyond Extinction's runs join at its 7 km seams (computeRiverLeads links them, and the segment that crosses
+ * the seam is whole in one piece, where runCrossings finds it for the white water).
+ */
+function splitByTile(run: HydroRiver, cellOf: (v: number) => number): { piece: HydroRiver; col: number; row: number }[] {
+  const pts = run.pts;
+  const out: { piece: HydroRiver; col: number; row: number }[] = [];
+  if (pts.length < 2) return out;
+  let start = 0;
+  let col = cellOf(pts[0][0]), row = cellOf(pts[0][2]);
+  for (let i = 1; i < pts.length; i++) {
+    const c = cellOf(pts[i][0]), r = cellOf(pts[i][2]);
+    if (c === col && r === row) continue;
+    out.push({ piece: { ...run, tile: String.fromCharCode(65 + col) + (row + 1), pts: pts.slice(start, i + 1) }, col, row });
+    start = i;
+    col = c;
+    row = r;
+  }
+  if (pts.length - 1 > start) out.push({ piece: { ...run, tile: String.fromCharCode(65 + col) + (row + 1), pts: pts.slice(start) }, col, row });
+  return out;
+}
+
 /** Every tile-boundary crossing along one run, with the local flow direction. */
 function runCrossings(run: HydroRiver): Crossing[] {
   const out: Crossing[] = [];
@@ -584,8 +620,18 @@ interface RiverRun {
 
 interface Chunk {
   tile: string;
+  /** Its tile in the game's grid (column west to east, row north to south). */
+  col: number;
+  row: number;
   cx: number;
   cz: number;
+  /** What it holds reaches this far (its rivers' points and widths, its lakes' shores), island metres. */
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  /** The tiles (by their middles, island metres) that must be loaded before its water is built: every one its rivers reach. */
+  needs: [number, number][];
   rivers: HydroRiver[];
   lakes: HydroLake[];
   built: boolean;
@@ -623,8 +669,14 @@ export class KauaiHydro {
    * @param base   where the island's files are (the game's address + "island/")
    * @param carve  hydro.json, fetched once (carve.ts), which also cuts the channels into the tiles
    */
-  constructor(scene: THREE.Object3D, private readonly base: string, private readonly carve: CarveData) {
+  /**
+   * @param grid   the game's tile grid (tileStreamer.ts): tiles across the island and one tile's side in metres
+   */
+  constructor(scene: THREE.Object3D, private readonly base: string, private readonly carve: CarveData, private readonly grid: { across: number; tileSize: number } = { across: 8, tileSize: 7000 }) {
     this.scene = scene;
+    // (the seams between the game's tiles: where the white water may go)
+    GRID_LINES = [];
+    for (let k = 1; k < grid.across; k++) GRID_LINES.push(k * grid.tileSize - HALF_WORLD);
     this.group.name = "kauai-hydro";
     scene.add(this.group);
     // Slightly deeper blue-green than the open ocean so channels read as
@@ -704,15 +756,20 @@ export class KauaiHydro {
     const doc = await this.carve.prefetch();
     if (!doc) return; // KauaiCarve already logged the failure
     if (this.disposed) return;
-    const chunkOf = (tile: string): Chunk => {
+    const { across, tileSize: S } = this.grid;
+    const mid = (across - 1) / 2;
+    /** The tile (column or row) a place is in, island metres. */
+    const cellOf = (v: number): number => Math.min(across - 1, Math.max(0, Math.floor((v + HALF_WORLD) / S)));
+    const chunkOf = (col: number, row: number): Chunk => {
+      const tile = String.fromCharCode(65 + col) + (row + 1);
       let c = this.chunks.get(tile);
       if (!c) {
-        const col = tile.charCodeAt(0) - 65;
-        const row = parseInt(tile.slice(1), 10) - 1;
         c = {
-          tile,
-          cx: (col - 3.5) * 7000,
-          cz: (row - 3.5) * 7000,
+          tile, col, row,
+          cx: (col - mid) * S,
+          cz: (row - mid) * S,
+          minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity,
+          needs: [],
           rivers: [],
           lakes: [],
           built: false,
@@ -723,9 +780,40 @@ export class KauaiHydro {
       }
       return c;
     };
-    for (const r of doc.rivers) chunkOf(r.tile).rivers.push(r);
-    for (const l of doc.lakes) chunkOf(l.tile).lakes.push(l);
-    this.computeRiverLeads(doc.rivers);
+    const grow = (c: Chunk, x: number, z: number, reach: number): void => {
+      c.minX = Math.min(c.minX, x - reach); c.maxX = Math.max(c.maxX, x + reach);
+      c.minZ = Math.min(c.minZ, z - reach); c.maxZ = Math.max(c.maxZ, z + reach);
+    };
+    // SPLIT AT THE GAME'S TILES (`splitByTile`), then each piece to its tile's chunk
+    const pieces: HydroRiver[] = [];
+    for (const r of doc.rivers) {
+      for (const { piece, col, row } of splitByTile(r, cellOf)) {
+        const c = chunkOf(col, row);
+        c.rivers.push(piece);
+        pieces.push(piece);
+        for (const p of piece.pts) grow(c, p[0], p[2], riverCarveRadius(p[3]) * 1.3);
+      }
+    }
+    // (a lake goes with the tile its middle is in)
+    for (const l of doc.lakes) {
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const [x, z] of l.ring) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+      const c = chunkOf(cellOf((minX + maxX) / 2), cellOf((minZ + maxZ) / 2));
+      c.lakes.push(l);
+      grow(c, minX, minZ, 0); grow(c, maxX, maxZ, 0);
+    }
+    // the joins across every seam, old and new (the pieces share their end points)
+    this.computeRiverLeads(pieces);
+    // WHAT EACH CHUNK NEEDS LOADED before its water is built: its own tile, and every tile any of its rivers' points
+    // (and the few points borrowed from the run across each join) lie in
+    for (const c of this.chunks.values()) {
+      const need = new Set<string>([`${c.col},${c.row}`]);
+      for (const r of c.rivers) {
+        const lead = this.riverLeads.get(r);
+        for (const p of [...r.pts, ...(lead?.in ?? []), ...(lead?.out ?? [])]) need.add(`${cellOf(p[0])},${cellOf(p[2])}`);
+      }
+      c.needs = [...need].map((k) => { const [col, row] = k.split(',').map(Number); return [(col - mid) * S, (row - mid) * S]; });
+    }
     this.loaded = true;
   }
 
@@ -792,12 +880,12 @@ export class KauaiHydro {
     const segs: { ax: number; az: number; bx: number; bz: number; half: number }[] = [];
     const lakes: HydroLake[] = [];
     for (const c of this.chunks.values()) {
-      // Skip tiles whose 7 km bounds don't overlap the query box.
+      // Skip chunks whose rivers and lakes don't reach the query box (GALAXY DEFENDERS: their own bounds, v0.2.150).
       if (
-        c.cx + 3500 < minX ||
-        c.cx - 3500 > maxX ||
-        c.cz + 3500 < minZ ||
-        c.cz - 3500 > maxZ
+        c.maxX + margin < minX ||
+        c.minX - margin > maxX ||
+        c.maxZ + margin < minZ ||
+        c.minZ - margin > maxZ
       ) {
         continue;
       }
@@ -868,7 +956,8 @@ export class KauaiHydro {
     let nearest = Infinity;
     for (const c of this.chunks.values()) {
       if (!c.built) continue;
-      if (x < c.cx - 3600 || x > c.cx + 3600 || z < c.cz - 3600 || z > c.cz + 3600) {
+      // (GALAXY DEFENDERS, v0.2.150: the chunk's own bounds, not a 7 km tile's)
+      if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) {
         continue;
       }
       for (const run of c.riverRuns) {
@@ -1031,35 +1120,24 @@ export class KauaiHydro {
     // Cascades tumble downstream (v runs 0→len along the flow) — fast scroll so
     // the seam reads as churning rapids.
     if (this.cascadeNormal) this.cascadeNormal.offset.set(0, -this.t * CASCADE_SCROLL);
+    let builtOne = false;
     for (const c of this.chunks.values()) {
       const ready = streamer.tileReadyAt(c.cx, c.cz);
-      // Build only once the 4 orthogonal neighbour tiles are also resident, so
-      // the ghost-context samples across every seam read real (seam-deterministic)
-      // terrain — the boundary cross-sections then match and STAY matched (built
-      // once, never rebuilt). Off-grid edges count as ready (no seam there).
-      if (ready && !c.built && this.neighboursReady(c, streamer)) {
+      // Build only once every tile its rivers reach is also resident (GALAXY DEFENDERS, v0.2.150: `needs`; Beyond
+      // Extinction asked for the 4 orthogonal neighbours), so the ghost-context samples across every seam read real
+      // (seam-deterministic) terrain: the boundary cross-sections then match and STAY matched (built once, never
+      // rebuilt). AT MOST ONE A FRAME, so no two go up to the graphics chip together.
+      if (ready && !c.built && !builtOne && this.needsReady(c, streamer)) {
         this.buildChunk(c, streamer);
+        builtOne = true;
       }
       for (const m of c.meshes) m.visible = ready;
     }
   }
 
-  /** True if every in-grid orthogonal neighbour tile of `c` has heights loaded. */
-  private neighboursReady(c: Chunk, streamer: KauaiTileStreamer): boolean {
-    const col = c.tile.charCodeAt(0) - 65;
-    const row = parseInt(c.tile.slice(1), 10) - 1;
-    const S = 7000;
-    for (const [dc, dr] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const nc = col + dc;
-      const nr = row + dr;
-      if (nc < 0 || nc > 7 || nr < 0 || nr > 7) continue; // off-grid: no seam
-      if (!streamer.tileReadyAt(c.cx + dc * S, c.cz + dr * S)) return false;
-    }
+  /** True if every tile `c` needs (its own, and every one its rivers reach) has heights loaded. */
+  private needsReady(c: Chunk, streamer: KauaiTileStreamer): boolean {
+    for (const [x, z] of c.needs) if (!streamer.tileReadyAt(x, z)) return false;
     return true;
   }
 

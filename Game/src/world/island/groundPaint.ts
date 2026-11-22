@@ -30,10 +30,14 @@ const PICTURE_FILES: Record<keyof GroundPictures, string> = {
   sand: 'sand', grass: 'grass', jungle: 'jungle', rock: 'cliff', mountain: 'mountain', snow: 'snow', reef: 'reef',
 };
 
-/** Load the seven pictures once. One that fails becomes plain grey, so the island still draws. */
+/**
+ * Load the seven pictures once. One that fails becomes plain grey, so the island still draws.
+ * ONE AT A TIME (v0.2.150, the island's gentle start): each is decoded and sized before the next is fetched, so the
+ * phone never holds seven decoding pictures at once.
+ */
 export async function loadGroundPictures(base: string): Promise<GroundPictures> {
   const out = {} as GroundPictures;
-  await Promise.all((Object.keys(PICTURE_FILES) as (keyof GroundPictures)[]).map(async (name) => {
+  for (const name of Object.keys(PICTURE_FILES) as (keyof GroundPictures)[]) {
     let picture: THREE.Texture;
     try {
       // (a WORLD picture by its size setting: core/textureSizes.ts, v0.2.148)
@@ -47,19 +51,22 @@ export async function loadGroundPictures(base: string): Promise<GroundPictures> 
     picture.anisotropy = 8; // (keeps it sharp seen at a low angle, instead of blurring into stripes)
     picture.needsUpdate = true;
     out[name] = picture;
-  }));
+  }
   return out;
 }
 
 /**
- * For the coarse FAR island only: the 8 x 8 grid saying which tiles are drawn in full right now (1) and so must not
- * be drawn by the far island as well, and where the island's own centre is in the game's world.
+ * For the coarse FAR island only: the grid saying which tiles are drawn in full right now (1) and so must not be drawn
+ * by the far island as well, and where the island's own centre is in the game's world.
  */
 export interface FarCutout {
-  /** 8 x 8, one byte a tile (row 1 first, column A first): 255 where the full tile is drawn. */
+  /** across x across, one byte a tile (row 1 first, column A first): 255 where the full tile is drawn. */
   shown: THREE.DataTexture;
   /** The island's centre in the game's world is at minus this (the game's centre is where she arrives). */
   origin: THREE.Vector2;
+  /** Tiles across the island (16 since v0.2.150; 8 before), and one tile's side in metres (3,500; 7,000 before). */
+  across: number;
+  tileSize: number;
 }
 
 /**
@@ -80,6 +87,8 @@ export function makeGroundMaterial(pictures: GroundPictures, far?: FarCutout): T
     if (far) {
       shader.uniforms.uShown = { value: far.shown };
       shader.uniforms.uOrigin = { value: far.origin };
+      shader.uniforms.uTiles = { value: far.across };
+      shader.uniforms.uTileM = { value: far.tileSize };
     }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aElev;\nvarying float vElev;\nvarying vec3 vBiomeW;\nvarying vec3 vBiomeN;')
@@ -91,7 +100,7 @@ varying float vElev;
 varying vec3 vBiomeW;
 varying vec3 vBiomeN;
 uniform sampler2D tSand, tGrass, tJungle, tRock, tMtn, tSnow, tReef;
-${far ? 'uniform sampler2D uShown;\nuniform vec2 uOrigin;' : ''}
+${far ? 'uniform sampler2D uShown;\nuniform vec2 uOrigin;\nuniform float uTiles, uTileM;' : ''}
 float gWet = 0.0; // how wet the sand is at the water's edge (set below, used for its shine)
 // A cheap smooth noise from the place itself (no picture needed): wobbles where one kind of ground gives way to the
 // next, and the brightness, so the edges are patchy like real ground and not neat contour lines.
@@ -113,9 +122,9 @@ vec3 triplanar(sampler2D tex, vec3 wp, vec3 n, float scale) {
   return texture2D(tex, wp.zy / scale).rgb * bw.x + texture2D(tex, wp.xz / scale).rgb * bw.y + texture2D(tex, wp.xy / scale).rgb * bw.z;
 }`)
       .replace('#include <map_fragment>', /* glsl */ `{
-${far ? `  // THE FAR ISLAND leaves out every tile that is drawn in full (the 8 x 8 grid of uShown)
-  vec2 cell = floor((vBiomeW.xz + uOrigin) / 7000.0 + 4.0);
-  if (cell.x >= 0.0 && cell.y >= 0.0 && cell.x < 8.0 && cell.y < 8.0 && texture2D(uShown, (cell + 0.5) / 8.0).r > 0.5) discard;` : ''}
+${far ? `  // THE FAR ISLAND leaves out every tile that is drawn in full (the grid of uShown: uTiles across, uTileM each)
+  vec2 cell = floor((vBiomeW.xz + uOrigin) / uTileM + uTiles * 0.5);
+  if (cell.x >= 0.0 && cell.y >= 0.0 && cell.x < uTiles && cell.y < uTiles && texture2D(uShown, (cell + 0.5) / uTiles).r > 0.5) discard;` : ''}
   float e = vElev;                               // height above the sea, metres
   vec3 nrm = normalize(vBiomeN);
   float slope = 1.0 - clamp(nrm.y, 0.0, 1.0);    // 0 flat .. 1 a wall

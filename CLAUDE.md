@@ -315,8 +315,9 @@ use the game's single copy of three.js.
   (`core/restart.ts`); the hidden live body opens without clothes, fabrics or hair. The dev server reads Char_B
   directly: check the BUILT game.
 - THE ISLAND IS THE MAIN MAP (Joshua, 2026-11-19; `Game/src/world/island/`): Beyond Extinction's real Kauai DEM at TRUE
-  SCALE (56 km, 8 x 8 tiles of 7 km, copied into `Game/public/island/`, see its `COPIED_FROM.md`; never edited by hand).
-  The 3 x 3 tiles round her are loaded (in a worker), the one(s) within 1.5 km of her at the fine grid (192 phone /
+  SCALE (56 km, 8 x 8 tiles of 7 km, copied into `Game/public/island/`, see its `COPIED_FROM.md`; never edited by hand;
+  SINCE v0.2.150 read cut into 16 x 16 tiles of 3.5 km, `height16/`: see v0.2.150 below).
+  The 3 x 3 tiles round her are loaded (in a worker), the one(s) within 500 m of her at the fine grid (192 phone /
   256 computer) and the rest at half; past them one coarse mesh of the whole island (`overview.png`, made by
   `scripts/make_island_overview.py`). Sea, shore and day sky from Beyond Extinction. The game's (0, 0) is her arrival
   point, BE's Wailua beach spawn (island metres 21290, 1288), facing inland; heights are metres above the sea and she
@@ -755,6 +756,32 @@ use the game's single copy of three.js.
   triangles more than 30 % (100 % 17,000). So in her SHARP set (within SHARP_WITHIN) the band is kept at 60 %
   (fastHeroine.ts `SHOULDERS_NEAR_DETAIL`); far off, her plain set, 30 % as before (`SHOULDERS_DETAIL`). Round at 1 %
   near too (112,247 triangles in all). The lab's `?shoulders=` sets it to compare.
+- v0.2.150: THE ISLAND IN 16 x 16 TILES, HER TILE FIRST, THE REST IN PLAY (Joshua, 2026-11-22: "instead of a 8x8 grid,
+  we turn it into a 16x16 grid with still the closest 9 smaller grids with the players grid always in the middle";
+  "make the current location island tile load first and the rest actually in the game not before"; the camera's far
+  distance left at 20 km, his "skip the camera"). (1) THE TILES: `scripts/make_island_tiles16.py` cuts each of Beyond
+  Extinction's 513 x 513 tiles (7 km; never edited) into its four 257 x 257 quarters (3.5 km; the middle row and column
+  shared, as neighbouring tiles share their edges): `public/island/kauai/height16/A1..P16.png` and `manifest16.json`,
+  256 files, 24.8 MB, every pixel checked against its source (no new detail: the same heights, ChatGPT's point too).
+  The 3 x 3 round her is now 10.5 x 10.5 km, a quarter of the 21 km. The grid's size is read from the manifest
+  everywhere it was 8 or 7000: tileStreamer.ts (`across`, `tileSize`, `mid`), carve.ts (`col * S - HALF_WORLD`), the
+  far island's cut-out (groundPaint.ts `uTiles`, `uTileM`; farIsland.ts takes a `FarCutout`), hydro.ts. Fine grid on
+  her own tile and any within 500 m (`FINE_WITHIN`, was 1.5 km): 192 squares of 18 m on a phone, the rest 96 of 36 m
+  (the old fine grid's squares). (2) HER TILE FIRST: before play `ready` waits for the tile under her only; main.ts
+  `beginPlaying` calls `island.startStreaming()`, and the other 8 come one at a time, nearest first, each started
+  `TILE_GAP` 400 ms after the last was built (tileStreamer.ts `queue`, `pump`); the ground pictures load one at a time
+  (groundPaint.ts), the forest only once all 9 are in (trees.ts `begin`; its six photos one at a time), the water from
+  play on. (3) THE WATER BY THE NEW TILES (hydro.ts): every river run split where it passes into another tile
+  (`splitByTile`: a piece keeps the segment that crosses the seam and ends at the first point past it, where the next
+  begins, as Beyond Extinction's runs join at its 7 km seams, so the joins and the white water over steep seams work
+  at the new seams too); a chunk's water is built once every tile its rivers (and the points borrowed across each join)
+  reach is in (`needs`; the 4-neighbours rule would have left water only on the tile she stood on), AT MOST ONE CHUNK A
+  FRAME; chunks reject by their own bounds. MEASURED on the built game: before play only O9 (hers) fetched; after,
+  N9 (where she faces, 290 m off), O8, N8, O10... one at a time; her tile's river built once N9 was in; all 9, then
+  the trees (about 1,000 in 47 draws); no errors. Seams: two fine tiles meet within 2 mm; a fine and a coarse one differ
+  by up to 18 cm on steep ground (the coarse edge is straighter), hidden by every tile's hanging skirt, and a neighbour
+  is fine before she is within 500 m of it. Graphics est. at the first picture 11 MB, after it 89 (was 97): the
+  characters still go up in that one frame (the plan's warm-up, not yet built).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

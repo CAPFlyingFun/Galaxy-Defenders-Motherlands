@@ -14,7 +14,17 @@
 // at about 1.2 m there.
 //
 // The files (public/island/) were copied from Beyond Extinction's web version;
-// see public/island/COPIED_FROM.md.
+// see public/island/COPIED_FROM.md. Since v0.2.150 the ground is read from its
+// tiles cut into 16 x 16 of 3.5 km (kauai/height16/, manifest16.json: made by
+// scripts/make_island_tiles16.py, every height unchanged).
+//
+// THE GENTLE START (v0.2.150; Joshua, 2026-11-22: "make the current location
+// island tile load first and the rest actually in the game not before"): before
+// play only the tile she stands on is loaded (`ready`); once she is playing
+// (`startStreaming`, from main.ts as play begins) the tiles round her come in one
+// at a time, nearest first (tileStreamer.ts), the river and lake water is built
+// a chunk a frame as its ground comes in (hydro.ts), and the forest starts
+// loading only once all the tiles round her are in (trees.ts `begin`).
 // ============================================================================
 import * as THREE from 'three';
 import type { GroundPoint } from '../collision';
@@ -78,8 +88,10 @@ export interface IslandWorld {
   waterAt(x: number, z: number): number | null;
   /** The sea's surface, metres (the game's height, as the ground's). */
   readonly seaLevel: number;
-  /** Wait until the tiles round (x, z) are all loaded, telling `say` how far along it is. */
+  /** Wait until the tile she stands on at (x, z) is loaded (v0.2.150: that tile only), telling `say` when it is. */
   ready(x: number, z: number, say: (done: number, of: number) => void): Promise<void>;
+  /** She is playing: the rest of the tiles round her, the water and the forest may come in now (v0.2.150). */
+  startStreaming(): void;
   /** The forest, for the readout: trees drawn and in how many draws. */
   treeCounts(): { trees: number; draws: number } | null;
   /** Settings -> WORLD -> Landscaping, live (treeObjects.ts). */
@@ -140,10 +152,9 @@ class IslandWalls implements Walls {
  */
 export async function createIslandWorld(base: string, scene: THREE.Scene, options: { landscaping?: Landscaping } = {}): Promise<IslandWorld> {
   const origin = new THREE.Vector2(ARRIVAL.x, ARRIVAL.z);
-  const [manifest, pictures] = await Promise.all([
-    fetch(`${base}kauai/manifest.json`).then((r) => r.json() as Promise<IslandManifest>),
-    loadGroundPictures(base),
-  ]);
+  // (the list of tiles first, then the ground's pictures, one at a time: groundPaint.ts)
+  const manifest = await fetch(`${base}kauai/manifest16.json`).then((r) => r.json() as Promise<IslandManifest>);
+  const pictures = await loadGroundPictures(base);
   const group = new THREE.Group();
   group.name = 'island';
   // the rivers and lakes: fetched at once (the tiles wait for them, to cut their channels in: carve.ts)
@@ -151,15 +162,16 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   void carve.prefetch();
   const tiles = new TileStreamer(manifest, pictures, base, origin, carve);
   group.add(tiles.group);
-  const far = await createFarIsland(base, manifest.tileSizeM * 8, pictures, tiles.shown, origin);
+  const islandSize = manifest.totalM ?? manifest.tileSizeM * tiles.across;
+  const far = await createFarIsland(base, islandSize, pictures, { shown: tiles.shown, origin, across: tiles.across, tileSize: tiles.tileSize });
   group.add(far);
-  const ocean: Ocean = createOcean(base, manifest.tileSizeM * 8, origin);
+  const ocean: Ocean = createOcean(base, islandSize, origin);
   group.add(ocean.mesh);
   // THE WATERWAYS (hydro.ts): made in the island's own metres, so their group is shifted by the arrival point
   const waterGroup = new THREE.Group();
   waterGroup.position.set(-origin.x, 0, -origin.y);
   group.add(waterGroup);
-  const hydro = new KauaiHydro(waterGroup, base, carve);
+  const hydro = new KauaiHydro(waterGroup, base, carve, { across: tiles.across, tileSize: tiles.tileSize });
   const hydroGround = {
     surfaceHeightAt: (ix: number, iz: number) => tiles.fineHeightAtIsland(ix, iz),
     tileReadyAt: (ix: number, iz: number) => tiles.tileReadyAtIsland(ix, iz),
@@ -167,6 +179,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   // THE FOREST (trees.ts, Beyond Extinction's photo trees on the real vegetation maps), in the island's own metres as
   // the rivers are; Settings -> WORLD -> Landscaping picks photos, 3D trees near her, 3D only, or none (live)
   const trees = new IslandTrees(waterGroup, base, options.landscaping ?? 'hybrid');
+  /** She is playing (`startStreaming`), and whether the forest has been let start (once the tiles round her are in). */
+  let playing = false, forestBegun = false;
 
   // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze.
   // Drawn straight from the picture (skyPicture.ts, v0.2.147): as `scene.background` three.js turned it into a
@@ -202,18 +216,30 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     groundAt,
     treeCounts: () => trees.counts,
     async ready(x, z, say) {
+      // (HER TILE ONLY, v0.2.150: the streamer loads nothing else until `startStreaming`)
       tiles.update(x, z);
       for (;;) {
-        const { ready, total } = tiles.loadState(x, z);
-        say(ready, total);
-        if (ready >= total) return;
+        const done = tiles.herTileReady(x, z);
+        say(done ? 1 : 0, 1);
+        if (done) return;
         await new Promise((r) => window.setTimeout(r, 50));
-        tiles.update(x, z); // (asks again for any that failed)
+        tiles.update(x, z); // (asks again if it failed)
       }
+    },
+    startStreaming() {
+      playing = true;
+      tiles.startStreaming();
     },
     update(seconds, herX, herZ, camera) {
       tiles.update(herX, herZ);
+      // (nothing of the water is built, nor the forest started, before she is playing)
+      if (!playing) { ocean.update(seconds, camera); return; }
       hydro.update(seconds, hydroGround);
+      // THE FOREST once every tile round her is in (the first time; after that it streams with the camera as before)
+      if (!forestBegun) {
+        const { ready, total } = tiles.loadState(herX, herZ);
+        if (ready >= total) { forestBegun = true; trees.begin(); }
+      }
       // (the forest by the CAMERA, in the island's metres: what is near the view is what is drawn)
       trees.update(seconds, camera.position.x + origin.x, camera.position.z + origin.y, hydroGround, hydro);
       ocean.update(seconds, camera);

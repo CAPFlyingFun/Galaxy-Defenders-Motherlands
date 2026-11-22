@@ -41,10 +41,11 @@ stay in `CLAUDE.md` (the repo's root); this file is the plan: where the game is 
 
 ### The island, in numbers
 
-- The whole island is **56 km**, cut into **8 × 8 tiles of 7 km × 7 km** each.
-- Each tile on disk: a 513 × 513 height picture, about **0.43 MB** (27 MB for all 64).
-- In the game: the **3 × 3 tiles round her** (21 km × 21 km). The tile(s) within 1.5 km of her are built as
-  **192 × 192 squares on a phone** (about 36 m each, 37,000 corners; 256 on a computer), the rest at half.
+- The whole island is **56 km**, cut by Beyond Extinction into **8 × 8 tiles of 7 km** (513 × 513, about 0.43 MB
+  each, 27 MB for all 64). **Since v0.2.150 the game reads them cut into 16 × 16 tiles of 3.5 km** (257 × 257, about
+  99 KB each, 24.8 MB for all 256; the same heights).
+- In the game: the **3 × 3 tiles round her**, now **10.5 km × 10.5 km** (was 21 km). Her tile, and any within 500 m of
+  her, as **192 × 192 squares on a phone** (about 18 m each); the rest at half (36 m).
 - Past them, **one coarse mesh of the whole island** (192 × 192, from `overview.png`).
 - Rivers and lakes: one file for the whole island, `hydro.json`, **2.1 MB**.
 - Trees: within 1050 m of the camera (photo trees), 3D trees within 60–80 m (Hybrid).
@@ -81,7 +82,19 @@ log's downloaded MB with its graphics estimate, not either alone.
 
 ---
 
-## 4. The next step: v0.2.150, the island started gently (proposed, not built)
+## 4. v0.2.150, the island started gently (BUILT, 2026-11-22; to test on the iPhone)
+
+**What was built** (Joshua's choices: the 16 × 16 grid, her tile first, the rest one at a time once she plays; the
+camera's far distance left at 20 km):
+- The island read as **16 × 16 tiles of 3.5 km** (each 7 km tile cut into four by `scripts/make_island_tiles16.py`,
+  every height unchanged): the 3 × 3 round her is **10.5 km** across, a quarter of the 21 km.
+- **Before play only the tile under her.** Once she plays, the other 8 one at a time, nearest first; then the river and
+  lake water as its ground comes in (one chunk a frame); the forest once all 9 are in.
+- The ground and tree pictures load **one at a time** (they used `Promise.all`).
+- Measured on the built game: as above, no errors; graphics est. 11 MB before the first picture, 89 MB after it.
+- **Not built yet:** the warm-up (item 1 below) and the Rivers & lakes switch (item 4).
+
+The plan as it was proposed:
 
 1. **Warm-up before the first picture:** every texture and mesh sent up to the graphics chip one at a time
    (`renderer.initTexture`, one per short break), so the first frame has nothing left to send. Helps both maps.

@@ -524,7 +524,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   let hair: FastHair | null = null;
   if (look.manifest.hair) {
     say('hair');
-    hair = await loadFastHair(look.manifest.hair, skin, options.hairStrands !== false, options.faceLocks === true);
+    hair = await loadFastHair(look.manifest.hair, skin, options.hairStrands !== false, options.faceLocks === true, male);
   }
 
   // ---- 7. her skeleton and how she moves ---------------------------------------------------------------------------
@@ -761,7 +761,9 @@ if (uHideHead > 0.5) {
   /** Her hair: drawn in third person; in first person hidden from her camera (its shadow kept: `hideHairPatch`). */
   const showHair = (detail: Detail = drawnDetail): void => {
     if (!hair) return;
-    hair.show(detail, true);
+    // (with the head at its own detail, its hair goes with the HEAD: John's head at 100 % wears the full haircut, not the
+    //  light one his 1 % would pick, whose hairline steps. Joshua, 2026-11-21: "put John's head at 100% detail")
+    hair.show(Math.max(detail, options.headDetail ?? 0), true);
     for (const mesh of [hair.full, hair.light]) {
       if (!mesh) continue;
       mesh.layers.set(0);
@@ -1212,7 +1214,7 @@ if (uHideHead > 0.5) {
     await options.renderer.compileAsync(skin, camera, options.scene);
     skin.material = materials.fine;
   }
-  hair?.show(drawnDetail, true);
+  hair?.show(Math.max(drawnDetail, options.headDetail ?? 0), true);   // (its hair goes with the head: `showHair`)
 
   // ---- 12. the heroine the game talks to -----------------------------------------------------------------------------
   /**

@@ -83,12 +83,18 @@ function giveBackPoreTile(): void {
  */
 export async function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer, packed?: { file: string; at: string } | null): Promise<SkinPictures> {
   const sharp = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  let own: THREE.Texture;
+  let own: THREE.Texture | null = null;
   if (packed && packedPicturesOn()) {
-    const response = await fetch(bakedLookFolder(look) + `${packed.file}?bake=${encodeURIComponent(packed.at)}`);
-    if (!response.ok) throw new Error(`${look}'s packed skin height did not load (${response.status})`);
-    own = await packedTexture(await response.arrayBuffer(), false, renderer);
-  } else {
+    // (a packed skin height that fails or is too slow falls back to its WebP one: packedPictures.ts, NEVER STUCK)
+    try {
+      const response = await fetch(bakedLookFolder(look) + `${packed.file}?bake=${encodeURIComponent(packed.at)}`);
+      if (!response.ok) throw new Error(`${look}'s packed skin height did not load (${response.status})`);
+      own = await packedTexture(await response.arrayBuffer(), false, renderer);
+    } catch (error) {
+      console.warn(`[packed pictures] ${look}'s skin height did not load packed (${String(error)}); its WebP picture is used`);
+    }
+  }
+  if (!own) {
     own = new THREE.TextureLoader().load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
       (t) => { t.needsUpdate = true; });
     own.colorSpace = THREE.NoColorSpace;

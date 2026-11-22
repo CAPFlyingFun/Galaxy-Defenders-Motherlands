@@ -94,6 +94,7 @@ export async function lighten(body: Kept, detail: number): Promise<Uint32Array> 
   // 2. then each part in turn, everything else held still, lightened to its own percent (its triangles as they were at
   //    100 %, the first pass held them all). A point in the body's own lock stays held throughout.
   for (const p of parts) {
+    if (p.detail >= 100) continue;   // (a part at 100 % is kept as the first pass left it: whole)
     const others = new Uint8Array(n);
     for (let v = 0; v < n; v++) others[v] = p.points[v] ? (body.lock ? body.lock[v] : 0) : 1;
     const inside = trianglesIn(index, p.points);

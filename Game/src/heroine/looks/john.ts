@@ -10,7 +10,8 @@
 //
 // Joshua, 2026-11-21: "Here is the male model and Blaze's husband name will be
 // John"; both in the game at once with a swap button, as Beyond Extinction does.
-// Nothing here is re-made by hand: it is his export, pasted.
+// Nothing here is re-made by hand: it is his export, pasted. HIS HEAD (his crew cut, eyes and face) is from his
+// newer export of 2026-11-22 02:11 UTC (builder v0.9.71); his clothes are the game's (above), not that export's.
 // ============================================================================
 import type { HeroineLook } from '../heroineLook';
 import { fillCleavage } from './catsuit';
@@ -39,6 +40,40 @@ export const JOHN_LOOK: HeroineLook = {
       "single": 0,
       "twins": 0,
       "triplets": 0
+    }
+  },
+  // HIS HEAD (Joshua, 2026-11-21, his export of 2026-11-22 02:11 UTC, "updated look for John with hair and face details",
+  // "Look at head details only, not clothing"): his crew cut, green eyes and face, as exported (builder v0.9.71)
+  "head": {
+    "hair": {
+      "style": "crew",
+      "length": 0,
+      "colour": "#1c1b1d"
+    },
+    "eyes": {
+      "colour": "#4c7a46"
+    },
+    "brows": {
+      "colour": null,
+      "amount": 1
+    },
+    "lips": {
+      "colour": null,
+      "amount": 1
+    },
+    "lashes": 1,
+    "face": {
+      "cheekFullness": 0.7,
+      "jawCorner": -0.03,
+      "chinForward": 0.21,
+      "noseBridge": -0.4,
+      "noseTip": 0.4,
+      "lipFullness": 0.6,
+      "eyeSize": 0.5,
+      "browHeight": 0.3,
+      "cheekbones": -0.3,
+      "faceWidth": -1,
+      "jawWidth": -0.02
     }
   }
 } as HeroineLook['body'],

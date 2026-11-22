@@ -470,8 +470,10 @@ async function start(): Promise<void> {
   /** HIS FACE AT 70 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
    *  30%"; v0.2.134 at 30 %: "His face is better, but not 100%"; then "Do face at 70%, hands at 15%"): his head, above
    *  his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts `headDetail`, detailLevels.ts
-   *  `headPart`: the rest lightened first with his head held, then his head alone). null: it goes with the rest. */
-  const JOHN_HEAD_DETAIL: number | null = 70;
+   *  `headPart`: the rest lightened first with his head held, then his head alone). null: it goes with the rest.
+   *  NOW 100 % (Joshua, 2026-11-21, with his new head and crew cut: "Can you put John's head at 100% detail"): his
+   *  head kept whole, and his hair worn as its full file (fastHeroine.ts `showHair`). */
+  const JOHN_HEAD_DETAIL: number | null = 100;
   /** HIS HANDS AT 15 % (the same ask), the same way (fastHeroine.ts `handsDetail`, detailLevels.ts `handPart`). */
   const JOHN_HANDS_DETAIL: number | null = 15;
   /** The Detail a character is drawn at while PLAYED: John's fixed one, or the Settings choice (Blaze). */

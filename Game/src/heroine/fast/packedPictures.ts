@@ -16,6 +16,11 @@
 // Its smaller copies (mipmaps) come in the file, so nothing is worked out on the phone. One worker at a time, and it
 // is let go 2 s after the last picture (its memory with it); the next look starts another.
 // `?packed=off` loads the WebP pictures as before (to compare on the phone).
+//
+// NEVER STUCK (2026-11-21): a packed picture that fails, or is not ready in `PACKED_WAIT_S`, is given up on and the
+// look's WebP picture is loaded instead (bakedLook.ts, skinTexture.ts): she is never left a stand-in for want of one
+// picture. (On the development server the loader looked for its transcoder in the wrong folder and waited for ever, no
+// error at all: there it is now told where three keeps it.)
 // ============================================================================
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
@@ -27,6 +32,8 @@ export const packedPicturesOn = (): boolean => {
 
 /** Seconds the transcoder's worker is kept after the last picture, before it is let go. */
 const KEEP_WORKER_S = 2;
+/** Seconds a packed picture may take before it is given up on (and its WebP picture loaded instead). */
+export const PACKED_WAIT_S = 45;
 
 let loader: KTX2Loader | null = null;
 let busy = 0;
@@ -36,7 +43,13 @@ let letGoTimer = 0;
 function loaderFor(renderer: THREE.WebGLRenderer): KTX2Loader {
   if (letGoTimer) { window.clearTimeout(letGoTimer); letGoTimer = 0; }
   // (one worker: pictures are turned one after another, so only one picture's working memory is ever held)
-  if (!loader) loader = new KTX2Loader().setWorkerLimit(1).detectSupport(renderer);
+  if (!loader) {
+    loader = new KTX2Loader().setWorkerLimit(1);
+    // (the built game finds the transcoder by itself, in assets/; the development server moves three's loader and its
+    //  own way to the transcoder breaks, so it is told the folder three keeps it in)
+    if (import.meta.env.DEV) loader.setTranscoderPath(`${import.meta.env.BASE_URL}node_modules/three/examples/jsm/libs/basis/`);
+    loader.detectSupport(renderer);
+  }
   return loader;
 }
 
@@ -60,7 +73,10 @@ export async function packedTexture(bytes: ArrayBuffer, colour: boolean, rendere
   busy++;
   try {
     const texture = await new Promise<THREE.CompressedTexture>((done, failed) => {
-      l.parse(bytes, (t) => done(t as THREE.CompressedTexture), (e) => failed(e instanceof Error ? e : new Error(String(e))));
+      // (given up on after PACKED_WAIT_S: the caller loads the WebP picture instead)
+      const late = window.setTimeout(() => failed(new Error(`a packed picture took over ${PACKED_WAIT_S} s`)), PACKED_WAIT_S * 1000);
+      l.parse(bytes, (t) => { window.clearTimeout(late); done(t as THREE.CompressedTexture); },
+        (e) => { window.clearTimeout(late); failed(e instanceof Error ? e : new Error(String(e))); });
     });
     texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     texture.flipY = false;   // (a packed picture cannot be flipped as it goes up: it is stored the way round the bake wrote it)

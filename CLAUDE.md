@@ -676,6 +676,19 @@ use the game's single copy of three.js.
   below 55% of the screen, under every control, no touch. OUT OF VIEW (aside, behind, past 80 m) it DOCKS at the top
   middle with ◀ or ▶ their way (pushed to the edge it hid under the vitals card or 🔄/⚙️ at 932 x 430). Settings ->
   TEST TOOLS -> AI thoughts (`gdm.npcThoughts`, `?thoughts=off`; on by default while the brain is tested; live).
+  HIS HEAD AND HAIR (v0.2.141; Joshua, 2026-11-21: "Here is the updated look for John with hair and face details now",
+  "Look at head details only, not clothing"; his export `docs/reference/characters/character-john-2026-11-22.json`):
+  `looks/john.ts` `body.head` is that export's head (a CREW cut, length 0, #1c1b1d; green eyes #4c7a46; his face
+  settings); his clothes stay the game's black and neon green. Re-baked on builder v0.9.71 (his face is the builder's,
+  fitted to his head, maleFace.ts). HIS HAIR: the bake now keeps a male look's hair (bakeLook.ts: none only for a male
+  look with no head of its own, whose default would read as HER ponytail), and fastHair.ts `loadFastHair(..., male)`
+  takes HIS file of the style (`hairStyle(id, true)`: `models/hair/male/<id>.glb`, made on his head, bound to his 69
+  bones; crew.glb and crew-light.glb in `charb-files.json`). Its hairline is a per-point mask in the file's colours,
+  cut at 0.42, which the game keeps. PICTURED against the builder's own room from his front, three-quarter and back: the
+  same cut (it comes down to his nape), eyes, brows and face; a little more shine on it in the game (hairStrands.ts).
+  HIS HEAD AT 100 % (same version; Joshua: "Can you put John's head at 100% detail"): main.ts `JOHN_HEAD_DETAIL` 100 (a
+  part at 100 % is kept whole, detailWorker.ts skips its second pass), and his HAIR GOES WITH HIS HEAD (fastHeroine.ts
+  `showHair`: the full haircut, not the light one his 1 % would pick). Lab: John at 1 % 64,241 triangles, his hair 27,886.
 - BACK TO v0.2.129 (Joshua, 2026-11-21, 15:11): after crashes on his iPhone the game went back to v0.2.126 (14:51),
   which then ran again ("It's working now... on v126"), so the crashes look like the phone's state (memory, stored
   files) more than the code; then "revert to v129... that will be easier". Kept on other branches, not live:
@@ -754,7 +767,9 @@ use the game's single copy of three.js.
   loads them when it is there (`loadBakedLook(look, renderer)`), skinTexture.ts the skin height (`loadSkinPictures`,
   now async). The ONE CPU read of her colour (beltGear.ts, her waistband trim) uses `albedo-small.webp` (1024;
   `BakedLook.cpuPicture`). The full readout's `her` line ends with how her pictures are kept (ASTC, BC7, ETC2, RGBA,
-  or WebP). `?packed=off` loads the WebP pictures as before (to compare). RE-RUN `python3 scripts/make_ktx2.py <look>`
+  or WebP). `?packed=off` loads the WebP pictures as before (to compare). NEVER STUCK (v0.2.141): a packed picture that fails or takes
+  over 45 s (`PACKED_WAIT_S`) falls back to its WebP picture; on the development server three's loader lost its way to
+  the transcoder and waited for ever, so there it is told the folder (node_modules/three/.../libs/basis/). RE-RUN `python3 scripts/make_ktx2.py <look>`
   AFTER RE-BAKING A LOOK OR REMAKING ITS SKIN HEIGHT (a 4096 picture takes about a minute; two at a time). COST: bigger
   downloads (Blaze 12.8 MB, John 12.4, Shadow Operative 24.5, against 1.5-4.5 MB of WebP), kept on the phone after.
   THE OFFLINE COPY KEEPS EACH BIG FILE BY ITS OWN FINGERPRINT (vite.config.ts `pwa()`, same version): outfits, fabrics,
@@ -779,6 +794,10 @@ use the game's single copy of three.js.
 - Previews: keep one local preview running and reuse the same browser page for all screenshots; screenshot only
   what changed; shut the preview down when done.
 - Ask before changing anything major in a clothing design.
+- ON EVERY NEW BUILDER (CCBS) COPY, RE-BAKE EVERY OUTFIT (Joshua, 2026-11-21: "Yes, rebake on new CCBS updates"): each
+  look in `Game/public/heroines/` with `scripts/bake_heroine.py`, then `scripts/make_skin_height.py`,
+  `scripts/make_ktx2.py` and `scripts/make_outfit_thumbs.py`, so every outfit is the builder's newest (a bake is a
+  snapshot: the game never runs the outfits live, the iPhone cannot carry that). Show him before/after pictures.
 - Phone first (iPhone 15 Plus, held on its side: the game is played in landscape only): at least 30 FPS; nothing
   outside the camera's view is drawn; the bottom corners stay free for the player's controls.
 - The debug readout is only READ (Joshua could not open Settings when it grew over the gear, 2026-11-17): it never

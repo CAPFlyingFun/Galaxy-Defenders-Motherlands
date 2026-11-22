@@ -128,9 +128,12 @@ function hangOnBody(hair: THREE.SkinnedMesh, body: THREE.SkinnedMesh): void {
  * Load her hairstyle (full and light), colour it, and hang it on her body.
  * @param strands    draw it as strands and locks with hair's own shine (hairStrands.ts; Settings -> HEROINE -> Hair strands)
  * @param faceLocks  leave the small loose locks by her face where the file has them (`easeFaceLocks`; Settings -> HEROINE -> Locks by her face)
+ * @param male       a male body: HIS file of the style (the builder's men's cuts, and her six refit to his head)
  */
-export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, strands = true, faceLocks = false): Promise<FastHair> {
-  const style = hairStyle(choice.style);
+export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, strands = true, faceLocks = false, male = false): Promise<FastHair> {
+  // (`male`: HIS file of the style, made for his head and bound to his skeleton: the builder's `models/hair/male/`,
+  //  since v0.9.71. John, 2026-11-21: his crew cut)
+  const style = hairStyle(choice.style, male);
   if (!style) throw new Error(`[heroine] the Character Builder has no hairstyle called "${choice.style}"`);
   const [fullFile, lightFile] = await Promise.all([
     loadHairFile(style.file),

@@ -1,0 +1,186 @@
+{
+ "version": 1,
+ "characters": [
+  {
+   "name": "John",
+   "savedAt": "2026-11-22T02:11:00.506Z",
+   "body": {
+    "model": "male-base",
+    "bump": 50,
+    "shape": "{\"version\":1,\"shape\":{\"bellyTilt\":17,\"bellyHeight\":-0.7,\"bellyWidth\":10,\"bellyDepth\":2,\"bellyUpper\":6,\"bellyLower\":-1,\"navel\":-3,\"navelAfter\":0,\"babyWeight\":-15,\"bellyFirmness\":52,\"bellyBounce\":130,\"babyFloat\":70,\"babyKicks\":110,\"breastSize\":-12,\"breastWidth\":-5,\"breastHeight\":1,\"breastDepth\":6,\"breastSpacing\":0.1,\"breastPosition\":0.8,\"breastDroop\":-3,\"breastUpper\":-2,\"breastLower\":-7,\"milkBalance\":16,\"breastFirmness\":70,\"breastBounce\":85,\"height\":6,\"upperLeg\":2.5,\"lowerLeg\":-1,\"torso\":-0.5,\"neck\":-1,\"upperArm\":-0.5,\"forearm\":1.5,\"shoulders\":-0.5,\"waist\":-10,\"hips\":1,\"head\":1,\"hands\":-6}}",
+    "refine": false,
+    "random": {
+     "rules": {},
+     "groups": []
+    },
+    "pregnancy": {
+     "pregnant": false,
+     "week": null,
+     "weekAtBump": null,
+     "firstWeekBump": null,
+     "deliveryBump": null,
+     "deliveryWeek": null,
+     "afterBump": null,
+     "births": {
+      "single": 0,
+      "twins": 0,
+      "triplets": 0
+     }
+    },
+    "head": {
+     "hair": {
+      "style": "crew",
+      "length": 0,
+      "colour": "#1c1b1d"
+     },
+     "eyes": {
+      "colour": "#4c7a46"
+     },
+     "brows": {
+      "colour": null,
+      "amount": 1
+     },
+     "lips": {
+      "colour": null,
+      "amount": 1
+     },
+     "lashes": 1,
+     "face": {
+      "cheekFullness": 0.7,
+      "jawCorner": -0.03,
+      "chinForward": 0.21,
+      "noseBridge": -0.4,
+      "noseTip": 0.4,
+      "lipFullness": 0.6,
+      "eyeSize": 0.5,
+      "browHeight": 0.3,
+      "cheekbones": -0.3,
+      "faceWidth": -1,
+      "jawWidth": -0.02
+     }
+    }
+   },
+   "clothes": {
+    "outfit": "his boxer briefs",
+    "shirtLength": 0,
+    "layers": [
+     {
+      "choice": {
+       "fabric": {
+        "family": "athletic",
+        "colour": 0,
+        "tint": "#232326"
+       },
+       "match": true,
+       "trim": null,
+       "stitch": 1,
+       "opacity": null
+      },
+      "detail": {
+       "mode": "auto",
+       "material": null,
+       "override": {
+        "nipple": 0.45,
+        "navel": 0.8
+       }
+      },
+      "template": {
+       "id": "tightsMale",
+       "params": {
+        "riseFront": 0.1,
+        "riseSide": 0.14,
+        "riseBack": 0.18,
+        "riseFrontWidth": 1,
+        "legStart": 0,
+        "legEnd": 1,
+        "feet": false,
+        "hemFront": null,
+        "hemBack": null,
+        "neckFront": null,
+        "neckBack": null,
+        "sleeve": -1,
+        "topFront": null,
+        "topBack": null,
+        "topSide": null,
+        "strap": 0,
+        "strapIn": 0,
+        "armhole": null,
+        "neckStyle": "crew",
+        "legCut": null,
+        "length": null,
+        "lowBand": {
+         "waist": 0.035,
+         "leg": 0.01
+        }
+       }
+      },
+      "mask": ""
+     },
+     {
+      "choice": {
+       "fabric": {
+        "family": "jersey",
+        "colour": 0,
+        "tint": "#26324f"
+       },
+       "match": true,
+       "trim": null,
+       "stitch": 1,
+       "opacity": null
+      },
+      "detail": {
+       "mode": "auto",
+       "material": null,
+       "override": {
+        "nipple": 0.45,
+        "navel": 0.8
+       }
+      },
+      "template": {
+       "id": "teeLong",
+       "params": {
+        "riseFront": null,
+        "riseSide": null,
+        "riseBack": null,
+        "riseFrontWidth": 1,
+        "legStart": 0,
+        "legEnd": 0,
+        "feet": false,
+        "hemFront": -0.1,
+        "hemBack": -0.1,
+        "neckFront": 0.966,
+        "neckBack": 0.97,
+        "sleeve": 1,
+        "topFront": null,
+        "topBack": null,
+        "topSide": null,
+        "strap": 0,
+        "strapIn": 0,
+        "armhole": null,
+        "neckStyle": "crew",
+        "legCut": null,
+        "length": 0,
+        "band": {
+         "sleeve": 0.05
+        }
+       }
+      },
+      "mask": ""
+     },
+     null,
+     null,
+     null,
+     null
+    ],
+    "garments": {},
+    "detail": {
+     "nipple": null,
+     "navel": null
+    },
+    "shoes": "sneakers"
+   },
+   "thumb": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAqKADAAQAAAABAAAA4AAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgA4ACoAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAgICAgICAwICAwQDAwMEBQQEBAQFBwUFBQUFBwgHBwcHBwcICAgICAgICAoKCgoKCgsLCwsLDQ0NDQ0NDQ0NDf/bAEMBAgICAwMDBgMDBg0JBwkNDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDf/dAAQAC//aAAwDAQACEQMRAD8A/HuiiivUOMKKKKACiiigAooooAKKKKACiukg8Ja9PpcWtfZvLsZndI5pXVN5QclVJ3lc8bgu3dkZyDjDuLS4tTiZMdsg5H5jih72DzK9FFFABRRRQAUUUUAFFFFABRRRQB//0Px7ooor1DjCiiigAooooAKKKKACrNlbm8vILQZzPKkYwMn5yBwO/Wq1X9LlSDU7OaVtiRzxMzbQ20KwJO1uDj0PB70ntoOKu7M/cXwT8KvhxDomm6Lqfh3SruOwtBDDJe20NxLgAkZklV3Yk56k4HAwAAPzh/af8GeF/A3jaOy8LWf2KwvLFJ3gLu8fneZIrhS5LAYVTjPyk8YGAP0A8M+B/B7WunWMTXcTaOis80PnQh2keJ51dgQCl0UMkgjcfM7FNmAF8W+OXw48N/EJtIsI7xNG07Rr7Mt7cT7ETT5Cv2tVaQlUKRIGjZ9wygU8MWH57gsbKGJ9pUm3fc/SMxwMamF9nTppNWtt80flowAYhSSM8E8ZHam1teJI9Ei8Q6pF4ZZn0hL24XT2fdua1EjCEneA2SmD8wB9RmsWv0GDvFM/OJq0mgoooqiQooooAKKKKACiiigD/9H8e6KKK9Q4wooooAKKKKACiiigAopyqzsEQFmY4AHJJPYVvWPh+7ncNdq0EeRkEfOfoO31Pr0NXCEpO0UJux+lXwv+KVrefDnT9Tu7nUpdTvITEbdUnmheWNjG5Rd7QpllJ/h4POKt+MvDXiPXvhzrk97bbZr6wuYLOxHzykyxMu5yDjcQSNoyBnOT2574A674Q0f4dWFrJrthpl9p81wJoLy5igkZZJXYgCcgsCpQ7lGMkgHKkDc+LX7Qug2OnzeHfAs/2/VnheFtSt2It7PzVZHaKQYMkwQnayfIu4MHJUrXwf8AZ2IeOlSoU3pLfpa/5f0j9EWPo/UY1MRNfCtt72/P+mflfRXf3/hu1uSXs8wSemMofwHTPt+Vcle6RfWILzpmMHG9TkH39QPqBX39TDzhutD86UkzNooorEoKKKKACiiigAooooA//9L8e6KKK9Q4wooooAKKKKACiiigDpvDkIErXTDJzsQ8cd29wcEDPoTXb7sjYOc9a4nS1eK3iushVBP45JWuvjk+UGvVwytBIxnuWCqA4xU6YC4A4qiJB1yM1YMyqoJPHSuhMkkkwgBNU7pUniaKT5lIIOfQ1z+rajI0i21qC8h5wOyr1Y+mP/rVqASPbqwO4kVHNfQdjzmaPyZXiP8AAxH5VFWjqtu9veusnJYBvzrOrx5q0mjZBRRRUjCiiigAooooA//T/HuiiivUOMKKKKACiiigApyqzsEQFmYgADqSabW9ounvMWvWwI4s7c93x/Tr9cVcIOUuVCbsbTwx29iYBjATGQMZ4+9g9z1qHRJZJF8u6Ziy+grN1a/UbYU5yefT1x+P8q0tEYupYDORyT6969FSXOooztpdmy6xPkKHXHpWdLayueJ2RB2xW0F2gnGarybSMsOPStpIlMyIlgtA20ks/VmGSQPfpWtpj+Zapk5I4PpmuT1lgiBRwznHXp/+oVa8P3qxqbRjyOV+lYxqJT5CmtLjfE4X7RCw6lSCfoa5iuz8VQ/u4Z/cr/30M/0rjK4sSrVGXDYKKKKwKCiiigAooooA/9T8e6KKK9Q4wooooAKKKKAHIjSOqIMsxAA9zXp0MUdtBFbJwqADt+Z9z3riNDtjPfBscRgt0yM9B/iPpXQatqItI22YLn5UGerev0Aruwq5YubM56uxzutXMdxd7Yh8sQ259zya6LTYGhjULxhFLg9Q2OR0riEBZ1BG8luR03En+td1ZXZyWI5J/lSoS5puTHJaWNOPc0e7I5GalEX7v5jnmolmHBx2p7T7IwMZ4ruujI5PX4ggQ/7WP0rO0dQ16AfQ4+vT+VbWswzTQtIwxs5Az+Z/KubsZWhuo2XjLAH8TXBV0rJmsdjs/EKGawyMnYQ3+fwzXA16PrGBpcmMfd/mK84pYxe/cIbBRRRXIWFFFFABRRRQB//V/HuiiivUOMKKKKACiiigD0Oz8O67ovhWDxfeafcx6XqUjR216Y2NvK0bOhQPjbvDI/y53YGcYrg7m4e6l86Tg4wB6D/6/ev06/aE8Iz6f+yzotrb6gYh4ZXTra5g2grdL+7hHXBUhikgI4wpGOePy+rky/Mni6LdrJNo9HM8v+qVVTve6T+8uWEImuBk4CfN+XT9a17bzY3MefunufSs/T14du549xjn/P0qLUJb60xd27kqv+sUgHj1GQa7I4uFN8rRxKjKSujrlZwuTxmrse6TBri/7WumVWil+UjI+Ve/4Vp2mo3pX55P/HR/hWyzOl1T/D/Ml4WR0dygEWD1xXnUo8mdgvG1sr9Oorq7q9uXTaX6jHQf4Vv/AAn+GOsfFzxxb+EtLlWBSpuLy6kIIgtY2VXcKSC7ZZVVR1ZhnC5YY4jH0pR5tktbsulhKjkoRV29EUvEFtf2mlR/bIZYRNEkkfmIU3oxGGXIGQfUcV55X7K/tY6kNK+DmtQCOK5HkW9qqyrvUeZLFHvHTDqH3If4WAPavxqrgwGavH0/bOPLbTe53ZrliwNZUlLmur7W/wAwoooruPMCiiigAooooA//1vx7ooor1DjCiiigAooooA/Uf46eI4/Ev7O2o6+iEWOtaXoF5ZIoMhhnN1H5yOUBCBVwpZjt34XIZlDflxXqOifFvxVo3w+1f4aiQXGk6mAYRIW32bmRWl8og42TLuV0PGW3DB3bvLq8zK8FLCwnTe17r0sj1c2x0cXOFVb8tn63ZrWBUDjqRz9c/wCFWpCuGUjIIwQehrKs3wzr6H+gq9KcLTq/EzCn8KOdKT2UwVcNAG4PcAnofpXQ2socisa6O8FP7wx+dGlztuKP95SVP1FTbS5Vzp5Dk19q/spXNr4Wsor23uEbVfE2tCKSEToxt9M0iCS5e4eNQXTfKfJy5Ay6ED+98SFsgkV6R8LPiXpHw2vL+/n0qa9vrxFhFwlwECW6kSGIRlCCJZEQSMSTsGFA53cmMoSrUXTgrt/j/T1O7LsRCjXjUm7Jdf6+75n2L+1t42ubvwFLbSafJANVurWBjIwXyyGa5GEJDHiMITggMGBIIFfmlXceO/iD4i+IOqnUdcnYxxlvs9sD+6hVzlsAYBdzy74yx9sAcPXdlWCeFw6py33OTN8csViHUjtsgooor0TzAooooAKKKKAP/9f8e6KKK9Q4wooooAKKKKACiiigBkMpiuSG6PjFbEh3JkVhygqyycYHXPoOePwzWgZlEfXjFefWVps7abvFFF/mmAPbn8v/AK9PjXZOXU8uM491/wDrUgB3Fj3xTXISSOQ54O32+b/64rVQ/dGbl+8NpJcrWbKcyt+FWiQg3gEjqcdqo53MX7N0rOh8aLq/CxaKKK7zjCiiigAooooAKKKKAP/Q/HuiiivUOMKKKKACiiigAooooAAdpBIBGe4zUZs2Mm5W2xddnX/IqTyzKNo9j+tWBAypsQksepNcWI+I6qPwlVTkse2ePwpHQSIUboacE8obPSlrqgvdSOeb95k2myq8LRyMS6Eq2Panzx7VDYxWehkhvFdB8svDexH/ANat/wAovF8/OQa4/gmdXxwMeilIIJB7Uld5xhRRRQAUUUUAFFFFAH//0fx7ooor1DjCiiigAooooAKKKKAJ7c4lGa1sKoLdzxWNCcSr9avXc5iiLAE45wOc1w4j4zso/CUZTmRj71HTV3bfn5bqfxp1dkFaKRyyd22NdcgP3Rgw/r+ldFuHlqR6VzkmQMjpnB+h4rZjYtAp9hXHiPiOmj8Jmzcyt9ajp8n+sb60yuun8KOafxMKKKKskKKKKACiiigD/9L8e6K9Lg8FacsJW5mnklzwyFUUD3Uq5J/4EK0YfC2hxReW9uZW/vvI4b/x1lX9K9blOM8jor2u20fSrVCkVnAwPXzI1lP4FwxFWbeztLR/MtYI4X/vRoFP5iiwHhdXrfTNSu/+PS0nmx/zzjZ/5A17izu5y7Fj7nNMpaAeKNo+rodr2Nyp9DE4/pSpo+rOwVbOcE+sbKPzIxXtVFIDx2bQtVskS6uodkQcKTvQnJB7Ak1CbO51C5jsrVd8rkkDcF+6CxyWIA6dyK9V16w1CfQpr+C1mls7eeCK4uEjZoYHmDmMSOBtUv5bbQSN2Djoa5nwzYXRvZtRELNbRp5Jmx8olcgqufUqrHjt16iuWol7VI6YX9mzn/8AhE9f/wCfdf8Av9F/8VS/8Ilr5/5d1/7/AEX/AMXXq26kya7LHMeVHwfr7KQbdMEf8/EI/wDZ6zoVkjh8qVSjp8rKeoYcEH6GvZa8r1CN47y8D9fOlYY9GYkfoa5MUlZNG9BvVGSNN1GQCRLWdlf5lIjYgg8gg46VKmiazICY7C6YDqRC5/pXrWnp5dhbRg52Qxrn1woq3XRFWSRjLc8MlgngYrNG8ZHUMpUj86ir3in+ZJtKb22nqMnB/CmI8Eor2tdP01H3iztyf9qFG/QgiqU2g6NPKZZLRMk5IQtGv/fKFQPwoA8hor1G48K6PPIHjR7df7sTkg/997z+tRf8IfpH9+5/7+J/8boA/9P896KbupMmvWszjuPoyKjoosgH7hSbqbRRoAu41t2nh/VLu1N5FDlMEoGON/px1wfbr+tM8P2On6lq9vZapfw6Zbyb911cJI8KMEYoHEStIFdwELKp2g7sHFfUcHw11i+1G30bSfEPhPUTKUVrmz16zaGNTjc5iaRborGOW2wscDgHgH1Mrp4WUnPEyStsu/8AXYmUZv4Fc8h8JLL4Jv4NetpB/acEnmox5VCQVKdiVZSUPP3SQOCak+JHjrVfGkEbaikcThxIVhDbS2SFA3FiAAxBx94+g4r1638DfCLQZTdfEz4iWlySXVbLw1m7fgDYzzmN9jBs7kMPQffyeGn4ufAfwNf2+rfDvwbd6lrWmuxtNS1W5cIsw+5cLGXdfMQjch8pGRgGUqwBHRj8Xl1SqqqhzTimk7bfPT9TppOvCk6XPaL3X/A/4Y+QaKKM4rwTAK0tP8HeEE1C5PiaTVLlZGtzHDZGG3ZZJiGmDvIJSVRc+XsQ7sfMUAJFnw/pr6nqKIB+6iIeQ9sDoPx6fn6V6HL4f09b0aiSxnBySTwR6YwABmvcy3JaeLpOpWva+mtvX/L7yViXSl7p5vr1rp9jrV9aaSjR2EVxItqjFiVgDHywSxLEhMckk+prIyK3deSOSY3iyqzPNJE0X8SiJYyGPPRi5A/3T+HP15WJoqjVlSjsmVzc3vPqO3U3OaKKwAKKKKACikyKNwoA/9T886KKK9Q4wopMijcKdgFopu6k3GkA+jIqPJooAfuFJuptFAC5NJRRQB6p4H8ZeA/D2j3Fh4m8J3Os3styJo7+11ZtPkjiCBfJMZt7iJl3ZbcVDc4zgc97pfxH+CI1CK61bwf4ga3jyWtTrcU8MnBwG2WdrKBnusoNfN1FdEMXXhHkhNpeo0/Jfcd78RfGGn+MtciutF0mLRNKsLZbLT7KJi5jt0d5MyOeXkd5GZmPJJ5LHLHgqTcKbuNYNt6sG7u4+kyKZRSEO3U3OaKKACiiigD/2Q=="
+  }
+ ],
+ "outfits": []
+}

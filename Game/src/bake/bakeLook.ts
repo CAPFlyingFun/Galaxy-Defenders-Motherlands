@@ -230,9 +230,9 @@ async function start(): Promise<void> {
     motion: { walkBob: percent('walkBob'), walkSway: percent('walkSway'), breastBounce: percent('breastBounce') },
     weeks,
     normalScale: [roomMaterial.normalScale?.x ?? 1, roomMaterial.normalScale?.y ?? 1],
-    // (no hair on the male body: the builder draws none on him, and his export has no head, which would otherwise read
-    //  as her default ponytail)
-    hair: male || head.hair.style === HAIR_STYLE_NONE ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
+    // (HIS HAIR too, since builder v0.9.71 (his twelve hairstyles, John 2026-11-21): the game hangs HIS file of that
+    //  style on him, fastHair.ts. A male look with no head of its own gets none: the default head is HER ponytail.)
+    hair: head.hair.style === HAIR_STYLE_NONE || (male && !look.body.head) ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
     body: look.body.model,
     files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null },
     facts: {

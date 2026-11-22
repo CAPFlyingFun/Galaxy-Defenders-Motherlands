@@ -159,8 +159,16 @@ export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer
   // HER BIG PICTURES: packed when the look has them (a quarter of the graphics memory), else the WebP pictures
   const packed = renderer && manifest.packed && packedPicturesOn() ? manifest.packed : null;
   const packedMark = packed ? `?bake=${encodeURIComponent(packed.packedAt)}` : '';
+  // (a packed picture that fails or is too slow falls back to its WebP one: packedPictures.ts, NEVER STUCK)
+  let fellBack = false;
   const picture = (webp: string, ktx2: string | undefined, colour: boolean): Promise<THREE.Texture> =>
-    packed && ktx2 && renderer ? loadPackedPicture(folder + ktx2 + packedMark, colour, renderer) : loadPicture(folder + webp + bake, colour);
+    packed && ktx2 && renderer
+      ? loadPackedPicture(folder + ktx2 + packedMark, colour, renderer).catch((error: unknown) => {
+        console.warn(`[packed pictures] ${look}'s ${ktx2} did not load packed (${String(error)}); its WebP picture is used`);
+        fellBack = true;
+        return loadPicture(folder + webp + bake, colour);
+      })
+      : loadPicture(folder + webp + bake, colour);
   const [albedo, normal, surface, shapeBytes, pieceBytes, small] = await Promise.all([
     picture(manifest.files.albedo, packed?.albedo, true),
     picture(manifest.files.normal, packed?.normal, false),
@@ -178,7 +186,7 @@ export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer
   return {
     manifest, albedo, normal, surface, shape, pieces, piecePictures,
     cpuPicture: small ?? ((albedo.image as CanvasImageSource | undefined) ?? null),
-    isPacked: !!packed,
+    isPacked: !!packed && !fellBack,
     megabytes: fetchedBytes / 1048576,
     dispose(): void {
       // (a packed texture's `image` is only its size: nothing to close)

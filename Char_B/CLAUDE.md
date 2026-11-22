@@ -1824,6 +1824,20 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
       to seated and back at 200%: no tear behind her, her mound and vulva under her bump at every size.
     - The probe's `sitBelly(on, { from, to, sag, sagHigh, sagWide, grow, normals })`, `sitBellyMask()` (her footprint
       as laid). `tests/sitBelly.test.ts`.
+  - SEATED, THE SIDE AND THE BACK OF HER HIPS KEEP HER OWN WEIGHTS (Joshua, 2026-11-21, of her seated side profile at 0
+    and 100%, the leotard's beside her own weights: the leotard's crossed out, her own ticked -- "keep the fix on… looks
+    better"; `birthWeights.ts` `SIT_KEEP`, `apply`'s `keep`, `keepOf`). The leotard's leg opening runs up the side of her
+    hip, and seated the skin on its leg side swung up with her thigh: a hollow diagonally across the side of her hip, and
+    her seat an upright wall, its fullest point 24 cm over the stool and its foot 7 cm further forward (MEASURED, sections
+    of her posed skin at 100%). Now behind her hip joints (from 2 cm in front, all by 3 cm behind) and out at her sides
+    (from 10 cm out, all by 14, no more than 8 cm in front of her hip joints) her skin keeps her own weights; her front --
+    belly, mound, vulva, the creases of her groin -- and the strip behind her vulva (within 3 to 5 cm of her middle, near
+    her crotch) stay the leotard's. SQUAT and RECLINE are as they were (no `keep`). GAME TUNING. MEASURED in the room
+    (light skin, 1x, nothing worn): her seat's points where her own weights put them (its lowest 47.8 cm off the floor,
+    46.4 with the leotard's); her bump's points under the top of a thigh 11 (7.6 mm) at 73% and 14 (7.6) at 100% (10 and
+    11 before). PICTURED at 0, 50, 100, 150 and 200% from her side, her three-quarter behind, his view and close under
+    her bump: the side profile of her own weights, her mound and vulva in view as before; going from standing to seated
+    and back at 100%: smooth. The probe's `sitKeep(on, tune)`. `tests/sitKeep.test.ts`.
   - FROM STANDING TO SEATED AND BACK: the leotard's weights all at once as she sets off (standing, weights move nothing),
     and its fields worked out ONCE on her SEATED pose as she sets off (`sitAsSeated`; kept as she stands again) and laid
     as far as she has sat, in `SIT_LAY_STEPS` (10) steps -- each her fields laid again (MEASURED: 25 ms a step on the build
@@ -1840,6 +1854,29 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
     her seated correctives (`bellySeat`, `bellySeatV2`) on and off at 100 and 200%: as good either way, left on.
 - MEASURED in the room, both poses at 200 and 150% on the light skin and 200% on the full one: round, no line down her
   belly's sides, no patch. LEFT, AND NAMED: faint ripples low on her belly's front in SQUAT at 200%.
+- **IN SQUAT AND RECLINE TOO, HER BUMP IS CARRIED AS SHE STANDS, AND HER THIGHS GIVE WAY TO IT** (Joshua, 2026-11-21: "fix
+  the pinch issues… while preserving her belly shape regardless of pose. If anything, the thighs adjust its shape a
+  little, but never the belly"; of the pictures, "Recline and now your last Squat pose looked great"). Seated's carry
+  (`sitBelly.ts`, above: her standing bump, one turn and carry, the 1 cm sag at 200%) is laid in both birth poses as well
+  (`birthBellyOn`; worked out on her pose as it is, not her seated one), and the hip turn, her groin's and knees' smoothing
+  and her room are kept off it by its footprint, as seated. Before, a crease pinched across the lower front of her bump
+  in SQUAT at 80% and its underside sank into her thighs at 165 and 200%; it keeps its egg shape now. RECLINE was turned
+  0.08 to 0.23 degrees (MEASURED): it looks as it did.
+  - HER THIGHS GIVE WAY (`bellyContact.ts`, field `shape:bellyContact`, laid wherever her bump is carried, last of her
+    pose's fields): a point of her thigh (its leg bones carry half of it or more, none of her bump's footprint) that stands
+    behind the nearest point of her bump's skin, or within `gap` (2 mm), where the two face each other, is put out along
+    her bump's facing to `gap` off it, the move spread over her thigh round it (never less where it was asked for) and
+    taken back to her rest shape through each point's own blended bones. Her bump is never moved. GAME TUNING:
+    `BELLY_CONTACT`.
+  - MEASURED in the room (light skin, 1x, nothing worn): in SQUAT at 80 and 200% and RECLINE at 80, 165 and 200% with
+    the carry, no point of her thigh in her bump -- it moves nothing there. SEATED it does: at 73% 144 to 182 points of
+    her thighs, 2.4 mm at the most; at 100% 309 to 330, 12 mm. Her bump's points under the top of a thigh (the 1 cm grid
+    above): 15 (7.7 mm) and 24 (10.2 mm) without, 10 (6.2) and 11 (5.1) with -- halved, not gone (what is left is points
+    of her thigh it does not take: under half a leg's, or in her bump's footprint). Pictured seated at 73 and 100% from
+    his view, close under her bump and her side, with and without: no edge on her thigh, no change to the eye.
+  - A BIRTH: RECLINE at 150%, at 0:30, 1:00 and 1:17 from her front, her side and below, with the carry and without:
+    the same, nothing through her belly, her baby's head in her opening's middle (`headInMouth` across 0.0 and -0.15 cm).
+  - The probe's `bellyContact(on, tune, birth)` (`birth`: the carry in SQUAT and RECLINE). `tests/bellyContact.test.ts`.
 - After anything changes the hold, her soft belly's share or her navel's lay: `tests/bellyHold.test.ts`,
   `tests/softBelly.test.ts`, `tests/softBody.test.ts`; then RECLINE and SQUAT at 100, 150 and 200% from her
   three-quarter and her front, close on her navel, and standing at 200%.
@@ -2166,9 +2203,89 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   - NOT DONE: his tee in his poses (squat, seated, walking) looked at; its sleeves stand a little off his arms (the
     draft's ease is hers); a cuff's edge at the long sleeve's wrist.
 - NOT DONE: his own pelvis bone; true briefs; loose shorts and trousers;
-  his head's parts; RECLINE floats (her bed is not drawn either); his NAVEL setting kept in a save.
+  RECLINE floats (her bed is not drawn either); his NAVEL setting kept in a save.
 - After anything changes him: `tests/maleBase.test.ts`, `tests/maleBelly.test.ts`, `tests/sarahBase.test.ts`; then the room:
   MALE, his belly at 0, 100 and 200% from his side and front, T-POSE from his back, X-RAY from his side.
+
+## His head: face, eyes, facial hair and hair
+
+- **HIS FACE IS HERS DRAWN THROUGH A FRAME FITTED TO HIS** (Joshua, 2026-11-21: "Let's work on hair, face, and eye options for
+  the male model now"). The face layer (`faceRig.ts`) is numbers measured on her sculpt in her rest metres; a body's face is a
+  `FaceSpec`: a FRAME taking its geometry into her rest metres (`rest = scale · turnX(pitch) · position + offset`, a turn about
+  x alone, the jaw's own axis, so the jaw turns the same in both) and brows, lashes, lips and defaults of its own. HER
+  PROGRAM'S TEXT IS AS IT WAS TO THE LETTER (`HER_FACE`; the lines are built by `shaderFor(spec)`, its key `|face-rig-v3`);
+  his is another program (`|face-rig-v3-male`).
+  - HIS FRAME, MEASURED 2026-11-21 (`maleFace.ts` `MALE_FACE_FIT`): her face, brow to chin, nose to ears, fitted onto his by
+    an iterative closest-point fit allowing a scale, a turn about x and a carry: `his = 1.0234 · turnX(-4.35°) · hers +
+    (0.0096, -0.0225, 0.1978)`, half her points within 1.41 mm of his skin; his nose's tip, not fitted to, falls 2.0 mm from
+    hers. Her eyes' centres fall in his sockets, her lips' seam on his. His head bone is `Bone_017`.
+  - HIS BROWS, LASHES AND LIPS (GAME TUNING by eye): brows lower and flatter, fuller, a squarer head, dark brown; lashes
+    shorter, no flick; lips their own colour nearer his skin's, his upper lip a little thinner. Eyes, their colours, blinking,
+    looking, the mouth's inside and the jaw are hers as they are.
+  - HIS FACE'S SHAPES: the same sliders and face types, laid through his frame (`faceShapeFields.ts` `headPoints`, `faceFieldOn`'s
+    `frame`: a move and a normal's turn taken back out by the frame's turn).
+- **HIS FACIAL HAIR** (his answer to stubble, a short beard, a full beard, a mustache and a goatee: "All sounds good"):
+  `FaceSpec.beard` (`BeardDesign`, `maleFace.ts` `BEARD`), PAINTED IN THE FACE LAYER as the brows are, so it rides his jaw, his
+  face's shapes and his skin. Its AREA is lines MEASURED on his face in her rest metres (the underside of his chin at y 1.478,
+  his jaw's angle (0.060, 1.526, -0.066), the front of his ear z -0.087 to -0.099) -- a cheek line, a back edge in front of his
+  ear, a neckline plane, the upper lip and the chin -- its edges wavered by a smooth noise; its HAIRS short strokes in a chart of
+  his lower face (a sphere's angles about a point inside his jaw), growing down it, a mustache's leaning out from his philtrum,
+  over a fill broken into grain (stubble's most). Six kinds (`BEARD_STYLE_IDS`: none, stubble, short, full, mustache, goatee),
+  a THICKNESS and a COLOUR (null: his brows', which follow his hair's). A face with no design (hers) has none of it in its
+  program. GAME TUNING but where MEASURED. NOT DONE: no volume (a full beard is painted, not a shell: from his side his jaw's
+  outline is his skin's).
+- **HIS HEAD IS HIS OWN LOOK**: `headLook.ts` `HEAD_DEFAULT_MALE` (a crew cut in a dark brown '#3b2a20', clean-shaven); the
+  room keeps a head for each body (`headForBody`): switching body shows that body's head. A look's `beard` is kept only when
+  there is some; a save of his untouched head writes nothing (`savedHead(head, male)`, `headOf(body, male)`), and a colour a
+  save names -- even null, the toolkit's copper -- is what was chosen. The FACE tab (`headPanel.ts`) shows FACIAL HAIR where the
+  face has a design for it (`hooks.beard`), his hairstyles (`hooks.styles`), RESET HEAD to his own head (`hooks.own`), and its
+  lines say "his" (`hooks.male`).
+- **HIS MUSTACHE IS A CRESCENT, HIS GOATEE'S CHIN TAPERS** (`BeardDesign.mustache.corner`, `chin.topHalfWidth`): square,
+  each read as a block stuck on his face (pictured in the room 2026-11-21). The mustache's top comes down from 2.5 cm
+  under his nose to 6 mm over its bottom at its ends, from 0.3 of its half-width out; the chin patch is 3.2 cm wide under
+  his lower lip and 5.4 cm at its foot, over 2.2 cm of height. GAME TUNING.
+- **HIS HAIRSTYLES** (his: "keep the variety"): built by the hair toolkit ON HIS HEAD (`--body male`: `scripts/hair/head.mjs`
+  `BODIES.male`, his head read into her rest metres by his face's frame, so a style is drawn in one frame for either head; the
+  file written back into his geometry and onto his skeleton). `hairStyles.ts` `MALE_HAIR_STYLES`: six men's cuts (crew, buzz,
+  side part, slicked back, curly top, man bun) and her six as he wears them, each `models/hair/male/<id>.glb` and its light
+  twin. Her six's files are byte for byte as they were (a style chooses his numbers by `kit.head.body.id`).
+  - A MAN'S HAIRLINE COVERS HIS TEMPLE AND COMES DOWN AS A SIDEBURN (the first cuts ran in one diagonal from his forehead to
+    behind his ear: a bare temple, read as receded). Each cut's hairline goes back about 1.2 cm from his forehead's corner,
+    straight down in front of his ear to a sideburn about 1.2 cm wide to mid-ear (y 1.565), AHEAD of his ear's front (z
+    -0.087 to -0.099; up it at z -0.088 to -0.090 -- further back, the cap lay up to 0.86 mm under the root of his ear,
+    MEASURED by `fit.mjs --body male`), over the ear and down behind it to his nape. `buzz.mjs` `MALE_HAIRLINE` (the crew's
+    too), `side-part.mjs` `HIS_HAIRLINE` (the slicked back's), `curly-top.mjs` `CURLY_HAIRLINE`, `man-bun.mjs`
+    `MALE_HAIRLINE`, `ponytail.mjs` `HIS_HAIRLINE` (her five others' on him). GAME TUNING on his MEASURED landmarks.
+  - THE CAP MUST REACH WHAT THE HAIRLINE KEEPS: the hairline is a mask on the cap, and the cap is a grid round its gather out
+    to `phiMax`; at 2.75 the curly top's grid stopped above his temples and its new hairline kept nothing there (3.13 now,
+    as the side part's).
+  - A HAIRLINE CUT ALONG A CURVE, NOT A STAIRCASE: the kit's alpha fades over about 5 mm of hairline distance, one cell of
+    the cap, so the alpha test cut along the cells. His cuts scale the frame's `hairMask` (buzz and crew `softEdge` 0.5 and
+    0.25 light; the side part and slicked back 0.4 and 0.2, divided by the line's slope where it runs upright): about 2.5
+    cells, the line where it was. The kit is as it was, so hers are.
+  - HER SIX ON HIM (`ponytail.mjs` `onHim`): each of her fixed points moved out or in from the head's upright axis by how
+    much further out his surface is than hers, a table MEASURED on both bodies' files every 30 degrees and 3 cm of height
+    (his back of head about 2 cm shallower, his neck thicker, his upper back further back). The ponytail's and the braid's
+    fall come 2.2 cm in at his nape (none from 1.40 m down: brought in there, the tail lay up to 5.8 mm under his upper
+    back); the long loose hair's falls lie on his shoulders (at her reach they stood off them like wings); the bob's crown
+    rounded over his head (it peaked). THE WAVY PONYTAIL FALLS DOWN HIS BACK (her way, over his shoulder, his wider and
+    higher shoulder stood it off him in a slab, its locks apart, and from behind it stuck out sideways: pictured in the
+    room) -- its tail's own path for him, side [1, 0, 0], no transport.
+  - MEASURED off the room 2026-11-21 (`fit.mjs --body male`, each of the 24 files at its longest and shortest): none of it
+    under his skin but one point of the side part's cap at his right ear's front, 0.50 mm, at the alpha cutoff. Triangles:
+    the man bun 29,312 (its coils' and combed locks' segments cut to stay under 30,000), the curly top 18,720 in curls.
+  - His twelve full files are fetched ahead (12.3 MB), his light twins not (`keepList.ts` `NOT_AHEAD`, `male/` in the rule).
+  - MEASURED in the room 2026-11-21 (light skin, 1x, no error on the page): each of the twelve on him from his
+    three-quarter and his back, the crew from four sides, each style pictured only once the room says it is worn
+    (`face` probe: `hair.worn` its id, not `loading` -- a picture taken a few seconds after a style is asked for shows
+    the one before it); the five kinds of facial hair; the SQUARE face with a short beard and the side part from his
+    front, three-quarter and side.
+  - NOT DONE, AND NAMED: the man bun's bun is a smooth ball from behind and its sides' combed locks barely show; the side
+    part's fringe stands in a few spikes from his side; a few dark pixels at his ear's outer edge in the buzz and crew from
+    his front; the light files' hairlines step more than the full ones'; the bob on him is a little lumpy at its front.
+- After anything changes his head: `tests/maleHead.test.ts`, `tests/faceRig.test.ts`, `tests/faceShapeFields.test.ts`,
+  `tests/headLook.test.ts`, `tests/headPanel.test.ts`, `tests/hairStyles.test.ts`; then the room: MALE, his face from his front,
+  three-quarter and side, each kind of facial hair, a face type, a hairstyle of each kind.
 
 ## Verification
 

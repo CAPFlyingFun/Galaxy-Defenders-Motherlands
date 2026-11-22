@@ -293,7 +293,10 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.68 (copied 2026-11-21 from its `main` e2ebcf8 at Joshua's word: her seated fixes, no pinching at her belly
+- THE BUILDER, v0.9.71 (copied 2026-11-21 from its `main` a2bf91c at Joshua's word, "9.71 is being deployed now for CCBS, grab the
+  latest": his face, eyes, facial hair and twelve hairstyles; in SQUAT and RECLINE her bump carried as she stands and her
+  thighs giving way to it, `bellyContact.ts`; seated, the side and back of her hips keep her own weights. Before that
+  v0.9.68, `main` e2ebcf8, at Joshua's word: her seated fixes, no pinching at her belly
   and pelvis, and the male body's outfits; checked in the BUILT game, her hidden live body running. Before that v0.9.60, 2026-11-20, `main` bae4157: the catsuit DRAWN, smooth edges; its
   neckline from a low U/V to a turtleneck, neck shape and width; a CHEST CUTOUT, oval, diamond or keyhole; its room now
   disposes its head panel, the 350 MB leak; before that v0.9.51, skin depth's hybrid; v0.9.49, the hybrid pregnancy
@@ -465,6 +468,12 @@ use the game's single copy of three.js.
   ONLY WITH THE CAMERA NEAR (Joshua, 2026-11-19: "at 2m out (or body height) and beyond that, it starts fading like
   normal"): two sets of levels (worker meshes 0 sharp, 2 plain; level KEYS in shapedBody.ts `PLAIN_KEY`); within 2.0 m of
   her middle (or first person) the sharp one, past 2.3 m the plain one. At 1%: 58,549 near, 8,163 far.
+  12 M NOW (v0.2.140; Joshua, 2026-11-21: "What is the detail for the belly?", then "Try raising the distance to 12
+  meters"): fastHeroine.ts `SHARP_WITHIN` 12, `SHARP_LEAVE` 12.5. Within it her belly (with her face, bust, hands and
+  arms) is at 100 %; past it, the plain set, at the level with the rest of her ("100% detail on belly below 12 meters,
+  can be 1% over 12 meters"; a 50 % belly part far off was tried and taken out before it was pushed). The pointy
+  belly he saw during the TIME LAPSE is not detail: her live body's shape reaches her at most once a second while her
+  belly keeps changing (liveBody.ts `LIVE_BELLY_EVERY`, kept at 1 s: his call); stopped, it is the builder's shape.
   HER HANDS TOO (Joshua, 2026-11-19: her fingers round a bar "look weird" at 1%): locked as her face (out at her sides,
   below her wrists, as `skinImportance` finds them): at 1% near she is then 92,075 triangles.
   HER ARMS TOO (Joshua, 2026-11-20, Look 2 at 25% near: "her arm is flat like a pancake"): her left upper arm lightened to

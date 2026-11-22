@@ -1,7 +1,9 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `e2ebcf8`
-(2026-11-21, v0.9.68: her body's fixes seated, her bump keeps its standing shape and her hips stay closed, no pinching
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `a2bf91c`
+(2026-11-21, v0.9.71: his face, eyes, facial hair and twelve hairstyles; in SQUAT and RECLINE her bump carried as she
+stands and her thighs giving way to it, `bellyContact.ts`; seated, the side and back of her hips keep her own weights).
+Before that: `e2ebcf8` (2026-11-21, v0.9.68: her body's fixes seated, her bump keeps its standing shape and her hips stay closed, no pinching
 at her belly and pelvis; and HIS outfit pictures, the male body's clothes). Before that: `bae4157`
 (2026-11-20, v0.9.60: a chest cutout, oval, diamond or keyhole, on the catsuit, leotard and swimsuit; the room lets its
 head panel go on dispose; since v0.9.59 the catsuit's drawn edges and an adjustable neckline, low V/U up to a

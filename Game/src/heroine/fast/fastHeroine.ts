@@ -171,14 +171,16 @@ const HEAD_GLSL_BONES = 8;
  * HER FACE, BUST AND BELLY KEPT SHARP WITH THE CAMERA NEAR (Joshua, 2026-11-19: "at 2m out (or body height)"): within
  * this many metres of her middle; it counts as far again only past SHARP_LEAVE (a little give, so no flicker).
  */
-const SHARP_WITHIN = 2.0;
+// (12 m: Joshua, 2026-11-21, "Try raising the distance to 12 meters"; was 2 m, about her height. Within it she wears the
+//  sharp set: her face, bust, belly, hands and arms at 100 %.)
+const SHARP_WITHIN = 12;
 /**
  * SQUATTING ON PURPOSE (Joshua, 2026-11-19: until there is a toilet, "she can just sit or squat down for 5s and then
  * stand up"): she gets down to a point this far above her floor and ahead of her (metres), low enough for lowerBody.ts
  * to choose its squat (the Character Builder's, which works for every belly) and not so low that she kneels.
  */
 const SQUAT_POINT = Object.freeze({ up: 0.32, ahead: 0.22 });
-const SHARP_LEAVE = 2.3;
+const SHARP_LEAVE = 12.5;
 /** A ball this big round her middle is what the camera's view is tested against (metres): her arms out, guns included. */
 const VIEW_BALL_RADIUS = 1.5;
 
@@ -449,6 +451,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   if (handsOwn) ownParts.push({ points: handPart(look.shape.position, box), detail: options.handsDetail! });
   maker.setMesh(0, look.shape.position, fullIndex, box, layout, importance, keepSharp ? sharpParts(look.shape.position, box, shapeMoves, undefined, !handsOwn) : null, ownParts);
   const levels = new DetailLevels(maker, 0, fullIndex);
+  // (the plain set, for the camera far off, past SHARP_LEAVE: her shoulders at 30 %, all the rest of her, belly too, at the
+  //  level. Joshua, 2026-11-21: "100% detail on belly below 12 meters, can be 1% over 12 meters".)
   if (keepSharp) maker.setMesh(2, look.shape.position, fullIndex, box, layout, importance, null, shoulders ? [shoulders] : []);
   const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;
 

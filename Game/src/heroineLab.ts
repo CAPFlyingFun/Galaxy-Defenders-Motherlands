@@ -109,6 +109,8 @@ async function start(): Promise<void> {
       headDetail: asked.has('head') ? Number(asked.get('head')) : undefined,
       // (?hands=50: both hands kept at 50 % near the camera instead of 100 %)
       handsDetail: asked.has('hands') ? Number(asked.get('hands')) : undefined,
+      // (?shoulders=100: her shoulders and neck at 100 % near the camera instead of 60 %, to compare)
+      shouldersDetail: asked.has('shoulders') ? Number(asked.get('shoulders')) : undefined,
       onProgress: (stage) => { status.textContent = `Loading the fast heroine: ${stage}…`; },
     });
     scene.add(heroine.root);

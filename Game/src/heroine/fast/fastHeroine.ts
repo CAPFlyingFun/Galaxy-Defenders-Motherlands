@@ -198,9 +198,16 @@ const VIEW_BALL_RADIUS = 1.5;
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
 /** How many detail levels are kept made at once besides her full 100 % (the ones she wore last). */
 const KEEP_LEVELS = 3;
-/** Her shoulders and neck kept at this percent near the camera when she is lighter (detailLevels.ts `shoulderPart`):
- *  30, where the lab showed them round (Joshua, 2026-11-21: "Her shoulder looks off" at the lower levels). */
+/** Her shoulders and neck kept at this percent FAR from the camera (her plain set) when she is lighter
+ *  (detailLevels.ts `shoulderPart`): 30, where the lab showed them round from a few metres (Joshua, 2026-11-21: "Her
+ *  shoulder looks off" at the lower levels). */
 const SHOULDERS_DETAIL = 30;
+/** ...and NEAR the camera (her sharp set, within SHARP_WITHIN): 60 (v0.2.149; Joshua, 2026-11-22, John's view of her
+ *  at 0.9 m: "her shoulder is missing that detail again"). At 30 %, that close, the top of each shoulder was still one
+ *  flat slab with a hard corner and the collar's edge jagged, with her pictures at 1024 and at 4096 alike: her shape,
+ *  not her pictures. Rendered at 0.9 m (Shadow Operative, 30 %): 60 % round, smooth collar, her collarbones showing,
+ *  the same as 100 %; 8,600 triangles more than 30 % (100 % would be 17,000). */
+const SHOULDERS_NEAR_DETAIL = 60;
 /** The heaviest level AUTO LIVE draws her at. */
 const AUTO_LIVE_TOP: Detail = 30;
 
@@ -230,6 +237,9 @@ export interface FastHeroineOptions {
    *  (detailLevels.ts `handPart`; Joshua, 2026-11-21, John: "Do face at 70%, hands at 15%", main.ts JOHN_HANDS_DETAIL).
    *  With the sharp set it replaces the 100 % `sharpParts` holds them at. Unset: as before. */
   readonly handsDetail?: number;
+  /** Her shoulders and neck kept at THIS detail (percent) near the camera (her sharp set); unset, SHOULDERS_NEAR_DETAIL (60).
+   *  For the heroine lab's comparisons (`?shoulders=60`). */
+  readonly shouldersDetail?: number;
   /**
    * ONE LEVEL ONLY (v0.2.147; Joshua, 2026-11-22: the memory plan, "John letting go of his full-size body once his 1 %
    * body is made"): a body held at ONE detail for good (John, main.ts JOHN_DETAIL) keeps only the level it wears. Every
@@ -464,8 +474,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // shoulder looks off"): under 30 % they folded into flat slabs with sharp corners. v0.2.134 kept them only near the
   // camera (the sharp set); his next picture, from about 3 m (the plain set, past SHARP_LEAVE), still showed them:
   // "Her shoulders still aren't fixed yet". Now in the plain set too. (Not on a male body: John is held at his own.)
+  // NEAR THE CAMERA AT 60 % (v0.2.149): at 0.9 m even 30 % showed the slab on top of her shoulder (Joshua: "her
+  // shoulder is missing that detail again"); in her sharp set they are kept at SHOULDERS_NEAR_DETAIL; far off (her
+  // plain set) they stay at 30 %.
   const shoulders = male ? null : { points: shoulderPart(look.shape.position, box), detail: SHOULDERS_DETAIL };
-  if (shoulders) ownParts.push(shoulders);
+  if (shoulders) ownParts.push(keepSharp ? { points: shoulders.points, detail: options.shouldersDetail ?? SHOULDERS_NEAR_DETAIL } : shoulders);
   // THE HANDS AT THEIR OWN PERCENT, if asked (`handsDetail`; Joshua, 2026-11-21, John: "Do face at 70%, hands at 15%"):
   // a part like the head. With the sharp set (Blaze near the camera) they come out of its 100 % lock and are kept at
   // this percent instead; Blaze does not ask for it (her hands stay at 100 % near).

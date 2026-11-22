@@ -728,7 +728,7 @@ use the game's single copy of three.js.
   `setTextureCaps`; tested: 7 of hers in 42 s in the software test browser, no errors). Full readout:
   `textures 1024 / 512`. MEASURED (built game, phone settings, island, both): graphics est. 252 -> 110 MB; a computer
   202 MB. Pictured at 4096/2048 against 1024/512: the same from her usual view, a touch softer close up.
-- v0.2.149 (2026-11-22; NOT PUSHED, Joshua: "Don't push yet"). (1) THE ALL-FOURS CAMERA (Joshua: "on all 4 looking
+- v0.2.149 (2026-11-22; pushed once her shoulder was fixed, Joshua: "Can you fix the shoulder then push?"). (1) THE ALL-FOURS CAMERA (Joshua: "on all 4 looking
   down the camera was switching between two views and was flashing a lot like it was fighting with something"): first
   person, past straight down (on all fours her reach is 142 degrees down, crouched 91), the camera swapped between two
   mirror views every frame. Her AIM was the cause: first person she is always given the crosshair's point
@@ -747,8 +747,14 @@ use the game's single copy of three.js.
   tree pictures each with Promise.all. THE PLAN, and the story (provisional), are in `docs/plan/MOTHERLANDS_PLAN.md`
   (Joshua's handoff of 2026-11-22, kept up to date): next, v0.2.150, the island started gently (a warm-up sending
   everything up before the first picture, her tile first, the rest one at a time after play begins, a Rivers & lakes
-  switch). STILL OPEN: her shoulder looks lighter again near the camera (Joshua, John's view of her at 0.9 m, 30 %):
-  to look into (we had to raise her shoulders' detail before: `SHOULDERS_DETAIL`).
+  switch). (3) HER SHOULDERS AT 60 % NEAR THE CAMERA (Joshua, John's view of her at 0.9 m, 30 %: "her shoulder is
+  missing that detail again"; "we had to adjust her details before on her shoulder"): rendered in the lab at 0.9 m
+  (Shadow Operative, 30 %), her shoulder band at 30 % still made the top of each shoulder one flat slab with a hard
+  corner and the collar's edge jagged, with her pictures at 1024 and at 4096 alike (her shape, not her pictures). 60 %
+  and 100 % were both round, smooth at the collar, her collarbones showing, and looked the same; 60 % is 8,600
+  triangles more than 30 % (100 % 17,000). So in her SHARP set (within SHARP_WITHIN) the band is kept at 60 %
+  (fastHeroine.ts `SHOULDERS_NEAR_DETAIL`); far off, her plain set, 30 % as before (`SHOULDERS_DETAIL`). Round at 1 %
+  near too (112,247 triangles in all). The lab's `?shoulders=` sets it to compare.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -21,7 +21,7 @@ import { connectSplash, showLastStart, showSplashError, showStartCount } from '.
 import { installGpuTally, type GpuTally } from './core/gpuTally';
 import { loadBreak } from './core/loadPace';
 import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart, startCountText } from './core/startupLog';
-import { setRestart } from './core/restart';
+import { restartGame, setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
 import { OtherDetail } from './heroine/fast/otherDetail';
 import { onGlTrouble, watchGlTrouble } from './core/glTrouble';
@@ -62,6 +62,12 @@ import { AutoCombat, GdmActorPort, NeedsRoutine, NpcBrain, thoughtLines, type Ac
 import { ThoughtBubble } from './ui/thoughtBubble';
 import { Sound } from './audio/sound';
 import { BreathSound, loadBreathVoice } from './audio/breathSound';
+// THE PROLOGUE (v0.2.153; Joshua's opening demo, Draft 1): its code is fetched only when it is the map (types here)
+import type { Tunnel } from './world/prologue/tunnel';
+import type { Flashlight } from './world/prologue/flashlight';
+import type { CaveSounds } from './world/prologue/caveSounds';
+import type { StoryDirector } from './story/storyDirector';
+import type { PrologueWorld } from './story/chapters/johnPrologue';
 
 /**
  * SIDE STEPS (Joshua, 2026-11-18). GAME TUNING. In third person MANUAL, AT A WALK only (her pace under SIDE_WALK_UNDER:
@@ -329,7 +335,7 @@ async function start(): Promise<void> {
     const meterStep = meter.step.bind(meter);
     meter.step = (key: string, label: string): void => { meterStep(key, label); markStart(label); };
   }
-  meter.step('world', 'Building the dome and the city…');
+  meter.step('world', startSettings.map === 'prologue' ? 'Beneath the island…' : 'Building the dome and the city…');
   /**
    * A SHORT BREAK between loading steps (Joshua, 2026-11-17). The page can only redraw (a turn of the phone, the
    * loading bar) when the game's code stops for a moment; one picture's time, here and there, lets it catch up.
@@ -389,20 +395,26 @@ async function start(): Promise<void> {
   // town's sky, drawn once into a 512-pixel cube on the graphics chip. On the island only the dome's twelve sections
   // are kept, as numbers (`Dome.sectionsOnly`): the danger she feels and the TEST TOOLS read them.
   const onIsland = graphics.map === 'island';
-  const sky = onIsland ? null : createSky(renderer);
+  // THE PROLOGUE (v0.2.153; Joshua, 2026-11-22: his opening demo, Draft 1, built first as a blockout): the story's
+  // opening, John alone in a passage beneath the island (world/prologue/, story/). Its own small scene: no island, no
+  // town, no Blaze (so no live body), only him. Settings -> WORLD -> Map -> Prologue, or ?map=prologue.
+  const prologue = graphics.map === 'prologue';
+  /** The domed town (neither the island nor the prologue): its sky, ground, city and dome are made only for it. */
+  const onTown = !onIsland && !prologue;
+  const sky = onTown ? createSky(renderer) : null;
   if (sky) {
     scene.background = sky.background;
     scene.add(sky.stars);
   }
 
-  const ground = onIsland ? null : createGround();
+  const ground = onTown ? createGround() : null;
   if (ground) scene.add(ground.mesh);
 
-  const city = onIsland ? null : createCity();
+  const city = onTown ? createCity() : null;
   if (city) scene.add(city.group);
 
-  const dome = onIsland ? Dome.sectionsOnly() : await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`);
-  if (!onIsland) scene.add(dome.group);
+  const dome = onTown ? await Dome.load(`${import.meta.env.BASE_URL}models/Half_Sphere.obj`) : Dome.sectionsOnly();
+  if (onTown) scene.add(dome.group);
 
   // THE ISLAND (src/world/island/): its 3 x 3 tiles of 3.5 km round her (v0.2.150: 16 x 16 over the island), the
   // coarse far island, the sea and the day sky. The game waits, behind the splash, only for the tile under her.
@@ -422,6 +434,36 @@ async function start(): Promise<void> {
     });
     await breathe();
   }
+  // THE PROLOGUE'S PASSAGE (world/prologue/tunnel.ts): built in code, nothing to download. In the dark: a black
+  // background, and black fog so the passage fades into it beyond the flashlight. Its flashlight, its sounds and the
+  // story (the overlay is made here, before the game's controls, so every control is drawn over it) come with it.
+  let tunnel: Tunnel | null = null;
+  let flashlight: Flashlight | null = null;
+  let caveSounds: CaveSounds | null = null;
+  let story: StoryDirector | null = null;
+  /** How far along the passage John is (metres), worked out once a frame. */
+  let prologueProgress = 0;
+  if (prologue) {
+    meter.step('tunnel', 'Beneath the island: the passage…');
+    const [{ Tunnel }, { Flashlight }, { CaveSounds }, { StoryDirector }] = await Promise.all([
+      import('./world/prologue/tunnel'), import('./world/prologue/flashlight'), import('./world/prologue/caveSounds'), import('./story/storyDirector'),
+    ]);
+    tunnel = new Tunnel();
+    scene.add(tunnel.group);
+    scene.background = new THREE.Color(0x000000);
+    scene.fog = new THREE.FogExp2(0x000000, 0.045);
+    // (BEYOND EXTINCTION'S TONE MAPPING, which its lab's flashlight is lit with: ACES filmic, exposure 1.15. A torch
+    //  close to the rock is far brighter than one down the passage; without it the wall in front of him went flat
+    //  white. Only here: the island and the town keep the game's own look.)
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    flashlight = new Flashlight(scene);
+    caveSounds = new CaveSounds(sound);
+    story = new StoryDirector(uiHost, caveSounds);
+    // (black from the very first picture: the scene opens in the dark)
+    story.overlay.fade(1, 0);
+    await breathe();
+  }
   /**
    * Where her feet go, metres: 0 on the flat town; on the island the ground, or in a deep river or lake, held up in the
    * water to her shoulders (islandWorld.ts standAt). The last good height if a tile is not in yet.
@@ -436,15 +478,21 @@ async function start(): Promise<void> {
 
   const targets = new SkyTargets();
   scene.add(targets.mesh);
+  // (no sky beneath the island, and nothing to shoot at in the prologue)
+  if (tunnel) targets.mesh.visible = false;
   const tracers = new Tracers();
   scene.add(tracers.mesh);
 
   // Two plain lights for the heroine. (The city, ground and dome glow by themselves and ignore lights.)
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a2740, 1.7));
+  const skyLight = new THREE.HemisphereLight(0xcfe0ff, 0x1a2740, 1.7);
+  scene.add(skyLight);
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   keyLight.position.set(-4, 10, 6);
   scene.add(keyLight);
   scene.add(keyLight.target);
+  // (beneath the island there is no sky and no sun: only the faintest light, so he is never quite lost in the black;
+  //  his flashlight does the rest)
+  if (tunnel) { skyLight.color.set(0x8a9bb5); skyLight.groundColor.set(0x1a140e); skyLight.intensity = 0.07; keyLight.intensity = 0; }
 
   // REAL SHADOWS (Joshua, 2026-11-17: "Allow real shadows"; the DEV Room's "Shadows: on", with its own numbers: a
   // 2048-pixel shadow picture, softened). The key light draws her once more, from where it stands, into a picture of
@@ -474,9 +522,34 @@ async function start(): Promise<void> {
   scene.add(shadowFloor);
 
   // ---- Heroine, camera, controls -----------------------------------------------
+  /**
+   * JOHN'S DETAIL, FIXED (Joshua, 2026-11-21: v0.2.128 froze on his iPhone about 10 s in; "Put him at 1% detail. If that
+   * works, then we can do the face and hands only and try again… and slowly add more"). John is drawn at this ONE level,
+   * played or standing by, whatever the Detail setting or the frame rate says: made once, never rebuilt (before, every
+   * change of the frame rate made new copies of both bodies). Nothing of him is kept sharp (JOHN_SHARP_PARTS): with his
+   * face, chest, belly, hands and arms kept, about 57,000 of his 222,000 triangles stayed at every level, so his 1 % was
+   * about 92,000 triangles with his belt and guns; now about 36,000. Blaze is unchanged. null: he follows as before.
+   */
+  const JOHN_DETAIL: 1 | null = 1;
+  /** John's face, hands and the rest kept sharp at his fixed level (fastHeroine.ts `sharpParts`): none, for now. */
+  const JOHN_SHARP_PARTS = false;
+  /** HIS FACE AT 70 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
+   *  30%"; v0.2.134 at 30 %: "His face is better, but not 100%"; then "Do face at 70%, hands at 15%"): his head, above
+   *  his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts `headDetail`, detailLevels.ts
+   *  `headPart`: the rest lightened first with his head held, then his head alone). null: it goes with the rest.
+   *  NOW 100 % (Joshua, 2026-11-21, with his new head and crew cut: "Can you put John's head at 100% detail"): his
+   *  head kept whole, and his hair worn as its full file (fastHeroine.ts `showHair`). */
+  const JOHN_HEAD_DETAIL: number | null = 100;
+  /** HIS HANDS AT 15 % (the same ask), the same way (fastHeroine.ts `handsDetail`, detailLevels.ts `handPart`). */
+  const JOHN_HANDS_DETAIL: number | null = 15;
+  /** JOHN AS HE IS MADE: his fixed detail and nothing kept sharp (above), everything else as Settings say. */
+  const johnSettings = (): HeroineSettings => (JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' });
+  /** (held at one detail, he keeps only that one level: fastHeroine.ts `oneLevel`, v0.2.147) */
+  const johnParts = (): { headDetail?: number; handsDetail?: number; oneLevel?: boolean } => (JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined, oneLevel: true } : {});
   // What she is doing while she loads goes to the splash: each line she reports is one step of the load.
   // (her body is the first heavy step: a pause before it, v0.2.151)
-  await pauseBefore('Blaze');
+  // (THE PROLOGUE: John is the first, and only, one made)
+  await pauseBefore(prologue ? 'John' : 'Blaze');
   // HER OUTFIT NOW: the address's ?look= wins at the start, else the one chosen in Settings. A change in Settings
   // changes her outfit WHILE THE GAME RUNS (see `changeOutfit` below), and this follows it.
   // (a catsuit in the style chosen under Catsuit style: heroineSettings.ts outfitLook)
@@ -489,8 +562,10 @@ async function start(): Promise<void> {
    * (`bodyNow`): a JavaScript Proxy. A change of outfit swaps `bodyNow` for the new body, and everything keeps working
    * with no new hand-over: they all ask `heroine.hands`, `heroine.root` and so on afresh each time.
    */
-  let bodyNow: GameHeroine = await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
-  markStart('Blaze made');
+  let bodyNow: GameHeroine = prologue
+    ? await createHeroine(renderer, scene, johnSettings(), (text) => meter.step(text, text), 'john', true, johnParts())
+    : await createHeroine(renderer, scene, graphics, (text) => meter.step(text, text), outfitNow);
+  markStart(prologue ? 'John made' : 'Blaze made');
   /**
    * THE TWO OF THEM (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character to change and switch
    * between like how Beyond Extinction does it"). Blaze and John, Blaze's husband (heroine/looks/john.ts), each with
@@ -580,26 +655,6 @@ async function start(): Promise<void> {
       b.update(c.vitals.reading, metres, graphics.breathVolume / 100);
     }
   };
-  /**
-   * JOHN'S DETAIL, FIXED (Joshua, 2026-11-21: v0.2.128 froze on his iPhone about 10 s in; "Put him at 1% detail. If that
-   * works, then we can do the face and hands only and try again… and slowly add more"). John is drawn at this ONE level,
-   * played or standing by, whatever the Detail setting or the frame rate says: made once, never rebuilt (before, every
-   * change of the frame rate made new copies of both bodies). Nothing of him is kept sharp (JOHN_SHARP_PARTS): with his
-   * face, chest, belly, hands and arms kept, about 57,000 of his 222,000 triangles stayed at every level, so his 1 % was
-   * about 92,000 triangles with his belt and guns; now about 36,000. Blaze is unchanged. null: he follows as before.
-   */
-  const JOHN_DETAIL: 1 | null = 1;
-  /** John's face, hands and the rest kept sharp at his fixed level (fastHeroine.ts `sharpParts`): none, for now. */
-  const JOHN_SHARP_PARTS = false;
-  /** HIS FACE AT 70 % (Joshua, 2026-11-21, v0.2.133 ran with him at 1 %: "Let's try raising only his face details to
-   *  30%"; v0.2.134 at 30 %: "His face is better, but not 100%"; then "Do face at 70%, hands at 15%"): his head, above
-   *  his neck, kept at this detail while the rest of him is at JOHN_DETAIL (fastHeroine.ts `headDetail`, detailLevels.ts
-   *  `headPart`: the rest lightened first with his head held, then his head alone). null: it goes with the rest.
-   *  NOW 100 % (Joshua, 2026-11-21, with his new head and crew cut: "Can you put John's head at 100% detail"): his
-   *  head kept whole, and his hair worn as its full file (fastHeroine.ts `showHair`). */
-  const JOHN_HEAD_DETAIL: number | null = 100;
-  /** HIS HANDS AT 15 % (the same ask), the same way (fastHeroine.ts `handsDetail`, detailLevels.ts `handPart`). */
-  const JOHN_HANDS_DETAIL: number | null = 15;
   /** The Detail a character is drawn at while PLAYED: John's fixed one, or the Settings choice (Blaze). */
   const detailFor = (c: Character | null): HeroineSettings['detail'] => (c && c === john && JOHN_DETAIL !== null ? JOHN_DETAIL : graphics.detail);
   /** Blaze is the one being played (always, without John). */
@@ -628,8 +683,8 @@ async function start(): Promise<void> {
   const applyShadows = (): void => {
     realShadows = graphics.shadows === 'on';
     renderer.shadowMap.enabled = realShadows;
-    keyLight.castShadow = realShadows;
-    shadowFloor.visible = realShadows && !island; // (on the island the ground itself takes her shadow)
+    keyLight.castShadow = realShadows && !tunnel;
+    shadowFloor.visible = realShadows && !island && !tunnel; // (on the island the ground itself takes her shadow; in the prologue's passage, its rock)
     heroine.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
     // (and whoever is not being played)
     bystanderBody()?.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
@@ -644,7 +699,7 @@ async function start(): Promise<void> {
   // If it cannot be opened the game starts without it, and the debug readout says so.
   let liveNote = '';
   let liveOpened = false;
-  if (graphics.liveBody === 'on' && heroine.attachLive) {
+  if (graphics.liveBody === 'on' && heroine.attachLive && !prologue) {
     try {
       // (the next heavy step: a pause before it, v0.2.151)
       await pauseBefore('her live body');
@@ -668,7 +723,7 @@ async function start(): Promise<void> {
   // looking out at the city (+Z). Her movement (`PlayerMotion`) and which way each part of her faces (`BodyTurn`,
   // src/input/bodyTurn.ts) are her own, in her kit (`makeKit`, below).
   const startMotion = new PlayerMotion();
-  const START = island ? { x: 0, z: 0, yaw: island.arrivalFacing } : { x: startMotion.x, z: startMotion.z, yaw: 0 };
+  const START = tunnel ? tunnel.start : island ? { x: 0, z: 0, yaw: island.arrivalFacing } : { x: startMotion.x, z: startMotion.z, yaw: 0 };
 
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
   // where she starts, so she can walk up to it, put her guns down on it and take them up again
@@ -677,18 +732,21 @@ async function start(): Promise<void> {
   const [{ lookKey: tableLookKey }, { LOOK_GEAR }] = await Promise.all([import('./heroine/looks'), import('./heroine/looks/gear')]);
   const tableLook = tableLookKey(outfitNow);
   const table = new WeaponTable(graphics.tableHeight, LOOK_GEAR[tableLook]?.gun);
-  table.place(1.6, 9.85, 0);
-  scene.add(table.root);
+  // (NOT IN THE PROLOGUE: John is on an expedition, not at the armoury. They are made, as everything that asks after
+  //  them expects them, but far off and not added to the scene)
+  const away = tunnel ? 5000 : 0;
+  table.place(1.6 + away, 9.85, 0);
+  if (!tunnel) scene.add(table.root);
   // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): an upright pole and a waist-high rail beside the table, the
   // other side of the street (src/world/grabBars.ts; her fingers: src/heroine/fast/fingerTouch.ts).
   const bars = new GrabBars();
-  bars.place('pole', -1.3, 10.1, 0);
-  bars.place('rail', -3.0, 10.3, 0);
-  scene.add(bars.pole, bars.rail);
+  bars.place('pole', -1.3 + away, 10.1, 0);
+  bars.place('rail', -3.0 + away, 10.3, 0);
+  if (!tunnel) scene.add(bars.pole, bars.rail);
   // THE DOOR (Joshua, 2026-11-18; src/world/door.ts): beside the rail, its pull side (the lever) toward the plaza
   const door = new Door();
-  door.place(-5.2, 10.2, Math.PI);
-  scene.add(door.root);
+  door.place(-5.2 + away, 10.2, Math.PI);
+  if (!tunnel) scene.add(door.root);
   // (on the island the table, bars and door stand on the beach beside her, on the sand's own height)
   if (island) {
     table.root.position.y = groundUnder(1.6, 9.85);
@@ -750,7 +808,7 @@ async function start(): Promise<void> {
   });
   /** A character's own kit, on their own body (`self`), standing at x, z and facing `yaw`. Their guns start holstered. */
   const makeKit = (self: GameHeroine, x: number, z: number, yaw: number): Kit => {
-    const motion = new PlayerMotion(island ? island.walls : walls);
+    const motion = new PlayerMotion(island ? island.walls : tunnel ? tunnel.walls : walls);
     motion.x = x; motion.z = z;
     // (a body that can turn its parts apart is handed its turning once, and reads it every frame)
     const turn = new BodyTurn();
@@ -856,9 +914,12 @@ async function start(): Promise<void> {
   // and heart takes into account. Her body shows them (she breathes faster and deeper after a run), and so does
   // the card along the top of the screen.
   // (her pace is in her kit: `pace`)
-  let vitals = new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
-  blaze = { name: 'Blaze', body: bodyNow, vitals, kit: blazeKit, cam: null, autoFire: graphics.autoFire === 'on' ? 'on' : 'off', brain: null, port: null, needs: null, combat: null };
-  playing = blaze;
+  // (THE PROLOGUE: the first one made is John, with his own vitals, never pregnant; he is in MANUAL, nothing to fight)
+  if (prologue) graphics.autoFire = 'off';
+  let vitals = prologue ? new HeroineVitals({ age: 30, weeks: 0 }) : new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
+  const firstOne: Character = { name: prologue ? 'John' : 'Blaze', body: bodyNow, vitals, kit: blazeKit, cam: null, autoFire: graphics.autoFire === 'on' ? 'on' : 'off', brain: null, port: null, needs: null, combat: null };
+  if (prologue) john = firstOne; else blaze = firstOne;
+  playing = firstOne;
 
   // ---- JOHN, made beside her (heroine/looks/john.ts: the builder's male body as Joshua saved him, in black and neon
   // green). Only as a fast body (Body: Performance); if he cannot be made, she plays on alone (no 🔄).
@@ -867,16 +928,14 @@ async function start(): Promise<void> {
   // says (30).
   /** Why John could not be made, if he could not (shown in a notice once the HUD is up). */
   let johnFailed: string | null = null;
-  if (graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
+  if (!prologue && graphics.body === 'performance' && new URLSearchParams(location.search).get('john') !== 'off') {
     try {
       // (his fixed detail and nothing kept sharp, if they are set: JOHN_DETAIL above; everything else as Settings say)
-      const his: HeroineSettings = JOHN_DETAIL === null ? graphics : { ...graphics, detail: JOHN_DETAIL, sharpParts: JOHN_SHARP_PARTS ? graphics.sharpParts : 'off' };
+      const his: HeroineSettings = johnSettings();
       // (the next heavy step, right after her live body: a pause before it, v0.2.151. Three of Joshua's five town starts
       //  on v0.2.150 were closed at "Loading John: unpacking his body…")
       await pauseBefore('John');
-      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true,
-        // (held at one detail, he keeps only that one level: fastHeroine.ts `oneLevel`, v0.2.147)
-        JOHN_DETAIL !== null ? { headDetail: JOHN_HEAD_DETAIL ?? undefined, handsDetail: JOHN_HANDS_DETAIL ?? undefined, oneLevel: true } : {});
+      const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true, johnParts());
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
       const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
@@ -925,6 +984,8 @@ async function start(): Promise<void> {
   let stanceNoAim = false;
   /** Her belly and pregnancy as Settings (or the time lapse) have them, on her body, her live body and her vitals. */
   const applyPregnancy = (): void => {
+    // (Blaze's alone: in the prologue there is no Blaze, and nothing of hers is put on John)
+    if (!blaze) return;
     const belly = graphics.belly ?? plan.start;
     // (always on BLAZE, whoever is played)
     herBody().setPregnant?.(herPregnant());
@@ -966,6 +1027,8 @@ async function start(): Promise<void> {
   let gait: Gait = 'stand', gaitResetLeft = 0;
   /** How far she is bent over winded now, 0..1 (set each frame from her pace's winded hold). */
   let windedWeight = 0;
+  /** (the prologue: where the camera looks, his eyes, and the shake's offset; kept for each frame) */
+  const storyLook = new THREE.Vector3(), storyEye = new THREE.Vector3(), shakeBy = new THREE.Vector3();
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   // (her guns' bursts, src/world/burstFire.ts, are in her kit: `burst`)
 
@@ -992,6 +1055,12 @@ async function start(): Promise<void> {
     heroine.setGround?.(island.standAt); // (her feet on the ground under each of them, along its slope; in deep water, held up)
     rig.droneLimit = Infinity;
     rig.faceAtOnce(island.arrivalFacing);
+  }
+  if (tunnel) {
+    // the passage: the camera kept out of the rock (cameraRig.ts `keepClear`), looking along the passage at the start
+    const t = tunnel;
+    rig.keepClear = (from, to) => t.keepClear(from, to);
+    rig.faceAtOnce(t.start.yaw);
   }
   /**
    * AIMED BY HAND: always in first person; in third person when auto-fire is off (Joshua, 2026-11-18: "so you could
@@ -1237,7 +1306,7 @@ async function start(): Promise<void> {
 
   const changeOutfit = async (): Promise<void> => {
     // (her outfits are BLAZE's: chosen while John is played, she changes when she is swapped back to)
-    if (!playingBlaze()) { outfitPending = true; hud.showNotice('Blaze changes when you swap back to her'); return; }
+    if (!playingBlaze()) { outfitPending = true; hud.showNotice(blaze ? 'Blaze changes when you swap back to her' : 'Outfits are Blaze\'s: she is not in the prologue'); return; }
     if (outfitChanging) { outfitAgain = true; return; }
     outfitChanging = true;
     try {
@@ -1427,7 +1496,7 @@ async function start(): Promise<void> {
       //  2026-11-21, "link up him to the same detail %"; before, only the one played took a change)
       // (Detail is the PLAYER'S: the one standing by follows the player's level by distance, otherDetail.ts)
       // (Blaze takes it whether she is played or standing by; John keeps his fixed level: JOHN_DETAIL)
-      if (key === 'detail') { if (JOHN_DETAIL === null) heroine.setDetail?.(graphics.detail); else blaze ? blaze.body.setDetail?.(graphics.detail) : heroine.setDetail?.(graphics.detail); }
+      if (key === 'detail') { if (JOHN_DETAIL === null) heroine.setDetail?.(graphics.detail); else blaze?.body.setDetail?.(graphics.detail); }
       else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
       // TEXTURE SIZES, while the game runs (core/textureSizes.ts): each picture of the kind changed is made again from
@@ -1477,9 +1546,18 @@ async function start(): Promise<void> {
     onIntake: intake,
     onBathroom: () => { if (bathroomLeft <= 0) intake('bathroom'); },
     onSwap: () => swapCharacter(),
-    // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor)
+    // 🔦 LIGHT (the prologue): the flashlight off or on (not while the story holds him still, in the opening's dark)
+    onLight: () => {
+      if (!flashlight || story?.locked) return;
+      flashlight.set(!flashlight.on);
+      caveSounds?.click();
+      hud.setLight(flashlight.on);
+    },
+    // THE PROMPT: the table's PUT DOWN / PICK UP when she is near it, else a bar's GRAB / LET GO (see promptFor);
+    // in the prologue, the story's own (SCAN, near markings: story/storyDirector.ts)
     onPrompt: (which) => {
-      if (promptIs === 'table') useTable(which);
+      if (promptIs === 'story') story?.act();
+      else if (promptIs === 'table') useTable(which);
       else if (promptIs === 'grab') grabBar(which);
       else if (promptIs === 'door') useDoor(which);
     },
@@ -1512,8 +1590,10 @@ async function start(): Promise<void> {
     onCrouch: () => { stance = stance === 'crouch' ? 'stand' : 'crouch'; },
     onProne: () => { stance = stance === 'down' ? 'stand' : 'down'; },
   });
-  // (🔄 shows once there is someone to swap to: John, made beside her)
-  hud.setSwap(john ? 'John' : null);
+  // (🔄 shows once there is someone to swap to: John, made beside her; none in the prologue, where he is alone)
+  hud.setSwap(bystander()?.name ?? null);
+  // (the prologue: no guns' buttons, and the flashlight's)
+  if (prologue) { hud.setStoryMode(true); hud.setLight(false); }
   if (johnFailed) hud.showNotice(`John couldn't load: ${johnFailed.slice(0, 60)}`, 8);
   onGlTrouble((line) => hud.showNotice(line, 12));
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
@@ -1536,7 +1616,7 @@ async function start(): Promise<void> {
   /** The hands picked for the bar she is about to take hold of (kept while her guns go away first). */
   let grabWhich: 'both' | Hand = 'both';
   /** What THE PROMPT is for this frame: the table, a bar, the door, or nothing. */
-  let promptIs: 'table' | 'grab' | 'door' | null = null;
+  let promptIs: 'table' | 'grab' | 'door' | 'story' | null = null;
   /** She is side-stepping this frame (crab steps: her stamina pays a little more per metre). */
   let sideStepping = false;
   /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
@@ -1587,7 +1667,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, tunnel, story, flashlight,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
@@ -1610,10 +1690,11 @@ async function start(): Promise<void> {
   // HER BREATHING, LOADED WITH EVERYTHING ELSE (Joshua, 2026-11-22: "load the audio on start… don't wait until after in
   // the game… that doesn't make sense"): the sound is made and her breathing files fetched and decoded (one at a time)
   // as a step of the load, so she is heard from her first breath. (v0.2.143 had them wait until 12 s into play.)
-  if (sound.start()) {
+  const voices = Object.entries(BREATH_VOICES).filter(([name]) => [blaze, john].some((c) => c?.name === name)).map(([, voice]) => voice);
+  // (none in the prologue: John has no breathing files yet)
+  if (voices.length && sound.start()) {
     meter.step('breathing', 'Loading her breathing…');
     // (never a reason not to start: given 20 s at most, after which the files go on loading in play)
-    const voices = Object.entries(BREATH_VOICES).filter(([name]) => [blaze, john].some((c) => c?.name === name)).map(([, voice]) => voice);
     await Promise.race([Promise.all(voices.map((voice) => loadBreathVoice(sound, voice, __APP_VERSION__))), new Promise((enough) => setTimeout(enough, 20000))]);
   }
   // TURNED UPRIGHT WHILE LOADING (v0.2.148): the downloading and building above carried on behind the cover, but the
@@ -1654,6 +1735,17 @@ async function start(): Promise<void> {
     // THE ISLAND'S OTHER TILES, ITS WATER AND ITS FOREST come in now, one at a time (v0.2.150; Joshua, 2026-11-22: "the
     // rest actually in the game not before"): before play only the tile under her was loaded
     island?.startStreaming();
+    // THE PROLOGUE'S STORY begins with the first frame of play (story/chapters/johnPrologue.ts)
+    if (story && tunnel && flashlight && caveSounds) {
+      const world: PrologueWorld = {
+        tunnel, flashlight, sounds: caveSounds,
+        progress: () => prologueProgress,
+        playAgain: () => restartGame(),
+      };
+      const director = story;
+      void import('./story/chapters/johnPrologue').then(({ playBeneathTheIsland }) => playBeneathTheIsland(director, world))
+        .catch((error) => console.error('The prologue\'s story stopped:', error));
+    }
     // (this load is remembered as a guide for the next only if it went the way its kind says it should)
     meter.finish(loadedAsPlanned(loadIs, { fastBody: !!heroine.attachLive, liveBody: liveOpened }));
     splash.done();
@@ -1930,6 +2022,8 @@ async function start(): Promise<void> {
       }
       // (squatting for the bathroom: she stays where she is, and does not aim or fire)
       if (bathroomLeft > 0) { pace.speedMost = 0; stanceNoAim = true; }
+      // (the story holding him still: the prologue's opening, in the dark)
+      if (story?.locked) { pace.speedMost = 0; stanceNoAim = true; }
       // (going down on all fours: both guns are put away first, on the way down)
       if (st && st.asked === 'fours' && st.down < 1 && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
       hud.setStance(stanceAsked(), pregnantNow());
@@ -2054,6 +2148,9 @@ async function start(): Promise<void> {
     const doorWord = doorUse.holding ? 'LET GO' : busyNow() || holstering || grabUse.busy || doorTaken(kitNow()) ? null : doorUse.label(motion.x, motion.z);
     promptIs = doorUse.holding ? 'door' : grabUse.holding && grabWord ? 'grab' : atTable ? 'table' : grabWord ? 'grab' : doorWord ? 'door' : null;
     hud.setPrompt(promptIs === 'table' ? tableUse.label() : promptIs === 'grab' ? grabWord : promptIs === 'door' ? doorWord : null);
+    // (the story's prompt, where nothing else wants it: SCAN near markings in the prologue)
+    const storyWord = story?.promptWord() ?? null;
+    if (storyWord && !promptIs) { promptIs = 'story'; hud.setPrompt(storyWord); }
     hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
     hud.setReload((atTable && tableUse.needsReload) || (!busyNow() && !holstering && beltReload.canStart));
 
@@ -2284,7 +2381,24 @@ async function start(): Promise<void> {
     if (controls.fireHeld) sinceFire = 0; else sinceFire += dt;
     if (rig.mode === 'third' && aimedByHand()) rig.setStyle(sinceFire < MANUAL_AIM_HOLD ? 'shoulder' : manualStyle);
     hud.setCrosshairAway(rig.mode === 'third' && rig.style !== 'shoulder');
+    // (the prologue: how far along the passage he is, which also tells the passage where to look first for him, for
+    //  his steps, the camera and the flashlight's beam)
+    if (tunnel) prologueProgress = tunnel.progressAt(motion.x, motion.z);
     rig.update(dt, heroine);
+    // THE PROLOGUE, once the camera is placed: the flashlight along where the camera looks (from the camera in first
+    // person, from his head in third: Beyond Extinction's lab flashlight), the gap's light, the drips, the story's
+    // beats, and the stone's shake on the camera
+    if (tunnel && flashlight && caveSounds && story) {
+      rig.camera.getWorldDirection(storyLook);
+      heroine.eye(storyEye);
+      flashlight.update(dt, rig.mode === 'first', storyEye, rig.camera.position, storyLook, (from, dir, most) => tunnel.rayLength(from, dir, most));
+      tunnel.update(dt);
+      caveSounds.update(dt);
+      story.update(dt, motion.x, motion.z, rig.camera.position, storyLook);
+      const shake = story.shakeNow;
+      if (shake > 0) rig.camera.position.add(shakeBy.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2).multiplyScalar(shake));
+      hud.setLight(flashlight.on);
+    }
     // (the island: its tiles follow her, the sea follows the camera)
     island?.update(dt, motion.x, motion.z, rig.camera);
 

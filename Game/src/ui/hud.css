@@ -385,6 +385,13 @@
 .gd-rail-cam { top: calc(var(--safe-top) + 204px); }
 .gd-rail-aim { top: calc(var(--safe-top) + 256px); height: 32px; border-color: rgba(255, 201, 60, 0.75); color: #ffd77a; }
 .gd-rail-aim.is-auto { border-color: rgba(94, 232, 200, 0.8); color: #c9fff1; }
+/* 🔦 LIGHT (v0.2.153, the prologue's flashlight): where HOLSTER is on the other maps; lit while it is on */
+.gd-rail-light { top: calc(var(--safe-top) + 100px); font-size: 16px; }
+.gd-rail-light small { font-size: 8px; }
+.gd-rail-light.is-on { border-color: rgba(255, 215, 122, 0.9); background: rgba(255, 215, 122, 0.22); color: #fff3d0; }
+/* THE STORY'S SCREEN (v0.2.153): no guns in the prologue, so none of their buttons */
+.gd-hud.is-story .gd-fire, .gd-hud.is-story .gd-rail-holster, .gd-hud.is-story .gd-rail-reload,
+.gd-hud.is-story .gd-rail-aim, .gd-hud.is-story .gd-hands, .gd-hud.is-story .gd-ammo { display: none !important; }
 .gd-hands {
   position: absolute;
   right: calc(var(--safe-right) + 74px);

@@ -28,8 +28,11 @@ export type DetailChoice = 'autoLive' | 'auto' | Detail;
 export type Sharpness = 1 | 2;
 export type SkinChoice = 'light' | 'full';
 export type ShadowChoice = 'on' | 'off';
-/** Which map she is on: the real island (the main game), or the domed town (kept to test in until its place is chosen). */
-export type MapChoice = 'island' | 'town';
+/**
+ * Which map she is on: the real island (the main game), the domed town (kept to test in until its place is chosen), or
+ * the PROLOGUE (v0.2.153: the story's opening, John beneath the island; story/chapters/johnPrologue.ts).
+ */
+export type MapChoice = 'island' | 'town' | 'prologue';
 
 /** Settings -> WORLD -> Landscaping (src/world/island/treeObjects.ts). */
 export type LandscapingChoice = 'images' | 'hybrid' | 'objects' | 'off';
@@ -332,8 +335,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     autoFire: read(SETTING_KEYS.autoFire) === 'on' ? 'on' : 'off',
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
     catsuitNeck: asCatsuitNeck(address.get('neck') ?? read(SETTING_KEYS.catsuitNeck)),
-    // (the island unless the town was chosen)
-    map: (address.get('map') ?? read(SETTING_KEYS.map)) === 'town' ? 'town' : 'island',
+    // (the island unless the town or the prologue was chosen)
+    map: ((v) => (v === 'town' || v === 'prologue' ? v : 'island'))(address.get('map') ?? read(SETTING_KEYS.map)),
     // (Hybrid unless another was chosen; v0.2.93's Trees off is kept as Off)
     landscaping: asLandscaping(address.get('land') ?? read(SETTING_KEYS.landscaping) ?? (read('gdm.trees') === 'off' || address.get('trees') === 'off' ? 'off' : null)),
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),

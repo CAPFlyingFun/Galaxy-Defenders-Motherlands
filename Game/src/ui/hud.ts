@@ -67,6 +67,8 @@ export interface HudOptions {
   onBathroom?(): void;
   /** The 🔄 button: play the other character (Blaze or John). */
   onSwap?(): void;
+  /** THE 🔦 LIGHT button (the story's flashlight, v0.2.153): switched off or on. */
+  onLight?(): void;
   /** A button in Settings -> FOOD & DRINK. */
   onIntake?(action: IntakeAction): void;
   /**
@@ -179,6 +181,9 @@ export class Hud {
   private readonly notice: HTMLElement;
   private noticeTimer = 0;
   private readonly aimModeButton: HTMLElement;
+  /** 🔦 LIGHT on the rail: the story's flashlight (only where there is one: the prologue). */
+  private readonly lightButton: HTMLElement;
+  private lightShown: boolean | null = null;
   private readonly handsBox: HTMLElement;
   private readonly handButtons: Record<'left' | 'right', HTMLElement>;
   /** The hand picked with L or R for the next action (null: both). */
@@ -300,6 +305,11 @@ export class Hud {
     tapButton(this.camButton, () => options.onCameraStyle?.());
     this.aimModeButton = railButton('gd-rail-aim', 'MANUAL', '', 'Auto or manual aim and fire');
     tapButton(this.aimModeButton, () => options.onAimMode?.());
+    // 🔦 LIGHT (v0.2.153, the prologue: Joshua's draft, "introduce movement, flashlight, and inspect/scan controls"):
+    // where HOLSTER is on the other maps (the story hides the guns' buttons); lit while the flashlight is on
+    this.lightButton = railButton('gd-rail-light', '🔦', 'LIGHT', 'Flashlight on or off');
+    this.lightButton.hidden = true;
+    tapButton(this.lightButton, () => options.onLight?.());
     // CROUCH and PRONE (Joshua, 2026-11-20): always there, above FIRE, each lit while she is in its stance. PRONE says
     // ALL 4s while Pregnancy is on (she goes down on her hands and knees instead of her belly).
     this.crouchButton = element('button', 'gd-button gd-stance gd-crouch', this.root, 'CROUCH');
@@ -386,7 +396,7 @@ export class Hud {
     };
     // (the map: Joshua, 2026-11-19, the real island for the main game, the town kept as a test map)
     element('h2', 'gd-settings-part', settings, 'WORLD');
-    choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen. Changing it reloads the game.');
+    choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town'], ['Prologue: John beneath the island (story)', 'prologue']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen; the prologue is the story\'s opening (John only, Scene 1 so far). Changing it reloads the game.');
     // TEXTURE SIZES (v0.2.148, core/textureSizes.ts): the largest side of a picture on the graphics chip; each step a
     // quarter of the memory of the one above; 4096 only on a computer (a phone is never offered what would close it)
     const sizeChoices = textureSizesOffered().map((s) => [String(s), s] as const);
@@ -646,6 +656,20 @@ export class Hud {
   setBathroom(urge: 0 | 1 | 2 | null): void {
     this.bathroomButton.hidden = !urge;
     this.bathroomButton.classList.toggle('is-strong', urge === 2);
+  }
+
+  /**
+   * THE STORY'S SCREEN (v0.2.153, the prologue): John is an archaeologist on an expedition, not in a fight, so FIRE,
+   * the gun buttons (HOLSTER / DRAW, RELOAD, AUTO / MANUAL, L / R) and the rounds are hidden (hud.css `.is-story`).
+   */
+  setStoryMode(on: boolean): void { this.root.classList.toggle('is-story', on); }
+
+  /** 🔦 LIGHT: hidden (null), or shown lit (true) or not (false). */
+  setLight(on: boolean | null): void {
+    if (on === this.lightShown) return;
+    this.lightShown = on;
+    this.lightButton.hidden = on === null;
+    this.lightButton.classList.toggle('is-on', on === true);
   }
 
   /** THE RAIL's RELOAD button: shown when a reload would do something (at the table, or from her belt). */

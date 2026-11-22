@@ -51,6 +51,7 @@ const CONTROLS = [
   { id: 'railReload', selector: '.gd-rail-reload', label: 'RELOAD' },
   { id: 'railCam', selector: '.gd-rail-cam', label: 'CAM (camera style)' },
   { id: 'railAim', selector: '.gd-rail-aim', label: 'AUTO / MANUAL' },
+  { id: 'railLight', selector: '.gd-rail-light', label: 'LIGHT (🔦, the prologue)' },
   { id: 'hands', selector: '.gd-hands', label: 'L / R hand' },
   { id: 'crouch', selector: '.gd-crouch', label: 'CROUCH' },
   { id: 'prone', selector: '.gd-prone', label: 'PRONE / ALL 4s' },

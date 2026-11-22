@@ -170,6 +170,14 @@ export class CameraRig {
    */
   groundAt: ((x: number, z: number) => number) | null = null;
   /**
+   * WALLS ROUND HER, FOR THE CAMERA (v0.2.153, the prologue's passage: world/prologue/tunnel.ts `keepClear`): given a
+   * point by her (`from`, inside) and where the third-person camera wants to be (`to`), it brings `to` in along the
+   * line between them to just short of the first rock in the way. null on the open maps (the camera goes anywhere).
+   */
+  keepClear: ((from: THREE.Vector3, to: THREE.Vector3) => void) | null = null;
+  /** (where the camera looks from, for `keepClear`, one vector kept for it) */
+  private readonly clearFrom = new THREE.Vector3();
+  /**
    * HOW MUCH LOWER SHE IS (Joshua, 2026-11-20: crouching, on her belly, on all fours), metres, set by the game: the
    * following camera's pivot and the side views come down with her, eased.
    */
@@ -336,6 +344,7 @@ export class CameraRig {
       this.easedPitch += (this.pitch - this.easedPitch) * ease;
       this.easedZoom += (this.zoom - this.easedZoom) * ease;
       this.placeStyle(dt, heroine, ease);
+      this.clearView(heroine);
       return;
     }
     this.easedYaw += (this.yaw - this.easedYaw) * ease;
@@ -373,6 +382,21 @@ export class CameraRig {
     this.camera.position.copy(this.pivot).addScaledVector(this.look, -distance);
     // (on hills: never under the slope behind her)
     this.keepAboveGround(feet.y);
+    this.clearView(heroine);
+  }
+
+  /**
+   * THE CAMERA KEPT OUT OF THE ROCK (`keepClear`, set only where there are walls round her): brought in toward the
+   * point it looks from, along its own line of sight, so it still looks the same way, only from nearer.
+   */
+  private clearView(heroine: HeroineBody): void {
+    if (!this.keepClear) return;
+    const feet = heroine.root.position;
+    // (the side views and the cinematic shots look AT a point by her; the others look from their pivot)
+    if (this.style === 'sideLeft' || this.style === 'sideRight' || this.style === 'cinematic') this.clearFrom.copy(this.shotAt);
+    else if (this.style === 'drone') this.clearFrom.set(feet.x, feet.y + 1.5, feet.z);
+    else this.clearFrom.copy(this.pivot);
+    this.keepClear(this.clearFrom, this.camera.position);
   }
 
   /** The lowest the camera may be at its own place: just over the ground there (or over her feet's level). */

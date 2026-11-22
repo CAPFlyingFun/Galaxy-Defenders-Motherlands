@@ -12,9 +12,9 @@ stay in `CLAUDE.md` (the repo's root); this file is the plan: where the game is 
 
 | | |
 |---|---|
-| Live on `main` | **v0.2.148** (turn first, then load; texture settings for characters and world) |
-| On `claude-work`, not pushed | **v0.2.149**: the all-fours first-person camera fixed; the splash counts each map's starts |
-| Main problem | The game is **closed by the iPhone at random during the start, on the island**. The town does not crash. |
+| Live on `main` | **v0.2.152** (one heavy loading step at a time; a start left on purpose is not counted as a crash) |
+| Being built | **v0.2.153**: the scene system and the prologue's first scene (section 5, "The opening demo") |
+| The crash | **Looks solved by v0.2.151** (Joshua, 2026-11-22: island, town, a swap and back with no crash; then "Worked and no issues so far… I think we finally found our issues"). The splash's count keeps watching. |
 
 ### The island start crash: the evidence so far
 
@@ -139,6 +139,53 @@ and at least 30 FPS; the town still works; the graphics estimate does not keep c
   - Mother Overlord's identity and motives (unrevealed).
   - The pregnancy is **not** to be made a villain-targeting plot by assumption.
   - **Survival difficulty (Q46): not answered.** No option chosen.
+
+### The opening demo, Draft 1 (Joshua's, 2026-11-22; about 8–10 minutes; PROVISIONAL)
+
+From `Motherlands_Opening_Demo_Draft_1.docx` (kept outside the repo; its image placeholders are for later concept art
+or screenshots). Story and dialogue are provisional.
+
+- **Scene 1, Beneath the Island** (DAY 9 | 07:42 | A.R.C.H. EXPEDITION SITE): black screen, water dripping, a radio.
+  John on the radio with the expedition leader ("staring at the same rock for twenty minutes"). His flashlight comes
+  on: ancient passages, roots through cracks overhead, geometric markings on the walls. **Objective: Rejoin the
+  expedition** (walking, the flashlight, inspect/scan). He scans markings that were not in the original survey (a
+  researcher: the survey never covered a wall under thirty metres of sediment); the A.R.C.H. display rebuilds part of
+  an inscription, several symbols unknown. A faint vibration through the stone; "Did anyone else feel that?" The
+  vibration again, a little stronger.
+- **Scene 2, The Chamber** (07:51): a huge round chamber, the expedition round a central structure with a faint blue
+  light moving under its surface. **Objective: Investigate the central structure**: scan three symbols, examine a
+  damaged control mechanism, compare the symbols with earlier finds (an easy introductory puzzle). "Almost like…
+  instructions." Scanner warning: UNKNOWN ENERGY ACTIVITY (source: central structure; pattern: increasing;
+  classification: unavailable). The symbols light one by one; a deep rumble.
+- **Scene 3, The Seal** (07:58): the chamber shakes, "back to the entrance!", a stone barrier coming down. **Objective:
+  Reach the exit**: a short scripted escape he cannot win (not a fail state). Sealed in; his calls get only static and
+  a broken "…lower passage…"; the team is separated in shifting passages. Through a new archway, an enormous tunnel
+  into the dark, bridges and structures far below. "What is this place?" An unknown signal; the lights go out; CUT TO
+  BLACK, a low mechanical pulse. **TITLE CARD: GALAXY DEFENDERS: MOTHERLANDS.**
+- **Scene 4, Mary** (DAY 10 | 08:16 | A.R.C.H. HEADQUARTERS): morning sun, terminals, a coffee machine. A colleague:
+  "You're here early." / "Couldn't sleep." Nothing from John yet. The camera moves behind her and the player takes
+  over. **Objective: Check the latest expedition reports.** Chapter 1 begins as Mary; the demo ends soon after.
+- **Notes from the draft:** the chamber and headquarters are separate light scenes (the island is not loaded for the
+  prologue); Mary does not yet know John is trapped, and neither knows of the pregnancy (Day 13 she finds out at the
+  hospital, Day 14 A.R.C.H. tells her the expedition is missing); what sealed the chamber (an ancient defence, an
+  accident, or someone else) and Mother Overlord's identity and tie to the ruins are undecided, and nothing in the demo
+  implies a reveal. Character looks in the draft (Mary auburn or chestnut hair and brown eyes in an A.R.C.H. field
+  jacket; John in a rugged expedition jacket with light stubble) are optional, not canon: today's looks stay until
+  Joshua chooses (clothing changes are asked first).
+
+**How it is being built (agreed 2026-11-22):** first as a BLOCKOUT (plain shapes, real lighting, text subtitles for the
+radio and voices, every objective working), the art after the flow plays well. In versions:
+
+1. **The scene system and Scene 1** (v0.2.153): Settings -> WORLD -> Map -> **Prologue** (`?map=prologue`; the island
+   stays the default). Only John is made (no Blaze, no live body, no island). The tunnel, his flashlight, SCAN, the
+   radio as subtitles, "Rejoin the expedition", the vibration.
+2. **Scenes 2–3**: the chamber, three symbols, the warning, the barrier, the view, cut to black, the title card.
+3. **Scene 4**: headquarters as Mary, her colleague, "Check the latest expedition reports", the end of the demo; the
+   chapter saved so a restart comes back to it.
+4. **Art**: stone, light, the structure's glow; voices if Joshua wants them (ElevenLabs).
+
+Defaults taken (Joshua: "Yeah!" to them): the expedition stay radio voices in Scene 1, two or three at low detail at
+the structure in Scene 2; the characters' looks as they are now; third person to start, first person there too.
 
 ---
 

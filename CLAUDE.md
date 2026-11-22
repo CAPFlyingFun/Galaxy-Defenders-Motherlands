@@ -807,6 +807,38 @@ use the game's single copy of three.js.
   left while still loading is not counted at all; neither is shown in amber. An iPhone closing a page for its memory
   sends no pagehide, so that is still told. The splash: "Starts on v0.2.152 without a crash: town 1 of 1". Tested on
   the built game: left 3 s into play, then while loading Blaze: "town 1 of 1", no amber line.
+- v0.2.153: THE PROLOGUE, SCENE 1, "BENEATH THE ISLAND" (Joshua, 2026-11-22: v0.2.151/152 ran with no crashes, "I
+  think we finally found our issues"; then his opening demo, Draft 1, `Motherlands_Opening_Demo_Draft_1.docx`, kept
+  outside the repo and written into `docs/plan/MOTHERLANDS_PLAN.md` section 5, "The opening demo"; "Yeah!" to building
+  it as a BLOCKOUT first: plain shapes, real light, text subtitles, every objective working; art later). Settings ->
+  WORLD -> Map -> Prologue (`?map=prologue`; the island stays the default). ITS OWN SMALL SCENE: only John is made (the
+  first and only body, his fixed detail; no Blaze, no live body, no island, town, table, bars or door, no breathing
+  files): the lightest start yet, playing at 10 s in the test browser (36 s on the island). THE PASSAGE
+  (`world/prologue/tunnel.ts`, all in code, nothing downloaded): about 100 m winding (PATH), arches of rough faceted
+  stone in strata (pushed only OUTWARD by noise, so the smooth arch is what stops him: `walls`), roots from the roof,
+  the dead-end rock behind him, and at the far end a narrow gap glowing the chamber's moving blue; three panels of
+  carved symbols to SCAN (`markingA` needed, B and C to find) and six only seen, the symbols drawn from numbers
+  (`story/glyphs.ts`: the same seed, the same symbol, on the wall and on the scanner; a seed's hundreds its outer
+  shape, so symbols "repeat but not identical"). The camera never goes into the rock (cameraRig.ts `keepClear`, the
+  passage's `keepClear`). HIS FLASHLIGHT (`world/prologue/flashlight.ts`), done AS BEYOND EXTINCTION'S TypeScript
+  version does Sarah's in the lab's power outage (Joshua: "Check Beyond Extinction... the flashing beam during the
+  power outage"; "Look at the TypeScript version"; its `PrologueCafeteriaScene.ts`): one spot light made at the start
+  and never hidden (strength 0 when off: no shader rebuild), NO SHADOWS from it (mine first started at his eyes with
+  shadows, and his own head left the passage black), from the CAMERA in first person and from his HEAD in third, along
+  where the camera looks; BE's colour, cone (pi/7), soft edge (0.35) and fall-off (decay 1), and BE's tone mapping
+  (ACES filmic, exposure 1.15), the prologue only. It DIMS NEAR ROCK (`rayLength`: full from 25 m, in step nearer),
+  or a wall two metres off was a white disc. 🔦 LIGHT on the rail (hud.ts `setLight`, where HOLSTER is; Edit controls).
+  THE STORY (`story/storyDirector.ts`): a chapter is a SCRIPT of awaits that reads like the draft
+  (`story/chapters/johnPrologue.ts`, the draft's own lines), run on the game's clock (paused, it waits); the scanner
+  (the prompt bubble says SCAN near a scannable marking he looks at; 2.4 s reading, the panel glowing teal; then the
+  A.R.C.H. display: the symbols, known in teal with numbers, unknown "?", and what it found), the camera's shake.
+  On screen (`ui/storyOverlay.ts`): the black, the typed time card (DAY 9 | 07:42 | A.R.C.H. EXPEDITION SITE),
+  subtitles low right of the CAMERA stick (RADIO lines in teal italics), the objective right of the vitals card with
+  its line, hints, the scanner, and the END CARD (Play again / Keep exploring): Scene 2 is the next version. Its sounds
+  are made in code (`world/prologue/caveSounds.ts`: drips with an echo, radio crackle and hiss, the rumble and grit,
+  the scanner's chirps, the switch). The HUD in story mode (hud.ts `setStoryMode`): no FIRE, gun buttons or rounds.
+  Tested on the built game (scripted, the story's clock sped up for the test only, `story.timeScale`): the opening, first
+  person, the wall's lines, SCAN, the display, the vibration, the end card, no errors; the town and island unchanged.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -1,0 +1,159 @@
+/* ============================================================================
+   storyOverlay.css -- the look of the story's screens (ui/storyOverlay.ts).
+
+   Kept out of the player's way (Joshua's rule: the bottom corners are the controls'): the objective and hints along
+   the top middle, the subtitles low in the middle between the MOVE stick and the right-hand buttons. Only the
+   scanner's display and the end card take a touch. Checked at 932 x 430 (his iPhone on its side).
+   ============================================================================ */
+
+.st-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #eaf2ff;
+}
+.st-root [hidden] { display: none !important; }
+
+/* THE FADE: the whole screen black (the scene opens in the dark) */
+.st-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+}
+
+/* THE TIME CARD: capitals in the middle of the black, typed out */
+.st-timecard {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font: 600 15px ui-monospace, 'SF Mono', Menlo, monospace;
+  letter-spacing: 0.22em;
+  color: #c9fff1;
+  text-shadow: 0 0 12px rgba(94, 232, 200, 0.45);
+  transition: opacity 0.7s ease;
+}
+.st-timecard.is-going { opacity: 0; }
+
+/* THE SUBTITLE: who speaks and what, low down, right of the CAMERA stick (it sits bottom left beside MOVE in MANUAL)
+   and left of the view switch */
+.st-sub {
+  position: absolute;
+  left: calc(50% + 120px);
+  bottom: calc(var(--safe-bottom, 0px) + 22px);
+  transform: translateX(-50%);
+  width: min(450px, 48vw);
+  padding: 7px 14px 9px;
+  border-radius: 12px;
+  background: rgba(4, 7, 14, 0.62);
+  text-align: center;
+}
+.st-sub-who {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #ffd77a;
+  margin-bottom: 2px;
+}
+.st-sub.is-radio .st-sub-who { color: #5ee8c8; }
+.st-sub-text {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+.st-sub.is-radio .st-sub-text { font-style: italic; color: #d9fff6; }
+
+/* THE OBJECTIVE: along the top, right of her vitals card and left of the 🚽 / 🔄 / gear */
+.st-objective {
+  position: absolute;
+  right: calc(var(--safe-right, 0px) + 170px);
+  top: calc(var(--safe-top, 0px) + 10px);
+  min-width: 200px;
+  max-width: 300px;
+  padding: 5px 14px 6px;
+  border-radius: 10px;
+  background: rgba(4, 7, 14, 0.55);
+  border: 1px solid rgba(255, 215, 122, 0.45);
+  text-align: center;
+  transition: border-color 0.4s ease, opacity 0.6s ease;
+}
+.st-objective-label { font-size: 9px; font-weight: 800; letter-spacing: 0.2em; color: #ffd77a; }
+.st-objective-title { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
+.st-objective-line { font-size: 11px; color: rgba(234, 242, 255, 0.75); margin-top: 1px; }
+.st-objective.is-done { border-color: rgba(94, 232, 200, 0.9); }
+.st-objective.is-done .st-objective-label::after { content: ' ✓ COMPLETE'; color: #5ee8c8; }
+
+/* A HINT, under the objective */
+.st-hint {
+  position: absolute;
+  right: calc(var(--safe-right, 0px) + 170px);
+  top: calc(var(--safe-top, 0px) + 70px);
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(94, 232, 200, 0.16);
+  border: 1px solid rgba(94, 232, 200, 0.5);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* SCANNING: a bar a little right of the middle (clear of the CAMERA stick) */
+.st-scanbar {
+  position: absolute;
+  left: calc(50% + 80px);
+  top: 62%;
+  transform: translateX(-50%);
+  width: 260px;
+  text-align: center;
+}
+.st-scanbar-words { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: #5ee8c8; margin-bottom: 4px; }
+.st-scanbar-track { height: 5px; border-radius: 3px; background: rgba(94, 232, 200, 0.2); overflow: hidden; }
+.st-scanbar-fill { height: 100%; width: 0; background: #5ee8c8; box-shadow: 0 0 10px #5ee8c8; }
+
+/* THE SCANNER'S DISPLAY: a dark screen with the symbols and what it found (a tap closes it); right of the middle */
+.st-display {
+  position: absolute;
+  left: calc(50% + 90px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(312px, 36vw);
+  padding: 10px 14px 8px;
+  border-radius: 12px;
+  background: rgba(3, 10, 16, 0.9);
+  border: 1px solid rgba(94, 232, 200, 0.7);
+  box-shadow: 0 0 24px rgba(94, 232, 200, 0.25);
+  pointer-events: auto;
+}
+.st-display-title { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: #5ee8c8; margin-bottom: 6px; }
+.st-display-picture { display: block; width: 100%; height: auto; margin-bottom: 6px; }
+.st-display-line { font-size: 12px; line-height: 1.35; color: #d9fff6; }
+.st-display-close { font-size: 9px; letter-spacing: 0.12em; color: rgba(217, 255, 246, 0.5); text-align: right; margin-top: 4px; }
+
+/* THE END CARD (a little right of the middle and high, clear of the CAMERA stick) */
+.st-card {
+  position: absolute;
+  left: calc(50% + 60px);
+  top: 44%;
+  transform: translate(-50%, -50%);
+  width: min(380px, 50vw);
+  padding: 14px 18px 12px;
+  border-radius: 14px;
+  background: rgba(4, 7, 14, 0.9);
+  border: 1px solid rgba(255, 215, 122, 0.6);
+  text-align: center;
+  pointer-events: auto;
+}
+.st-card-heading { font-size: 14px; font-weight: 800; letter-spacing: 0.16em; color: #ffd77a; margin-bottom: 6px; }
+.st-card-line { font-size: 13px; line-height: 1.4; }
+.st-card-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+.st-card-button {
+  font: 700 13px system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.06em;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 2px solid rgba(94, 232, 200, 0.7);
+  background: rgba(16, 26, 46, 0.85);
+  color: #eaf2ff;
+}

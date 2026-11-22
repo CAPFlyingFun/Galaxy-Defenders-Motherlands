@@ -157,9 +157,10 @@ const SPEED_WINDOW = 2;
 export function loadKind(settings: { body: string; liveBody: string; map?: string }, address: URLSearchParams = new URLSearchParams(location.search)): string {
   const body = address.get('heroine') === 'standin' ? 'standin' : settings.body === 'performance' ? 'fast' : 'room';
   // (only the fast body can carry the live body; a different look or suit downloads different files)
-  const live = body === 'fast' && settings.liveBody === 'on' ? 'live' : '';
-  // (the island and the town load quite different files)
-  const map = settings.map === 'town' ? '' : 'island';
+  // (the prologue is John alone: no Blaze, so no live body)
+  const live = body === 'fast' && settings.liveBody === 'on' && settings.map !== 'prologue' ? 'live' : '';
+  // (the island, the town and the prologue load quite different files)
+  const map = settings.map === 'town' ? '' : settings.map === 'prologue' ? 'prologue' : 'island';
   return [body, live, map, address.get('look') ?? '', address.get('suit') ?? ''].filter((word) => word !== '').join(' ');
 }
 

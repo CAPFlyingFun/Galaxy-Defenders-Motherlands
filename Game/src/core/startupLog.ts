@@ -15,6 +15,15 @@
 // tally keeps, for this version and each map, how many starts there were and how many reached 30 s. The splash shows
 // it (splash.ts `showStartCount`), so a few restarts on the town and a few on the island can be compared without
 // counting by hand.
+//
+// LEFT ON PURPOSE IS NOT A CRASH (v0.2.152; Joshua, 2026-11-22, after a run of starts with no crash at all: "it didn't
+// show when the island or room successfully opening without crashing… Appears to be a counter, lol"). He had changed
+// map (which restarts the game) a few seconds into play, before the 30 s mark, and that start was counted, and shown in
+// amber, as closed by the phone. Now the page's "pagehide" (the browser saying the page is being left: a restart of
+// the game's own, a map change, "start fresh", or the player closing it) marks the start as LEFT ON PURPOSE: one that
+// had reached play counts as a start without a crash, one left while still loading is not counted at all, and neither
+// is shown in amber. When an iPhone closes a page for its memory it does not say so: no pagehide, so that is still
+// told as a crash.
 // =====================================================================================================================
 
 const KEY = 'gdm.startLog';
@@ -31,7 +40,7 @@ interface Step {
   /** downloaded so far, MB */
   dl: number;
 }
-interface Log { version: string; map?: string; steps: Step[] }
+interface Log { version: string; map?: string; steps: Step[]; left?: boolean }
 
 let log: Log = { version: '', steps: [] };
 let began = 0;
@@ -67,7 +76,8 @@ function countThisStart(version: string, map: string): void {
 }
 
 /**
- * The count, as a short text for the splash: "Starts on v0.2.149 that reached 30 s: town 4 of 5 · island 1 of 3".
+ * The count, as a short text for the splash: "Starts on v0.2.152 without a crash: town 4 of 5 · island 1 of 3". A start
+ * without a crash: it reached 30 s of play, or reached play and was then left on purpose (`leftOnPurpose`).
  * (This start is counted in `began` but cannot have lasted yet, so it is left out: what is shown is the starts before.)
  */
 export function startCountText(): string {
@@ -76,7 +86,7 @@ export function startCountText(): string {
     const before = map === log.map ? count.began - 1 : count.began;
     if (before > 0) parts.push(`${map} ${count.lasted} of ${before}`);
   }
-  return parts.length ? `Starts on ${tally.version} that reached 30 s: ${parts.join(' · ')}` : '';
+  return parts.length ? `Starts on ${tally.version} without a crash: ${parts.join(' · ')}` : '';
 }
 
 /**
@@ -89,11 +99,30 @@ export function beginStartLog(version: string, mb: () => number, dl: () => numbe
   downloaded = dl;
   try {
     const before = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Log | null;
-    if (before && Array.isArray(before.steps) && before.steps.length && !before.steps.some((step) => step.s === START_SURVIVED)) lastClosed = before;
+    // (closed by the phone: not left on purpose, and never reached the 30 s mark)
+    if (before && Array.isArray(before.steps) && before.steps.length && !before.left && !before.steps.some((step) => step.s === START_SURVIVED)) lastClosed = before;
   } catch { /* nothing readable: nothing to say */ }
   log = { version, map, steps: [] };
   countThisStart(version, map || 'game');
   markStart('page');
+  // (LEFT ON PURPOSE: the page is being left, by the game's own restart or by the player; not a crash)
+  window.addEventListener('pagehide', leftOnPurpose);
+}
+
+/** The page is being left on purpose (pagehide): written down, and counted as no crash if she was playing. */
+function leftOnPurpose(): void {
+  if (!began || log.left || countedLasted) return;
+  log.left = true;
+  log.steps.push({ s: 'left on purpose', t: Math.round((performance.now() - began) / 100) / 10, mb: Math.round(memory()), dl: Math.round(downloaded() * 10) / 10 });
+  try { localStorage.setItem(KEY, JSON.stringify(log)); } catch { /* not remembered: nothing to do */ }
+  const here = tally.maps[log.map || 'game'];
+  if (here) {
+    // (reached play: a start without a crash; still loading: not counted either way)
+    if (log.steps.some((step) => step.s === 'playing')) here.lasted += 1;
+    else here.began = Math.max(0, here.began - 1);
+    countedLasted = true;
+    saveTally();
+  }
 }
 
 /** A step reached: written down at once (so it is there even if the phone closes the game the next moment). */

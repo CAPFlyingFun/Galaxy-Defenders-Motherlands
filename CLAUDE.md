@@ -799,6 +799,14 @@ use the game's single copy of three.js.
   pauses after the first start that gets all the way through. Not done: a picture warm-up before the first frame
   (measured: the pictures are already up by then; the first frame adds about 33 MB of mesh data and three 4 MB shape
   tables). Her live body's own loading is the builder's (Char_B, not edited): its four pictures still come together.
+- v0.2.152: A START LEFT ON PURPOSE IS NOT A CRASH (Joshua, 2026-11-22: v0.2.151 ran with no crash on his iPhone,
+  island -> town -> swap -> island, but the splash said "island 0 of 1 · town 0 of 1" and showed his own map changes in
+  amber, "closed after: 5 s · 23.2 s in": a start counted as good only at 30 s of play, and he changed map sooner).
+  startupLog.ts `leftOnPurpose`, on the page's "pagehide" (the game's own restart: a map change, Settings, start fresh;
+  or the player closing it): the log is marked `left`; a start that had reached play counts as one WITHOUT A CRASH, one
+  left while still loading is not counted at all; neither is shown in amber. An iPhone closing a page for its memory
+  sends no pagehide, so that is still told. The splash: "Starts on v0.2.152 without a crash: town 1 of 1". Tested on
+  the built game: left 3 s into play, then while loading Blaze: "town 1 of 1", no amber line.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

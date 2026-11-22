@@ -79,7 +79,7 @@ const SIDE_EFFORT = 1.25;
 import { CAMERA_STYLES, CAMERA_STYLE_NAMES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
-interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number; pictures?: string }
+interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number; pictures?: string; cameraMetres?: number; sharp?: boolean }
 type GameHeroine = HeroineBody & {
   stats?: () => HeroineCost;
   /** The fast heroine only: change her detail and the frame rate Auto holds, while the game runs. */
@@ -498,6 +498,8 @@ async function start(): Promise<void> {
    *  TOOLS -> AI thoughts). Put into the UI layer first, so every control is drawn over it. */
   const thoughtBubble = new ThoughtBubble(uiHost);
   const thoughtAt = new THREE.Vector3();
+  // (scratch for the bubble's distances: the one standing by's middle and the camera's place)
+  const otherMiddle = new THREE.Vector3(), cameraAt = new THREE.Vector3();
   /** How far above their eyes the bubble's tail points, metres (clear of the top of the head). */
   const THOUGHT_ABOVE = 0.3;
   /**
@@ -2335,11 +2337,30 @@ async function start(): Promise<void> {
         other.body.eye(thoughtAt);
         thoughtAt.y += THOUGHT_ABOVE;
         const h = other.body.hands, k = other.kit;
-        thoughtBubble.update(realDt, rig.camera, thoughtAt, () => thoughtLines({
-          name: other.name, brain: other.brain!, port: other.port!, combat: other.combat, needs: other.needs,
-          auto: other.autoFire === 'on',
-          rounds: { left: h?.hasGun('left') ? k.tableUse.rounds.left : null, right: h?.hasGun('right') ? k.tableUse.rounds.right : null },
-        }));
+        thoughtBubble.update(realDt, rig.camera, thoughtAt, () => {
+          // HOW FAR, AND HOW THEY ARE DRAWN (Joshua, 2026-11-22: "distance to other character so I can get where I want the
+          // better quality to be so I can test pregnant and not"): metres from the one played and from the camera, their
+          // detail now, their sharp set (face, bust, belly, hands within 12 m of the camera), Blaze's live body awake
+          // or asleep (within 12 m of the one played: `wakeBlazesLiveBody`)
+          const cost = other.body.stats?.();
+          const live = other.body.liveInfo?.();
+          const apart = playing ? Math.hypot(playing.kit.motion.x - k.motion.x, playing.kit.motion.z - k.motion.z) : null;
+          // (the camera to their middle, worked out here every frame: their body only measures it while it is drawn, so
+          //  out of view it would read the last time they were seen)
+          otherMiddle.setFromMatrixPosition(other.body.root.matrixWorld);
+          otherMiddle.y += other.body.height * 0.5;
+          const camera = rig.camera.getWorldPosition(cameraAt).distanceTo(otherMiddle);
+          return thoughtLines({
+            name: other.name, brain: other.brain!, port: other.port!, combat: other.combat, needs: other.needs,
+            auto: other.autoFire === 'on',
+            rounds: { left: h?.hasGun('left') ? k.tableUse.rounds.left : null, right: h?.hasGun('right') ? k.tableUse.rounds.right : null },
+            view: {
+              apart, from: playing?.name ?? '', camera, detail: cost?.detail ?? null,
+              // (John's detail is fixed, JOHN_DETAIL: no sharp or plain set to tell)
+              sharp: other === john && JOHN_DETAIL !== null ? null : cost?.sharp ?? null, live: live ? live.awake : null,
+            },
+          });
+        });
       } else thoughtBubble.hide();
     }
     // THEIR BREATHING, now that their vitals have moved on and the camera is where it is this frame

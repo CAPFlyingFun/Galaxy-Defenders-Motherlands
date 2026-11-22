@@ -12,6 +12,8 @@
 //   ⏭ next: 🚽 bathroom             the next order waiting, if any
 //   ✓ Drew guns                     how the last order ended (✓ done, ⏸ interrupted, ✗ failed and why)
 //   🚽 45 💧 60 🍽️ 70 🔋 80 ⚠️ 30     their needs and the danger, as their brain sees them (percent)
+//   📏 8.4 m to John · 📷 9.1 m      how far they are from the one played and from the camera (v0.2.145)
+//   🔍 30% · sharp · live ✓          how they are drawn: detail, the sharp set, Blaze's live body awake
 //
 // Nothing here decides anything: it only reads the brain, so it can never change what they do. Each line is kept
 // short (about 30 letters) so the bubble stays small on the phone.
@@ -33,6 +35,12 @@ export interface ThoughtSource {
   auto: boolean;
   /** Rounds in each gun (null: no gun in that hand). */
   rounds: { left: number | null; right: number | null };
+  /**
+   * HOW FAR, AND HOW THEY ARE DRAWN (Joshua, 2026-11-22: "add in the stats of the AI player, distance to other character
+   * so I can get where I want the better quality to be"): metres from the one played (`from`, their name) and from the
+   * camera; their detail now (percent); whether they wear their sharp set; Blaze's live body awake (null: none).
+   */
+  view?: { apart: number | null; from: string; camera: number | null; detail: number | null; sharp: boolean | null; live: boolean | null };
 }
 
 /** The longest a line may be, in letters, before it is cut with '…' (the bubble is about 190 px wide). */
@@ -100,5 +108,19 @@ export function thoughtLines(s: ThoughtSource): string[] {
   // 7. THEIR NEEDS AND THE DANGER, as their brain sees them
   const o = port.observe(), n = o.needs, pct = (v: number): number => Math.round(v * 100);
   lines.push(`🚽 ${pct(n.bathroom)} 💧 ${pct(n.water)} 🍽️ ${pct(n.food)} 🔋 ${pct(n.energy)}${o.danger > 0.05 ? ` ⚠️ ${pct(o.danger)}` : ''}`);
+  // 8. HOW FAR, AND HOW THEY ARE DRAWN (for tuning the distances: Joshua, 2026-11-22)
+  const v = s.view;
+  if (v) {
+    const m = (x: number): string => `${x < 10 ? x.toFixed(1) : Math.round(x)} m`;
+    if (v.apart !== null || v.camera !== null) {
+      lines.push([v.apart !== null ? `📏 ${m(v.apart)} to ${v.from}` : '', v.camera !== null ? `📷 ${m(v.camera)}` : ''].filter(Boolean).join(' · '));
+    }
+    const drawn = [
+      v.detail !== null ? `🔍 ${Math.round(v.detail)}%` : '',
+      v.sharp === null ? '' : v.sharp ? 'sharp' : 'plain',
+      v.live === null ? '' : v.live ? 'live ✓' : 'live 💤',
+    ].filter(Boolean);
+    if (drawn.length) lines.push(drawn.join(' · '));
+  }
   return lines.map(cut);
 }

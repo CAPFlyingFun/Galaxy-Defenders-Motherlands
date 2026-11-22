@@ -670,6 +670,14 @@ use the game's single copy of three.js.
   as far as Settings. Tested on the built game: the stores emptied, the game reloaded and downloaded everything.
   WHY THE DOWNLOAD JUMPS ("5mb to 50mb, slowly up to 52mb, jump to 100mb"): files the phone already keeps arrive in a
   moment, new or changed ones at the network's speed.
+  (9) A CLOSED START STARTS FRESH BY ITSELF (v0.2.145; Joshua, 2026-11-22: "if it crashes, the default will be to
+  redownload everything again and clear the cache... and maybe a 5s cancel button if you want to skip it"; splash.ts
+  `showLastStart`, `FRESH_AFTER_CLOSE_S` 5): under the amber line the splash (and the rotate cover) counts down "its
+  saved files will be cleared and the whole game downloaded again in N s", with Cancel (keep them; the load goes on) and
+  Clear now; at 0, `clearAndStartFresh`. So it is not set off by mistake, a start that ended ON PURPOSE is not counted
+  as closed (startupLog.ts `ENDED_ON_PURPOSE`): the page hidden or shut ('left': put away, or closed while away) or the
+  game restarting itself ('restart', core/restart.ts `markRestart`). Tested on the built game: leaving a start shows
+  nothing; a start with no ending counts down; Cancel keeps the files and the game loads.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:
@@ -746,6 +754,13 @@ use the game's single copy of three.js.
   below 55% of the screen, under every control, no touch. OUT OF VIEW (aside, behind, past 80 m) it DOCKS at the top
   middle with ◀ or ▶ their way (pushed to the edge it hid under the vitals card or 🔄/⚙️ at 932 x 430). Settings ->
   TEST TOOLS -> AI thoughts (`gdm.npcThoughts`, `?thoughts=off`; on by default while the brain is tested; live).
+  HOW FAR, AND HOW THEY ARE DRAWN (v0.2.145; Joshua, 2026-11-22: "distance to other character so I can get where I
+  want the better quality to be so I can test pregnant and not"): two more lines, `📏 8.4 m to John · 📷 9.1 m` (from
+  the one played, and from the camera to their middle, worked out in main.ts every frame) and `🔍 30% · sharp · live ✓`
+  (their detail now; their sharp set, face/bust/belly/hands at 100 % within SHARP_WITHIN 12 m of the camera, or plain;
+  Blaze's live body awake within LIVE_NEAR 12 m of the one played, or 💤). The distances he tunes from it: OtherDetail
+  20 m on a phone (the one standing by at the player's level, then down to 1 % over 10 m), SHARP_WITHIN 12, LIVE_NEAR 12.
+  John's detail is fixed (1 %), so his line shows no sharp or plain.
   HIS HEAD AND HAIR (v0.2.141; Joshua, 2026-11-21: "Here is the updated look for John with hair and face details now",
   "Look at head details only, not clothing"; his export `docs/reference/characters/character-john-2026-11-22.json`):
   `looks/john.ts` `body.head` is that export's head (a CREW cut, length 0, #1c1b1d; green eyes #4c7a46; his face

@@ -262,6 +262,13 @@ export interface FastHeroineStats {
    * 'ETC2', 'RGBA' (packed files, unpacked where the chip reads no packed form), or 'WebP' (not packed).
    */
   readonly pictures: string;
+  /**
+   * HOW CLOSE THE CAMERA IS (Joshua, 2026-11-22: "distance to other character so I can get where I want the better quality
+   * to be"): metres from the camera to her middle, and whether she wears her SHARP set now (her face, bust, belly, hands
+   * and arms at 100 %: within SHARP_WITHIN, until past SHARP_LEAVE).
+   */
+  readonly cameraMetres: number;
+  readonly sharp: boolean;
 }
 
 export interface FastHeroine extends HeroineBody {
@@ -1981,6 +1988,7 @@ if (uHideHead > 0.5) {
         drawCalls: 1 + hairDrawn + pieces.meshes.length + 4, // her skin, her hair, her outfit's extra pieces, and two guns of two materials each
         updateMs, detail: drawnDetail, auto: choice === 'auto' || choice === 'autoLive', pixels: Math.round(pixels), fps: auto.rate, doing: auto.doing,
         pictures: pictureForm,
+        cameraMetres: cameraDistance, sharp: near,
       };
     },
 

@@ -26,10 +26,13 @@
 //                    arrived, as the whole is not known yet.
 //   the last start   if the phone CLOSED the game while it started last time,
 //                    where it had got to (core/startupLog.ts): a screenshot of
-//                    the splash then says where it stopped. With it, a button
-//                    to CLEAR THE SAVED FILES AND START FRESH (core/freshStart.ts;
-//                    Joshua, 2026-11-22), there when the game cannot get as far
-//                    as Settings.
+//                    the splash then says where it stopped. AND IT STARTS FRESH
+//                    BY ITSELF (Joshua, 2026-11-22: "if it crashes, the default
+//                    will be to redownload everything again and clear the
+//                    cache... and maybe a 5s cancel button if you want to skip
+//                    it"): a 5-second count, then the game's saved files are
+//                    cleared and everything downloaded again (core/freshStart.ts);
+//                    Cancel keeps them, Clear now does not wait.
 // ============================================================================
 import type { LoadMeter } from '../core/loadMeter';
 import { restartGame } from '../core/restart';
@@ -89,25 +92,50 @@ export function bytesText(bytes: number, expected: number | null, perSecond: num
   return `${megabytes(bytes)} / ${megabytes(whole)} MB · ${Math.floor((bytes / whole) * 100)}%${speed}`;
 }
 
+/** After a start the phone closed, how long the splash waits before clearing the saved files by itself, seconds. */
+export const FRESH_AFTER_CLOSE_S = 5;
+
 /**
- * Show where the LAST start stopped, if the phone closed it (core/startupLog.ts), on the splash and the cover, and with
- * it the button that clears the game's saved files and starts fresh (core/freshStart.ts).
+ * Show where the LAST start stopped, if the phone closed it (core/startupLog.ts), on the splash and the cover; and then
+ * START FRESH BY ITSELF after FRESH_AFTER_CLOSE_S seconds (the game's saved files cleared, everything downloaded
+ * again: core/freshStart.ts), with Cancel (keep them; the load goes on) and Clear now. The load goes on meanwhile.
  */
 export function showLastStart(text: string | null): void {
-  for (const id of ['splash-last', 'rotate-last']) {
-    const node = document.getElementById(id);
-    if (node) node.textContent = text ?? '';
-  }
-  for (const id of ['splash-fresh', 'rotate-fresh']) {
-    const button = document.getElementById(id) as HTMLButtonElement | null;
-    if (!button) continue;
-    button.hidden = !text;
-    button.onclick = (event) => {
+  const byId = (id: string): HTMLElement | null => document.getElementById(id);
+  for (const id of ['splash-last', 'rotate-last']) { const node = byId(id); if (node) node.textContent = text ?? ''; }
+  if (!text) return;
+  const notes = ['splash-auto', 'rotate-auto'].map(byId).filter((n): n is HTMLElement => !!n);
+  const cancels = ['splash-cancel', 'rotate-cancel'].map(byId).filter((n): n is HTMLButtonElement => n instanceof HTMLButtonElement);
+  const clears = ['splash-fresh', 'rotate-fresh'].map(byId).filter((n): n is HTMLButtonElement => n instanceof HTMLButtonElement);
+  const say = (words: string): void => { for (const n of notes) n.textContent = words; };
+  let left = FRESH_AFTER_CLOSE_S, timer = 0, going = false;
+  const clearNow = (): void => {
+    if (going) return;
+    going = true;
+    window.clearInterval(timer);
+    say('Clearing saved files…');
+    for (const b of [...cancels, ...clears]) b.hidden = true;
+    void clearAndStartFresh();
+  };
+  const count = (): void => {
+    say(`The phone closed the game last time, so its saved files will be cleared and the whole game downloaded again in ${left} s.`);
+  };
+  count();
+  timer = window.setInterval(() => { left -= 1; if (left <= 0) clearNow(); else count(); }, 1000);
+  for (const b of cancels) {
+    b.hidden = false;
+    b.onclick = (event) => {
       event.stopPropagation();
-      button.disabled = true;
-      button.textContent = 'Clearing saved files…';
-      void clearAndStartFresh();
+      window.clearInterval(timer);
+      say('Saved files kept.');
+      for (const c of cancels) c.hidden = true;
+      for (const c of clears) c.textContent = 'Clear saved files and start fresh';
     };
+  }
+  for (const b of clears) {
+    b.hidden = false;
+    b.textContent = 'Clear now';
+    b.onclick = (event) => { event.stopPropagation(); clearNow(); };
   }
 }
 

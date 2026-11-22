@@ -48,7 +48,7 @@
       "sneakerR-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
       "sneakerR-plain: 4090 points, 7280 triangles"
     ],
-    "lowestPointOverTheFloorMetres": -0.00005970725671000876,
+    "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
     "crownOverTheFloorMetres": 1.7163248551592702,
     "pointsTheBuilderMoved": 44184,
@@ -62,5 +62,13 @@
     "albedoCoveredTexels": 7537039,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
+  },
+  "packed": {
+    "albedo": "albedo.ktx2",
+    "skinHeight": "skinHeight.ktx2",
+    "normal": "normal.ktx2",
+    "surface": "surface.ktx2",
+    "albedoSmall": "albedo-small.webp",
+    "packedAt": "2026-11-22T00:58:57+00:00"
   }
 }

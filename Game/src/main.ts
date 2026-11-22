@@ -75,7 +75,7 @@ const SIDE_EFFORT = 1.25;
 import { CAMERA_STYLES, CAMERA_STYLE_NAMES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
-interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number }
+interface HeroineCost { triangles: number; drawCalls: number; updateMs: number; detail?: number; auto?: boolean; pixels?: number; pictures?: string }
 type GameHeroine = HeroineBody & {
   stats?: () => HeroineCost;
   /** The fast heroine only: change her detail and the frame rate Auto holds, while the game runs. */
@@ -2228,7 +2228,8 @@ async function start(): Promise<void> {
         // the heroine's own share: her triangles as drawn, her detail level, her CPU time a frame
         const her = heroine.stats?.();
         if (her) {
-          lines.push(`her ${her.triangles.toLocaleString()} tris · ${her.drawCalls} draws`);
+          // (and how her big pictures are kept on the graphics chip: ASTC on an iPhone when packed, WebP when not)
+          lines.push(`her ${her.triangles.toLocaleString()} tris · ${her.drawCalls} draws · ${her.pictures ?? ''}`);
           lines.push((her.detail !== undefined ? `detail ${her.detail}%${her.auto ? ' auto' : ''} · ` : '') + `${her.updateMs.toFixed(2)} ms CPU`);
         }
         // (the hidden live body: what its step costs each frame, and whether her baby is kicking)

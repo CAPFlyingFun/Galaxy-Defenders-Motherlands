@@ -150,24 +150,31 @@ function charb(): Plugin {
 // After the build, this writes dist/sw.js: a small "service worker", a script the browser keeps running beside the
 // page, which answers the page's requests for files from a store ON THE DEVICE instead of the network.
 //
-// Two stores, each named after a fingerprint of what it holds, so a store is replaced only when its files change:
-//   gdm-app-<fingerprint>    the game's own pages, code and small files. Fetched and kept as the app installs.
-//   gdm-charb-<fingerprint>  the Character Builder's files (her body, skin, hair: about 34 MB). Kept the first time
-//                            each is asked for. A push that only changes game code leaves this store alone, so her
-//                            big files are NOT downloaded again.
-// The page itself (index.html) is asked from the network first, so a new version shows the next time the app is
-// opened online; with no signal the stored page is used and the game still starts.
+// Two stores:
+//   gdm-app-<fingerprint>   the game's own pages, code and small files (about 4.4 MB). Fetched and kept as a new
+//                           version installs. The page itself (index.html) is asked from the network first, so a new
+//                           version shows the next time the app is opened online; with no signal the stored page is
+//                           used and the game still starts.
+//   gdm-files               the BIG files: her outfits (heroines/, fabrics/, thumbs/), the Character Builder's files
+//                           (charb/: her body, skin, hair) and the island (island/). Kept the first time each is asked
+//                           for, ONE ENTRY PER FILE AND ITS CONTENTS: the build writes a fingerprint of every one of
+//                           them into sw.js (`HASHES`), and a stored copy is used only while its fingerprint is the
+//                           current one. So a push that changes one outfit's pictures re-downloads only those pictures;
+//                           every other file on the phone stays (Joshua, 2026-11-21: "when a new push goes out, I think
+//                           it should probably only update the files that changed"). Before, the whole outfit store
+//                           (or builder, or island store) was thrown away whenever any one of its files changed.
 //
-// A NEW VERSION'S INSTALL WAITS FOR THE GAME, AND KEEPS WHAT DID NOT CHANGE (Joshua, 2026-11-21: after v0.2.137 it
-// crashed three times in a row near the end of loading, then ran; "when a new push goes out, I think it should
-// probably only update the files that changed"). Once the app is installed, Safari itself checks for a new sw.js every
-// time the app is opened, so a new version's install ALWAYS started while the game was loading, and it fetched all
-// 4.4 MB of the game's own files again, the unchanged ones too. Now:
-//   - the install WAITS until the page says the game is up ('gdm-up', main.ts), or 90 s at most, before it does
-//     anything, so it never competes with the loading;
-//   - a file under assets/ whose name has not changed IS the same file (the build puts a fingerprint of its contents
-//     in its name), so it is copied from the old store, not downloaded; only new names, and the few files that keep
-//     their names (the page, the icons, the dome model), are fetched, past the browser's own cache.
+// A NEW VERSION'S INSTALL WAITS FOR THE GAME (Joshua, 2026-11-21: after v0.2.137 it crashed three times in a row near
+// the end of loading, then ran). Safari itself checks for a new sw.js every time the app is opened, so a new version's
+// install ALWAYS started while the game was loading. Now it WAITS until the page says the game is up ('gdm-up',
+// main.ts; or 90 s at most), then, one file at a time:
+//   - the game's own files: a file under assets/ whose name has not changed IS the same file (its name carries a
+//     fingerprint of its contents): copied from the old store; only new names and the few files that keep their names
+//     (the page, the icons, the dome model) are fetched, past the browser's own cache;
+//   - the big files kept by an older version (the old gdm-looks-/gdm-charb-/gdm-island- stores, before v0.2.139): each
+//     is checked against its fingerprint ONCE (SHA-256, in the worker) and kept in gdm-files if it is the same, so
+//     nothing that did not change is downloaded again.
+// Taking over, it deletes the old stores and any gdm-files entry whose contents are no longer the current ones.
 // (The stores are on the phone's storage, not in its memory: an old and a new copy never add up in the game's memory.)
 // ---------------------------------------------------------------------------------------------------------------------
 function pwa(): Plugin {
@@ -183,28 +190,35 @@ function pwa(): Plugin {
       const dist = here('./dist');
       if (!existsSync(dist)) return;
       const files = walk(dist).filter((f) => f !== 'sw.js');
+      /** A fingerprint of one file's contents (the first 16 hex digits of its SHA-256: the worker works out the same). */
+      const hashOf = (f: string) => createHash('sha256').update(readFileSync(join(dist, f))).digest('hex').slice(0, 16);
       const fingerprint = (list: string[]) => {
         const hash = createHash('sha256');
         for (const f of [...list].sort()) hash.update(f).update(readFileSync(join(dist, f)));
         return hash.digest('hex').slice(0, 12);
       };
-      // (the island's 30 MB of ground tiles are kept as they are first used, like her big files: its own store)
-      // HER OUTFITS AND FABRICS are kept as they are first used too, in their own store (the iPhone audit, 2026-11-20):
-      // all of them were fetched at install, about 36 MB of outfits she was not wearing, competing with the game's own
-      // loading; and a push that changed only code fetched them all again. The test and bake pages are not kept at all.
+      // (the test and bake pages are not kept at all)
       const LAB_PAGES = ['armor-lab.html', 'bake.html', 'heroine-lab.html', 'vitals-lab.html'];
-      // (the outfit pictures in Settings too: about 135 small ones, fetched as Settings shows them)
-      const isLook = (f: string) => f.startsWith('heroines/') || f.startsWith('fabrics/') || f.startsWith('thumbs/');
-      const app = files.filter((f) => !f.startsWith('charb/') && !f.startsWith('island/') && !isLook(f) && !LAB_PAGES.includes(f));
-      const charbFiles = files.filter((f) => f.startsWith('charb/'));
-      const islandFiles = files.filter((f) => f.startsWith('island/'));
-      const lookFiles = files.filter(isLook);
+      // THE BIG FILES, kept as they are first used, each by its own fingerprint: her outfits, fabrics and their pictures
+      // in Settings (about 135 small ones), the builder's files, the island's tiles
+      const isBig = (f: string) => /^(heroines|fabrics|thumbs|charb|island)\//.test(f);
+      const app = files.filter((f) => !isBig(f) && !LAB_PAGES.includes(f));
+      const big = files.filter(isBig);
+      const hashes: Record<string, string> = {};
+      for (const f of big) hashes[f] = hashOf(f);
       const sw = `// Written by the build (vite.config.ts, pwa()). Do not edit: it is replaced on every build.
 const APP = 'gdm-app-${fingerprint(app)}';
-const CHARB = 'gdm-charb-${fingerprint(charbFiles)}';
-const ISLAND = 'gdm-island-${fingerprint(islandFiles)}';
-const LOOKS = 'gdm-looks-${fingerprint(lookFiles)}';
+const FILES = 'gdm-files';
 const APP_FILES = ${JSON.stringify(['./', ...app.filter((f) => f !== 'index.html')])};
+// Every big file and the fingerprint of its contents (the first 16 hex digits of its SHA-256)
+const HASHES = ${JSON.stringify(hashes)};
+// (where this game lives: the worker's own folder)
+const SCOPE = new URL('./', self.location).pathname;
+/** A big file's key in gdm-files: its path and the fingerprint of its contents. */
+const keyOf = (path, hash) => SCOPE + path + '?h=' + hash;
+/** A file's path in the game (from a full address): 'heroines/blaze/albedo.ktx2', or null if it is not the game's. */
+const pathOf = (url) => (url.origin === self.location.origin && url.pathname.startsWith(SCOPE) ? decodeURIComponent(url.pathname.slice(SCOPE.length)) : null);
+const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 // THE GAME IS UP: the page says so once it is playing (main.ts, 'gdm-up'); an install waits for it (or 90 s at most)
 let gameIsUp;
@@ -212,19 +226,20 @@ const gameUp = new Promise((up) => { gameIsUp = up; });
 self.addEventListener('message', (event) => { if (event.data === 'gdm-up') gameIsUp(); });
 const UP_WAIT_MS = 90000;
 
-// Installing: once the game is up, keep the game's own files. A file under assets/ with the same name as before is the
-// same file (its name carries a fingerprint of its contents): copied from the old store. Anything else is fetched past
-// the browser's own cache. One at a time, gently. (Her big files are kept later, as they are first used.)
+// Installing, once the game is up (one file at a time, gently):
 self.addEventListener('install', (event) => {
   event.waitUntil(Promise.race([gameUp, new Promise((later) => setTimeout(later, UP_WAIT_MS))]).then(async () => {
+    // 1. THE GAME'S OWN FILES: a file under assets/ with the same name as before is the same file: copied from the old
+    //    store. Anything else is fetched past the browser's own cache.
     const cache = await caches.open(APP);
-    const older = (await caches.keys()).filter((name) => name.startsWith('gdm-app-') && name !== APP);
+    const names = await caches.keys();
+    const olderApp = names.filter((name) => name.startsWith('gdm-app-') && name !== APP);
     let copied = 0, fetched = 0;
     for (const file of APP_FILES) {
       if (await cache.match(file)) continue;   // (kept already: an install that was stopped and started again)
       let kept = null;
       if (file.startsWith('assets/')) {
-        for (const name of older) { kept = await (await caches.open(name)).match(file); if (kept) break; }
+        for (const name of olderApp) { kept = await (await caches.open(name)).match(file); if (kept) break; }
       }
       if (kept) { await cache.put(file, kept); copied++; continue; }
       const response = await fetch(file, { cache: 'no-cache' });
@@ -232,23 +247,51 @@ self.addEventListener('install', (event) => {
       await cache.put(file, response);
       fetched++;
     }
-    console.log('[sw] new version kept: ' + fetched + ' files fetched, ' + copied + ' unchanged files copied');
+    // 2. THE BIG FILES AN OLDER VERSION KEPT (its gdm-looks-, gdm-charb-, gdm-island- stores): each checked against its
+    //    fingerprint once, and kept if it is the same
+    const files = await caches.open(FILES);
+    let kept = 0;
+    for (const name of names.filter((n) => /^gdm-(looks|charb|island)-/.test(n))) {
+      const old = await caches.open(name);
+      for (const request of await old.keys()) {
+        const path = pathOf(new URL(request.url));
+        const hash = path && HASHES[path];
+        if (!hash || await files.match(keyOf(path, hash))) continue;
+        const response = await old.match(request);
+        if (!response || !response.ok) continue;
+        const body = await response.arrayBuffer();
+        if (hex(await crypto.subtle.digest('SHA-256', body)).slice(0, 16) !== hash) continue;   // (changed: fetched when asked)
+        await files.put(keyOf(path, hash), new Response(body, { headers: response.headers }));
+        kept++;
+      }
+    }
+    console.log('[sw] new version kept: ' + fetched + ' files fetched, ' + copied + ' unchanged files copied, ' + kept + ' big files kept');
     await self.skipWaiting();
   }));
 });
 
-// Taking over: throw away the stores of older versions of THIS game (other sites' stores are left alone).
+// Taking over: throw away older stores of THIS game (other sites' stores are left alone) and every big file whose
+// contents are no longer the current ones.
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((names) => Promise.all(
-    names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || (n.startsWith('gdm-charb-') && n !== CHARB) || (n.startsWith('gdm-island-') && n !== ISLAND) || (n.startsWith('gdm-looks-') && n !== LOOKS)).map((n) => caches.delete(n)),
-  )).then(() => self.clients.claim()));
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter((n) => (n.startsWith('gdm-app-') && n !== APP) || /^gdm-(looks|charb|island)-/.test(n)).map((n) => caches.delete(n)));
+    const files = await caches.open(FILES);
+    for (const request of await files.keys()) {
+      const url = new URL(request.url);
+      // (kept only while its fingerprint is the current one for its path)
+      if (HASHES[pathOf(url)] !== url.searchParams.get('h')) await files.delete(request);
+    }
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL('./', self.location).pathname)) return;
+  const path = pathOf(url);
+  if (path === null) return;
 
   // A page: the network first (so a new version arrives), the stored page when there is no signal.
   // (ASKED PAST THE BROWSER'S OWN CACHE, 'no-store': GitHub Pages lets a browser keep a page 10 minutes, and Joshua's
@@ -264,18 +307,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else: the stored copy if there is one; otherwise the network, and keep what comes back.
-  const store = url.pathname.includes('/charb/') ? CHARB : url.pathname.includes('/island/') ? ISLAND
-    : url.pathname.includes('/heroines/') || url.pathname.includes('/fabrics/') || url.pathname.includes('/thumbs/') ? LOOKS : APP;
-  event.respondWith(caches.open(store).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
-    // (kept while the worker waits for it; a full store only means it is fetched again next time)
+  // A BIG FILE: the stored copy of THESE contents if there is one; otherwise the network, kept under its fingerprint.
+  const hash = HASHES[path];
+  if (hash) {
+    const key = keyOf(path, hash);
+    event.respondWith(caches.open(FILES).then((files) => files.match(key).then((hit) => hit || fetch(request).then((response) => {
+      // (kept while the worker waits for it; a full store only means it is fetched again next time)
+      if (response.ok && response.status === 200) event.waitUntil(files.put(key, response.clone()).catch(() => {}));
+      return response;
+    }))));
+    return;
+  }
+
+  // Anything else of the game's: the stored copy if there is one; otherwise the network, and keep what comes back.
+  event.respondWith(caches.open(APP).then((cache) => cache.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((response) => {
     if (response.ok && response.status === 200) event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
     return response;
   }))));
 });
 `;
       writeFileSync(join(dist, 'sw.js'), sw);
-      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install; ${lookFiles.length} outfit files, ${charbFiles.length} builder files and ${islandFiles.length} island files kept on first use`);
+      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install; ${big.length} big files (outfits, builder, island) kept on first use, each by its own fingerprint`);
     },
   };
 }

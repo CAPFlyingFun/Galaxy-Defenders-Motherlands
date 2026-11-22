@@ -66,7 +66,7 @@ import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
 import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine, type SkinMaterials } from './outfitMaterial';
-import { addSkinTexture, loadSkinPictures } from './skinTexture';
+import { addSkinTexture, loadSkinPictures, type SkinPictures } from './skinTexture';
 import { addSkinShine, shineUniforms, SkinWetness } from './skinShine';
 import { shapeWeightsAt } from './shapedBody';
 import { SkinBreath } from './skinBreath';
@@ -255,6 +255,11 @@ export interface FastHeroineStats {
   /** The frame rate AUTO measured, and what it last did. */
   readonly fps: number;
   readonly doing: string;
+  /**
+   * HOW HER BIG PICTURES ARE KEPT on the graphics chip (packedPictures.ts): 'ASTC' (an iPhone), 'BC7' (most computers),
+   * 'ETC2', 'RGBA' (packed files, unpacked where the chip reads no packed form), or 'WebP' (not packed).
+   */
+  readonly pictures: string;
 }
 
 export interface FastHeroine extends HeroineBody {
@@ -350,7 +355,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const painted = options.painted ?? null;
   // (whose body: hers, or his for a look on the builder's male body -- John, 2026-11-21)
   const male = LOOKS[options.look]?.body.model === 'male-base';
-  const [file, baked] = await Promise.all([loadBodyFile(say, bodyFileFor(male ? 'male-base' : 'v2-body')), painted ? Promise.resolve(null) : loadBakedLook(options.look)]);
+  const [file, baked] = await Promise.all([loadBodyFile(say, bodyFileFor(male ? 'male-base' : 'v2-body')), painted ? Promise.resolve(null) : loadBakedLook(options.look, options.renderer)]);
   const skin = file.skin;
   const fileGeometry = skin.geometry;
   const count = fileGeometry.getAttribute('position').count;
@@ -373,9 +378,15 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
         files: { albedo: '', normal: '', surface: '', shape: '', pieces: null },
       },
       albedo: none, normal: none, surface: none, shape, pieces: [], piecePictures: new Map(), megabytes: 0,
+      cpuPicture: null, isPacked: false,   // (no picture of her to read: the belt goes round her middle by shape alone)
       dispose(): void { none.dispose(); },
     };
   })();
+  // (how her big pictures are kept on the graphics chip, for the readout: packedPictures.ts)
+  const PACKED_FORMS: Record<number, string> = {
+    [THREE.RGBA_ASTC_4x4_Format]: 'ASTC', [THREE.RGBA_BPTC_Format]: 'BC7', [THREE.RGBA_ETC2_EAC_Format]: 'ETC2', [THREE.RGB_ETC2_Format]: 'ETC2', [THREE.RGBAFormat]: 'RGBA',
+  };
+  const pictureForm = look.isPacked ? (PACKED_FORMS[look.albedo.format] ?? 'packed') : 'WebP';
   if (look.shape.count !== count || look.manifest.vertexCount !== count) {
     look.dispose();
     throw new Error(`[heroine] the baked look "${options.look}" was made for a body of ${look.shape.count} points; the body file has ${count}. Bake the look again (src/bake/bakeLook.ts).`);
@@ -473,9 +484,11 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // HER SKIN'S DEPTH (Joshua, 2026-11-19; skinTexture.ts): the builder's hybrid, her own skin picture's depth and its pore
   // and crease tile, on her bare skin
   /** Her skin-depth pictures (kept here so `dispose` lets them go: they live only in her shader's uniforms). */
-  let skinPictures: ReturnType<typeof loadSkinPictures> | null = null;
+  let skinPictures: SkinPictures | null = null;
   if (options.skinTexture !== false && !painted) {
-    skinPictures = loadSkinPictures(options.look, options.renderer);
+    // (packed for the graphics chip when the look's pictures are: packedPictures.ts)
+    const packed = baked?.manifest.packed;
+    skinPictures = await loadSkinPictures(options.look, options.renderer, packed?.skinHeight ? { file: packed.skinHeight, at: packed.packedAt } : null);
     for (const m of [materials.fine, materials.plain]) addSkinTexture(m as THREE.MeshStandardMaterial, skinPictures, unitsPerMetre);
   }
   // HER SKIN'S SHINE (Joshua, 2026-11-19; skinShine.ts): dry to oily (a setting), and wet from the water
@@ -916,7 +929,7 @@ if (uHideHead > 0.5) {
   const gear: BeltGear = buildBeltGear({
     root, skin, belly: body.belly, points: body.points, meshToRest, skinIndex: holdIndex, skinWeight: holdWeight,
     motionMoves: MOTION_SHAPES.map((_, k) => body.motionMoves(k)), influences,
-    uv: layout, picture: (look.albedo.image as CanvasImageSource | undefined) ?? null, pictureFlipY: look.albedo.flipY,
+    uv: layout, picture: look.cpuPicture, pictureFlipY: false,   // (her colour as pixels: the small copy when her pictures are packed, bakedLook.ts)
     trunkBones: [hipsBone, pelvisBone, ...backBones],
     thighBone: { left: bones[joints.hipL], right: bones[joints.hipR] },
     leftSign,
@@ -1951,6 +1964,7 @@ if (uHideHead > 0.5) {
         triangles: Math.round(skinTriangles + (hair?.triangles() ?? 0) + pieces.triangles() + gunTriangles),
         drawCalls: 1 + hairDrawn + pieces.meshes.length + 4, // her skin, her hair, her outfit's extra pieces, and two guns of two materials each
         updateMs, detail: drawnDetail, auto: choice === 'auto' || choice === 'autoLive', pixels: Math.round(pixels), fps: auto.rate, doing: auto.doing,
+        pictures: pictureForm,
       };
     },
 

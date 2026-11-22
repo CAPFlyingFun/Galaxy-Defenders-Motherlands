@@ -25,6 +25,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { bakedLookFolder } from './bakedLook';
+import { packedPicturesOn, packedTexture } from './packedPictures';
 
 /** The builder's numbers (Char_B skinDetail.ts SKIN_DETAIL): kept as they are unless Joshua changes them. */
 export const SKIN_TEXTURE = Object.freeze({
@@ -75,14 +76,24 @@ function giveBackPoreTile(): void {
   if (poreTileUsers === 0 && poreTile) { poreTile.dispose(); poreTile = null; }
 }
 
-/** Load a look's skin height map and take the shared pore tile (both read as plain numbers, not colours). */
-export function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer): SkinPictures {
-  const loader = new THREE.TextureLoader();
+/**
+ * Load a look's skin height map and take the shared pore tile (both read as plain numbers, not colours).
+ * `packed`: the look's packed skin height (look.json `packed.skinHeight` and `packedAt`, scripts/make_ktx2.py): loaded
+ * PACKED for the graphics chip (packedPictures.ts; 22 MB there instead of 89), unless the page has `?packed=off`.
+ */
+export async function loadSkinPictures(look: string, renderer: THREE.WebGLRenderer, packed?: { file: string; at: string } | null): Promise<SkinPictures> {
   const sharp = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  const own = loader.load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
-    (t) => { t.needsUpdate = true; });
-  own.colorSpace = THREE.NoColorSpace;
-  own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
+  let own: THREE.Texture;
+  if (packed && packedPicturesOn()) {
+    const response = await fetch(bakedLookFolder(look) + `${packed.file}?bake=${encodeURIComponent(packed.at)}`);
+    if (!response.ok) throw new Error(`${look}'s packed skin height did not load (${response.status})`);
+    own = await packedTexture(await response.arrayBuffer(), false, renderer);
+  } else {
+    own = new THREE.TextureLoader().load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
+      (t) => { t.needsUpdate = true; });
+    own.colorSpace = THREE.NoColorSpace;
+    own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
+  }
   own.anisotropy = sharp;
   const tile = takePoreTile(sharp);
   let released = false;

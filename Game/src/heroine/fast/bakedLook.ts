@@ -24,6 +24,7 @@ import { BAKED_AS } from '../looks/bakedAs';
 import * as THREE from 'three';
 import { unpackShape, type BakedShape } from './shapeFile';
 import { unpackPieces, type BakedPiece } from './piecesFile';
+import { packedPicturesOn, packedTexture } from './packedPictures';
 
 export interface BakedLookManifest {
   readonly version: 1;
@@ -58,6 +59,15 @@ export interface BakedLookManifest {
   readonly body?: 'v2-body' | 'male-base';
   /** File names, beside look.json. */
   readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null };
+  /**
+   * HER BIG PICTURES PACKED for the graphics chip (scripts/make_ktx2.py; packedPictures.ts), when the look has them:
+   * the .ktx2 files, her colour at 1024 for the CPU (the belt's waistband), and when they were made (a mark on their
+   * addresses, as `bakedAt` is on the others).
+   */
+  readonly packed?: {
+    readonly albedo: string; readonly normal: string; readonly surface: string; readonly skinHeight?: string;
+    readonly albedoSmall: string; readonly packedAt: string;
+  };
   /** Anything the bake measured that a person may want to read later (never used by the game). */
   readonly facts?: Readonly<Record<string, unknown>>;
 }
@@ -72,6 +82,13 @@ export interface BakedLook {
   /** The outfit's extra pieces (empty when it has none), and their pictures by file name. */
   readonly pieces: readonly BakedPiece[];
   readonly piecePictures: ReadonlyMap<string, THREE.Texture>;
+  /**
+   * HER COLOUR AS PIXELS THE PAGE CAN READ (the belt finds her waistband's trim in it: beltGear.ts). With packed
+   * pictures, her colour at 1024 (a packed picture cannot be read back); otherwise her colour picture itself.
+   */
+  readonly cpuPicture: CanvasImageSource | null;
+  /** Whether her big pictures came packed (for the readout and the skin height: skinTexture.ts). */
+  readonly isPacked: boolean;
   /** How many megabytes were downloaded for the look. */
   readonly megabytes: number;
   dispose(): void;
@@ -109,25 +126,49 @@ async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture>
   return texture;
 }
 
-/** Fetch a baked look's files (all at once) and unpack them. */
-export async function loadBakedLook(look: string): Promise<BakedLook> {
+/** Load one PACKED picture (a .ktx2 file) as a texture the graphics chip keeps packed (packedPictures.ts). */
+async function loadPackedPicture(url: string, colour: boolean, renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
+  const bytes = await (await fetchOk(url)).arrayBuffer();
+  fetchedBytes += bytes.byteLength;
+  return packedTexture(bytes, colour, renderer);
+}
+
+/** A small picture decoded for the page to read (not a texture). */
+async function loadBitmap(url: string): Promise<ImageBitmap> {
+  const blob = await (await fetchOk(url)).blob();
+  fetchedBytes += blob.size;
+  return createImageBitmap(blob, { imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+}
+
+/**
+ * Fetch a baked look's files (all at once) and unpack them. With a `renderer`, a look whose big pictures are packed
+ * (look.json `packed`) has them loaded packed (packedPictures.ts; `?packed=off` loads the WebP pictures instead).
+ */
+export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer): Promise<BakedLook> {
   const folder = bakedLookFolder(look);
   fetchedBytes = 0;
   // NEVER AN OLD COPY (Joshua, 2026-11-21: the Shadow Operative suit, re-baked in v0.2.123, still showed its old specks on
   // his iPhone in v0.2.124). Every file is asked for with a mark of WHICH bake it is: look.json with the game's version,
   // the rest with the bake's own time. A re-baked look's files then have new addresses, so neither Safari's own cache
-  // nor any other copy on the way can hand back the old picture. (The game's offline store ignores the mark: it is
-  // emptied anyway whenever any outfit file changes, vite.config.ts `pwa`.)
+  // nor any other copy on the way can hand back the old picture. (The game's offline store ignores the mark: it keeps
+  // each file by a fingerprint of its contents, so a re-baked file is a different entry: vite.config.ts `pwa`.)
   const manifest = (await (await fetchOk(`${folder}look.json?v=${encodeURIComponent(__APP_VERSION__)}`)).json()) as BakedLookManifest;
   const bake = `?bake=${encodeURIComponent(manifest.bakedAt)}`;
   if (manifest.version !== 1) throw new Error(`baked look "${look}" is version ${String(manifest.version)}, which this game does not read`);
   const bytesOf = (name: string): Promise<ArrayBuffer> => fetchOk(folder + name + bake).then((r) => r.arrayBuffer()).then((b) => { fetchedBytes += b.byteLength; return b; });
-  const [albedo, normal, surface, shapeBytes, pieceBytes] = await Promise.all([
-    loadPicture(folder + manifest.files.albedo + bake, true),
-    loadPicture(folder + manifest.files.normal + bake, false),
-    loadPicture(folder + manifest.files.surface + bake, false),
+  // HER BIG PICTURES: packed when the look has them (a quarter of the graphics memory), else the WebP pictures
+  const packed = renderer && manifest.packed && packedPicturesOn() ? manifest.packed : null;
+  const packedMark = packed ? `?bake=${encodeURIComponent(packed.packedAt)}` : '';
+  const picture = (webp: string, ktx2: string | undefined, colour: boolean): Promise<THREE.Texture> =>
+    packed && ktx2 && renderer ? loadPackedPicture(folder + ktx2 + packedMark, colour, renderer) : loadPicture(folder + webp + bake, colour);
+  const [albedo, normal, surface, shapeBytes, pieceBytes, small] = await Promise.all([
+    picture(manifest.files.albedo, packed?.albedo, true),
+    picture(manifest.files.normal, packed?.normal, false),
+    picture(manifest.files.surface, packed?.surface, false),
     bytesOf(manifest.files.shape),
     manifest.files.pieces ? bytesOf(manifest.files.pieces) : Promise.resolve(null),
+    // (her colour for the page to read: the small copy when the big one is packed)
+    packed ? loadBitmap(folder + packed.albedoSmall + packedMark) : Promise.resolve(null),
   ]);
   const shape = unpackShape(shapeBytes);
   const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
@@ -136,9 +177,13 @@ export async function loadBakedLook(look: string): Promise<BakedLook> {
   await Promise.all([...new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))].map(async (name) => { piecePictures.set(name, await loadPicture(folder + name + bake, true)); }));
   return {
     manifest, albedo, normal, surface, shape, pieces, piecePictures,
+    cpuPicture: small ?? ((albedo.image as CanvasImageSource | undefined) ?? null),
+    isPacked: !!packed,
     megabytes: fetchedBytes / 1048576,
     dispose(): void {
+      // (a packed texture's `image` is only its size: nothing to close)
       for (const t of [albedo, normal, surface, ...piecePictures.values()]) { (t.image as ImageBitmap | undefined)?.close?.(); t.dispose(); }
+      small?.close();
     },
   };
 }

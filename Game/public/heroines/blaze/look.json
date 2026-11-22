@@ -61,5 +61,13 @@
     "albedoCoveredTexels": 7537039,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
+  },
+  "packed": {
+    "albedo": "albedo.ktx2",
+    "skinHeight": "skinHeight.ktx2",
+    "normal": "normal.ktx2",
+    "surface": "surface.ktx2",
+    "albedoSmall": "albedo-small.webp",
+    "packedAt": "2026-11-22T00:40:47+00:00"
   }
 }

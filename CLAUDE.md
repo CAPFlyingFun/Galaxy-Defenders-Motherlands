@@ -730,6 +730,30 @@ use the game's single copy of three.js.
   on. (4) ONE PORE TILE FOR BOTH (skinTexture.ts `takePoreTile`, `SkinPictures.release`): counted, let go when the
   last body gives it back. Not done (his call): texture compression (KTX2), the big memory saver (about 480 MB est. on
   the graphics chip with Blaze, 770 with John, mostly the 4096 pictures), as he asked to keep the textures for now.
+- HER PICTURES PACKED FOR THE GRAPHICS CHIP (v0.2.139; Joshua, 2026-11-21: "Do the compression of the textures first, as
+  long as it looks the same"): each look's four big pictures (albedo 4096, skinHeight 4096, normal 2048, surface 1024:
+  about 206 MB a character on the chip as unpacked RGBA, plus about 150 MB of decoded copies the page kept) are ALSO
+  kept as KTX2, Basis UASTC with their mipmaps and Zstandard (`scripts/make_ktx2.py`, which calls
+  `scripts/ktx2_encode.mjs`, ktx2-encoder PINNED at 0.5.4: 0.6's encoder refuses over 12 megapixels). The game turns
+  them, in one short-lived worker, into the chip's own packed form (`heroine/fast/packedPictures.ts`; three's
+  KTX2Loader, its transcoder in assets/): ASTC 4x4 on an iPhone, BC7 on most computers. About 51 MB a character on the
+  chip, a quarter. CHECKED: make_ktx2.py decodes every packed picture back with the game's own transcoder
+  (`scripts/ktx2_decode.cjs`) and compares it with the original; a look under 45 dB PSNR is not marked packed. Blaze:
+  albedo 53.7, skin height 62.1, normal 66.0, surface 48.9 dB (about 40 is where a difference starts to be seen);
+  rendered in the lab the two are the same pixel for pixel but for edge shimmer from her breathing. No RDO (9% smaller
+  files, 3x the time, less quality). look.json `packed` names the files (+ `albedoSmall`, `packedAt`); bakedLook.ts
+  loads them when it is there (`loadBakedLook(look, renderer)`), skinTexture.ts the skin height (`loadSkinPictures`,
+  now async). The ONE CPU read of her colour (beltGear.ts, her waistband trim) uses `albedo-small.webp` (1024;
+  `BakedLook.cpuPicture`). The full readout's `her` line ends with how her pictures are kept (ASTC, BC7, ETC2, RGBA,
+  or WebP). `?packed=off` loads the WebP pictures as before (to compare). RE-RUN `python3 scripts/make_ktx2.py <look>`
+  AFTER RE-BAKING A LOOK OR REMAKING ITS SKIN HEIGHT (a 4096 picture takes about a minute; two at a time). COST: bigger
+  downloads (Blaze 12.8 MB, John 12.4, Shadow Operative 24.5, against 1.5-4.5 MB of WebP), kept on the phone after.
+  THE OFFLINE COPY KEEPS EACH BIG FILE BY ITS OWN FINGERPRINT (vite.config.ts `pwa()`, same version): outfits, fabrics,
+  thumbs, the builder's files and the island are one store, `gdm-files`, an entry per file and its contents' SHA-256
+  (`HASHES` in sw.js); a push re-downloads only the files whose contents changed (before, any changed outfit file threw
+  away every outfit file). The first install of it checks the files older versions kept (their gdm-looks-/charb-/
+  island- stores) against their fingerprints once, after the game is up, and keeps the same ones. Tested on the built
+  game: a changed file is dropped and fetched, the rest kept.
 - Later: Duo mode, an idle/offline income mode, more dome themes.
 - Later (Joshua's idea, 2026-11-16): the domed town placed on the large island of Kawi (Beyond Extinction,
   TRADDOMIUM), each location its own section that loads separately, joined into one big map the way Call of

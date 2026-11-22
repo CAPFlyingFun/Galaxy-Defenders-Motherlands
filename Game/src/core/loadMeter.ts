@@ -78,6 +78,13 @@ export interface LoadMeter {
    * time; pass false for a load that did not go the usual way (her live body failed to open, say).
    */
   finish(remember?: boolean): void;
+  /**
+   * TIME THAT IS NOT LOADING (v0.2.148, turn first): while held, the meter's clock stands still, so a wait for the
+   * player to turn the phone is not counted as loading time (here, or in the time remembered for next time).
+   */
+  hold(): void;
+  /** The wait is over: the clock goes on from where it stood. */
+  release(): void;
   /** How far along the loading is, 0 to 1. It only ever rises, and is 1 only after finish(). */
   readonly fraction: number;
   /** The line to show under the bar: what is loading now. */
@@ -227,9 +234,10 @@ interface Note { at: number; position: number }
 
 /**
  * Start measuring. Call it before the game asks for its first file.
- * `kind` says which kind of load this is (loadKind, above).
+ * `kind` says which kind of load this is (loadKind, above). `heldSeconds`: time before the meter was made that was NOT
+ * loading (v0.2.148: a phone opened upright waits for the turn before anything loads), taken off every time.
  */
-export function startLoadMeter(kind: string): LoadMeter {
+export function startLoadMeter(kind: string, heldSeconds = 0): LoadMeter {
   // What this load is measured against: the last load of this kind on this device, or the first-time table.
   const kept = readRecord(kind);
   const remembered = kept !== null;
@@ -240,7 +248,12 @@ export function startLoadMeter(kind: string): LoadMeter {
   for (const mark of last.marks) if (!lastMarks.has(mark[0])) lastMarks.set(mark[0], mark);
 
   /** Seconds since the page was opened (the browser's own clock starts there). */
-  const now = (): number => performance.now() / 1000;
+  // (seconds of loading: since the page opened, less the time held before the meter was made and since: see `hold`)
+  let held = heldSeconds, heldFrom: number | null = null;
+  const now = (): number => {
+    const t = performance.now() / 1000;
+    return Math.max(0, t - held - (heldFrom === null ? 0 : t - heldFrom));
+  };
 
   // ---- This load, as it happens --------------------------------------------------------------------------------
   /** This load's own marks, in order. This is what gets remembered. Bytes are added to the newest as they arrive. */
@@ -386,6 +399,13 @@ export function startLoadMeter(kind: string): LoadMeter {
       if (finished) return;
       label = text;
       reach(once(`step ${key}`));
+    },
+
+    hold(): void { if (heldFrom === null) heldFrom = performance.now() / 1000; },
+    release(): void {
+      if (heldFrom === null) return;
+      held += performance.now() / 1000 - heldFrom;
+      heldFrom = null;
     },
 
     finish(remember = true): void {

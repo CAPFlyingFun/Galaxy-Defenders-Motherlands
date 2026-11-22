@@ -27,6 +27,7 @@
 // a bush is pushed through).
 // ============================================================================
 import * as THREE from 'three';
+import { sizedPicture } from '../../core/textureSizes';
 import { KINDS, TRUNK_SHARE, drawLeafPicture, drawPalmBark, makeKindModels, type Kind, type KindModels } from './treeModels';
 
 export type Landscaping = 'images' | 'hybrid' | 'objects' | 'off';
@@ -231,11 +232,10 @@ export class TreeObjects {
     // the pictures: one of leaves drawn in code, the palm's ringed bark drawn in code, and two of Thronemound's barks
     const leaf = drawLeafPicture();
     const palmBark = drawPalmBark();
-    const loader = new THREE.TextureLoader();
+    // (the bark photos are WORLD pictures by their size setting: core/textureSizes.ts, v0.2.148)
     const bark = (name: string): { map: THREE.Texture; normalMap: THREE.Texture } => {
-      const map = loader.load(`${base}bark/${name}.jpg`);
-      map.colorSpace = THREE.SRGBColorSpace;
-      const normalMap = loader.load(`${base}bark/${name}_normal.jpg`);
+      const map = sizedPicture(`${base}bark/${name}.jpg`, 'world', (t) => { t.colorSpace = THREE.SRGBColorSpace; });
+      const normalMap = sizedPicture(`${base}bark/${name}_normal.jpg`, 'world');
       for (const t of [map, normalMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; }
       this.pictures.push(map, normalMap);
       return { map, normalMap };

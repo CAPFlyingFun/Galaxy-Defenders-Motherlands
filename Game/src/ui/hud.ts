@@ -21,6 +21,7 @@
 // what the player is doing into the Controls object (input/controls.ts); the
 // game loop reads it from there, the same as it reads the keyboard.
 // ============================================================================
+import { textureSizesOffered } from '../core/textureSizes';
 import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
@@ -386,6 +387,10 @@ export class Hud {
     // (the map: Joshua, 2026-11-19, the real island for the main game, the town kept as a test map)
     element('h2', 'gd-settings-part', settings, 'WORLD');
     choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen. Changing it reloads the game.');
+    // TEXTURE SIZES (v0.2.148, core/textureSizes.ts): the largest side of a picture on the graphics chip; each step a
+    // quarter of the memory of the one above; 4096 only on a computer (a phone is never offered what would close it)
+    const sizeChoices = textureSizesOffered().map((s) => [String(s), s] as const);
+    choiceRow('World textures', 'worldTextures', sizeChoices, 'The largest the island\'s ground, river, tree and bark pictures, her suit\'s fabric and the skin\'s pores are drawn (pixels; each step down is a quarter of the memory). The sky and the coastline stay as they are; the shadows are 1024 at 512 and under, 2048 above. It changes while you play.');
     choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Changes at once.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');
     // HER OUTFIT, AS PICTURES (Joshua, 2026-11-20: "a little thumbnail of what they look like, like in CCBS... bake the
@@ -427,6 +432,7 @@ export class Hud {
     const detailRow = choiceRow('Detail', 'detail', [['Auto live', 'autoLive'], ['Auto', 'auto'], ...DETAILS.map((d) => [`${d}%`, d] as const)]);
     const targetRow = choiceRow('Target FPS', 'targetFps', TARGET_FPS.map((f) => [String(f), f] as const), 'Auto live: from 30% down to 1% by the frame rate (her face, bust, belly and hands kept sharp near the camera). Auto: up to 100%, lighter only if the frame rate needs it.');
     choiceRow('Sharpness', 'sharpness', [['2x', 2], ['1x', 1]]);
+    choiceRow('Character textures', 'characterTextures', textureSizesOffered().map((s) => [String(s), s] as const), 'The largest her (and John\'s) outfit, skin depth and hair pictures are drawn (pixels; each step down is a quarter of the memory). It changes while you play (a few seconds).');
     choiceRow('Skin depth', 'skinTexture', [['On', 'on'], ['Off', 'off']], 'Pores and fine creases on her bare skin, and her own skin picture\'s depth: the Character Builder\'s hybrid. It changes while you play (a few seconds).');
     choiceRow('Locks by her face', 'faceLocks', [['Eased off her cheeks', 'off'], ['As the builder has them', 'on']], 'The small loose locks of hair by her cheeks. It changes while you play (a few seconds).');
     choiceRow('Hair strands', 'hairStrands', [['On', 'on'], ['Off', 'off']], 'On: her hair drawn as strands and locks with hair\'s own banded shine; Off: as the Character Builder draws it. It changes while you play (a few seconds).');

@@ -55,6 +55,16 @@ import { checkScreen, isUprightNow, onTurn } from './screenFit';
 
 /** After any sign that the screen changed, the stage is measured again after each of these waits (milliseconds). */
 const MEASURE_AGAIN_MS = [120, 300, 600, 1000];
+/**
+ * ONE RE-FIT A TURN (v0.2.148; Joshua, 2026-11-22: "it's almost always switching orientation" when the iPhone closes
+ * the game): a new size is passed on only once it has stayed the same this long (milliseconds). A turn reports a few
+ * sizes on the way (the measuring above, at once and over a second), and each one passed on rebuilt the 3D picture's
+ * drawing surface (about 60 MB at his phone's sharpness, smoothed), several times in a second, while the phone itself
+ * was redrawing the whole page for its new shape. The very first size is passed on at once.
+ */
+const SETTLE_MS = 300;
+/** Turn first, then load: on its side, the stage's size must hold this long before the game starts (milliseconds). */
+const SIDE_SETTLE_MS = 500;
 /** A touch screen that is taller than it is wide: the same test the cover in index.html uses. Keep the two the same. */
 /** A stage this short or shorter (pixels) is a phone on its side: styles may pack things tighter (the `is-short` label). */
 const SHORT_STAGE = 500;
@@ -129,8 +139,12 @@ export function keepLandscape(stage: HTMLElement): void {
     lastWidth = width;
     lastHeight = height;
     lastRatio = ratio;
-    for (const fn of resizeListeners) fn();
+    // (the first size at once; every later one once it has held for SETTLE_MS: each new size starts the wait again)
+    if (!told) { told = true; for (const fn of resizeListeners) fn(); return; }
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => { for (const fn of resizeListeners) fn(); }, SETTLE_MS);
   };
+  let told = false, settleTimer = 0;
 
   // ---- 2. Measuring again and again after the screen changes (the iPhone's late size, see the top of this file) --
   let frameRequest = 0;
@@ -180,6 +194,27 @@ export function keepLandscape(stage: HTMLElement): void {
 }
 
 let refit: () => void = () => {};
+
+/**
+ * TURN FIRST, THEN LOAD (v0.2.148; Joshua, 2026-11-22: "force the turn, once turned in landscape, then it starts
+ * everything"). Resolves once the screen is on its side and its size has held for SIDE_SETTLE_MS: at once if it is
+ * on its side already (or is not a phone: only a touch screen held upright counts as upright, screenFit.ts). Turned
+ * upright again while it waits, it waits again. Resolves with how long it waited, in seconds.
+ */
+export function whenOnItsSide(stage: HTMLElement): Promise<number> {
+  const began = performance.now();
+  if (!isUprightNow()) return Promise.resolve(0);
+  return new Promise((done) => {
+    let width = -1, height = -1, steadySince = 0;
+    // (looked at ten times a second: the turn's own signals come early, and an iPhone gives its new size late)
+    const look = window.setInterval(() => {
+      if (isUprightNow()) { steadySince = 0; width = -1; return; }
+      const w = stage.clientWidth, h = stage.clientHeight, t = performance.now();
+      if (w !== width || h !== height) { width = w; height = h; steadySince = t; return; }
+      if (t - steadySince >= SIDE_SETTLE_MS && w > h) { window.clearInterval(look); done((t - began) / 1000); }
+    }, 100);
+  });
+}
 /**
  * Re-check the page's size now and over the next moments, as after a turn. The game calls this when loading ends
  * (Joshua, 2026-11-17): a turn made while the game was busy loading may have left the page laid out at the old

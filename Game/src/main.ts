@@ -13,7 +13,8 @@
 import * as THREE from 'three';
 import { SHADOW_ONLY_LAYER, type Hand, type HeroineBody } from './core/contracts';
 import './core/screenFit'; // first: the screen measured once, the game box sized from it (Joshua, 2026-11-17)
-import { isUpright, keepLandscape, onStageResize, refitNow } from './core/orientation';
+import { setTextureCaps, textureCap } from './core/textureSizes';
+import { isUpright, keepLandscape, onStageResize, onUprightChange, refitNow, whenOnItsSide } from './core/orientation';
 import { checkScreen } from './core/screenFit';
 import { loadKind, loadedAsPlanned, startLoadMeter } from './core/loadMeter';
 import { connectSplash, showLastStart, showSplashError } from './ui/splash';
@@ -298,8 +299,18 @@ async function start(): Promise<void> {
   // been drawn, every step below tells the METER what it is doing (`meter.step`), and the meter also counts the bytes
   // of every file as it arrives; the splash shows what the meter says (src/core/loadMeter.ts, src/ui/splash.ts).
   // Nothing of the game runs until all of it is in: the controls and the game loop are only made at the end.
+  keepLandscape(stage); // keeps the game fitted to the screen, and knows when a phone is held upright (src/core/orientation.ts)
+  // TURN FIRST, THEN LOAD (v0.2.148; Joshua, 2026-11-22: "when I start almost always in portrait... when I rotate to
+  // landscape, that's when the errors usually occur... force the turn, once turned in landscape, then it starts
+  // everything"). A phone opened upright downloads and builds NOTHING until it is on its side and its size has
+  // settled (orientation.ts `whenOnItsSide`): the biggest memory moment of a start (her pictures going up to the
+  // graphics chip, the first picture) no longer lands in the middle of the turn. The time waiting is not loading time.
+  if (isUpright()) {
+    for (const id of ['rotate-step', 'splash-step']) { const node = document.getElementById(id); if (node) node.textContent = 'Turn your phone on its side to start'; }
+  }
+  const waitedForTurn = await whenOnItsSide(stage);
   const loadIs = loadKind(loadHeroineSettings()); // which kind of load this is: "fast live", "fast", "room"...
-  const meter = startLoadMeter(loadIs);
+  const meter = startLoadMeter(loadIs, waitedForTurn);
   // HOW FAR THE LAST START GOT (Joshua, 2026-11-22: v0.2.142 "keeps crashing on load"; core/startupLog.ts): every step
   // of this start is written down on the phone as it is reached, with the megabytes downloaded and the graphics memory
   // asked for (est., `gpuTally`, counted from the moment the renderer is made). If the phone closed the LAST start
@@ -307,6 +318,8 @@ async function start(): Promise<void> {
   let gpuTally: GpuTally | null = null;
   beginStartLog(VERSION_NUMBER, () => gpuTally?.totalMB() ?? 0, () => meter.bytes / 1048576);
   showLastStart(lastStartClosed());
+  // (every turn of the phone is written down too, so a start the phone closed says whether a turn came just before)
+  onUprightChange((upright) => markStart(upright ? 'turned upright' : 'turned on its side'));
   {
     // (every step the splash shows is a step of the start log too)
     const meterStep = meter.step.bind(meter);
@@ -320,8 +333,6 @@ async function start(): Promise<void> {
    */
   const breathe = (): Promise<void> => new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
   const splash = connectSplash(meter);
-
-  keepLandscape(stage); // keeps the game fitted to the screen, and knows when a phone is held upright (src/core/orientation.ts)
   preventPageZoom(); // no double-tap or pinch zoom of the page itself (src/input/noZoom.ts)
   // The FPS readout and dome test buttons: on with "?debug=1" in the address, or the tick box in Settings.
   let debugRemembered = false;
@@ -334,6 +345,9 @@ async function start(): Promise<void> {
   // per CSS pixel: a phone's 3x screen would triple the work for little gain.
   // ("Sharpness" in Settings lowers that to 1: about a quarter of the pixels to fill.)
   const graphics = loadHeroineSettings();
+  // TEXTURE SIZES (v0.2.148, core/textureSizes.ts): every picture made from here on is made to these, and Settings
+  // changes them while the game runs (each picture of that kind made again, one at a time)
+  void setTextureCaps({ character: graphics.characterTextures, world: graphics.worldTextures });
   // THE GAME'S SOUND (audio/sound.ts): one Web Audio context, woken by the first touch, at Settings -> SOUND's master
   // volume. Her breathing is its first sound (audio/breathSound.ts, `playBreaths` in the loop).
   const sound = new Sound();
@@ -425,7 +439,10 @@ async function start(): Promise<void> {
   // is small too (a few metres round her feet) and goes with her, so her shadow shows anywhere on the map and
   // not only in the plaza. (Both are moved in the loop below, where she is moved.)
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  keyLight.shadow.mapSize.set(2048, 2048);
+  // (its size follows the WORLD texture setting, as Joshua confirmed, 2026-11-22: 1024 at 256 and 512, 2048 above;
+  //  a 2048 shadow picture and its depths are 32 MB on the graphics chip, a 1024 one 8 MB)
+  const shadowSizeFor = (world: number): number => (world <= 512 ? 1024 : 2048);
+  keyLight.shadow.mapSize.set(shadowSizeFor(graphics.worldTextures), shadowSizeFor(graphics.worldTextures));
   const shadowBox = keyLight.shadow.camera;
   // (the shadow also sees what only casts a shadow: her hair in first person, see SHADOW_ONLY_LAYER)
   shadowBox.layers.enable(SHADOW_ONLY_LAYER);
@@ -1392,6 +1409,17 @@ async function start(): Promise<void> {
       if (key === 'detail') { if (JOHN_DETAIL === null) heroine.setDetail?.(graphics.detail); else blaze ? blaze.body.setDetail?.(graphics.detail) : heroine.setDetail?.(graphics.detail); }
       else if (key === 'targetFps') { for (const c of [blaze, john]) c?.body.setTargetFps?.(graphics.targetFps); }
       else if (key === 'sharpness') fit();
+      // TEXTURE SIZES, while the game runs (core/textureSizes.ts): each picture of the kind changed is made again from
+      // its file, one at a time; the shadow picture follows the world's (made again at its next drawing)
+      else if (key === 'characterTextures' || key === 'worldTextures') {
+        void setTextureCaps({ character: graphics.characterTextures, world: graphics.worldTextures });
+        const size = shadowSizeFor(graphics.worldTextures);
+        if (keyLight.shadow.mapSize.x !== size) {
+          keyLight.shadow.mapSize.set(size, size);
+          keyLight.shadow.map?.dispose();
+          keyLight.shadow.map = null;
+        }
+      }
       else if (key === 'shadows') applyShadows();
       else if (key === 'fovThird' || key === 'fovFirst') rig.setFov(graphics.fovThird, graphics.fovFirst);
       else if (key === 'zoomThird') rig.setZoom(graphics.zoomThird);
@@ -1514,6 +1542,7 @@ async function start(): Promise<void> {
 
   // ---- Fit the canvas to the screen ----------------------------------------------
   let fitted = false;
+  const fitSize = new THREE.Vector2();
   const fit = () => {
     // (upright, the game is hidden behind the cover: its picture keeps its landscape shape and is not resized for
     //  nothing. Opened upright, it has no landscape shape yet: it is given the upright screen's turned on its side.)
@@ -1522,8 +1551,12 @@ async function start(): Promise<void> {
     const height = isUpright() ? host.clientWidth : host.clientHeight;
     fitted = true;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, graphics.sharpness);
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(width, height, false);
+    // ONCE, AND ONLY WHAT CHANGED (v0.2.148): three.js's setPixelRatio sets the size again itself, so every re-fit
+    // rebuilt the drawing surface TWICE (measured: two in the same millisecond), and a re-fit to the same size rebuilt
+    // it for nothing (setting a canvas's size, even to the size it has, makes a new one)
+    // (size and sharpness set together, once: three.js's setDrawingBufferSize; its page size is the stage's own)
+    const was = renderer.getSize(fitSize);
+    if (was.x !== width || was.y !== height || renderer.getPixelRatio() !== pixelRatio) renderer.setDrawingBufferSize(width, height, pixelRatio);
     sky?.setPixelRatio(pixelRatio);
     rig.resize(width, height);
   };
@@ -1561,6 +1594,15 @@ async function start(): Promise<void> {
     // (never a reason not to start: given 20 s at most, after which the files go on loading in play)
     const voices = Object.entries(BREATH_VOICES).filter(([name]) => [blaze, john].some((c) => c?.name === name)).map(([, voice]) => voice);
     await Promise.race([Promise.all(voices.map((voice) => loadBreathVoice(sound, voice, __APP_VERSION__))), new Promise((enough) => setTimeout(enough, 20000))]);
+  }
+  // TURNED UPRIGHT WHILE LOADING (v0.2.148): the downloading and building above carried on behind the cover, but the
+  // picture is got ready and drawn (everything still to go up to the graphics chip) only once it is on its side
+  // again. The meter's clock stands still meanwhile.
+  if (isUpright()) {
+    meter.hold();
+    meter.step('turn', 'Turn your phone on its side to carry on');
+    await whenOnItsSide(stage);
+    meter.release();
   }
   meter.step('picture', 'Getting the picture ready…');
   try {
@@ -2419,6 +2461,8 @@ async function start(): Promise<void> {
         // (graphics memory asked for, an ESTIMATE: core/gpuTally.ts; and where the last start stopped, if the phone
         //  closed it: core/startupLog.ts)
         if (gpuTally) lines.push(`GPU est ${Math.round(gpuTally.totalMB())}MB · tex ${Math.round(gpuTally.textureBytes / 1048576)}`);
+        // (the texture sizes in force: characters / world, core/textureSizes.ts)
+        lines.push(`textures ${textureCap('character')} / ${textureCap('world')}`);
         for (const step of lastStartSteps()) lines.push(`last: ${step}`);
         hud.setReadout(lines.join('\n'));
         readoutTimer = 0;

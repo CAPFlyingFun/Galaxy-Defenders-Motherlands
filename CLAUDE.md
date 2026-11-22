@@ -702,6 +702,32 @@ use the game's single copy of three.js.
   page buffers after clean-up 491 -> 467 MB. NEXT (his call): step 2 a TEXTURES setting separate from Detail with phone
   rungs (her skin-depth picture to 2048 first); step 3 HER LIVE BODY (TRADDOMIUM: keep the formula, not the whole body;
   Joshua's idea from Anthill Airways: Live / Frozen / Auto, frozen between changes of her belly).
+- v0.2.148: TURN FIRST, THEN LOAD, AND THE TEXTURE SETTINGS (Joshua, 2026-11-22: "when I start almost always in
+  portrait... when I rotate to landscape, that's when the errors usually occur... it's almost always switching
+  orientation... force the turn, once turned in landscape, then it starts everything"; then the TRADDOMIUM-style
+  texture ladder, his numbers). TURNING: (1) a phone opened upright downloads and builds NOTHING until it is on its
+  side and its size has held 0.5 s (orientation.ts `whenOnItsSide`; the cover says "Turn your phone on its side to
+  start"; the wait is not loading time: loadMeter.ts `startLoadMeter(kind, heldSeconds)`); (2) turned upright while
+  loading, downloading goes on but the picture is got ready and drawn only once it is on its side again (meter
+  `hold`/`release`, the step "Turn your phone on its side to carry on"); (3) upright mid-play nothing is drawn but the
+  pause's still (pauseMenu `wantsPicture` already said no upright); (4) ONE RE-FIT A TURN: a new size is passed on
+  only once it has held 300 ms (orientation.ts `SETTLE_MS`; it was up to five), and fit() rebuilds the drawing surface
+  only if its size or sharpness really changed, ONCE (three.js's setPixelRatio sets the size itself: every re-fit had
+  rebuilt it twice; now `setDrawingBufferSize`). Measured: upright and back to the same size rebuilds nothing;
+  (5) the start log writes 'turned upright' / 'turned on its side', and its trimming never drops the 30 s mark.
+  TEXTURES (`core/textureSizes.ts`): Settings -> HEROINE -> Character textures and WORLD -> World textures, the largest
+  side on the graphics chip, 256 / 512 / 1024 / 2048 (+ 4096 on a computer only); PHONE 1024 characters (first or third
+  person alike, his call) and 512 world; a computer 4096 and 2048 (as before). CHARACTER: her and John's packed pictures
+  (packedPictures.ts `loadPackedSized`: the .ktx2's larger levels simply not sent), the WebP fallback and piece pictures
+  (bakedLook.ts), her SKIN DEPTH AT THE SAME SIZE (his: "Keep skin depth the same as the texture"), hair (fastHair.ts
+  `sizeHairPicture`, his "1024 to match"). WORLD: the island's ground, riverbed, tree photo and bark pictures, her suit's
+  fabric tiles and the skin's pore tile (`sizedPicture`: decoded straight to size with createImageBitmap's resize,
+  straight alpha). FIXED (his confirmation): the sky 2048 x 1024, the coast mask 2048 R8, the water's ripple 512; the
+  SHADOW MAP follows world, 1024 at 512 and under, 2048 above (main.ts `shadowSizeFor`). Both CHANGE WHILE PLAYING:
+  every picture of that kind made again from its file, one at a time, into the same texture (`keepSized`,
+  `setTextureCaps`; tested: 7 of hers in 42 s in the software test browser, no errors). Full readout:
+  `textures 1024 / 512`. MEASURED (built game, phone settings, island, both): graphics est. 252 -> 110 MB; a computer
+  202 MB. Pictured at 4096/2048 against 1024/512: the same from her usual view, a touch softer close up.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { sizedPictureAsync } from "../../core/textureSizes";
 import type { CarveData, HydroRiver, HydroLake } from "./carve";
 import { riverCarveRadius, FLAT_FRAC } from "./carveCore";
 
@@ -27,6 +28,10 @@ type KauaiTileStreamer = HydroGround;
 /** Load one picture (null if it does not come). */
 async function loadTexture(url: string): Promise<THREE.Texture | null> {
   try { return await new THREE.TextureLoader().loadAsync(url); } catch { return null; }
+}
+/** Load one colour picture at the WORLD texture size, kept so (core/textureSizes.ts, v0.2.148; null if it does not come). */
+async function loadWorldColour(url: string): Promise<THREE.Texture | null> {
+  try { return await sizedPictureAsync(url, 'world', (t) => { t.colorSpace = THREE.SRGBColorSpace; }); } catch { return null; }
 }
 
 /**
@@ -656,8 +661,8 @@ export class KauaiHydro {
   private async loadBedTextures(): Promise<void> {
     await Promise.all(
       BED_TEXTURES.map(async (url, i) => {
-        const tex = await loadTexture(this.base + url);
-        if (!tex || this.disposed) return;
+        const tex = await loadWorldColour(this.base + url);
+        if (!tex || this.disposed) { tex?.dispose(); return; }
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.anisotropy = 4;

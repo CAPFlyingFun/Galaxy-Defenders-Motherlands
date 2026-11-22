@@ -21,6 +21,7 @@
 import { wearsLightSkin } from '@charb/sarahlab/skinChoice';
 import { TARGET_FPS, type TargetFps } from './fast/autoDetail';
 import { nearestDetail, type Detail } from './fast/detailLevels';
+import { asTextureSize, textureDefaults, type TextureSize } from '../core/textureSizes';
 
 export type BodyMode = 'performance' | 'visual';
 export type DetailChoice = 'autoLive' | 'auto' | Detail;
@@ -44,6 +45,13 @@ export interface HeroineSettings {
   detail: DetailChoice;
   targetFps: TargetFps;
   sharpness: Sharpness;
+  /**
+   * TEXTURE SIZES (v0.2.148, core/textureSizes.ts; Joshua, 2026-11-22): the largest side, in pixels, of the playable
+   * characters' pictures (her and John's outfits, skin depth and hair; phone 1024) and of the world's (the island's
+   * ground, rivers, trees and bark, her suit's fabric tiles, the pore tile; phone 512). 4096 on a computer only.
+   */
+  characterTextures: TextureSize;
+  worldTextures: TextureSize;
   skin: SkinChoice;
   /** Real shadows: she casts her own shadow on the plaza (the DEV Room's "Shadows: on"). */
   shadows: ShadowChoice;
@@ -218,6 +226,8 @@ export const SETTING_KEYS = Object.freeze({
   detail: 'gdm.detail',
   targetFps: 'gdm.targetFps',
   sharpness: 'gdm.sharpness',
+  characterTextures: 'gdm.characterTextures',
+  worldTextures: 'gdm.worldTextures',
   skin: 'gdm.skin',
   shadows: 'gdm.shadows',
   liveBody: 'gdm.liveBody',
@@ -303,6 +313,9 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     detail: asDetail(address.get('detail')) ?? asDetail(read(SETTING_KEYS.detail)) ?? 'autoLive',   // (the DEV Room's own setting: Joshua's settings picture, 2026-11-17)
     targetFps: asFps(address.get('fps')) ?? asFps(read(SETTING_KEYS.targetFps)) ?? 30,
     sharpness: asSharpness(address.get('sharp')) ?? asSharpness(read(SETTING_KEYS.sharpness)) ?? 2,
+    // (?char_tex= and ?world_tex= for a test; a phone is never given 4096, whatever was saved: textureSizes.ts)
+    characterTextures: asTextureSize(address.get('char_tex')) ?? asTextureSize(read(SETTING_KEYS.characterTextures)) ?? textureDefaults().character,
+    worldTextures: asTextureSize(address.get('world_tex')) ?? asTextureSize(read(SETTING_KEYS.worldTextures)) ?? textureDefaults().world,
     skin: asSkin(address.get('body')) ?? asSkin(read(SETTING_KEYS.skin)) ?? deviceSkin(),
     shadows: (address.get('shadows') ?? read(SETTING_KEYS.shadows)) === 'off' ? 'off' : 'on',
     liveBody: (address.get('live') ?? read(SETTING_KEYS.liveBody)) === 'off' ? 'off' : 'on',

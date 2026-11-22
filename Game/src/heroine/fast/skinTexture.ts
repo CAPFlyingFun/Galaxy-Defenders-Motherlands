@@ -25,7 +25,8 @@
 // ============================================================================
 import * as THREE from 'three';
 import { bakedLookFolder } from './bakedLook';
-import { packedPicturesOn, packedTexture } from './packedPictures';
+import { loadPackedSized, packedPicturesOn } from './packedPictures';
+import { sizedPicture } from '../../core/textureSizes';
 
 /** The builder's numbers (Char_B skinDetail.ts SKIN_DETAIL): kept as they are unless Joshua changes them. */
 export const SKIN_TEXTURE = Object.freeze({
@@ -62,11 +63,12 @@ let poreTile: THREE.Texture | null = null;
 let poreTileUsers = 0;
 function takePoreTile(sharp: number): THREE.Texture {
   if (!poreTile) {
-    const tile = new THREE.TextureLoader().load(import.meta.env.BASE_URL + PORE_TILE, (t) => { t.needsUpdate = true; });
-    tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
-    tile.colorSpace = THREE.NoColorSpace;
-    tile.anisotropy = sharp;
-    poreTile = tile;
+    // (a WORLD picture by its size setting, core/textureSizes.ts: a small tile repeated over her skin, as the fabric tiles)
+    poreTile = sizedPicture(import.meta.env.BASE_URL + PORE_TILE, 'world', (tile) => {
+      tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
+      tile.colorSpace = THREE.NoColorSpace;
+      tile.anisotropy = sharp;
+    });
   }
   poreTileUsers++;
   return poreTile;
@@ -87,18 +89,17 @@ export async function loadSkinPictures(look: string, renderer: THREE.WebGLRender
   if (packed && packedPicturesOn()) {
     // (a packed skin height that fails or is too slow falls back to its WebP one: packedPictures.ts, NEVER STUCK)
     try {
-      const response = await fetch(bakedLookFolder(look) + `${packed.file}?bake=${encodeURIComponent(packed.at)}`);
-      if (!response.ok) throw new Error(`${look}'s packed skin height did not load (${response.status})`);
-      own = await packedTexture(await response.arrayBuffer(), false, renderer);
+      // (the CHARACTER texture setting, as her colour picture: Joshua, 2026-11-22, "Keep skin depth the same as the
+      //  texture"; core/textureSizes.ts)
+      own = await loadPackedSized(bakedLookFolder(look) + `${packed.file}?bake=${encodeURIComponent(packed.at)}`, false, renderer, 'character');
     } catch (error) {
       console.warn(`[packed pictures] ${look}'s skin height did not load packed (${String(error)}); its WebP picture is used`);
     }
   }
   if (!own) {
-    own = new THREE.TextureLoader().load(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
-      (t) => { t.needsUpdate = true; });
-    own.colorSpace = THREE.NoColorSpace;
-    own.flipY = false;   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
+    own = sizedPicture(bakedLookFolder(look) + `skinHeight.webp?v=${encodeURIComponent(__APP_VERSION__)}`,  // (never an old copy: bakedLook.ts)
+      'character', (t) => { t.colorSpace = THREE.NoColorSpace; },
+      { flipY: false });   // (as her baked pictures: bakedLook.ts reads them the glTF way round)
   }
   own.anisotropy = sharp;
   const tile = takePoreTile(sharp);

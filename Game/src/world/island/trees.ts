@@ -40,6 +40,7 @@
 // Every fade is a WIPE UP THE TREE ("trunk first, then the tops").
 // ============================================================================
 import * as THREE from 'three';
+import { sizedPictureAsync } from '../../core/textureSizes';
 import type { HydroGround, KauaiHydro } from './hydro';
 import {
   FADE_FRAGMENT_CUT, FADE_FRAGMENT_HEAD, FADE_VERTEX_HEAD, SWAP_M, TreeObjects, fadeRange, fadeUniforms, setFade, trunkRadius,
@@ -309,8 +310,9 @@ export class IslandTrees {
     if (this.disposed) return;
     this.river = await loadRaster(`${this.base}veg/river.png`);
     if (this.disposed) return;
-    const loader = new THREE.TextureLoader();
-    this.pictures = await Promise.all(SPECIES.map((sp) => loader.loadAsync(`${this.base}${sp.file}`).catch(() => null)));
+    // (WORLD pictures by their size setting: core/textureSizes.ts, v0.2.148; a picture's shape, its width over its
+    //  height, is the same at every size, so each tree's width below is too)
+    this.pictures = await Promise.all(SPECIES.map((sp) => sizedPictureAsync(`${this.base}${sp.file}`, 'world', (t) => { t.colorSpace = THREE.SRGBColorSpace; }).catch(() => null)));
     if (this.disposed) { for (const p of this.pictures) p?.dispose(); return; }
     this.materials = SPECIES.map((sp, s) => {
       const picture = this.pictures[s];

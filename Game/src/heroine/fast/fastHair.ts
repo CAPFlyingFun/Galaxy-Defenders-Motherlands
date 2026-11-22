@@ -17,6 +17,37 @@ import { HAIR_LENGTH_MORPH, hairStyle } from '@charb/sarahlab/hairStyles';
 import { patchHairMaterial, setHairColour } from '@charb/sarahlab/hairMaterial';
 import { loadHairFile } from './bodyFile';
 import { addHairStrands } from './hairStrands';
+import { fitTo, keepSized, textureCap } from '../../core/textureSizes';
+
+/**
+ * HER HAIR'S PICTURE AT THE CHARACTER TEXTURE SIZE (v0.2.148; Joshua, 2026-11-22: hair "1024 to match/sync with
+ * character's texture size"; core/textureSizes.ts). The hair file's own picture (1024) is kept as it came, and the
+ * texture drawn is that picture or a smaller copy made from it, again whenever the setting changes. (At 1024 and up
+ * it is the file's own picture, as before.)
+ */
+function sizeHairPicture(map: THREE.Texture): void {
+  const own = map.image as ImageBitmap | undefined;
+  if (!own || typeof createImageBitmap !== 'function' || !('width' in own)) return;
+  let made: ImageBitmap | null = null;
+  const drawAt = async (cap: number): Promise<void> => {
+    const size = fitTo(own.width, own.height, cap);
+    const before = made;
+    let picture: ImageBitmap = own;
+    if (size.width !== own.width || size.height !== own.height) {
+      try {
+        picture = await createImageBitmap(own, { premultiplyAlpha: 'none', colorSpaceConversion: 'none', resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' });
+      } catch { picture = own; }
+    }
+    if (picture === map.image) return;
+    made = picture === own ? null : picture;
+    map.dispose();
+    map.image = picture;
+    map.needsUpdate = true;
+    before?.close();
+  };
+  keepSized(map, 'character', drawAt);
+  void drawAt(textureCap('character'));
+}
 
 /** What the baked look says about her hair. */
 export interface HairChoice { readonly style: string; readonly colour: string | null; readonly length: number }
@@ -145,6 +176,8 @@ export async function loadFastHair(choice: HairChoice, body: THREE.SkinnedMesh, 
     // the builder's two patches: each lock lit as one round thing from both sides; its strands drawn in her colour
     patchHairMaterial(material);
     setHairColour(material, choice.colour);
+    const map = (material as THREE.MeshStandardMaterial).map;
+    if (map) sizeHairPicture(map);
     // the game's own: strands, locks and hair's banded shine instead of a shiny hat (Joshua, 2026-11-19)
     if (strands) addHairStrands(material);
     if (!faceLocks && EASED_STYLES.has(choice.style)) easeFaceLocks(mesh);

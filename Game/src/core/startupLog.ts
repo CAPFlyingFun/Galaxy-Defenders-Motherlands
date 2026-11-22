@@ -63,7 +63,13 @@ export function markStart(step: string): void {
     mb: Math.round(memory()),
     dl: Math.round(downloaded() * 10) / 10,
   });
-  if (log.steps.length > STEPS_KEPT) log.steps.splice(1, log.steps.length - STEPS_KEPT);
+  // (only the latest are kept, but never the 30 s mark: the phone's TURNS are written down too (v0.2.148), and many
+  //  turns in a long game would otherwise push it out, and the next start would say this one was closed)
+  while (log.steps.length > STEPS_KEPT) {
+    const old = log.steps.findIndex((step, i) => i > 0 && step.s !== START_SURVIVED);
+    if (old < 0) break;
+    log.steps.splice(old, 1);
+  }
   try { localStorage.setItem(KEY, JSON.stringify(log)); } catch { /* not remembered: nothing to do */ }
 }
 

@@ -23,6 +23,7 @@
 import * as THREE from 'three';
 import type { BakedLook } from './bakedLook';
 import { freeMaterial } from './bodyFile';
+import { sizedPicture } from '../../core/textureSizes';
 
 export interface SkinMaterials {
   /** For levels of 25 % and over: with her fine surface detail. */
@@ -170,13 +171,15 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   // THE LIVE KNIT's swatch and its numbers, shared by both materials (so the slider moves them together)
   const knitColour = shine?.knitOn ? new THREE.Color(shine.knitOn) : null;   // (in the working colours: as her colour is read)
   const knitUniforms = shine?.knit ? {
-    knitMap: { value: new THREE.TextureLoader().load(import.meta.env.BASE_URL + shine.knit.file, (t) => { t.needsUpdate = true; }) },
+    // (her suit's fabric tiles are WORLD pictures by their size setting: core/textureSizes.ts, v0.2.148; their colour
+    //  space is set below, before the picture arrives)
+    knitMap: { value: sizedPicture(import.meta.env.BASE_URL + shine.knit.file, 'world') },
     knitTile: { value: KNIT.tileMetres * shine.knit.stitch * unitsPerMetre },
     knitStrength: { value: shine.knit.strength },
     knitMiddle: { value: shine.knit.middle / 255 },
     // (its height picture, if it has one; a 1 x 1 flat picture otherwise, so the shader is the same either way)
     knitHeightMap: { value: shine.knit.bump
-      ? new THREE.TextureLoader().load(import.meta.env.BASE_URL + shine.knit.bump.file, (t) => { t.needsUpdate = true; })
+      ? sizedPicture(import.meta.env.BASE_URL + shine.knit.bump.file, 'world')
       : new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1) },
     // (the threads' real depth, metres: the same whatever size the stitch is drawn at)
     knitDepth: { value: shine.knit.bump?.depth ?? 0 },
@@ -194,7 +197,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   }
   // THE PRINTS (ClothShine `prints`): each picture, its repeat and the colour it covers
   const prints = (shine?.prints ?? []).slice(0, 3).map((p) => {
-    const map = new THREE.TextureLoader().load(import.meta.env.BASE_URL + p.file, (t) => { t.needsUpdate = true; });
+    const map = sizedPicture(import.meta.env.BASE_URL + p.file, 'world');
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());

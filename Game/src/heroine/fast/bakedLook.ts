@@ -24,7 +24,8 @@ import { BAKED_AS } from '../looks/bakedAs';
 import * as THREE from 'three';
 import { unpackShape, type BakedShape } from './shapeFile';
 import { unpackPieces, type BakedPiece } from './piecesFile';
-import { packedPicturesOn, packedTexture } from './packedPictures';
+import { loadPackedSized, packedPicturesOn } from './packedPictures';
+import { decodeSized, keepSized, textureCap } from '../../core/textureSizes';
 
 export interface BakedLookManifest {
   readonly version: 1;
@@ -109,13 +110,25 @@ async function fetchOk(url: string): Promise<Response> {
   return response;
 }
 
-/** Load one picture as a texture, set up the way the body file's own textures are (not flipped, repeating). */
+/**
+ * Load one picture as a texture, set up the way the body file's own textures are (not flipped, repeating), no larger
+ * than the CHARACTER texture setting and kept so when it changes (core/textureSizes.ts, v0.2.148).
+ */
 async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture> {
-  const blob = await (await fetchOk(url)).blob();
-  fetchedBytes += blob.size;
-  // (decoded off the main thread; `none` keeps the picture's rows in the order the bake wrote them)
-  const bitmap = await createImageBitmap(blob, { imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
-  const texture = new THREE.Texture(bitmap);
+  // (decoded off the main thread; rows in the order the bake wrote them, her own colours, straight from her file)
+  const decode = async (cap: number): Promise<ImageBitmap> => {
+    const blob = await (await fetchOk(url)).blob();
+    fetchedBytes += blob.size;
+    return decodeSized(blob, cap, { flipY: false, colour: false });
+  };
+  const texture = new THREE.Texture(await decode(textureCap('character')));
+  keepSized(texture, 'character', async (cap) => {
+    const picture = await decode(cap), before = texture.image as ImageBitmap;
+    texture.dispose();
+    texture.image = picture;
+    texture.needsUpdate = true;
+    before.close?.();
+  });
   texture.flipY = false;
   texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
@@ -126,11 +139,12 @@ async function loadPicture(url: string, colour: boolean): Promise<THREE.Texture>
   return texture;
 }
 
-/** Load one PACKED picture (a .ktx2 file) as a texture the graphics chip keeps packed (packedPictures.ts). */
+/**
+ * Load one PACKED picture (a .ktx2 file) as a texture the graphics chip keeps packed (packedPictures.ts), no larger
+ * than the CHARACTER texture setting, and kept so when it changes (core/textureSizes.ts, v0.2.148).
+ */
 async function loadPackedPicture(url: string, colour: boolean, renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
-  const bytes = await (await fetchOk(url)).arrayBuffer();
-  fetchedBytes += bytes.byteLength;
-  return packedTexture(bytes, colour, renderer);
+  return loadPackedSized(url, colour, renderer, 'character', (bytes) => { fetchedBytes += bytes; });
 }
 
 /** A small picture decoded for the page to read (not a texture). */

@@ -13,6 +13,7 @@
 // the side as well ("triplanar"), so a cliff shows rock and not long streaks.
 // ============================================================================
 import * as THREE from 'three';
+import { sizedPictureAsync } from '../../core/textureSizes';
 
 /** The ground pictures, under public/island/textures/ (copied from Beyond Extinction). */
 export interface GroundPictures {
@@ -31,13 +32,14 @@ const PICTURE_FILES: Record<keyof GroundPictures, string> = {
 
 /** Load the seven pictures once. One that fails becomes plain grey, so the island still draws. */
 export async function loadGroundPictures(base: string): Promise<GroundPictures> {
-  const loader = new THREE.TextureLoader();
   const out = {} as GroundPictures;
   await Promise.all((Object.keys(PICTURE_FILES) as (keyof GroundPictures)[]).map(async (name) => {
     let picture: THREE.Texture;
     try {
-      picture = await loader.loadAsync(`${base}textures/${PICTURE_FILES[name]}.jpg`);
-      picture.colorSpace = THREE.SRGBColorSpace; // (a colour picture: the shader then reads it as true light values)
+      // (a WORLD picture by its size setting: core/textureSizes.ts, v0.2.148)
+      picture = await sizedPictureAsync(`${base}textures/${PICTURE_FILES[name]}.jpg`, 'world', (t) => {
+        t.colorSpace = THREE.SRGBColorSpace; // (a colour picture: the shader then reads it as true light values)
+      });
     } catch {
       picture = new THREE.DataTexture(new Uint8Array([200, 200, 200, 255]), 1, 1);
     }

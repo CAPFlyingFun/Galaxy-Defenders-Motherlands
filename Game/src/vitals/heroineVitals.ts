@@ -314,6 +314,12 @@ export interface VitalsReading {
 }
 
 /** The bathroom bar and her urge, from what is in her bladder and rectum (the builder's thresholds). */
+/**
+ * HOW LONG A BATHROOM VISIT TAKES, seconds (Joshua, 2026-11-22: food 12 s, water 5 s; it was 10 s for either: "someone
+ * rarely ever goes in 5s, lol", 2026-11-21, when it was 5 for either). GAME TUNING.
+ */
+export const BATHROOM_VISIT = { bladderSeconds: 5, bowelSeconds: 12 } as const;
+
 export function bathroomOf(bladderMl: number, rectumMl: number, squeeze = 0): { fill: number; urge: 0 | 1 | 2 } {
   // (her baby presses on her bladder: it holds `squeeze` less, and every mark on it comes that much sooner)
   const room = 1 - clamp(squeeze, 0, 0.9);
@@ -583,11 +589,29 @@ export class HeroineVitals {
     this.needs = this.gameNeeds();
   }
 
+  /** Her rectum set to `ml` millilitres (to test a bowel visit: Settings -> FOOD & DRINK -> Need to go #2). */
+  setRectum(ml: number): void {
+    this.gut = { ...this.gut, rectumMl: clamp(ml, 0, RECTUM.mostMl) };
+    this.needs = this.gameNeeds();
+  }
+
   /** She uses the bathroom: her bladder emptied (and her rectum, if she needed to go). */
-  relieve(): void {
-    this.gut = { ...this.gut, bladderMl: 0, rectumMl: 0 };
+  relieve(bowels = true): void {
+    // (her bladder always; her bowels only on a visit for them: `bathroomVisit`)
+    this.gut = { ...this.gut, bladderMl: 0, rectumMl: bowels ? 0 : this.gut.rectumMl };
     this.bathroomRate = -1;
     this.needs = this.gameNeeds();
+  }
+
+  /**
+   * WHAT A BATHROOM VISIT IS NOW, AND HOW LONG IT TAKES (Joshua, 2026-11-22: "food ends up being longer relieving oneself
+   * 🚽 (make it 12s), and the water 💧 quicker at 5s"): once her rectum is at its urge (the builder's RECTUM.urgeMl,
+   * 150 mL) it is her bowels too, BATHROOM_VISIT.bowelSeconds, and both are emptied; otherwise only her bladder,
+   * BATHROOM_VISIT.bladderSeconds. Asked as she squats; `relieve(bowels)` as she gets up.
+   */
+  bathroomVisit(): { seconds: number; bowels: boolean } {
+    const bowels = this.gut.rectumMl >= RECTUM.urgeMl;
+    return { seconds: bowels ? BATHROOM_VISIT.bowelSeconds : BATHROOM_VISIT.bladderSeconds, bowels };
   }
 
   /** She eats and/or drinks: millilitres of food and of water (a snack bar is about 150, a canteen swig 250). */

@@ -23,6 +23,8 @@ import { loadBreak } from './core/loadPace';
 import { START_SURVIVED, beginStartLog, lastStartClosed, lastStartSteps, markStart, startCountText } from './core/startupLog';
 import { restartGame, setRestart } from './core/restart';
 import { STANCE } from './heroine/fast/groundPose';
+import { SIT } from './heroine/fast/sitPose';
+import { PopUpToilet, TOILET_SIZE } from './world/toilet';
 import { OtherDetail } from './heroine/fast/otherDetail';
 import { onGlTrouble, watchGlTrouble } from './core/glTrouble';
 import { createPause, type Pause } from './ui/pauseMenu';
@@ -785,7 +787,7 @@ async function start(): Promise<void> {
    *  a swap: `saveState`, `loadState`; the one standing by's are here, and change here). */
   interface KitState {
     stance: 'stand' | 'crouch' | 'down'; stanceNoAim: boolean;
-    bathroomLeft: number; mustGoNow: boolean;
+    bathroomLeft: number; bathroomBowels: boolean; mustGoNow: boolean;
     tableReloading: boolean; tableAfterDraw: 'both' | 'left' | 'right' | 'reload' | null;
     grabAfterHolster: BarName | null; grabAfterTable: BarName | null; doorAfterHolster: Hand | null; grabWhich: 'both' | Hand;
     aimTarget: number; supporting: boolean; gait: Gait; gaitResetLeft: number; windedWeight: number;
@@ -812,9 +814,11 @@ async function start(): Promise<void> {
     /** What their brain wants of them this frame (src/npc/gdmPort.ts). */
     readonly wants: ActorWants;
     readonly state: KitState;
+    /** THEIR OWN POP-UP TOILET (src/world/toilet.ts; Joshua, 2026-11-22): it grows in behind them when they go. */
+    readonly toilet: PopUpToilet;
   }
   const freshState = (): KitState => ({
-    stance: 'stand', stanceNoAim: false, bathroomLeft: 0, mustGoNow: false, tableReloading: false, tableAfterDraw: null,
+    stance: 'stand', stanceNoAim: false, bathroomLeft: 0, bathroomBowels: false, mustGoNow: false, tableReloading: false, tableAfterDraw: null,
     grabAfterHolster: null, grabAfterTable: null, doorAfterHolster: null, grabWhich: 'both', aimTarget: 0, supporting: false,
     gait: 'stand', gaitResetLeft: 0, windedWeight: 0, waterDepthNow: 0, wetFor: Infinity, actionPitch: 0, actionPitchWant: 0,
     sinceFire: Infinity, limits: NO_LIMITS, lastMoveX: 0, lastMoveY: 0,
@@ -842,6 +846,8 @@ async function start(): Promise<void> {
       return !!gear && Array.from({ length: gear.pouches }, (_, i) => gear.pouchState(i)).some((state) => state !== 'full');
     };
     const ask = (): Ask => ({ walkTo: null, look: null, yaw: 0, lookAt: null });
+    const toilet = new PopUpToilet();
+    scene.add(toilet.root);
     return {
       self, motion, turn, turnInput: { view: 'third', look: null, move: null, hold: null, grip: false },
       tableUse, tableAsk: ask(),
@@ -853,6 +859,7 @@ async function start(): Promise<void> {
       pace: new Pace(), burst: new BurstFire(), eating: { food: 0, water: 0, seconds: 0 }, aim: new THREE.Vector3(),
       wants: { walkTo: null, look: null, aimAt: null, fire: false, shots: 0 },
       state: freshState(),
+      toilet,
     };
   };
   // BLAZE'S KIT (her stand-in follows her body through outfit changes: `blaze.body`, or the body just made)
@@ -1011,6 +1018,7 @@ async function start(): Promise<void> {
   const vitalsPanel = new VitalsPanel();
   // (Settings -> HUD: the list or the gauges, and the units; both change while she plays)
   vitalsPanel.setStyle(graphics.vitalsStyle);
+  vitalsPanel.setShown(graphics.vitalsShown);
   vitalsPanel.setUnits(graphics.units);
   /**
    * How deep the water is at her feet now (metres), and how wet her skin still is (1 soaked .. 0 dry): they cool her
@@ -1130,21 +1138,79 @@ async function start(): Promise<void> {
   // (what she is eating or drinking now, still to go into her, and the seconds left to take it: her kit's `eating`)
   /** Seconds left squatting for the bathroom (her bladder is emptied when they run out). */
   let bathroomLeft = 0;
-  // (Joshua, 2026-11-21: "change the time from 5s to 10s, someone rarely ever goes in 5s, lol")
-  const BATHROOM_SECONDS = 10;
+  // (Joshua, 2026-11-21: "change the time from 5s to 10s, someone rarely ever goes in 5s, lol"; then 2026-11-22: "food
+  //  ends up being longer relieving oneself 🚽 (make it 12s), and the water 💧 quicker at 5s": how long is her vitals'
+  //  say, `bathroomVisit`, and whether it is her bowels too, emptied as she gets up)
+  /** This visit is her bowels too (her rectum emptied with her bladder as she gets up). */
+  let bathroomBowels = false;
   /**
    * SHE CAN HOLD IT NO LONGER (Joshua, 2026-11-21: "once it gets to 85% full, will show an ETA until you will go
    * regardless of what's going on"): her bathroom bar is full, so she lets go of whatever she holds, puts her guns
    * away, stands, and goes where she is (step 5b below). True until she has started.
    */
   let mustGoNow = false;
+  /**
+   * A BATHROOM VISIT (Joshua, 2026-11-22: the pop-up toilet, and "food ... 12s, and the water 💧 quicker at 5s"): they
+   * SIT on a toilet that grows in just behind them (src/world/toilet.ts; how they sit: heroine/fast/sitPose.ts), or, if
+   * there is no room for one there (`toiletFits`), squat where they stand as before. Returns how long it all takes
+   * (sitting down and getting up included) and whether it is their bowels too (emptied with their bladder at the end).
+   * The played one's (`intake`) and the one standing by's (their brain's `squat`) are the same.
+   */
+  const startVisit = (k: Kit, body: GameHeroine, v: HeroineVitals): { seconds: number; bowels: boolean } => {
+    const visit = v.bathroomVisit();
+    const seat = body.seatFor && body.sitFor ? body.seatFor() : null;
+    if (seat && toiletFits(k, seat.back)) {
+      const yaw = k.turn.base, x = k.motion.x - Math.sin(yaw) * seat.back, z = k.motion.z - Math.cos(yaw) * seat.back;
+      k.toilet.show(x, groundUnder(k.motion.x, k.motion.z), z, yaw, seat.top);
+      body.sitFor!(visit.seconds);
+      // (sitting down and getting up, SIT.seconds each, on either side of the visit itself)
+      return { seconds: SIT.seconds + visit.seconds + SIT.seconds, bowels: visit.bowels };
+    }
+    body.squatFor?.(visit.seconds);
+    return { seconds: visit.seconds, bowels: visit.bowels };
+  };
+  /**
+   * IS THERE ROOM FOR A TOILET just behind them (`back` metres behind them is the point under their hips)? Not in the
+   * water, not where the ground behind them is more than 10 cm above or below where they stand (a slope, a step), not
+   * where a wall, a building, the dome, a tree's trunk or the tunnel's rock is in the way (the same walls that stop
+   * them walking: from where they stand back to its tank's back, and across its width there), and not on top of the
+   * other character.
+   */
+  const toiletFits = (k: Kit, back: number): boolean => {
+    if (k === playing?.kit ? waterDepthNow > 0.05 : k.state.waterDepthNow > 0.05) return false;
+    const yaw = k.turn.base, ax = Math.sin(yaw), az = Math.cos(yaw), lx = az, lz = -ax;   // (ahead, and her left)
+    const x = k.motion.x, z = k.motion.z, floor = groundUnder(x, z);
+    const hx = x - ax * back, hz = z - az * back, far = back + TOILET_SIZE.behind;
+    const spots = [[hx, hz], [x - ax * far, z - az * far], [hx + lx * TOILET_SIZE.halfWidth, hz + lz * TOILET_SIZE.halfWidth], [hx - lx * TOILET_SIZE.halfWidth, hz - lz * TOILET_SIZE.halfWidth]];
+    for (const [px, pz] of spots) { const g = groundUnder(px, pz); if (Number.isFinite(g) && Math.abs(g - floor) > 0.1) return false; }
+    const stops = island ? island.walls : tunnel ? tunnel.walls : walls;
+    if (stops) {
+      const out = { x: 0, z: 0 };
+      // (from where they stand, back to its tank's back; then from under their hips out to each side)
+      const clear = (fromX: number, fromZ: number, toX: number, toZ: number): boolean => {
+        stops.move(fromX, fromZ, toX - fromX, toZ - fromZ, out);
+        return Math.hypot(out.x - toX, out.z - toZ) < 0.02;
+      };
+      if (!clear(x, z, x - ax * far, z - az * far)) return false;
+      for (const side of [1, -1]) if (!clear(hx, hz, hx + lx * side * TOILET_SIZE.halfWidth, hz + lz * side * TOILET_SIZE.halfWidth)) return false;
+    }
+    const other = [blaze, john].find((c) => c && c.kit !== k);
+    if (other && Math.hypot(other.kit.motion.x - hx, other.kit.motion.z - hz) < 0.6) return false;
+    return true;
+  };
   const intake = (action: IntakeAction) => {
     if (action === 'hungry') { vitals.setFoodBar(0.25); return; }
     if (action === 'thirsty') { vitals.setWaterBar(0.25); return; }
     if (action === 'needToGo') { vitals.setBladder(350); return; }
+    // (her bowels at their urge, 200 mL of the builder's 300: the 🚽 then takes 12 s, not 5)
+    if (action === 'needToGo2') { vitals.setRectum(200); return; }
     if (action === 'mustGo') { vitals.setBladder(520); return; }
     if (action === 'tired') { vitals.setEnergy(0.1); return; }
-    if (action === 'bathroom') { bathroomLeft = BATHROOM_SECONDS; heroine.squatFor?.(BATHROOM_SECONDS); return; }
+    if (action === 'bathroom') {
+      const visit = startVisit(playing?.kit ?? blazeKit, heroine, vitals);
+      bathroomLeft = visit.seconds; bathroomBowels = visit.bowels;
+      return;
+    }
     const portion = INTAKE[action];
     eating.food += portion.food;
     eating.water += portion.water;
@@ -1343,7 +1409,7 @@ async function start(): Promise<void> {
    */
   /** The played one's small values, written into their kit as they are swapped away. */
   const saveState = (s: KitState): void => {
-    s.stance = stance; s.stanceNoAim = stanceNoAim; s.bathroomLeft = bathroomLeft; s.mustGoNow = mustGoNow;
+    s.stance = stance; s.stanceNoAim = stanceNoAim; s.bathroomLeft = bathroomLeft; s.bathroomBowels = bathroomBowels; s.mustGoNow = mustGoNow;
     s.tableReloading = tableReloading; s.tableAfterDraw = tableAfterDraw; s.grabAfterHolster = grabAfterHolster;
     s.grabAfterTable = grabAfterTable; s.doorAfterHolster = doorAfterHolster; s.grabWhich = grabWhich;
     s.aimTarget = aimTarget; s.supporting = supporting; s.gait = gait; s.gaitResetLeft = gaitResetLeft;
@@ -1353,7 +1419,7 @@ async function start(): Promise<void> {
   };
   /** ...and taken back up from their kit as they are swapped to. */
   const loadState = (s: KitState): void => {
-    stance = s.stance; stanceNoAim = s.stanceNoAim; bathroomLeft = s.bathroomLeft; mustGoNow = s.mustGoNow;
+    stance = s.stance; stanceNoAim = s.stanceNoAim; bathroomLeft = s.bathroomLeft; bathroomBowels = s.bathroomBowels; mustGoNow = s.mustGoNow;
     tableReloading = s.tableReloading; tableAfterDraw = s.tableAfterDraw; grabAfterHolster = s.grabAfterHolster;
     grabAfterTable = s.grabAfterTable; doorAfterHolster = s.doorAfterHolster; grabWhich = s.grabWhich;
     aimTarget = s.aimTarget; supporting = s.supporting; gait = s.gait; gaitResetLeft = s.gaitResetLeft;
@@ -1461,7 +1527,8 @@ async function start(): Promise<void> {
         return useTableFor(k, 'reload');
       },
       reloading: () => k.beltReload.busy || k.tableUse.busy || k.state.tableAfterDraw !== null,
-      squat: (seconds) => { k.state.bathroomLeft = seconds; c.body.squatFor?.(seconds); },
+      // (as long as their own visit takes: 12 s with their bowels, 5 s with their bladder only; vitals `bathroomVisit`)
+      squat: () => { const v = startVisit(k, c.body, c.vitals); k.state.bathroomLeft = v.seconds; k.state.bathroomBowels = v.bowels; },
       squatting: () => k.state.bathroomLeft > 0,
     };
     const port = new GdmActorPort(hooks);
@@ -1535,6 +1602,7 @@ async function start(): Promise<void> {
       else if (key === 'soundVolume') sound.setVolume(graphics.soundVolume / 100);
       else if (key === 'breathVolume') { /* live: read every frame */ }
       else if (key === 'vitalsStyle') vitalsPanel.setStyle(graphics.vitalsStyle);
+      else if (key === 'vitalsShown') vitalsPanel.setShown(graphics.vitalsShown);
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
@@ -1680,7 +1748,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, tunnel, story, flashlight, groundArrows, miniMap,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
@@ -1852,8 +1920,9 @@ async function start(): Promise<void> {
     ti.view = 'third';
     ti.move = m.heading;
     ti.look = ask.look ?? (busy ? null : k.wants.look);
-    ti.hold = k.doorUse.faceYaw();
-    ti.grip = false;
+    // (sitting on their toilet: square to it, their head alone looking round)
+    ti.hold = k.doorUse.faceYaw() ?? (k.toilet.inUse ? k.toilet.yaw : null);
+    ti.grip = k.toilet.inUse;
     k.turn.step(dt, ti);
     k.turn.headPitch = 0;
     // 6. AIM AND FIRE (their brain's fire order, in AUTO): in bursts, with their own guns' rounds; each shot a streak
@@ -1872,7 +1941,7 @@ async function start(): Promise<void> {
         fired = true;
       });
     // 7. THE BATHROOM (their brain squats them where they stand: src/npc/gdmPort.ts): their bladder emptied as it ends
-    if (s.bathroomLeft > 0) { s.bathroomLeft -= dt; if (s.bathroomLeft <= 0) c.vitals.relieve(); }
+    if (s.bathroomLeft > 0) { s.bathroomLeft -= dt; if (s.bathroomLeft <= 0) { c.vitals.relieve(s.bathroomBowels); k.toilet.hide(); } }
     // (anything they were eating or drinking when swapped away still goes in, evenly over its seconds)
     const e = k.eating;
     if (e.seconds > 0) {
@@ -2209,9 +2278,11 @@ async function start(): Promise<void> {
     //  back go straight ahead and behind, and left and right are side steps. Her body used to turn to the way she
     //  walked: backing up she turned right round and faced the camera, south with the camera looking north)
     //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
-    turnInput.hold = doorUse.faceYaw() ?? busyFace ?? (walkSides() ? rig.yaw : null);
+    // (SITTING ON HER TOILET she stays square to it, her head alone looking round, as at the table: src/world/toilet.ts)
+    const seatedYaw = playing?.kit.toilet.inUse ? playing.kit.toilet.yaw : null;
+    turnInput.hold = doorUse.faceYaw() ?? seatedYaw ?? busyFace ?? (walkSides() ? rig.yaw : null);
     // (holding on in first person: her head alone turns, 90 degrees each way, the rest of her square: bodyTurn.ts `grip`)
-    turnInput.grip = busyFace !== null;
+    turnInput.grip = busyFace !== null || seatedYaw !== null;
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
@@ -2496,7 +2567,9 @@ async function start(): Promise<void> {
       if (eating.seconds <= 0) { eating.food = 0; eating.water = 0; eating.seconds = 0; }
     }
     // (the bathroom: squatting, then her bladder emptied)
-    if (bathroomLeft > 0) { bathroomLeft -= dt; if (bathroomLeft <= 0) vitals.relieve(); }
+    if (bathroomLeft > 0) { bathroomLeft -= dt; if (bathroomLeft <= 0) { vitals.relieve(bathroomBowels); playing?.kit.toilet.hide(); } }
+    // (each toilet growing in or shrinking away)
+    for (const c of [blaze, john]) c?.kit.toilet.update(dt);
     // SHE CAN HOLD IT NO LONGER (mustGoNow): whatever she is doing, she lets go, her guns go away, and she goes
     if (mustGoNow && bathroomLeft <= 0) {
       if (grabUse.holding) grabUse.letGo();

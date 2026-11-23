@@ -61,7 +61,8 @@ export interface ActorHooks {
   /** Reloading: start one (from the belt, or at the table if the table is free), and whether one is running. */
   startReload(): boolean;
   reloading(): boolean;
-  /** The bathroom where they stand: squat this long (their bladder is emptied when it ends), and whether still squatting. */
+  /** The bathroom where they stand: squat (as long as their own visit takes, 12 s with their bowels or 5 s with their
+   *  bladder only: their vitals' `bathroomVisit`; `seconds` is only a guess), and whether still squatting. */
   squat(seconds: number): void;
   squatting(): boolean;
 }

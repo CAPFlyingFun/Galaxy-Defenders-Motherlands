@@ -269,6 +269,37 @@ export class FootGround {
   groundAt: ((x: number, z: number) => number) | null = null;
   /** CROUCHING (groundPose.ts): her hips this much lower, metres; her knees bend to keep her feet on the ground. */
   crouchDrop = 0;
+  /**
+   * SITTING DOWN (sitPose.ts; Joshua, 2026-11-22, the pop-up toilet): how far she is through sitting, 0 standing .. 1
+   * seated, set each frame while her seated pose is laid over her (it swings her legs forward under her hips). While
+   * it is over 0 her body is lowered as far as her pose has lifted her ankles and moved BACK as far as it has swung
+   * them forward, so her feet stay planted where they stood and her hips come down onto the seat behind her; and her
+   * feet take no steps.
+   */
+  seat = 0;
+  /** How far back she is moved this frame for sitting, metres (see `seat`). For a readout and the tests. */
+  seatBack = 0;
+  /**
+   * HER FEET WHILE SHE SITS (sitPose.ts `sitPhase`; Joshua's reference diagram and "make sure the feet are 0.6m
+   * apart"), set each frame with `seat`: each foot's share of its step out (left, right) to `seatWidth` apart, middle to
+   * middle; each foot's lift on its step, metres; how far her feet are drawn back behind where her seated pose would
+   * rest them (`seatTuck`, metres: her body goes back that much less, so her hips still land on the seat); and how far
+   * they have slid forward again since (`seatAhead`, metres). All of it from the spots her feet stood on as she began.
+   */
+  readonly seatSpread: [number, number] = [0, 0];
+  readonly seatLift: [number, number] = [0, 0];
+  seatWidth = 0.6;
+  seatTuck = 0;
+  seatAhead = 0;
+  /** Where each foot stood as she began to sit (world x, z), and whether she was sitting last frame. */
+  private readonly seatBase = [0, 0, 0, 0];
+  private seatWas = false;
+  /** Where each foot is to be this frame while she sits (world x, z): `seatBase` stepped out and slid forward. */
+  private readonly seatSpot = [0, 0, 0, 0];
+  /** Each leg's reach, hip to ankle with the knee straight (thigh and shin), metres (left, right). */
+  private readonly legReach: [number, number] = [0, 0];
+  /** Each ankle's place along her forward when she stands, metres from her root (as her pose stands her). */
+  private readonly standAhead: [number, number] = [0, 0];
   /** This frame: each foot's ground, metres above (+) or below (-) her root, and how it is tipped to lie on it. */
   private readonly groundUnder: [number, number] = [0, 0];
   private readonly tilt: [THREE.Quaternion, THREE.Quaternion] = [new THREE.Quaternion(), new THREE.Quaternion()];
@@ -347,6 +378,18 @@ export class FootGround {
     this.fitFloorY = fit.position.y;
     root.updateMatrixWorld(true);
     for (let side = 0; side < 2; side++) this.standY[side] = this.legs[side].ankle.matrixWorld.elements[13] - root.position.y;
+    for (let side = 0; side < 2; side++) {
+      const at = (b: THREE.Bone): THREE.Vector3 => new THREE.Vector3().setFromMatrixPosition(b.matrixWorld), l = this.legs[side];
+      this.legReach[side] = at(l.hip).distanceTo(at(l.knee)) + at(l.knee).distanceTo(at(l.ankle));
+    }
+    // (and along her forward: x = sin(yaw), z = cos(yaw))
+    {
+      const yaw = root.rotation.y, ax = Math.sin(yaw), az = Math.cos(yaw);
+      for (let side = 0; side < 2; side++) {
+        const e = this.legs[side].ankle.matrixWorld.elements;
+        this.standAhead[side] = (e[12] - root.position.x) * ax + (e[14] - root.position.z) * az;
+      }
+    }
     this.poseWidth = new THREE.Vector3().setFromMatrixPosition(left.ankle.matrixWorld).distanceTo(new THREE.Vector3().setFromMatrixPosition(right.ankle.matrixWorld));
   }
 
@@ -387,9 +430,23 @@ export class FootGround {
     // Her bones as her pose has them, with her hips where they are when she stands (not yet lowered or shifted).
     fit.position.x = 0;
     fit.position.y = this.fitFloorY;
+    fit.position.z = 0;
     root.updateMatrixWorld(true);
     for (let side = 0; side < 2; side++) lift[side] = legs[side].ankle.matrixWorld.elements[13] - root.position.y - this.standY[side];
     this.measureGround();
+    // SITTING (see `seat`): how far her seated pose has swung her ankles forward of where they stand, as her body is to
+    // go back by (the middle of the two)
+    let seatBack = 0;
+    if (this.seat > 0) {
+      const yaw = root.rotation.y, ax = Math.sin(yaw), az = Math.cos(yaw);
+      for (let side = 0; side < 2; side++) {
+        const e = legs[side].ankle.matrixWorld.elements;
+        seatBack += ((e[12] - root.position.x) * ax + (e[14] - root.position.z) * az - this.standAhead[side]) / 2;
+      }
+      // (her feet drawn back under her knees: her body goes back that much less, so her hips still reach the seat)
+      seatBack = Math.max(0, seatBack - this.seatTuck);
+    }
+    this.seatBack = seatBack;
 
     // ---- which feet are planted, and how far through its swing each of the others is (0 leaving .. 1 landing) ----
     swing[0] = -1;
@@ -432,6 +489,8 @@ export class FootGround {
     } else {
       // STANDING: both feet planted but for the one taking a step (a crab step or a step on the spot: decided below,
       // once each foot's home is known)
+      // (sitting: her feet are set where they go by `seat`; a step of her own in the air is dropped where it is)
+      if (this.seat > 0) { this.stepFoot = -1; this.crabbing = false; this.stepHop = 0; }
       if (squaring) {
         // (squaring up: both feet are on their way home together; a step that was in the air goes with them)
         this.stepFoot = -1; this.crabbing = false; this.stepHop = 0; this.crabNext = 'lead'; this.turnStage = 0;
@@ -462,6 +521,32 @@ export class FootGround {
     const turned = twist !== null && Math.abs(twist.hips) > 1e-4;
     if (turned) drop += (tuning.twistDropStanding + tuning.twistDropWalking * walk) * Math.min(1, Math.abs(twist.hips) / tuning.twistFull);
     drop += this.crouchDrop;
+    // (sitting: down as far as her pose lifts her higher ankle, so both feet reach the floor; the other knee bends)
+    if (this.seat > 0) drop += Math.max(0, lift[0], lift[1]);
+    // SITTING, WHERE HER FEET GO (see `seatSpread`): from the spots they stood on as she began, stepped out across her
+    // to her seated width (half each side) and slid forward as she settles. And her hips come down a little more if a
+    // leg could not reach its spot straight (her feet stepped wide while she still stands tall: 2-3 cm, or they hung)
+    if (this.seat > 0) {
+      if (!this.seatWas) for (let side = 0; side < 2; side++) {
+        const e = legs[side].ankle.matrixWorld.elements, foot = feet[side];
+        this.seatBase[side * 2] = foot.locked ? foot.lockX : e[12] + foot.offX;
+        this.seatBase[side * 2 + 1] = foot.locked ? foot.lockZ : e[14] + foot.offZ;
+      }
+      const yaw = root.rotation.y, ax = Math.sin(yaw), az = Math.cos(yaw), lx = az, lz = -ax;
+      const across = (this.seatBase[0] - this.seatBase[2]) * lx + (this.seatBase[1] - this.seatBase[3]) * lz;
+      // (where she is about to be moved by: her sway, and back over the seat)
+      const sx = motion.sway * az - ax * seatBack, sz = -motion.sway * ax - az * seatBack;
+      for (let side = 0; side < 2; side++) {
+        const out = Math.max(0, (this.seatWidth - across) / 2) * this.seatSpread[side] * (side === 0 ? 1 : -1);
+        const x = this.seatBase[side * 2] + lx * out + ax * this.seatAhead, z = this.seatBase[side * 2 + 1] + lz * out + az * this.seatAhead;
+        this.seatSpot[side * 2] = x; this.seatSpot[side * 2 + 1] = z;
+        // (her hip now, and the spot as it is before she is moved: how far down her hips must be for a leg a little
+        //  short of straight to reach it)
+        const h = legs[side].hip.matrixWorld.elements, across2 = (h[12] - (x - sx)) ** 2 + (h[14] - (z - sz)) ** 2;
+        const reach = this.legReach[side] * 0.985;
+        if (across2 < reach * reach) drop = Math.max(drop, h[13] - root.position.y - this.standY[side] - this.groundUnder[side] - Math.sqrt(reach * reach - across2));
+      }
+    }
     this.drop = drop;
 
     // ---- each foot: held to its spot and on the floor if it is planted, clear of the floor if it swings ----
@@ -480,8 +565,8 @@ export class FootGround {
     }
     for (let side = 0; side < 2; side++) if (!Number.isFinite(this.footFace[side])) this.footFace[side] = yaw;
     const turnedBy = wrapAngle(yaw - this.squareYaw);   // (+: she has turned to her left)
-    // (she is about to be moved sideways by her sway: toward her left, which is across her forward)
-    const shiftX = motion.sway * aheadZ, shiftZ = -motion.sway * aheadX;
+    // (she is about to be moved sideways by her sway: toward her left, which is across her forward; and, sitting, back)
+    const shiftX = motion.sway * aheadZ - aheadX * seatBack, shiftZ = -motion.sway * aheadX - aheadZ * seatBack;
     const fade = Math.exp(-dt / tuning.release);
     // HER STANCE: standing, each foot's home is spread out from where her pose stands it, to her shoulder width (her
     // left is across her forward: x = cos(yaw), z = -sin(yaw)); walking, the builder's stride has its own width
@@ -494,7 +579,7 @@ export class FootGround {
       foot.homeZ = foot.ankle.z + leftZ * out;
     }
     // STANDING: WHICH FOOT STEPS NEXT (when none is stepping; none while squaring up)
-    if (!walking && !squaring && this.stepFoot < 0) {
+    if (!walking && !squaring && this.stepFoot < 0 && this.seat <= 0) {
       if (crab && crab.speed >= tuning.crabFrom && this.shoulderWidth > 0) {
         // THE CRAB STEP: how far each foot is out from its home, the way she goes (+ ahead of it, - left behind)
         const width = this.shoulderWidth;
@@ -585,7 +670,15 @@ export class FootGround {
       foot.knee.addScaledVector(line, -foot.knee.dot(line));
       // where her pose (and her sway, and her stance) puts this ankle over the ground
       const poseX = foot.homeX + shiftX, poseZ = foot.homeZ + shiftZ;
-      if (squaring) {
+      if (this.seat > 0) {
+        // SITTING: held to the spot it stood on as she began, stepped out sideways to her seated width and slid forward
+        // as she settles (see `seatSpread`); never slipping, never stepping on its own
+        foot.locked = true;
+        foot.lockX = this.seatSpot[side * 2];
+        foot.lockZ = this.seatSpot[side * 2 + 1];
+        foot.offX = foot.lockX - poseX;
+        foot.offZ = foot.lockZ - poseZ;
+      } else if (squaring) {
         // SQUARING UP: from where it was when this began (its offset from home), home, eased; let go meanwhile, and
         // held where it lands at the end
         if (!this.squareBegun) {
@@ -629,6 +722,7 @@ export class FootGround {
       if (swing[side] >= 0) want = Math.max(want, tuning.clear * walk * ease(0, tuning.clearEase, swing[side]) * ease(0, tuning.clearEase, 1 - swing[side]));
       if (this.stepFoot === side) want = Math.max(want, this.stepHigh * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)));
       // (squaring up: lifted a little on the way, if it has any way to go)
+      if (this.seat > 0) want = Math.max(want, this.seatLift[side]);
       if (squaring) want = Math.max(want, tuning.squareHeight * Math.min(1, Math.hypot(this.squareFrom[side * 2], this.squareFrom[side * 2 + 1]) / 0.05) * Math.sin(Math.PI * this.squareClock));
       foot.raise = want - above;
       this.raised[side] = foot.raise > tuning.least ? foot.raise : 0;
@@ -674,6 +768,9 @@ export class FootGround {
     this.hopNow = this.stepFoot >= 0 && this.stepHop > 0 ? this.stepHop * Math.sin(Math.PI * clamp(this.stepClock, 0, 1)) : 0;
     fit.position.y = this.fitFloorY - drop + this.hopNow;
     fit.position.x = motion.sway;
+    // (sitting: back over the seat; her root's own scale, as her root is what is turned and scaled)
+    fit.position.z = -seatBack / Math.max(1e-6, root.scale.z);
+    this.seatWas = this.seat > 0;
     // (squaring up: its starting places taken; done once her feet are home, set square to her)
     if (squaring) {
       this.squareBegun = true;

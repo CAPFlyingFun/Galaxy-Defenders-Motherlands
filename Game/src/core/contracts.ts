@@ -200,8 +200,15 @@ export interface HeroineBody {
   setWaterDepth?(metres: number): void;
   /** Her skin's own shine: -1 dry .. 0 natural .. +1 oily (Settings -> HEROINE -> Skin shine). */
   setSkinShine?(oily: number): void;
-  /** Squat down for this many seconds, then stand up (the bathroom, until there is a toilet). */
+  /** Squat down for this many seconds, then stand up (the bathroom, where there is no room for a toilet). */
   squatFor?(seconds: number): void;
+  /**
+   * SITTING (heroine/fast/sitPose.ts; the pop-up toilet, src/world/toilet.ts): where a seat must be for her to sit as
+   * she stands now: its top's height over her floor and how far behind her it is (the point under her hips), metres.
+   */
+  seatFor?(): { top: number; back: number };
+  /** Sit down onto the seat behind her (SIT.downSeconds), stay this many seconds, then get up (SIT.upSeconds). */
+  sitFor?(seconds: number): void;
   /**
    * HER STANCE (Joshua, 2026-11-20; heroine/fast/groundPose.ts): standing, crouching, on her belly, or on all fours. She
    * gets there over a second or so (crouching first, then down; up through her crouch).

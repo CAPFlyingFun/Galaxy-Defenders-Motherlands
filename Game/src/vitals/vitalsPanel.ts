@@ -20,6 +20,12 @@
 //
 // Under the card, small CHIPS show only while they apply: her pregnancy week, a kick, winded, pain, hungry, thirsty.
 //
+// BASICS OR ALL (Joshua, 2026-11-22: "how about we keep the basics, and hide the rest or have the rest optional
+// information to display"; Settings -> HUD -> Vitals shown, `setShown`): BASICS, the default, shows only the four big
+// places (health, water, food, stamina, with an urgent one swapped in as above), in either layout: the list's first
+// column without her heart, breathing and speed; the gauges' four round ones without the numbers on the left or the
+// hexagons. ALL shows everything, as before. The chips show in both.
+//
 // It only DRAWS. It is handed a reading (heroineVitals.ts) and a few things from the game (her speed, her pace, the
 // chips' states) and shows them. It only touches the page when something it shows has changed (cheaper on a phone).
 // It never takes a touch: the HUD's controls stay free (Joshua's rule for the top-left corner).
@@ -28,6 +34,8 @@ import type { VitalsReading } from './heroineVitals';
 
 /** Which layout (heroineSettings.ts `vitalsStyle`). */
 export type VitalsStyle = 'list' | 'gauges';
+/** How much it shows (heroineSettings.ts `vitalsShown`). */
+export type VitalsShown = 'basics' | 'all';
 /** Which units her speed and temperature are shown in (heroineSettings.ts `units`). */
 export type VitalsUnits = 'imperial' | 'metric' | 'both';
 
@@ -239,6 +247,13 @@ export class VitalsPanel {
   private readonly gaugesCard: HTMLElement;
   private readonly listCard: HTMLElement;
   private style: VitalsStyle = 'list';
+  private shown: VitalsShown = 'basics';
+  /** What BASICS hides: the gauges' left numbers, their hexagons (back, ring and middle), and the list's heart, breathing
+   *  and speed rows and its second column; and the gauges' box, made shorter. */
+  private readonly allOnly: (HTMLElement | SVGElement)[] = [];
+  private readonly gaugesBox: HTMLElement;
+  private readonly listGrid: HTMLElement;
+  private readonly gaugesSvg: SVGElement;
   private units: VitalsUnits = 'both';
   /** GAUGES: the hearts (one in each layout: they beat), the numbers on the left, and the eleven gauges. */
   private readonly hearts: HTMLElement[] = [];
@@ -280,6 +295,7 @@ export class VitalsPanel {
     // ---- LAYOUT A, GAUGES ---------------------------------------------------------------------------------------
     this.gaugesCard = make('div', 'gd-vitals-card', this.element);
     const left = make('div', 'gd-vitals-left', this.gaugesCard);
+    this.allOnly.push(left);
     const heartLine = make('div', '', left);
     this.hearts.push(make('span', 'gd-vitals-heart', heartLine, '❤️'));
     heartLine.append(' ');
@@ -296,7 +312,9 @@ export class VitalsPanel {
     //  MOVE stick already, and WINDED has its chip.)
     this.gSpeedOther = make('small', 'gd-vitals-dim gd-vitals-num', speedLine);
     const gauges = make('div', 'gd-vitals-gauges', this.gaugesCard);
+    this.gaugesBox = gauges;
     const svg = document.createElementNS(SVG, 'svg');
+    this.gaugesSvg = svg;
     svg.setAttribute('width', '230');
     svg.setAttribute('height', '126');
     gauges.appendChild(svg);
@@ -331,12 +349,16 @@ export class VitalsPanel {
       const value = make('span', '', mid);
       value.style.fontSize = `${numberPx}px`;
       this.slots.push({ ring, mid, emoji, value });
+      // (the hexagons are ALL only: BASICS keeps the four round ones)
+      if (!round) this.allOnly.push(back, ring, mid);
     }
 
     // ---- LAYOUT B, THE LIST -------------------------------------------------------------------------------------
     this.listCard = make('div', 'gd-vitals-card', this.element);
     const list = make('div', 'gd-vitals-list', this.listCard);
+    this.listGrid = list;
     const columnA = make('div', '', list), columnB = make('div', '', list);
+    this.allOnly.push(columnB);
     const row = (parent: HTMLElement, emoji = ''): ListRow => {
       const line = make('div', 'gd-vitals-row', parent);
       return { row: line, emoji: make('span', '', line, emoji), number: make('b', '', line), name: make('i', '', line) };
@@ -347,6 +369,7 @@ export class VitalsPanel {
     this.lBreath = row(columnA, '🫁');
     this.lBreath.name.textContent = 'br/min';
     this.lSpeed = row(columnA, '🏃‍♀️');
+    this.allOnly.push(this.lRate.row, this.lBreath.row, this.lSpeed.row);
     for (let i = 0; i < VITALS_PRIORITY.length; i++) this.lStats.push(row(i < BIG ? columnA : columnB));
 
     // ---- CHIPS ----------------------------------------------------------------------------------------------------
@@ -366,6 +389,23 @@ export class VitalsPanel {
       thirsty: chip('💧 THIRSTY', '#7fc8ff'),
     };
     this.setStyle('list');
+    this.setShown('basics');
+  }
+
+  /** How much it shows (Settings -> HUD -> Vitals shown): the basics, or all of it. */
+  setShown(shown: VitalsShown): void {
+    this.shown = shown;
+    const all = shown === 'all';
+    for (const el of this.allOnly) {
+      if (el instanceof HTMLElement) el.hidden = !all; else el.style.display = all ? '' : 'none';
+    }
+    // (BASICS: the gauges' box only as tall as the round ones)
+    const tall = all ? 126 : 50;
+    this.gaugesBox.style.height = `${tall}px`;
+    this.gaugesSvg.setAttribute('height', String(tall));
+    // (and the list one column wide: its gap would leave the card 10 px too wide)
+    this.listGrid.style.gridTemplateColumns = all ? '' : 'auto';
+    this.last.clear();
   }
 
   /** Which layout to show (Settings -> HUD -> Vitals style). */

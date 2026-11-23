@@ -37,7 +37,7 @@ import { clearAndStartFresh } from '../core/freshStart';
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
 /** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
-export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'mustGo' | 'bathroom' | 'tired';
+export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'needToGo2' | 'mustGo' | 'bathroom' | 'tired';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -536,6 +536,7 @@ export class Hud {
     element('small', 'gd-note', settings, 'How shiny her bare skin is: dry (matte, a little darker) to oily (glossy). Water makes her wet up to where it came: shiny at once, for 2 minutes, then drying over 30 s (Get wet in TEST TOOLS to try it).');
     // ---- Settings: her vitals card (Joshua, 2026-11-21: two layouts to choose from, the list by default; units) ------
     element('h2', 'gd-settings-part', settings, 'HUD');
+    choiceRow('Vitals shown', 'vitalsShown', [['Basics', 'basics'], ['All', 'all']], 'Basics: health, water, food and stamina; another (the bathroom near full, energy nearly gone...) takes a place while it is urgent. All: her heart, breathing and speed and all eleven stats. Changes at once.');
     choiceRow('Vitals style', 'vitalsStyle', [['List', 'list'], ['Gauges', 'gauges']], 'List: each stat as an icon, its number and its name, in two columns. Gauges: the four most important as round gauges, the rest as hexagons. An urgent one moves up into the first places. Changes at once.');
     choiceRow('Units', 'units', [['Both', 'both'], ['Imperial (mph, °F)', 'imperial'], ['Metric (km/h, °C)', 'metric']], 'Her speed and her body temperature.');
     // ---- Settings: sound (Joshua, 2026-11-21: her breathing, the game's first sound; audio/sound.ts, breathSound.ts)
@@ -573,7 +574,8 @@ export class Hud {
     intakeRow([['Sip 100 mL', 'sip'], ['Bottle 500 mL', 'bottle'], ['Canteen 1 L', 'canteen']]);
     intakeRow([['Make hungry', 'hungry'], ['Make thirsty', 'thirsty'], ['Bathroom', 'bathroom']]);
     // (to test THE BATHROOM BAR and the 🚽 button: her bladder to the urge, 350 mL, or a strong urge, 520 mL)
-    intakeRow([['Need to go', 'needToGo'], ['Must go now', 'mustGo'], ['Make tired', 'tired']]);
+    intakeRow([['Need to go', 'needToGo'], ['Need to go #2', 'needToGo2'], ['Must go now', 'mustGo']]);
+    intakeRow([['Make tired', 'tired']]);
     element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 10 s and her bladder is emptied (until there is a toilet). From 85% full the 🚽 counts down; at 0:00 she goes wherever she is. Make tired: her energy to 10% (standing still brings it back). The full readout shows her stomach and bladder.');
     choiceRow('Body clock', 'bodyClock', [['1x (real time)', 1], ['6x (1 h = 6 h)', 6], ['15x (as it was)', 15], ['60x (fast test)', 60]], 'How fast her stomach empties and her bladder fills: game hours for each real hour.');
     element('h2', 'gd-settings-part', settings, 'TEST TOOLS');

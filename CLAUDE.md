@@ -858,6 +858,44 @@ use the game's single copy of three.js.
   so no button is drawn over them; the subtitles stay under the controls. The passage gives `sOf`, `pointAt` and
   `outline` for them. Tested on the built game at 932 x 430: the arrows, the map small and big, the distance, the
   display top left, first person, no errors.
+- v0.2.155: THE BASICS ON THE VITALS CARD, BATHROOM TIMES, AND THE POP-UP TOILET (Joshua, 2026-11-22: "keep the
+  basics, and hide the rest or have the rest optional information to display"; "food ... (make it 12s), and the water
+  💧 quicker at 5s"; heart rate "not really needed" under basics; "12s for both"; then "a procedural toilet 🚽 that pops
+  up just behind where either one are standing, and then can test the sitting pose... Don't need any animations right
+  now except getting up and down"; both in one push). (1) Settings -> HUD -> VITALS SHOWN (`gdm.vitalsShown`,
+  `?vitals_shown=`, live; vitalsPanel.ts `setShown`): BASICS, the default, only ⛑️ health, 💧 water, 🍽️ food, ⚡️ stamina
+  (an urgent one still swaps into the four while urgent: the 🚽 from 85% takes stamina's place); in either layout (the
+  gauges' four round ones); no heart rate, breathing or speed; the chips as before. ALL: the card as it was.
+  (2) A VISIT (heroineVitals.ts `bathroomVisit`, `BATHROOM_VISIT`): 12 s once her rectum is at its urge (the builder's
+  RECTUM.urgeMl 150 mL), bowels and bladder both emptied (one 12 s visit, not 12 + 5); 5 s for her bladder only, her
+  rectum left (`relieve(bowels)`). Both characters, the brain's own visits and "must go now". Test: FOOD & DRINK -> Need
+  to go #2 (rectum 200 mL). (3) THE POP-UP TOILET (`world/toilet.ts` `PopUpToilet`, one in each character's kit): white,
+  made in code (a lathe bowl with water, the deck, the tank with its lid and a chrome lever on its side, a rounded seat
+  ring and the lid up against the tank); the 🚽 GROWS IT IN (0.3 s) behind whoever goes, its seat's middle under where
+  their hips come to rest, its top at THEIR seat height; it SHRINKS AWAY once they are up. No room there (in water; the
+  ground 10 cm higher or lower; a wall, a building, the dome, a tree trunk or the tunnel's rock in the way, tested with the
+  walls that stop walking, main.ts `toiletFits`; the other character there) and they squat as before.
+  (4) SITTING DOWN AND GETTING UP (`heroine/fast/sitPose.ts`), AFTER HIS REFERENCE DIAGRAM (Joshua: a sit-to-stand
+  figure, "works the same in reverse"; "make the first part 1s long... increase it to 3s total"; "make sure the feet are
+  0.6m apart"; the feet drawn back "add now"; "fix his hands as well"): THE BUILDER'S OWN SIT (humanSeated.ts
+  `poseSeated` 'sit', the PREGNANT posture SETTLED, as her room sits her v2 body: knees parting round a bigger belly,
+  hands resting on her thighs; JOHN the same sit with no belly: the builder's plain sit held his hands out in front of
+  him as at a desk) laid over her by how far down her hips are. SITTING DOWN, 3 s (`SIT`, `sitPhase`): 0-0.6 s her feet
+  STEP APART, left then right, to 0.6 m middle to middle (`SIT.feetApart`); 0.2-2 s her hips go down and back onto the
+  seat, her body LEANING FORWARD AT HER HIPS as they go (most, 40 degrees, as they reach the seat; `atHips` 0.7 of it
+  her pelvis tipped about her hip joints with her thighs turned back so her legs stay, a little in her lower back and
+  chest, her head turned back up by 0.6 of it), her feet DRAWN BACK under her knees (`SIT.tuck` 0.12 m); 2-3 s she sits
+  back upright and her feet slide forward to rest. GETTING UP is the same backwards: 1 s leaning forward with her feet
+  drawn back, 2 s rising, her feet stepping back together at the end. Her FEET SYSTEM does the moving (footGround.ts
+  `seat`, `seatSpread`, `seatLift`, `seatTuck`, `seatAhead`): she is lowered as far as the pose lifts her ankles and
+  moved BACK as far as it swings them forward less the tuck (`fit.position.z`); her feet are held from the spots they
+  stood on (stepped out, slid forward), no steps of their own while she sits. WHERE THE SEAT GOES (`seatFor`,
+  `seatShape`): the same sit worked out on her bind (`posedJoints`), her standing ankle height, less `SIT.pad` 0.1 m of
+  flesh under her hips, the tuck nearer. Seated, she faces the toilet and her head alone looks round (as at the table:
+  bodyTurn `hold` + `grip`). A visit takes 3 + 5 or 12 + 3 s. MEASURED and pictured from the side at each stage, as
+  his diagram, and from the front: see the commit. Her clothes stay on (only the pose for now).
+  LATER (Joshua): real toilets in the world that the brain and the player go to (routines.ts already has a bathroom
+  place).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

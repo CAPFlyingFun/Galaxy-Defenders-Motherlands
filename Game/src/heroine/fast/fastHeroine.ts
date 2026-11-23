@@ -57,6 +57,7 @@ import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
+import { SIT, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
@@ -292,6 +293,8 @@ export interface FastHeroineStats {
 }
 
 export interface FastHeroine extends HeroineBody {
+  /** How far through sitting she is (0 standing .. 1 seated), and how far back and down it has her, metres: for tests. */
+  sitInfo(): { share: number; back: number; drop: number };
   stats(): FastHeroineStats;
   /** Change her detail: 'auto' or a fixed level. Takes effect as soon as the level is ready (at once if it was made before). */
   setDetail(detail: DetailChoice): void;
@@ -547,8 +550,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   /** Her feet in her model's own height (the bottom of her baked shape): the water line is measured up from here. */
   const feetInModel = box.min.y;
   let waterDepth = 0;
-  /** Seconds left of squatting on purpose (`squatFor`: the bathroom, for now). */
+  /** Seconds left of squatting on purpose (`squatFor`: the bathroom where there is no room for a toilet). */
   let squatLeft = 0;
+  /**
+   * SITTING (sitPose.ts; `sitFor`, the pop-up toilet): whether she is to be seated (going down, or down), the seconds
+   * still to stay once she is down, and how far into sitting down she is, seconds (0 standing .. SIT.seconds seated and
+   * settled). Getting up runs that back to 0, the same way backwards.
+   */
+  let sitAsked = false, sitLeft = 0, sitT = 0;
+  const sitOut: MutableJointTurn[] = [];
+  const sitNow: SitPhase = { legs: 0, lean: 0, apart: [0, 0], lift: [0, 0], ahead: 0 };
+  const hipsBefore = new THREE.Vector3(), hipsAfter = new THREE.Vector3(), hipsOther = new THREE.Vector3(), rootTurn = new THREE.Quaternion();
   if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
   skin.castShadow = false;
@@ -676,6 +688,17 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   // (which side is her left along X is measured from her joints, not assumed)
   const leftSign = Math.sign(bone(joints.shoulderL).getWorldPosition(new THREE.Vector3()).x - bone(joints.shoulderR).getWorldPosition(new THREE.Vector3()).x) || 1;
   const arms = { left: arm(leftSign, joints.shoulderL, joints.elbowL, joints.wristL), right: arm(-leftSign, joints.shoulderR, joints.elbowR, joints.wristR) };
+  // WHERE A SEAT GOES FOR HER (sitPose.ts `seatShape`): as she stands now, her ankles' height over her floor, and her
+  // hips ahead of her root and her ankles ahead of her hips, along her forward (metres); and her bind's units in metres
+  root.updateMatrixWorld(true);
+  const standing = (() => {
+    const at = (i: number): THREE.Vector3 => bones[i].getWorldPosition(new THREE.Vector3());
+    const hips = at(joints.hipL).add(at(joints.hipR)).multiplyScalar(0.5), ankles = at(joints.ankleL).add(at(joints.ankleR)).multiplyScalar(0.5);
+    const ax = Math.sin(root.rotation.y), az = Math.cos(root.rotation.y);
+    const ahead = (p: THREE.Vector3): number => (p.x - root.position.x) * ax + (p.z - root.position.z) * az;
+    return { ankleHeight: ankles.y - root.position.y, hipsAhead: ahead(hips), anklesAheadOfHips: ahead(ankles) - ahead(hips) };
+  })();
+  const metresPerUnit = motion.legMetres / Math.max(1e-6, motion.measure.legLength);
   // HER SIZES FOR CROUCHING AND CRAWLING (groundPose.ts), measured from her own bones as she stands now (metres), and
   // the middle of her hips in her model's group (`fit`): the point her body is tipped forward about to lie down.
   root.updateMatrixWorld(true);
@@ -1634,6 +1657,21 @@ if (uHideHead > 0.5) {
     setPregnant(on: boolean): void { live?.setPregnant(on); },
     setWaterDepth(metres: number): void { waterDepth = Math.max(0, metres); },
     squatFor(seconds: number): void { squatLeft = Math.max(squatLeft, seconds); },
+    // SITTING (sitPose.ts): where the seat must be for her, as she stands and as big as her belly is now: its top over
+    // her floor (her ankles' height, plus her hips over her ankles seated, less the flesh under her hips), and how far
+    // behind her root the point under her hips is (her ankles swing forward of her hips by this much more than they
+    // stand, so she goes back by that, from where her hips stand)
+    //  (her feet drawn back SIT.tuck under her knees as she sits: the seat is that much nearer)
+    seatFor(): { top: number; back: number } {
+      const shape = seatShape(motion.measure, motion.bind, male ? 0 : body.belly, metresPerUnit);
+      return {
+        top: standing.ankleHeight + shape.hipsAboveAnkles - SIT.pad,
+        back: shape.anklesAhead - SIT.tuck - standing.anklesAheadOfHips - standing.hipsAhead,
+      };
+    },
+    sitFor(seconds: number): void { sitAsked = true; sitLeft = Math.max(sitLeft, seconds); },
+    /** How far through sitting she is (0 standing .. 1 seated), and how far back and down it has her, metres: for tests. */
+    sitInfo: () => ({ share: sitT / SIT.seconds, back: ground.seatBack, drop: ground.drop }),
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
     soakSkin(): void { wetness.soak(); },
     bellyNow: () => body.belly,
@@ -1762,6 +1800,24 @@ if (uHideHead > 0.5) {
       // (the same four on a live level, where they sit among all her other shapes)
       for (let i = 0; i < 4; i++) if (liveMotionAt[i] >= 0) liveInfluences[liveMotionAt[i]] = motion.weights[i];
 
+      // SITTING DOWN AND GETTING UP (sitPose.ts `sitPhase`, Joshua's diagram): the builder's sit laid over her by how
+      // far down her hips are; her feet system then lowers her and moves her back onto the seat, her feet stepped
+      // apart, drawn back under her knees and slid forward to rest as she settles (footGround.ts `seat`)
+      if (sitAsked) {
+        sitT = Math.min(SIT.seconds, sitT + frame.dt);
+        if (sitT >= SIT.seconds) { sitLeft -= frame.dt; if (sitLeft <= 0) { sitAsked = false; sitLeft = 0; } }
+      } else if (sitT > 0) sitT = Math.max(0, sitT - frame.dt);
+      sitPhase(sitT, sitNow);
+      const sitS = sitNow.legs;
+      if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS);
+      // (from the first moment, for her feet's step out, though her hips have not begun to go down)
+      ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
+      ground.seatSpread[0] = sitNow.apart[0]; ground.seatSpread[1] = sitNow.apart[1];
+      ground.seatLift[0] = sitNow.lift[0]; ground.seatLift[1] = sitNow.lift[1];
+      ground.seatWidth = SIT.feetApart;
+      ground.seatTuck = SIT.tuck * sitS;
+      ground.seatAhead = sitNow.ahead;
+
       // Her feet on the floor (footGround.ts): she is set down on the foot that carries her, each planted foot held
       // to the spot it landed on. How much of her legs' rise and fall shows is her look's Bob, eased off with her speed.
       // EACH PART OF HER TURNED ITS OWN WAY (`setFacing`; the rule is the game's, input/bodyTurn.ts). Her hips and
@@ -1776,7 +1832,8 @@ if (uHideHead > 0.5) {
       // (crouching: her hips lower, her knees bent to keep her feet on the ground; lying down or on all fours her feet
       //  no longer carry her, so they are let go, to be set down afresh when she stands)
       ground.crouchDrop = STANCE.crouchDrop * motion.legMetres * crouchS;
-      if (downW < 1) ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing && downS < 0.5 ? legTwist : null, crab);
+      // (seated, her hips and legs stay square to the seat: no turning them apart)
+      if (downW < 1) ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing && downS < 0.5 && sitS <= 0 ? legTwist : null, crab);
       else ground.letGo();
       // CROUCHED, HER BACK LEANS FORWARD (most of it low in her back), about the line across her hips
       if (crouchS > 0 && downS < 1) {
@@ -1787,6 +1844,28 @@ if (uHideHead > 0.5) {
         turnAbout(bone(joints.chest), leanAxis, lean * 0.35);
         // (her head kept up, looking ahead, not at the ground)
         turnAbout(bone(joints.neck), leanAxis, -lean * 0.8);
+      }
+      // SITTING DOWN OR GETTING UP, SHE LEANS FORWARD AT HER HIPS (Joshua's diagram: her weight over her feet as her
+      // hips leave or reach the seat, then upright): her pelvis tipped forward about her hip joints, her thighs turned
+      // back by as much so her legs stay as they are, and her body moved so her hip joints stay where they were; a
+      // little of it in her lower back and chest; her head turned back up by most of it, looking ahead
+      if (sitNow.lean > 1e-4) {
+        const lean = sitNow.lean, hinge = lean * SIT.atHips;
+        leanAxis.set(Math.cos(yawNow), 0, -Math.sin(yawNow));   // (her left: a turn about it tips her top forward)
+        root.updateMatrixWorld(true);
+        hipsBefore.setFromMatrixPosition(bone(joints.hipL).matrixWorld).add(hipsOther.setFromMatrixPosition(bone(joints.hipR).matrixWorld)).multiplyScalar(0.5);
+        turnAbout(bone(joints.pelvis), leanAxis, hinge);
+        turnAbout(bone(joints.hipL), leanAxis, -hinge);
+        turnAbout(bone(joints.hipR), leanAxis, -hinge);
+        root.updateMatrixWorld(true);
+        hipsAfter.setFromMatrixPosition(bone(joints.hipL).matrixWorld).add(hipsOther.setFromMatrixPosition(bone(joints.hipR).matrixWorld)).multiplyScalar(0.5);
+        // (how far her hip joints moved, back in her root's own frame: her body is moved back by as much)
+        hipsBefore.sub(hipsAfter).applyQuaternion(rootTurn.copy(root.quaternion).invert()).divide(root.scale);
+        fit.position.add(hipsBefore);
+        turnAbout(bone(joints.spine), leanAxis, lean * SIT.atSpine);
+        turnAbout(bone(joints.chest), leanAxis, lean * SIT.atChest);
+        turnAbout(bone(joints.neck), leanAxis, -lean * SIT.headUp);
+        root.updateMatrixWorld(true);
       }
 
       // ON HER BELLY OR ON ALL FOURS (groundPose.ts): STEP BY STEP, as a person gets down (Joshua, 2026-11-21: "a more

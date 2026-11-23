@@ -149,6 +149,12 @@ export interface HeroineSettings {
    * clean two-column list of icon, number and name; 'gauges' round and hexagon gauges (vitals/vitalsPanel.ts). Live.
    */
   vitalsStyle: 'list' | 'gauges';
+  /**
+   * HOW MUCH OF HER VITALS THE CARD SHOWS (Joshua, 2026-11-22: "how about we keep the basics, and hide the rest or have
+   * the rest optional information to display"): 'basics', the default, her four most important (health, water, food,
+   * stamina), an urgent one swapping in while it is urgent; 'all' everything, as before. Live.
+   */
+  vitalsShown: 'basics' | 'all';
   /** Units for her speed and temperature (Joshua: "Both, with imperial and metric units in settings"). Live. */
   units: 'imperial' | 'metric' | 'both';
   /**
@@ -262,6 +268,7 @@ export const SETTING_KEYS = Object.freeze({
   soundVolume: 'gdm.soundVolume',
   breathVolume: 'gdm.breathVolume',
   vitalsStyle: 'gdm.vitalsStyle',
+  vitalsShown: 'gdm.vitalsShown',
   units: 'gdm.units',
   npcThoughts: 'gdm.npcThoughts',
 });
@@ -356,6 +363,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     breathVolume: asNumber(address.get('breath') ?? read(SETTING_KEYS.breathVolume), 0, 100) ?? SOUND_START.breath,
     // (the list unless the gauges were chosen; both units unless one was)
     vitalsStyle: (address.get('vitals') ?? read(SETTING_KEYS.vitalsStyle)) === 'gauges' ? 'gauges' : 'list',
+    // (the basics unless all were chosen)
+    vitalsShown: (address.get('vitals_shown') ?? read(SETTING_KEYS.vitalsShown)) === 'all' ? 'all' : 'basics',
     units: ((v) => (v === 'imperial' || v === 'metric' ? v : 'both'))(address.get('units') ?? read(SETTING_KEYS.units)),
     // (on unless hidden: it is for testing the brain)
     npcThoughts: (address.get('thoughts') ?? read(SETTING_KEYS.npcThoughts)) === 'off' ? 'off' : 'on',

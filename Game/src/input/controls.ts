@@ -61,6 +61,11 @@ export class Controls {
     surface.addEventListener('pointermove', this.onPointerMove);
     surface.addEventListener('pointerup', this.onPointerUp);
     surface.addEventListener('pointercancel', this.onPointerUp);
+    // (A FINGER NEVER LEFT ON THE VIEW BY MISTAKE, see `onPointerDown`: one that loses its hold on the view, or is
+    //  lifted anywhere on the page, is let go as well)
+    surface.addEventListener('lostpointercapture', this.onPointerUp);
+    window.addEventListener('pointerup', this.onPointerUp, true);
+    window.addEventListener('pointercancel', this.onPointerUp, true);
     surface.addEventListener('wheel', this.onWheel, { passive: false });
     // Stop the long-press / right-click menu from covering the game.
     surface.addEventListener('contextmenu', this.onContextMenu);
@@ -121,6 +126,9 @@ export class Controls {
     this.surface.removeEventListener('pointermove', this.onPointerMove);
     this.surface.removeEventListener('pointerup', this.onPointerUp);
     this.surface.removeEventListener('pointercancel', this.onPointerUp);
+    this.surface.removeEventListener('lostpointercapture', this.onPointerUp);
+    window.removeEventListener('pointerup', this.onPointerUp, true);
+    window.removeEventListener('pointercancel', this.onPointerUp, true);
     this.surface.removeEventListener('wheel', this.onWheel);
     this.surface.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('keydown', this.onKeyDown);
@@ -131,6 +139,13 @@ export class Controls {
   // ---- The view surface: drag to look, pinch to zoom --------------------------
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    // A FINGER NEVER LEFT ON THE VIEW BY MISTAKE (Joshua, 2026-11-22: "instead of the half of the screen panning the
+    // camera around like normal, the different directions suddenly were zoom in and out"): a finger whose lifting
+    // never reached us (a touch cut off: an overlay opened, the phone took the gesture) stayed in `pointers` for good,
+    // so every drag after it was the SECOND finger of a pinch, and moving toward or away from where the lost one was
+    // left zoomed. The first finger of a new touch (`isPrimary`: no other finger is on the screen ANYWHERE, the sticks
+    // and buttons too) means any finger still in the list is a lost one: they are let go first.
+    if (event.isPrimary && this.pointers.size > 0) { this.pointers.clear(); this.pinchDistance = 0; }
     // "Capture" keeps the drag coming to us even if the finger slides over a button.
     this.surface.setPointerCapture(event.pointerId);
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });

@@ -917,6 +917,16 @@ use the game's single copy of three.js.
   FIRST PERSON the view is her head, so it does all of this; turning the view frees her head until she is up
   (`freeLook`, `sitLook`), the view going on from her head's way left and right too (main.ts sets `rig.yaw`). John the
   same.
+- v0.2.157: A LOST FINGER NO LONGER TURNS DRAGS INTO ZOOM (Joshua, 2026-11-22, his screenshot in SIDE L: "instead of
+  the half of the screen panning the camera around like normal, the different directions suddenly were zoom in and
+  out... I am not sure how it happened"). `input/controls.ts` keeps the fingers on the view (`pointers`); a finger
+  whose lifting never reached it (a touch cut off: an overlay opened mid-drag, the phone took the gesture) stayed in the
+  list for good, so every later one-finger drag was the second finger of a pinch, and moving toward or away from where
+  the lost one was zoomed (only a reload cleared it). Now: the first finger of a new touch (`isPrimary`: no other finger
+  anywhere on the screen, sticks and buttons too) lets any finger still in the list go; a finger that loses its hold on
+  the view (`lostpointercapture`) or is lifted anywhere on the page (window `pointerup`/`pointercancel`) is let go.
+  Tested on the built game: a lost finger, then a new drag turns the view (no zoom), nothing left in the list; a real
+  two-finger pinch still zooms.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

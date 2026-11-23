@@ -10,14 +10,19 @@
 //   TIME CARD    a line of capitals in the middle of the black, typed out.
 //   SUBTITLE     bottom middle, between the MOVE stick and the right-hand buttons: who speaks (a radio voice in
 //                A.R.C.H. teal, marked RADIO) and what they say.
-//   OBJECTIVE    top middle, small: OBJECTIVE, its name, and a line under it (what is found so far). Ticked off when done.
+//   OBJECTIVE    along the top, small: OBJECTIVE and how far it is (metres along the way), its name, and a line under
+//                it (what is found so far). Ticked off when done.
 //   HINT         under the objective for a few seconds: how a control works, the first time it is needed.
 //   SCANNING     a bar in the middle while the scanner reads, then the scanner's DISPLAY: the inscription's symbols,
 //                known in teal with their numbers, unknown with a "?", and a few lines of what it found. A tap closes it.
+//                OVER HER VITALS CARD, top left (Joshua, 2026-11-22, after v0.2.153: "the UI does kind of get in the
+//                way": in the middle of the screen it covered the view and CROUCH and PRONE were drawn over it).
 //   END CARD     the scene complete: what comes next, and two buttons.
 //
-// Nothing here takes a touch but the scanner's display and the end card's buttons: the game is played through it.
-// Made before the game's controls (main.ts), so every control is drawn over it.
+// Nothing here takes a touch but the scanner's display, the end card's buttons and the minimap (ui/miniMap.ts): the
+// game is played through it. TWO LAYERS: the subtitles, objective and hints are made before the game's controls
+// (main.ts), so every control is drawn over them; the scanner's display, the end card and the minimap are in the TOP
+// layer (`top`), put after the controls by `liftAbove`, so no button is drawn over them.
 // ============================================================================
 
 import './storyOverlay.css';
@@ -33,6 +38,9 @@ function make<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, 
 
 export class StoryOverlay {
   private readonly root: HTMLElement;
+  /** The layer drawn over the game's controls (the display, the end card, the minimap): see `liftAbove`. */
+  readonly top: HTMLElement;
+  private readonly host: HTMLElement;
   private readonly fadeLayer: HTMLElement;
   private readonly timeCard: HTMLElement;
   private readonly subtitle: HTMLElement;
@@ -40,6 +48,8 @@ export class StoryOverlay {
   private readonly subtitleText: HTMLElement;
   private readonly objective: HTMLElement;
   private readonly objectiveTitle: HTMLElement;
+  private readonly objectiveLabel: HTMLElement;
+  private distanceShown = '';
   private readonly objectiveLine: HTMLElement;
   private readonly hint: HTMLElement;
   private readonly scanBar: HTMLElement;
@@ -52,6 +62,7 @@ export class StoryOverlay {
   private displayClose: (() => void) | null = null;
 
   constructor(host: HTMLElement) {
+    this.host = host;
     this.root = make('div', 'st-root', host);
     this.fadeLayer = make('div', 'st-fade', this.root);
     this.timeCard = make('div', 'st-timecard', this.root);
@@ -59,7 +70,7 @@ export class StoryOverlay {
     this.subtitleWho = make('div', 'st-sub-who', this.subtitle);
     this.subtitleText = make('div', 'st-sub-text', this.subtitle);
     this.objective = make('div', 'st-objective', this.root);
-    make('div', 'st-objective-label', this.objective, 'OBJECTIVE');
+    this.objectiveLabel = make('div', 'st-objective-label', this.objective, 'OBJECTIVE');
     this.objectiveTitle = make('div', 'st-objective-title', this.objective);
     this.objectiveLine = make('div', 'st-objective-line', this.objective);
     this.hint = make('div', 'st-hint', this.root);
@@ -67,11 +78,21 @@ export class StoryOverlay {
     this.scanWords = make('div', 'st-scanbar-words', this.scanBar, 'SCANNING');
     const track = make('div', 'st-scanbar-track', this.scanBar);
     this.scanFill = make('div', 'st-scanbar-fill', track);
-    this.display = make('div', 'st-display', this.root);
-    this.card = make('div', 'st-card', this.root);
+    this.top = make('div', 'st-root st-top', host);
+    this.display = make('div', 'st-display', this.top);
+    this.card = make('div', 'st-card', this.top);
     for (const node of [this.timeCard, this.subtitle, this.objective, this.hint, this.scanBar, this.display, this.card]) node.hidden = true;
     // (the scanner's display closes at a tap anywhere on it)
     this.display.addEventListener('pointerdown', (event) => { event.stopPropagation(); this.displayClose?.(); });
+  }
+
+  /** Put the top layer after everything else in the page's UI (call once the game's controls are made). */
+  liftAbove(): void { this.host.appendChild(this.top); }
+
+  /** How far the objective is, metres along the way (null: not shown). */
+  setDistance(metres: number | null): void {
+    const text = metres === null ? 'OBJECTIVE' : `OBJECTIVE · ${Math.round(metres)} m`;
+    if (text !== this.distanceShown) { this.distanceShown = text; this.objectiveLabel.textContent = text; }
   }
 
   /** The screen faded to black (1) or clear (0), over `seconds`. */
@@ -148,7 +169,8 @@ export class StoryOverlay {
   showDisplay(title: string, ins: Inscription, lines: readonly string[], seconds: number, onClose: () => void): void {
     this.display.replaceChildren();
     make('div', 'st-display-title', this.display, title);
-    const picture = scannerCanvas(ins, 540, 66 * ins.rows.length);
+    // (drawn at twice its size on screen, for the phone's sharp screen: 326 x 34 a row)
+    const picture = scannerCanvas(ins, 652, 68 * ins.rows.length);
     picture.className = 'st-display-picture';
     this.display.appendChild(picture);
     for (const line of lines) make('div', 'st-display-line', this.display, line);
@@ -189,5 +211,6 @@ export class StoryOverlay {
     window.clearInterval(this.typing);
     window.clearTimeout(this.hintTimer);
     this.root.remove();
+    this.top.remove();
   }
 }

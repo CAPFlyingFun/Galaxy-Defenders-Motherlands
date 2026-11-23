@@ -839,6 +839,25 @@ use the game's single copy of three.js.
   the scanner's chirps, the switch). The HUD in story mode (hud.ts `setStoryMode`): no FIRE, gun buttons or rounds.
   Tested on the built game (scripted, the story's clock sped up for the test only, `story.timeScale`): the opening, first
   person, the wall's lines, SCAN, the display, the vibration, the end card, no errors; the town and island unchanged.
+- v0.2.154: THE WAY TO THE OBJECTIVE, AND THE STORY'S SCREEN OUT OF THE WAY (Joshua, 2026-11-22, after playing
+  v0.2.153 on his iPhone: 60 FPS, no crash; "the UI does kind of get in the way… and also a big one is ground arrows or
+  something to tell you which way towards your objective like maybe a little compass 🧭 or mini map… can look at how
+  TypeScript Beyond Extinction did it"). Beyond Extinction (`CAPFlyingFun/Beyond-Extinction`, artifacts/beyond-extinction)
+  guides with a chip over the objective that pins to the screen's edge as an arrow (engine/HudMarker.ts), a ring and
+  icon on the objective (ObjectiveHighlight.ts) and a blueprint minimap (Minimap.ts). In a winding passage a straight
+  arrow points into rock, so: (1) ARROWS ON THE FLOOR (`world/prologue/groundArrows.ts`): four faint teal chevrons
+  2.2-7.3 m ahead along the passage toward the objective (back the way he came if it is behind), a ripple running
+  ahead; gone within 3 m of it and while the story holds him. (2) THE MINIMAP AND COMPASS (`ui/miniMap.ts`, after BE's
+  Minimap.ts): small and round, top right beside the rail, around John and TURNED WITH THE VIEW, an N on its rim, the
+  passage, the markings (teal, grey once scanned), the objective a pulsing gold dot or a gold ARROW ON THE RIM; tapped,
+  the whole passage north up (BE's letterbox fit), tapped again small. (3) THE DISTANCE on the objective ("OBJECTIVE ·
+  76 m", metres along the passage). The story sets the place (`StoryDirector.setWaypoint`: the gap; the first wall
+  while it is to be scanned). THE SCREEN: the objective smaller; the scanner's display now OVER HER VITALS CARD, top
+  left (in the middle it covered the view and CROUCH and PRONE were drawn over it), closing by itself after 9 s; it,
+  the end card and the minimap are in the story's TOP layer, put after the controls (`StoryOverlay.top`, `liftAbove`),
+  so no button is drawn over them; the subtitles stay under the controls. The passage gives `sOf`, `pointAt` and
+  `outline` for them. Tested on the built game at 932 x 430: the arrows, the map small and big, the distance, the
+  display top left, first person, no errors.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

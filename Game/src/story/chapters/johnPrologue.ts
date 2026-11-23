@@ -69,7 +69,7 @@ const REPORTS: Record<string, ScanReport> = {
 /** The line under the objective: the walls scanned so far. */
 function scannedLine(story: StoryDirector): string {
   const n = story.scannedOf(WALLS);
-  return n === 0 ? 'Follow the passage' : `Follow the passage · markings scanned ${n} / ${WALLS.length}`;
+  return n === 0 ? 'Follow the passage' : `Follow the passage · markings ${n} / ${WALLS.length}`;
 }
 
 /** Scene 1. Runs from the first frame of play to the end of the passage. */
@@ -103,6 +103,8 @@ export async function playBeneathTheIsland(story: StoryDirector, w: PrologueWorl
   await story.wait(1.6);
   story.locked = false;
   story.objective('REJOIN THE EXPEDITION', 'Follow the passage');
+  // (the way: arrows on the floor, the minimap, the distance: to the passage's end, where the team is)
+  story.setWaypoint(w.tunnel.gapAt);
   story.hint('MOVE to walk · 🔦 LIGHT turns the flashlight off and on', 7);
 
   // ---- "These markings weren't in the original survey." -------------------------------------------------------------
@@ -113,9 +115,12 @@ export async function playBeneathTheIsland(story: StoryDirector, w: PrologueWorl
   await story.say('JOHN', 'Fair point.');
   story.objectiveLine('Scan the markings on the wall');
   if (!story.isScanned('markingA')) story.hint('Go up to the markings, look at them and tap SCAN', 7);
+  // (the way to the wall, until it is scanned or he walks on past it)
+  if (wallA && !story.isScanned('markingA')) story.setWaypoint(wallA.at);
   // John scans the wall (or, if he walks on past it, the story goes on without it)
   await Promise.race([story.scanned('markingA'), story.until(() => w.progress() > sA + 12)]);
   past = true;
+  story.setWaypoint(w.tunnel.gapAt);
   story.objectiveLine(scannedLine(story));
 
   // ---- A faint vibration passes through the stone. -------------------------------------------------------------------
@@ -137,6 +142,7 @@ export async function playBeneathTheIsland(story: StoryDirector, w: PrologueWorl
   // ---- The passage's end: the chamber's light through the gap. ------------------------------------------------------
   await story.until(() => w.progress() > w.tunnel.length - 7);
   story.objectiveDone();
+  story.setWaypoint(null);
   await story.wait(1.6);
   const found = story.scannedOf(WALLS);
   story.overlay.showCard('SCENE 1 COMPLETE', [

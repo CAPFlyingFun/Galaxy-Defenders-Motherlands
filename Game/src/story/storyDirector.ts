@@ -19,7 +19,9 @@
 // be scanned, and looking at it, the prompt bubble says SCAN (`promptWord`); a tap (`act`) reads it for a couple of
 // seconds (he can keep moving, but not walk away), then the scanner's display shows what it found.
 //
-// And the CAMERA SHAKE when the stone vibrates (`shake`, read each frame by the game: `shakeNow`).
+// And the CAMERA SHAKE when the stone vibrates (`shake`, read each frame by the game: `shakeNow`), and WHERE TO GO: the
+// objective's place (`setWaypoint`), which the game shows with arrows on the floor, the minimap's dot or rim arrow and
+// the distance on the objective (Joshua, 2026-11-22: "something to tell you which way towards your objective").
 // ============================================================================
 
 import * as THREE from 'three';
@@ -52,7 +54,7 @@ const SCAN_LOST = 4.6;
 /** How long a scan takes (seconds). */
 const SCAN_SECONDS = 2.4;
 /** How long the scanner's display stays up unless tapped away (seconds). */
-const DISPLAY_SECONDS = 12;
+const DISPLAY_SECONDS = 9;
 
 export class StoryDirector {
   readonly overlay: StoryOverlay;
@@ -118,6 +120,10 @@ export class StoryDirector {
   objectiveDone(): void { this.overlay.objectiveDone(); }
   /** A hint under the objective for a few seconds. */
   hint(text: string, seconds = 6): void { this.overlay.showHint(text, seconds); }
+
+  /** WHERE TO GO now: the objective's place (null: nowhere). The game shows the way to it (main.ts, the prologue). */
+  waypoint: { readonly x: number; readonly z: number } | null = null;
+  setWaypoint(at: { readonly x: number; readonly z: number } | null): void { this.waypoint = at; }
 
   /** The camera shakes (the stone vibrating): how much (metres, at its strongest) and for how long. */
   shake(strength: number, seconds: number): void { this.shaking = { strength, seconds, t: 0 }; }

@@ -518,6 +518,38 @@ export class Tunnel {
     return this.sAt[n.i] + RING_STEP * Math.min(1, Math.max(0, n.t));
   }
 
+  /** How far along the passage (x, z) is (metres), WITHOUT moving where searches start (for a fixed place: a target). */
+  sOf(x: number, z: number): number {
+    const n = this.nearest(x, z, null);
+    return this.sAt[n.i] + RING_STEP * Math.min(1, Math.max(0, n.t));
+  }
+
+  /** The passage's middle line at `s` metres along it: where (x, z), and the way it runs there (tx, tz, one long). */
+  pointAt(s: number, out: { x: number; z: number; tx: number; tz: number }): { x: number; z: number; tx: number; tz: number } {
+    const f = Math.min(this.ringCount - 1.001, Math.max(0, s / RING_STEP));
+    const i = Math.floor(f), k = f - i;
+    out.x = this.px[i] + (this.px[i + 1] - this.px[i]) * k;
+    out.z = this.pz[i] + (this.pz[i + 1] - this.pz[i]) * k;
+    const tx = this.tx[i] + (this.tx[i + 1] - this.tx[i]) * k, tz = this.tz[i] + (this.tz[i + 1] - this.tz[i]) * k;
+    const l = Math.hypot(tx, tz) || 1;
+    out.tx = tx / l; out.tz = tz / l;
+    return out;
+  }
+
+  /**
+   * THE PASSAGE SEEN FROM ABOVE, for the minimap (ui/miniMap.ts): its two walls at the floor as lines of points
+   * (x, z, x, z...), every metre or so, start to end.
+   */
+  outline(): { left: number[]; right: number[] } {
+    const left: number[] = [], right: number[] = [];
+    for (let i = 0; i < this.ringCount; i += 2) {
+      const lx = this.tz[i], lz = -this.tx[i], hw = this.hw[i];
+      left.push(this.px[i] + lx * hw, this.pz[i] + lz * hw);
+      right.push(this.px[i] - lx * hw, this.pz[i] - lz * hw);
+    }
+    return { left, right };
+  }
+
   /** His step from (x, z): where it really ends, kept inside the passage (sliding along a wall). */
   private move(x: number, z: number, stepX: number, stepZ: number, out: GroundPoint): GroundPoint {
     let nx = x + stepX, nz = z + stepZ;

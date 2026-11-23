@@ -170,17 +170,17 @@ export function scannerCanvas(ins: Inscription, width: number, height: number): 
   const cellH = height / rows;
   ins.rows.forEach((row, r) => {
     const cellW = width / row.length;
-    const size = Math.min(cellW, cellH) * 0.56;
+    const size = Math.min(cellW, cellH) * 0.54;
     row.forEach((glyph, c) => {
-      const cx = cellW * (c + 0.5), cy = cellH * (r + 0.42);
+      const cx = cellW * (c + 0.5), cy = cellH * (r + 0.38);
       const known = ins.known.has(glyph);
       g.strokeStyle = known ? '#5ee8c8' : 'rgba(150, 170, 190, 0.45)';
       g.fillStyle = g.strokeStyle;
       drawGlyph(g, glyph, cx, cy, size);
-      g.font = `600 ${Math.round(cellH * 0.16)}px system-ui, sans-serif`;
+      g.font = `600 ${Math.round(cellH * 0.24)}px system-ui, sans-serif`;
       g.textAlign = 'center';
-      g.fillStyle = known ? 'rgba(201, 255, 241, 0.85)' : 'rgba(255, 200, 120, 0.85)';
-      g.fillText(known ? `S-${glyph}` : '?', cx, cy + size * 0.5 + cellH * 0.17);
+      g.fillStyle = known ? 'rgba(201, 255, 241, 0.9)' : 'rgba(255, 200, 120, 0.9)';
+      g.fillText(known ? `S-${glyph}` : '?', cx, cy + size * 0.5 + cellH * 0.22);
     });
   });
   return canvas;

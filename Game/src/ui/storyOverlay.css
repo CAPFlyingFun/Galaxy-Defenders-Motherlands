@@ -66,31 +66,32 @@
 }
 .st-sub.is-radio .st-sub-text { font-style: italic; color: #d9fff6; }
 
-/* THE OBJECTIVE: along the top, right of her vitals card and left of the 🚽 / 🔄 / gear */
+/* THE OBJECTIVE: along the top, right of her vitals card and left of the minimap; SMALL (Joshua, after v0.2.153:
+   "the UI does kind of get in the way") */
 .st-objective {
   position: absolute;
-  right: calc(var(--safe-right, 0px) + 170px);
-  top: calc(var(--safe-top, 0px) + 10px);
-  min-width: 200px;
-  max-width: 300px;
-  padding: 5px 14px 6px;
-  border-radius: 10px;
-  background: rgba(4, 7, 14, 0.55);
-  border: 1px solid rgba(255, 215, 122, 0.45);
+  right: calc(var(--safe-right, 0px) + 172px);
+  top: calc(var(--safe-top, 0px) + 8px);
+  min-width: 160px;
+  max-width: 250px;
+  padding: 3px 10px 4px;
+  border-radius: 8px;
+  background: rgba(4, 7, 14, 0.5);
+  border: 1px solid rgba(255, 215, 122, 0.4);
   text-align: center;
   transition: border-color 0.4s ease, opacity 0.6s ease;
 }
-.st-objective-label { font-size: 9px; font-weight: 800; letter-spacing: 0.2em; color: #ffd77a; }
-.st-objective-title { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
-.st-objective-line { font-size: 11px; color: rgba(234, 242, 255, 0.75); margin-top: 1px; }
+.st-objective-label { font-size: 8px; font-weight: 800; letter-spacing: 0.18em; color: #ffd77a; }
+.st-objective-title { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+.st-objective-line { font-size: 9.5px; color: rgba(234, 242, 255, 0.72); }
 .st-objective.is-done { border-color: rgba(94, 232, 200, 0.9); }
 .st-objective.is-done .st-objective-label::after { content: ' ✓ COMPLETE'; color: #5ee8c8; }
 
 /* A HINT, under the objective */
 .st-hint {
   position: absolute;
-  right: calc(var(--safe-right, 0px) + 170px);
-  top: calc(var(--safe-top, 0px) + 70px);
+  right: calc(var(--safe-right, 0px) + 172px);
+  top: calc(var(--safe-top, 0px) + 54px);
   padding: 4px 12px;
   border-radius: 12px;
   background: rgba(94, 232, 200, 0.16);
@@ -112,24 +113,62 @@
 .st-scanbar-track { height: 5px; border-radius: 3px; background: rgba(94, 232, 200, 0.2); overflow: hidden; }
 .st-scanbar-fill { height: 100%; width: 0; background: #5ee8c8; box-shadow: 0 0 10px #5ee8c8; }
 
-/* THE SCANNER'S DISPLAY: a dark screen with the symbols and what it found (a tap closes it); right of the middle */
+/* THE SCANNER'S DISPLAY: a dark screen with the symbols and what it found (a tap closes it). OVER HER VITALS CARD, top
+   left, in the top layer (Joshua, after v0.2.153: in the middle it covered the view, and CROUCH and PRONE were drawn
+   over it): above the MOVE stick, out of the middle of the view */
 .st-display {
   position: absolute;
-  left: calc(50% + 90px);
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(312px, 36vw);
-  padding: 10px 14px 8px;
+  left: calc(var(--safe-left, 0px) + 10px);
+  top: calc(var(--safe-top, 0px) + 8px);
+  width: 326px;
+  padding: 8px 12px 6px;
   border-radius: 12px;
   background: rgba(3, 10, 16, 0.9);
   border: 1px solid rgba(94, 232, 200, 0.7);
   box-shadow: 0 0 24px rgba(94, 232, 200, 0.25);
   pointer-events: auto;
 }
-.st-display-title { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: #5ee8c8; margin-bottom: 6px; }
-.st-display-picture { display: block; width: 100%; height: auto; margin-bottom: 6px; }
-.st-display-line { font-size: 12px; line-height: 1.35; color: #d9fff6; }
-.st-display-close { font-size: 9px; letter-spacing: 0.12em; color: rgba(217, 255, 246, 0.5); text-align: right; margin-top: 4px; }
+.st-display-title { font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: #5ee8c8; margin-bottom: 4px; }
+.st-display-picture { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+.st-display-line { font-size: 10.5px; line-height: 1.3; color: #d9fff6; }
+.st-display-close { font-size: 8px; letter-spacing: 0.12em; color: rgba(217, 255, 246, 0.5); text-align: right; margin-top: 2px; }
+
+/* THE MINIMAP AND COMPASS (ui/miniMap.ts): small and round, top right beside the rail (under the 🚽 / 🔄, clear of the
+   prompt bubble); tapped, big in the middle. In the top layer, so it takes its own tap. */
+.st-map {
+  position: absolute;
+  right: calc(var(--safe-right, 0px) + 76px);
+  top: calc(var(--safe-top, 0px) + 60px);
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  pointer-events: auto;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+}
+.st-map canvas { display: block; width: 100%; height: 100%; }
+.st-map-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(180, 210, 235, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.st-map.is-big {
+  right: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(78vh, 60vw);
+  height: min(78vh, 60vw);
+  border-radius: 10px;
+}
+.st-map.is-big .st-map-hint { bottom: 6px; }
 
 /* THE END CARD (a little right of the middle and high, clear of the CAMERA stick) */
 .st-card {

@@ -67,6 +67,8 @@ import type { Tunnel } from './world/prologue/tunnel';
 import type { Flashlight } from './world/prologue/flashlight';
 import type { CaveSounds } from './world/prologue/caveSounds';
 import type { StoryDirector } from './story/storyDirector';
+import type { GroundArrows } from './world/prologue/groundArrows';
+import type { MiniMap } from './ui/miniMap';
 import type { PrologueWorld } from './story/chapters/johnPrologue';
 
 /**
@@ -441,12 +443,19 @@ async function start(): Promise<void> {
   let flashlight: Flashlight | null = null;
   let caveSounds: CaveSounds | null = null;
   let story: StoryDirector | null = null;
+  /** THE WAY TO THE OBJECTIVE (Joshua, 2026-11-22: "ground arrows or something... a little compass 🧭 or mini map"): arrows
+   *  on the passage's floor, and the minimap and compass (after Beyond Extinction's Minimap.ts). */
+  let groundArrows: GroundArrows | null = null;
+  let miniMap: MiniMap | null = null;
   /** How far along the passage John is (metres), worked out once a frame. */
   let prologueProgress = 0;
+  /** The objective's place along the passage (metres), worked out when it changes. */
+  let waypointWas: { x: number; z: number } | null = null, waypointS: number | null = null;
   if (prologue) {
     meter.step('tunnel', 'Beneath the island: the passage…');
-    const [{ Tunnel }, { Flashlight }, { CaveSounds }, { StoryDirector }] = await Promise.all([
+    const [{ Tunnel }, { Flashlight }, { CaveSounds }, { StoryDirector }, { GroundArrows }, { MiniMap }] = await Promise.all([
       import('./world/prologue/tunnel'), import('./world/prologue/flashlight'), import('./world/prologue/caveSounds'), import('./story/storyDirector'),
+      import('./world/prologue/groundArrows'), import('./ui/miniMap'),
     ]);
     tunnel = new Tunnel();
     scene.add(tunnel.group);
@@ -462,6 +471,10 @@ async function start(): Promise<void> {
     story = new StoryDirector(uiHost, caveSounds);
     // (black from the very first picture: the scene opens in the dark)
     story.overlay.fade(1, 0);
+    groundArrows = new GroundArrows(tunnel);
+    scene.add(groundArrows.group);
+    miniMap = new MiniMap(story.overlay.top, tunnel.outline());
+    miniMap.setShown(false);
     await breathe();
   }
   /**
@@ -1592,8 +1605,8 @@ async function start(): Promise<void> {
   });
   // (🔄 shows once there is someone to swap to: John, made beside her; none in the prologue, where he is alone)
   hud.setSwap(bystander()?.name ?? null);
-  // (the prologue: no guns' buttons, and the flashlight's)
-  if (prologue) { hud.setStoryMode(true); hud.setLight(false); }
+  // (the prologue: no guns' buttons, and the flashlight's; the story's top layer over the controls)
+  if (prologue) { hud.setStoryMode(true); hud.setLight(false); story?.overlay.liftAbove(); }
   if (johnFailed) hud.showNotice(`John couldn't load: ${johnFailed.slice(0, 60)}`, 8);
   onGlTrouble((line) => hud.showNotice(line, 12));
   /** Take hold of the bar she is near (with both hands, or the one picked with L or R), or let go of the one she holds. */
@@ -1667,7 +1680,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, tunnel, story, flashlight,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, tunnel, story, flashlight, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
@@ -2398,6 +2411,19 @@ async function start(): Promise<void> {
       const shake = story.shakeNow;
       if (shake > 0) rig.camera.position.add(shakeBy.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2).multiplyScalar(shake));
       hud.setLight(flashlight.on);
+      // THE WAY TO THE OBJECTIVE: where it is along the passage (worked out when it changes), the arrows on the floor
+      // toward it, how far it is on the objective, and the minimap (turned with the view: the camera's yaw)
+      const wp = story.waypoint;
+      if (wp !== waypointWas) { waypointWas = wp; waypointS = wp ? tunnel.sOf(wp.x, wp.z) : null; }
+      groundArrows?.update(dt, prologueProgress, waypointS, story.locked);
+      story.overlay.setDistance(waypointS === null ? null : Math.abs(waypointS - prologueProgress));
+      if (miniMap) {
+        miniMap.setShown(!story.locked);
+        miniMap.setPlayer(motion.x, motion.z, Math.atan2(storyLook.x, storyLook.z));
+        miniMap.setTarget(wp);
+        miniMap.setPoints(tunnel.markings.filter((m) => m.scannable).map((m) => ({ x: m.at.x, z: m.at.z, done: story!.isScanned(m.id) })));
+        miniMap.render(dt);
+      }
     }
     // (the island: its tiles follow her, the sea follows the camera)
     island?.update(dt, motion.x, motion.z, rig.camera);

@@ -52,22 +52,30 @@ export const JOHN_FACE: Readonly<Record<string, number>> = {
   noseTip: -0.2,
   noseLength: 0.3,
   earSize: 1,
+  // BUILDER v0.9.73's DEEP-SET EYES (its agent's John: 0.6): his eyes back and his brow ridge forward, with its shade
+  eyeDepth: 0.6,
 };
 
 /**
  * JOHN'S HEAD in the builder's words (its `HeadLook`).
  *   hair   none: bald. His scalp is his skin as the builder draws it (pictured 2026-11-22: clean, no hairline). The
  *          colour still counts: it is what his brows and stubble would follow if they had none of their own.
- *   eyes   blue-gray (the reference's irises, by eye: their measured average is pulled dark by the pupil and rim).
- *   brows  near-black brown and full (the portrait's MEASURED #4b3327 drew lighter on him: the builder lightens brows).
- *   beard  the builder's STUBBLE, under half thickness, dark brown: the reference's light stubble.
+ *   eyes   blue-gray (the reference's irises, by eye: their measured average is pulled dark by the pupil and rim),
+ *          with a GREY ring round the pupil reaching 0.4 out (builder v0.9.73's two-tone iris; its agent's John
+ *          #7d93a3 with a grey ring at 40 %: his blue-gray kept).
+ *   brows  near-black brown and full (the portrait's MEASURED #4b3327 drew lighter on him: the builder lightens brows),
+ *          in v0.9.73's BROW SHAPE heavy and straight: straight 0.8, thick +0.5, arch -0.2 (its agent's John).
+ *   beard  the builder's STUBBLE, under half thickness, dark brown: the reference's light stubble. (Its agent pictured
+ *          him at 0.7; at 0.75 it drew a flat, hard-edged shadow over his lower face in the game: 0.45 is kept.)
+ *   detail v0.9.73's FACE DETAIL: an eyelid crease (0.5), smile lines (0.45) and a philtrum (0.4) (its agent's John).
  */
 export const JOHN_HEAD = {
   hair: { style: 'none', length: 0, colour: '#2b211c' },
-  eyes: { colour: '#7f97a6' },
-  brows: { colour: '#1e140d', amount: 1 },
+  eyes: { colour: '#7f97a6', inner: '#8c9092', innerSize: 0.4 },
+  brows: { colour: '#1e140d', amount: 1, arch: -0.2, straight: 0.8, thick: 0.5 },
   lips: { colour: null, amount: 1 },
   lashes: 1,
   face: JOHN_FACE,
   beard: { style: 'stubble', colour: '#3b2a20', amount: 0.45 },
+  detail: { crease: 0.5, smile: 0.45, philtrum: 0.4 },
 } as const;

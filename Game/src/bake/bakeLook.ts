@@ -36,7 +36,7 @@ import { herWeek } from '@charb/sarahlab/baby';
 import { readPregnancy } from '@charb/sarahlab/pregnancy';
 import { HAIR_STYLE_NONE } from '@charb/sarahlab/hairStyles';
 import { ROOM_UNITS, openBuilderRoom } from '../heroine/builderRoom';
-import { findPaintedSkin } from '../heroine/paintMask';
+import { findPaintedSkin, measureSkin } from '../heroine/paintMask';
 import { LOOKS, lookKey } from '../heroine/looks';
 import { bodyFileFor, findBodySkin } from '../heroine/fast/bodyFile';
 import type { BakedLookManifest } from '../heroine/fast/bakedLook';
@@ -46,6 +46,7 @@ import { layFaceBeyond } from './faceBeyond';
 import { capturePieces } from './capturePieces';
 import { repackUv } from './repackUv';
 import { packPieces } from '../heroine/fast/piecesFile';
+import { measureBand, packBand, type BandPoints } from '../heroine/liveBand';
 import { MOTION_SHAPES } from '../heroine/fast/shapedBody';
 
 /** The pictures' sizes, in pixels a side. Her colour is what the eye reads; her shine needs far less. */
@@ -86,6 +87,8 @@ async function start(): Promise<void> {
   // ---- 1. the builder's room, with her FULL skin (every point of the body file) ----------------------------------
   const room = await openBuilderRoom({
     renderer, look, lightSkin: false,
+    // (a live band is drawn by the game, not baked into her picture: liveBand.ts)
+    leaveOutLiveBand: true,
     onProgress: (stage) => say(`Baking "${key}": ${stage}…`),
   });
   // a second of standing, so her springs and anything that landed late have settled
@@ -166,6 +169,15 @@ async function start(): Promise<void> {
     if (point.y < bottom) bottom = point.y;
   }
 
+  // ---- 3a. her LIVE BAND, if the look has one (liveBand.ts): where each point of her skin near it is from it -----------
+  // (measured on the room's own skin, as the room measures its painted layers: the same points, in the same order)
+  let band: BandPoints | null = null;
+  if (look.liveBand) {
+    say(`Baking "${key}": her live band…`);
+    band = measureBand(look.liveBand, measureSkin(skin));
+    if (band.count !== count) throw new Error(`the live band was measured on ${band.count} points, her shape has ${count}`);
+  }
+
   // ---- 3b. her extra pieces: what the room draws for this outfit that is not her skin (capturePieces.ts) --------------
   say(`Baking "${key}": her extra pieces…`);
   const fileDictionary = fileSkin.morphTargetDictionary ?? {};
@@ -242,7 +254,9 @@ async function start(): Promise<void> {
     //  style on him, fastHair.ts. A male look with no head of its own gets none: the default head is HER ponytail.)
     hair: head.hair.style === HAIR_STYLE_NONE || (male && !look.body.head) ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
     body: look.body.model,
-    files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null },
+    files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null, ...(band ? { band: 'band.bin' } : {}) },
+    // (the live band's colour: the game draws it, liveBand.ts)
+    ...(look.liveBand ? { band: { colour: look.liveBand.colour } } : {}),
     facts: {
       drawnInTheRoom: drawn,
       extraPieces: extra.notes, lowestPointOverTheFloorMetres: lowest / ROOM_UNITS,
@@ -250,6 +264,7 @@ async function start(): Promise<void> {
       pointsTheBuilderMoved: moved, movedMostGeometryUnits: movedMost, pointsWithChangedBones: weightsChanged,
       restSkinSpread: rest.spread, captureMissing: capture.missing,
       faceSlidersPastTheirEnds: beyond, upperLidsAsBaked: lids,
+      liveBandPoints: band?.index.length ?? 0,
       albedoCoveredTexels: albedo.coveredCount, textureIslands: layout.islands, islandsShrunkTo: layout.scale,
     },
   };
@@ -260,6 +275,7 @@ async function start(): Promise<void> {
     'shape.bin': new Blob([packShape({ count, position: capture.position, normal: capture.normal, uv: layout.uv, skinIndex, skinWeight }) as BlobPart], { type: 'application/octet-stream' }),
     'look.json': new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }),
   };
+  if (band) blobs['band.bin'] = new Blob([packBand(band) as BlobPart], { type: 'application/octet-stream' });
   if (extra.pieces.length) blobs['pieces.bin'] = new Blob([packPieces(extra.pieces) as BlobPart], { type: 'application/octet-stream' });
   Object.assign(blobs, extra.pictures);
 

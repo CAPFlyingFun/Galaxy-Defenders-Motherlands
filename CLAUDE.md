@@ -293,8 +293,11 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.71 (copied 2026-11-21 from its `main` a2bf91c at Joshua's word, "9.71 is being deployed now for CCBS, grab the
-  latest": his face, eyes, facial hair and twelve hairstyles; in SQUAT and RECLINE her bump carried as she stands and her
+- THE BUILDER, v0.9.73 (copied 2026-11-23 from its `main` 941b8ea at Joshua's word, "go ahead as well on the builder":
+  a face's details for every character, made for Mary and John: freckles, a two-tone iris, brow shape, an eyelid crease,
+  deep-set eyes, smile lines, a philtrum, a skin picture over the skin; since v0.9.72 his body wears his own skin, so
+  builderRoom.ts 5c finds it on him already). Before that v0.9.71 (copied 2026-11-21 from its `main` a2bf91c at Joshua's
+  word, "9.71 is being deployed now for CCBS, grab the latest": his face, eyes, facial hair and twelve hairstyles; in SQUAT and RECLINE her bump carried as she stands and her
   thighs giving way to it, `bellyContact.ts`; seated, the side and back of her hips keep her own weights. Before that
   v0.9.68, `main` e2ebcf8, at Joshua's word: her seated fixes, no pinching at her belly
   and pelvis, and the male body's outfits; checked in the BUILT game, her hidden live body running. Before that v0.9.60, 2026-11-20, `main` bae4157: the catsuit DRAWN, smooth edges; its
@@ -975,6 +978,41 @@ use the game's single copy of three.js.
   A.R.C.H. emblem on the chest (a small painted shape comes out ragged), the board's slimmer ankle boots. MARY'S
   CASUAL SET (the tee, tank and zip top of the other board) is written in `looks/casualSets.ts` and NOT in the game:
   his order is these first.
+- v0.2.160: THE SIDE BANDS DRAWN LIVE, BUILDER v0.9.73, THE NEW FACES, EVERY OUTFIT RE-BAKED, KICKS IN THREE STATES
+  (Joshua, 2026-11-23). (1) THE SIDE BANDS (his: "the stripes on the side changed with the larger belly. Can we keep it
+  consistent?", "I don't mind if it goes with the belly, just need to make sure the width is the same regardless of belly
+  size"; then his screenshot at a big belly, the band's edge ragged on the phone's 1024 picture). `heroine/liveBand.ts`:
+  a look's LIVE BAND (HeroineLook `liveBand`; Mary's three suits' side bands) is LEFT OUT OF HER PICTURE by the bake
+  (builderRoom.ts `leaveOutLiveBand`) and drawn by her skin's shader (outfitMaterial.ts `BAND_GLSL`): the bake writes,
+  for each point near it, how far from its middle line it is and half its width there (`band.bin`, about 110 KB,
+  look.json `files.band`, `band.colour`: the Flat cloth's tint, which a Flat cloth bakes as exactly); the game smooths
+  that distance over her skin as she loads (`smoothBand`, 48 passes, about 2 cm: her skin is measured point by point and
+  it wobbled), and works out on the CPU, as her shape changes, how much her skin round her has STRETCHED at each point
+  since the bake (shapedBody.ts `measureBandStretch`, the level direction on each triangle as baked against now, 24
+  passes of smoothing); the shader draws the band where |distance| x stretch is under half its width, its edge over one
+  pixel. So the band stays on the same skin (it moves with her belly) but keeps its WIDTH at any belly, 0 to 200%, and
+  its edge is sharp at any texture size. Points on a SEAM of her texture layout are two points in one place: anything
+  smoothed over her triangles treats them as one (`samePlace`), or the band cracked along every seam. TRIED AND DROPPED,
+  each pictured: the stretch worked out in the shader per triangle (from the slope of the band's distance: it turns 5
+  degrees from one triangle to the next, 25 at the 90th of a hundred: orange flecks; from the level direction: smooth but
+  it jumps at every triangle edge: a notched edge). A thin line down the front of her belly where the written points
+  meet the far ones (the distance jumps from -0.15 to +0.25 through 0): points over 6 cm outside the band's edge get a
+  width of 0 (`BAND_EDGE_ROOM`). On the builder's own body (Body: Visual) the band is still paint in its layer
+  (`paintedBand`). MEASURED, M2 three-quarter and side at 50, 100, 150, 200%: the same width throughout, the edges smooth
+  but for a wobble of about 2 mm close up at 100%. Before, at 200% the band was twice as wide with stepped edges.
+  (2) BUILDER v0.9.73 (see THE BUILDER above). (3) THE NEW FACES with its features, the numbers its agent pictured them
+  with (looks/maryHead.ts, johnHead.ts): MARY green-hazel eyes #6c7a42 with a gold ring #bf8f45, brows arched +0.4, the
+  BUILDER'S freckles (85 %, size 0.3, nose, cheeks and shoulders, never over her paint; the game's own painted freckles
+  dropped, its rosy cheeks kept), crease 0.6, smile lines 0.3, philtrum 0.5; JOHN a grey ring #8c9092 at 0.4 in his
+  blue-gray, brows straight 0.8, thick +0.5, arch -0.2, DEEP-SET EYES 0.6 (a face slider), crease 0.5, smile lines 0.45,
+  philtrum 0.4. Their measured face sliders are kept, and his stubble at 0.45 (its agent pictured 0.7; at 0.75 it drew a
+  hard shadow in the game). (4) EVERY OUTFIT RE-BAKED on v0.9.73 (his standing rule), skin heights, packed pictures,
+  thumbnails. (5) KICKS IN THREE STATES (Joshua: "Balanced... 50% kicks = reaction, 50% of reactions = look. Relaxed
+  not doing anything: 100%, 75%. Busy doing something: 30%, 50%"): bellyTouch.ts `KICK_REACTION`, BellyTouch `mood`
+  (FastHeroine `setKickMood`), told each frame by main.ts: BUSY firing or within 3 s of it, at the table, a bar or the
+  door, holstering, drawing or reloading, or past a walk (pace over 1.5); RELAXED otherwise when still (under 0.1 m/s);
+  BALANCED otherwise (a walk). The one standing by: busy as their kit is busy or their brain fires, relaxed with nowhere
+  to walk, balanced walking. (The 35 % / 40 % before are gone.)
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -23,6 +23,7 @@
 import { BAKED_AS } from '../looks/bakedAs';
 import * as THREE from 'three';
 import { unpackShape, type BakedShape } from './shapeFile';
+import { unpackBand } from '../liveBand';
 import { unpackPieces, type BakedPiece } from './piecesFile';
 import { loadPackedSized, packedPicturesOn } from './packedPictures';
 import { decodeSized, keepSized, textureCap } from '../../core/textureSizes';
@@ -59,7 +60,9 @@ export interface BakedLookManifest {
    */
   readonly body?: 'v2-body' | 'male-base';
   /** File names, beside look.json. */
-  readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null };
+  readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null; readonly band?: string };
+  /** A LIVE BAND the game draws on her (liveBand.ts; its numbers in `files.band`): its colour, '#rrggbb'. */
+  readonly band?: { readonly colour: string };
   /**
    * HER BIG PICTURES PACKED for the graphics chip (scripts/make_ktx2.py; packedPictures.ts), when the look has them:
    * the .ktx2 files, her colour at 1024 for the CPU (the belt's waistband), and when they were made (a mark on their
@@ -80,6 +83,11 @@ export interface BakedLook {
   readonly normal: THREE.Texture;
   readonly surface: THREE.Texture;
   readonly shape: BakedShape;
+  /**
+   * Her LIVE BAND's numbers for every point of her skin (two each: how far across from its middle line, half its width;
+   * liveBand.ts `unpackBand`), or null when the look has none.
+   */
+  readonly band: Float32Array | null;
   /** The outfit's extra pieces (empty when it has none), and their pictures by file name. */
   readonly pieces: readonly BakedPiece[];
   readonly piecePictures: ReadonlyMap<string, THREE.Texture>;
@@ -191,15 +199,17 @@ export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer
   const surface = await picture(manifest.files.surface, packed?.surface, false);
   const shapeBytes = await bytesOf(manifest.files.shape);
   const pieceBytes = manifest.files.pieces ? await bytesOf(manifest.files.pieces) : null;
+  const bandBytes = manifest.files.band ? await bytesOf(manifest.files.band) : null;
   // (her colour for the page to read: the small copy when the big one is packed)
   const small = packed ? await loadBitmap(folder + packed.albedoSmall + packedMark) : null;
   const shape = unpackShape(shapeBytes);
   const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
+  const band = bandBytes ? unpackBand(bandBytes, manifest.vertexCount) : null;
   // the pieces' own pictures (her two sneakers share one)
   const piecePictures = new Map<string, THREE.Texture>();
   for (const name of new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))) piecePictures.set(name, await loadPicture(folder + name + bake, true));
   return {
-    manifest, albedo, normal, surface, shape, pieces, piecePictures,
+    manifest, albedo, normal, surface, shape, band, pieces, piecePictures,
     cpuPicture: small ?? ((albedo.image as CanvasImageSource | undefined) ?? null),
     isPacked: !!packed && !fellBack,
     megabytes: fetchedBytes / 1048576,

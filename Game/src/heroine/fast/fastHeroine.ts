@@ -54,7 +54,8 @@ import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
-import { BellyTouch } from './bellyTouch';
+import { BellyTouch, type KickMood } from './bellyTouch';
+import { smoothBand } from '../liveBand';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
@@ -425,7 +426,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
         barefootHeightMetres: BAREFOOT_HEIGHT_METRES, navel: painted!.navel, normalScale: [1, 1], hair: painted!.hair,
         files: { albedo: '', normal: '', surface: '', shape: '', pieces: null },
       },
-      albedo: none, normal: none, surface: none, shape, pieces: [], piecePictures: new Map(), megabytes: 0,
+      albedo: none, normal: none, surface: none, shape, band: null, pieces: [], piecePictures: new Map(), megabytes: 0,
       cpuPicture: null, isPacked: false,   // (no picture of her to read: the belt goes round her middle by shape alone)
       dispose(): void { none.dispose(); },
     };
@@ -470,6 +471,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     bakedBelly: look.manifest.belly,
     navel: look.manifest.navel,
     triangles: fullIndex,
+    // (her live band's numbers smoothed over her skin as she loads: liveBand.ts `smoothBand`)
+    band: look.band && smoothBand(look.band, fullIndex, look.shape.position),
   });
 
   // ---- 3. her detail levels ----------------------------------------------------------------------------------------
@@ -1573,6 +1576,7 @@ if (uHideHead > 0.5) {
     // HER HANDS TO HER BELLY (bellyTouch.ts): holding it up as she runs, and her look down at a kick (the game's say)
     setBellySupport(on: boolean): void { bellyHand.setSupport(on); },
     setBellyLookAllowed(ok: boolean): void { bellyHand.lookAllowed = ok; },
+    setKickMood(mood: KickMood): void { bellyHand.mood = mood; },
     bellyLook(out: THREE.Vector3): number { return bellyHand.look(out); },
     stopBellyLook(): void { bellyHand.stopLook(); },
     // WINDED (groundPose.ts WINDED): bent over, hands on her knees, by this much (0..1; the game eases it)

@@ -27,6 +27,7 @@
 //     uses, renumbered").
 // ============================================================================
 import * as THREE from 'three';
+import { samePlace } from '../liveBand';
 import { bellyWeights, breastGrowUnits, navelFlatFor, BELLY_MOTION, BREAST_TARGETS, BREAST_GROW_TARGET } from '@charb/sarahlab/sarahLabTool';
 
 /** Her four motion shapes, in the order bodyMotion.ts writes their weights. (The names are the builder's own.) */
@@ -60,6 +61,9 @@ const FRESH_NORMALS_BELOW = 25;
 
 type Numbers = THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
 
+/** How many times her live band's stretch is smoothed over each point's neighbours (`measureBandStretch`). */
+const BAND_STRETCH_SMOOTHING = 24;
+
 /** What a shaped body is made from. */
 export interface ShapedBodySource {
   /** How many points her skin has. */
@@ -82,6 +86,8 @@ export interface ShapedBodySource {
   readonly navel: number;
   /** Her triangles (three point numbers each): for her surface's directions where the builder moves points itself. */
   readonly triangles?: Uint32Array;
+  /** Her look's LIVE BAND numbers, two a point (liveBand.ts), when it has one: handed to her shader as `bandAt`. */
+  readonly band?: Float32Array | null;
 }
 
 /** One detail level's copy of her: its geometry, and which of her points each of its points is. */
@@ -143,6 +149,25 @@ export class ShapedBody {
   private normalFix: { points: Uint32Array; turn: Float32Array } | null = null;
   /** Which triangles each point is in (made once, when first needed). */
   private pointTriangles: { start: Uint32Array; list: Uint32Array } | null = null;
+  /**
+   * HER LIVE BAND'S STRETCH (liveBand.ts; outfitMaterial.ts draws the band): for each point near the band, how much
+   * longer her skin is ROUND HER now than as baked (1 as baked; her belly grown, more). The band runs up her side, so
+   * this is what would widen it; her shader divides it back out, so the band keeps its width at any belly.
+   * WORKED OUT HERE, FOR EACH POINT, not in the shader for each triangle (Joshua, 2026-11-23, the first tries): a
+   * stretch worked out for each triangle jumps a little from one triangle to the next, and the band's edge, half a
+   * band's width from its middle, moved with every jump: a notched edge, orange flecks. A stretch for each point,
+   * blended over each triangle, has no jumps.
+   * Null when her look has no live band. `bandTriangles` the triangles that touch the band (their first point's place in
+   * her triangle list), `bandSum`/`bandWeight` reused for the sums.
+   */
+  private bandStretch: Float32Array | null = null;
+  private bandTriangles: Uint32Array | null = null;
+  private bandSum: Float32Array | null = null;
+  private bandWeight: Float32Array | null = null;
+  /** For each point of those triangles, the first point in the same place (liveBand.ts `samePlace`): summed as one. */
+  private bandOne: Int32Array | null = null;
+  /** ...and those points. */
+  private bandPoints: Uint32Array | null = null;
 
   constructor(private readonly source: ShapedBodySource) {
     this.belly = source.bakedBelly;
@@ -155,6 +180,19 @@ export class ShapedBody {
       if (moves) for (let v = 0; v < n; v++) { out[v * 3] = moves.getX(v); out[v * 3 + 1] = moves.getY(v); out[v * 3 + 2] = moves.getZ(v); }
       return out;
     });
+    // HER LIVE BAND: which triangles touch it (a point of theirs on the band); as baked it is stretched by 1 everywhere
+    if (source.band && source.triangles) {
+      const T = source.triangles, band = source.band, touching: number[] = [];
+      for (let t = 0; t < T.length; t += 3) if (band[T[t] * 2 + 1] > 0 || band[T[t + 1] * 2 + 1] > 0 || band[T[t + 2] * 2 + 1] > 0) touching.push(t);
+      this.bandTriangles = Uint32Array.from(touching);
+      const points = new Set<number>();
+      for (const t of touching) { points.add(T[t]); points.add(T[t + 1]); points.add(T[t + 2]); }
+      this.bandPoints = Uint32Array.from(points);
+      this.bandOne = samePlace(source.position, points);
+      this.bandStretch = new Float32Array(n).fill(1);
+      this.bandSum = new Float32Array(n);
+      this.bandWeight = new Float32Array(n);
+    }
   }
 
   /** Her points as shaped now (x, y, z each, every point of the full body). Read only: do not write into it. */
@@ -246,6 +284,14 @@ export class ShapedBody {
     const rest = new Float32Array(n * 3);
     for (let k = 0; k < n; k++) { const o = order[k]; rest[k * 3] = s.position[o * 3]; rest[k * 3 + 1] = s.position[o * 3 + 1]; rest[k * 3 + 2] = s.position[o * 3 + 2]; }
     geometry.setAttribute('knitRest', new THREE.BufferAttribute(rest, 3));
+    // HER LIVE BAND's numbers for each point (liveBand.ts): how far across from its middle and half its width (never
+    // changed), and how stretched her skin is round her there (`bandStretch`, written by `fill`): her shader draws the
+    // band from them
+    if (s.band) {
+      const bandAt = new Float32Array(n * 3);
+      for (let k = 0; k < n; k++) { const o = order[k]; bandAt[k * 3] = s.band[o * 2]; bandAt[k * 3 + 1] = s.band[o * 2 + 1]; bandAt[k * 3 + 2] = 1; }
+      geometry.setAttribute('bandAt', new THREE.BufferAttribute(bandAt, 3));
+    }
     // HER MOTION SHAPES STAY LIVE: the four are carried over, for this level's own points only.
     // (their moves only; a 1 cm sway turns her surface too little for the lighting to show)
     const live = this.isLive(detail);
@@ -343,7 +389,60 @@ export class ShapedBody {
       }
     }
     this.normalFix = extra && s.triangles ? this.renormal(extra, s.triangles) : null;
+    this.measureBandStretch();
     for (const level of this.levels.values()) this.fill(level);
+  }
+
+  /**
+   * HER LIVE BAND'S STRETCH for every point of the triangles that touch it (`bandStretch`). For each such triangle: the
+   * LEVEL direction on it as baked (square to its facing and to "up": the band runs up her side, so level is across
+   * it), written as so much of each of two of its edges, and the same of those edges now: how much longer that has
+   * grown. Each point takes the average of its triangles' (bigger triangles counting more), smoothed over its
+   * neighbours. A triangle lying nearly level (facing within 15 degrees of straight up or down) has no level direction
+   * and is left out. A few milliseconds, as her shape changes.
+   */
+  private measureBandStretch(): void {
+    const tris = this.bandTriangles, out = this.bandStretch, sum = this.bandSum, weight = this.bandWeight;
+    const one = this.bandOne, points = this.bandPoints, T = this.source.triangles;
+    if (!tris || !out || !sum || !weight || !one || !points || !T) return;
+    const R = this.source.position, P = this.position;
+    // (every sum is kept on the first point in each place: points on a seam of her texture layout are summed as one)
+    sum.fill(0); weight.fill(0);
+    for (const t of tris) {
+      const a = T[t] * 3, b = T[t + 1] * 3, c = T[t + 2] * 3;
+      // two edges as baked, and its facing
+      const e1x = R[b] - R[a], e1y = R[b + 1] - R[a + 1], e1z = R[b + 2] - R[a + 2];
+      const e2x = R[c] - R[a], e2y = R[c + 1] - R[a + 1], e2z = R[c + 2] - R[a + 2];
+      const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+      const nLength = Math.hypot(nx, ny, nz), levelLength = Math.hypot(nx, nz);
+      if (nLength < 1e-20 || levelLength < 0.26 * nLength) continue;
+      // the level direction on it (its facing crossed with "up"), 1 long
+      const ux = -nz / levelLength, uz = nx / levelLength;
+      // as so much of each edge (it lies in their plane)
+      const xx = e1x * e1x + e1y * e1y + e1z * e1z, xy = e1x * e2x + e1y * e2y + e1z * e2z, yy = e2x * e2x + e2y * e2y + e2z * e2z;
+      const rx = ux * e1x + uz * e1z, ry = ux * e2x + uz * e2z, det = xx * yy - xy * xy;
+      if (det <= 1e-30) continue;
+      const al = (rx * yy - ry * xy) / det, be = (ry * xx - rx * xy) / det;
+      // the same of the edges now
+      const sx = al * (P[b] - P[a]) + be * (P[c] - P[a]);
+      const sy = al * (P[b + 1] - P[a + 1]) + be * (P[c + 1] - P[a + 1]);
+      const sz = al * (P[b + 2] - P[a + 2]) + be * (P[c + 2] - P[a + 2]);
+      const stretch = Math.hypot(sx, sy, sz);
+      for (const v of [T[t], T[t + 1], T[t + 2]]) { sum[one[v]] += stretch * nLength; weight[one[v]] += nLength; }
+    }
+    for (const v of points) out[v] = weight[one[v]] > 0 ? sum[one[v]] / weight[one[v]] : 1;
+    // SMOOTHED: each point the average of its triangles' averages, BAND_STRETCH_SMOOTHING times (about 1.5 cm round
+    // each point: her skin's stretch changes over centimetres, and 5 % of noise left in it put a 1.5 mm kink in the
+    // band's edge at each point, 2026-11-23)
+    for (let pass = 0; pass < BAND_STRETCH_SMOOTHING; pass++) {
+      sum.fill(0); weight.fill(0);
+      for (const t of tris) {
+        const p = T[t], q = T[t + 1], r = T[t + 2];
+        const mean = (out[p] + out[q] + out[r]) / 3;
+        for (const v of [p, q, r]) { sum[one[v]] += mean; weight[one[v]] += 1; }
+      }
+      for (const v of points) if (weight[one[v]] > 0) out[v] = sum[one[v]] / weight[one[v]];
+    }
   }
 
   /** Her surface's directions again wherever the builder moved her points by more than a tenth of a millimetre. */
@@ -405,6 +504,13 @@ export class ShapedBody {
     if (level.detail < FRESH_NORMALS_BELOW && !level.live) freshNormals(P, N, level.triangles);
     position.needsUpdate = true;
     normal.needsUpdate = true;
+    // her live band's stretch for this level's points (`measureBandStretch`)
+    const bandAt = level.geometry.getAttribute('bandAt') as THREE.BufferAttribute | undefined;
+    if (bandAt && this.bandStretch) {
+      const B = bandAt.array as Float32Array, stretch = this.bandStretch;
+      for (let k = 0; k < order.length; k++) B[k * 3 + 2] = stretch[order[k]];
+      bandAt.needsUpdate = true;
+    }
   }
 
   dispose(): void {

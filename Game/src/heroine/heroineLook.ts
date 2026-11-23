@@ -13,6 +13,7 @@
 // here -- nothing about her is re-made by hand.
 // ============================================================================
 import type { MaskPainter } from './paintMask';
+import type { LiveBand } from './liveBand';
 
 /** One character as the Character Builder's EXPORT writes her (the parts the game uses). */
 export interface HeroineLook {
@@ -49,6 +50,12 @@ export interface HeroineLook {
    * is a number for every point of her skin and her full and light skins have different points.
    */
   readonly maskPainters?: readonly (MaskPainter | null)[];
+  /**
+   * A BAND THE GAME DRAWS LIVE on her trunk (liveBand.ts; Mary's side bands, 2026-11-23): left out of her baked picture
+   * and drawn by her skin's shader, so it keeps its width over a growing belly and a sharp edge at any texture size. On
+   * the builder's own body it is painted into its layer as usual.
+   */
+  readonly liveBand?: LiveBand;
   /**
    * Leave out the strip of fabric the builder stretches across her cleavage (the bake does not keep it). For a suit
    * painted on her skin up to her neck (graySuit.ts), where the paint itself runs into her cleavage.

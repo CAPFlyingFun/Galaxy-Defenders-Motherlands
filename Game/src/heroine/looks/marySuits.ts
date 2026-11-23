@@ -21,8 +21,12 @@
 //   paint layers 3-4  the PANELS, STRIPES AND RINGS, painted by code
 //                  (paintMask.ts), in the builder's smooth Flat cloth: measured on
 //                  her own trunk, arms and legs, so they lie where they should at
-//                  any shape. Being paint, they stretch with her belly from 0 to
-//                  200% exactly as her skin does; nothing extra is drawn in play.
+//                  any shape. Being paint, they stretch with her skin.
+//   THE SIDE BAND  is NOT paint in the game: the game draws it live on her
+//                  (liveBand.ts; v0.2.160, Joshua, 2026-11-23: over a big belly the
+//                  painted band grew twice as wide and its edge went ragged on the
+//                  phone's 1024 picture). It stays on the same skin, so it moves with
+//                  her belly, but keeps its WIDTH at any belly and a sharp edge.
 // Her belt, holsters and pouches (the game needs them), her guns and her low boots
 // are the game's 3D gear in each suit's colours (looks/gear.ts `marySuitGear`). The
 // A.R.C.H. emblem on the chest is left for later: a small painted shape comes out
@@ -36,6 +40,7 @@
 // ============================================================================
 import type { HeroineLook } from '../heroineLook';
 import { plate, turnBetween, type LegPlace, type MaskPainter, type PaintSurface } from '../paintMask';
+import type { BandPlace, LiveBand } from '../liveBand';
 import { BLAZE_LOOK } from './blaze';
 import { fillCleavage } from './catsuit';
 import { EXPORT_BODY } from './shadowSuit';
@@ -90,17 +95,26 @@ const through = (given: readonly (readonly [number, number])[]) => {
   };
 };
 
+/** A band's shape: its middle runs `path(along)` degrees round her, half `half(along)` wide (leg lengths), from `from` to `to`. */
+interface BandShape { readonly from: number; readonly to: number; readonly path: (along: number) => number; readonly half: (along: number) => number }
+
 /**
- * A BAND: a stripe whose width may change as it goes (paintMask.ts `stripe` with a width for each height). Its middle
- * runs `path(along)` degrees round her, half `half(along)` wide (leg lengths), from `from` to `to`, its ends rounded.
- * Returns how far inside it the place is (minus: outside).
+ * Where a place is from a BAND (a stripe whose width may change as it goes: paintMask.ts `stripe` with a width for each
+ * height): how far across from its middle line (signed), its half-width at the nearest place along it, and how far past
+ * either end. Its ends are rounded.
  */
-function band(place: LegPlace, o: { from: number; to: number; path: (along: number) => number; half: (along: number) => number }): number {
+function bandPlace(place: LegPlace, o: BandShape): BandPlace {
   const along = Math.min(o.to, Math.max(o.from, place.along));
   // (a band that slants is measured square to itself, not straight across)
   const step = 0.004, slope = ((o.path(along + step) - o.path(along - step)) / (2 * step)) * RADIANS * place.radius;
   const across = (turnBetween(place.turn, o.path(along)) * RADIANS * place.radius) / Math.sqrt(1 + slope * slope);
-  return o.half(along) - Math.hypot(across, place.along - along);
+  return { across, half: o.half(along), past: Math.abs(place.along - along) };
+}
+
+/** A BAND as paint: how far inside it the place is (minus: outside). */
+function band(place: LegPlace, o: BandShape): number {
+  const at = bandPlace(place, o);
+  return at.half - Math.hypot(at.across, at.past);
 }
 
 /**
@@ -153,10 +167,13 @@ const capOnArm = (p: LegPlace, size: number): number =>
 /**
  * THE SIDE BAND: from under her arm down beside her breast (not over it), in toward her waist, out over her hip to the
  * top of her leg, where the leg's stripe carries on. `waist` is its half-width at her waist (it narrows top and bottom).
+ * DRAWN LIVE by the game (liveBand.ts), not painted: this is where each point of her trunk is from it.
  */
 const SIDE_PATH = through([[1.0, 86], [0.82, 82], [0.66, 72], [0.45, 64], [0.22, 70], [-0.05, 80]]);
-const sideBand = (p: LegPlace, waist: number, ends: number): number =>
-  band(p, { from: -0.05, to: 0.84, path: SIDE_PATH, half: through([[-0.05, ends], [0.3, waist], [0.5, waist], [0.84, ends * 0.7]]) });
+const sideBand = (waist: number, ends: number): ((p: LegPlace) => BandPlace) => {
+  const shape: BandShape = { from: -0.05, to: 0.84, path: SIDE_PATH, half: through([[-0.05, ends], [0.3, waist], [0.5, waist], [0.84, ends * 0.7]]) };
+  return (p) => bandPlace(p, shape);
+};
 
 /** Down the outside of her arm, from her shoulder cap to her wrist. */
 const ARM_PATH = through([[0, 86], [0.5, 92], [1, 86]]);
@@ -172,8 +189,16 @@ const legStripe = (p: LegPlace, half: number, offset = 0): number =>
 
 // ------------------------------------------------------------------ the three suits
 
-/** One of Mary's catsuits: Joshua's plain catsuit, its collar gap filled, and its painted layers (bottom first). */
-function marySuitLook(painted: readonly { readonly colour: string; readonly paint: MaskPainter }[]): HeroineLook {
+/**
+ * One of Mary's catsuits: Joshua's plain catsuit, its collar gap filled, its painted layers (bottom first), and the side
+ * band the game draws live (`side`: which of the painted layers it belongs to, the colour of, and where it runs).
+ */
+function marySuitLook(
+  painted: readonly { readonly colour: string; readonly paint: MaskPainter }[],
+  side: { readonly on: number; readonly trunk: LiveBand['trunk'] },
+): HeroineLook {
+  // (the painted layers come after his catsuit's two)
+  const liveBand: LiveBand = { colour: painted[side.on].colour, layer: 2 + side.on, trunk: side.trunk };
   return {
     name: 'Blaze',
     body: EXPORT_BODY,
@@ -188,6 +213,7 @@ function marySuitLook(painted: readonly { readonly colour: string; readonly pain
     // (layer 1 his template; layer 2 the gap under his collar, up to it: his neckline 1.1)
     // (filled from 0.55 up her trunk: from the usual 0.7 a slit of her skin showed under her cleavage, the first bake)
     maskPainters: [null, fillCleavage(PLAIN_CATSUIT_LAYER.template.params.neckFront, 0.55), ...painted.map((p) => p.paint)],
+    liveBand,
     noCleavageBridge: true,
     // (the room's unnamed sheet over her crotch, in her skin's colour, is left out: heroineLook.ts)
     onlyNamedPieces: true,
@@ -219,12 +245,12 @@ export const MARY_RESEARCH_SUIT_LOOK: HeroineLook = marySuitLook([
   {
     colour: C.research.teal,
     paint: painter({
-      trunk: (p) => any(capOnTrunk(p, 1), sideBand(p, 0.032, 0.012)),
+      trunk: (p) => capOnTrunk(p, 1),
       leg: (p, knee) => kneeRing(p, knee, { wide: 0.045, tall: 0.06, half: 0.005, lift: 0.005 }),
       arm: (p) => any(capOnArm(p, 1), armStripe(p, 0.008), cuff(p, 0.04)),
     }),
   },
-]);
+], { on: 1, trunk: sideBand(0.032, 0.012) });
 
 /**
  * M2, THE SUBTERRANEAN EXPLORER: orange caps over her shoulders, a broad orange band down each side, an orange stripe
@@ -234,12 +260,12 @@ export const MARY_EXPLORER_SUIT_LOOK: HeroineLook = marySuitLook([
   {
     colour: C.explorer.orange,
     paint: painter({
-      trunk: (p) => any(capOnTrunk(p, 1), sideBand(p, 0.04, 0.014)),
+      trunk: (p) => capOnTrunk(p, 1),
       leg: (p, knee) => any(legStripe(p, 0.008, 4), kneeRing(p, knee, { wide: 0.05, tall: 0.065, half: 0.008, lift: 0.005 })),
       arm: (p) => any(capOnArm(p, 1), armStripe(p, 0.01), cuff(p, 0.045)),
     }),
   },
-]);
+], { on: 0, trunk: sideBand(0.04, 0.014) });
 
 /**
  * M3, THE STEALTH OPERATIVE: thin red lines, a small red cap over each shoulder, a red line down each side, the
@@ -249,9 +275,9 @@ export const MARY_STEALTH_SUIT_LOOK: HeroineLook = marySuitLook([
   {
     colour: C.stealth.red,
     paint: painter({
-      trunk: (p) => any(capOnTrunk(p, 0.6), sideBand(p, 0.012, 0.009)),
+      trunk: (p) => capOnTrunk(p, 0.6),
       leg: (p, knee) => any(legStripe(p, 0.008), kneeRing(p, knee, { wide: 0.048, tall: 0.062, half: 0.006, lift: 0.005 })),
       arm: (p) => any(capOnArm(p, 0.6), armStripe(p, 0.008), cuff(p, 0.035)),
     }),
   },
-]);
+], { on: 0, trunk: sideBand(0.012, 0.009) });

@@ -4,8 +4,10 @@
 //
 // A KICK (the builder's own, from her hidden live body, liveBody.ts: a place on
 // her skin as she stood, a way out and a push). When a NEW kick starts:
-//   1. NOT EVERY TIME (Joshua: "about 35% of the time there is a kick she puts a
-//      hand on her belly"): `chance` it calls a hand at all;
+//   1. NOT EVERY TIME, and how often BY WHAT SHE IS DOING (Joshua, 2026-11-23;
+//      before it, "about 35% of the time"): `KICK_REACTION` -- RELAXED (doing
+//      nothing) every kick calls a hand, BALANCED half of them, BUSY 30 %. The
+//      game says which she is (`mood`; main.ts);
 //   2. NOT AT ONCE (Joshua: "randomize (3-7s after a kick)"): she waits a moment
 //      first (`waitLeast`-`waitMost`), as someone does who notices and then
 //      reaches; a hand that is busy by then is not sent;
@@ -20,8 +22,8 @@
 //      `oppositeSpread`;
 //   5. it RESTS there (fingerTouch.ts lays its palm and every finger 2 mm off her
 //      own skin, skinPatch.ts) for `restLeast`-`restMost` seconds;
-//   6. SHE LOOKS sometimes (Joshua: "out of the 35% that she does, about 40% of
-//      that she actually looks"): `lookChance` of the touches, 2-3 s after her
+//   6. SHE LOOKS sometimes (`KICK_REACTION`: relaxed 75 % of the touches,
+//      balanced and busy 50 %; before 2026-11-23, 40 %), 2-3 s after her
 //      hand lands, her head goes down to it over 1 s, stays 0.5 s and comes back
 //      up over 1 s ("so it takes 2.5s per look"); her hands let go as it comes
 //      back up ("as the camera goes back to normal, that's when the hands
@@ -44,12 +46,22 @@
 import * as THREE from 'three';
 import type { SkinPatch } from './skinPatch';
 
+/**
+ * HOW SHE TAKES A KICK, BY WHAT SHE IS DOING (Joshua, 2026-11-23: "let's modify the numbers in 3 states"), GAME TUNING:
+ * `reach` the share of kicks that call a hand at all, `look` the share of those touches on which she also looks down at
+ * it. Which state she is in is the game's to say (BellyTouch `mood`; main.ts: RELAXED standing still with nothing to do,
+ * BUSY firing or just after, holding the table, a bar or the door, holstering, drawing or reloading, or faster than a
+ * walk; BALANCED all else, a walk for one).
+ */
+export type KickMood = 'relaxed' | 'balanced' | 'busy';
+export const KICK_REACTION: Readonly<Record<KickMood, { readonly reach: number; readonly look: number }>> = {
+  relaxed: { reach: 1, look: 0.75 },
+  balanced: { reach: 0.5, look: 0.5 },
+  busy: { reach: 0.3, look: 0.5 },
+};
+
 /** GAME TUNING (Joshua's numbers, 2026-11-20). */
 export const BELLY_TOUCH = {
-  /** The share of kicks that call a hand at all. */
-  chance: 0.35,
-  /** The share of those touches on which she also looks down at it. */
-  lookChance: 0.4,
   /** She notices the kick and reaches after this long, seconds (a random time between the two). */
   waitLeast: 3,
   waitMost: 7,
@@ -193,6 +205,8 @@ interface Waiting {
 export class BellyTouch {
   /** The game's say on whether she may start a look now (not while she fires or runs: main.ts). */
   lookAllowed = true;
+  /** What she is doing, as the game sees it (main.ts): how often a kick calls a hand and a look (`KICK_REACTION`). */
+  mood: KickMood = 'balanced';
   /** Her hands on her belly now (or on their way): the kick's (and its pair), and the one holding it up. */
   private kickHand: HandOn | null = null;
   private pairHand: HandOn | null = null;
@@ -284,11 +298,11 @@ export class BellyTouch {
         this.before[k] = now;
         (this.kickSpots[k] ??= new THREE.Vector3()).set(kickAt[k].x, kickAt[k].y, kickAt[k].z);
         if (!(was <= 0 && now > 0) || !kickDir || this.waiting || this.kickHand || this.rest > 0) continue;
-        if (Math.random() >= BELLY_TOUCH.chance) continue;
+        if (Math.random() >= KICK_REACTION[this.mood].reach) continue;
         this.waiting = {
           left: between(BELLY_TOUCH.waitLeast, BELLY_TOUCH.waitMost),
           spot: this.kickSpots[k].clone(), out: new THREE.Vector3(kickDir[k].x, kickDir[k].y, kickDir[k].z).normalize(),
-          kick: k, look: Math.random() < BELLY_TOUCH.lookChance, both: null,
+          kick: k, look: Math.random() < KICK_REACTION[this.mood].look, both: null,
         };
       }
     }

@@ -265,6 +265,10 @@ const SUPPORT_OFF_LEVEL = 2.4;
 const SUPPORT_FROM_WEEK = 30;
 /** No look down at a kick while she fires, nor this long after, seconds (Joshua: never pull the view off a target). */
 const LOOK_AFTER_FIRE = 3;
+/** Kicks (bellyTouch.ts KICK_REACTION): faster than this pace (1 a walk, 2 a jog) she is BUSY. GAME TUNING. */
+const KICK_BUSY_PACE = 1.5;
+/** ...and slower than this, metres a second, with nothing to do, she is RELAXED. GAME TUNING. */
+const KICK_STILL_SPEED = 0.1;
 // First person while she is busy at the table or a bar: how quickly the view follows her head (seconds), and how far
 // it tips down when she has no hands to look at (radians, about 45 degrees; with hands it looks at them).
 const FIRST_PERSON_FOLLOW_SECONDS = 0.2;
@@ -1895,6 +1899,9 @@ async function start(): Promise<void> {
     if (s.grabAfterHolster && !k.holsterUse.busy) { k.grabUse.start(s.grabAfterHolster, s.grabWhich); s.grabAfterHolster = null; }
     if (s.grabAfterTable && !k.tableUse.busy) { k.grabUse.start(s.grabAfterTable, s.grabWhich); s.grabAfterTable = null; }
     const busy = k.tableUse.busy || k.grabUse.busy || k.doorUse.busy;
+    // (kicks, as for the one played: busy holding something, holstering, drawing, reloading or firing; relaxed with
+    //  nowhere to walk; balanced walking)
+    body.setKickMood?.(busy || k.holsterUse.busy || k.beltReload.busy || k.wants.fire ? 'busy' : k.wants.walkTo ? 'balanced' : 'relaxed');
     // 3. THEIR STANCE, as they were left (they stand up for the table, a bar, a door or the bathroom)
     if ((busy || s.mustGoNow || s.bathroomLeft > 0) && s.stance !== 'stand') s.stance = 'stand';
     body.setStance?.(s.stance === 'down' ? (c === blaze && herPregnant() ? 'fours' : 'prone') : s.stance);
@@ -2133,6 +2140,11 @@ async function start(): Promise<void> {
       const week = pregnantNow() ? plan.weekFor(heroine.bellyNow?.() ?? graphics.belly ?? plan.start) : 0;
       heroine.setBellySupport?.(supporting && pregnantNow() && week >= SUPPORT_FROM_WEEK);
       heroine.setBellyLookAllowed?.(!controls.fireHeld && sinceFire > LOOK_AFTER_FIRE && pace.level < SUPPORT_ON_LEVEL);
+      // HOW SHE TAKES A KICK BY WHAT SHE IS DOING (Joshua, 2026-11-23; bellyTouch.ts KICK_REACTION): BUSY firing or just
+      // after, holding the table, a bar or the door, holstering, drawing or reloading, or faster than a walk; RELAXED
+      // standing still with nothing to do; BALANCED all else (a walk, for one)
+      const kickBusy = controls.fireHeld || sinceFire < LOOK_AFTER_FIRE || busyNow() || holsterUse.busy || beltReload.busy || pace.level > KICK_BUSY_PACE;
+      heroine.setKickMood?.(kickBusy ? 'busy' : pace.speed < KICK_STILL_SPEED ? 'relaxed' : 'balanced');
     }
     // (whichever is running walks her and turns her)
     const ask = tableUse.busy ? tableAsk : grabUse.busy ? grabAsk : doorAsk;

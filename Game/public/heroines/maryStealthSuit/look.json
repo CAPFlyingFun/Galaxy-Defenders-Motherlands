@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryStealthSuit",
-  "bakedAt": "2026-11-23T05:59:15.547Z",
-  "builderVersion": "0.9.71",
+  "bakedAt": "2026-11-23T08:55:52.638Z",
+  "builderVersion": "0.9.73",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7134627257793762,
+  "barefootHeightMetres": 1.713636303401573,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -28,7 +28,11 @@
     "normal": "normal.webp",
     "surface": "surface.webp",
     "shape": "shape.bin",
-    "pieces": null
+    "pieces": null,
+    "band": "band.bin"
+  },
+  "band": {
+    "colour": "#e0141c"
   },
   "facts": {
     "drawnInTheRoom": [
@@ -42,11 +46,11 @@
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7000999516145126,
-    "pointsTheBuilderMoved": 71854,
-    "movedMostGeometryUnits": 0.15010440375703166,
+    "crownOverTheFloorMetres": 1.7002735292367095,
+    "pointsTheBuilderMoved": 71838,
+    "movedMostGeometryUnits": 0.1503644240348717,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16335546913083757,
+    "restSkinSpread": 0.16350318607708852,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -59,6 +63,7 @@
       "mostMm": 2.3980917547362655
     },
     "upperLidsAsBaked": 0.15,
+    "liveBandPoints": 14137,
     "albedoCoveredTexels": 7537039,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
@@ -69,6 +74,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-23T06:08:39+00:00"
+    "packedAt": "2026-11-23T09:32:33+00:00"
   }
 }

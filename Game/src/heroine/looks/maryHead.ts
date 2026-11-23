@@ -9,8 +9,8 @@
 //
 // WHAT IS HERE
 //   * MARY_HEAD: her head in the builder's own words (hair, eyes, brows, lips, lashes, face sliders).
-//   * MARY_SKIN_MARKS: her freckles and the warmth in her cheeks, painted by the GAME's bake (bake/skinMarks.ts):
-//     the builder has no freckles.
+//   * MARY_SKIN_MARKS: the warmth in her cheeks, painted by the GAME's bake (bake/skinMarks.ts). Her FRECKLES were
+//     painted there too until the builder had its own (v0.9.73, 2026-11-23): now they are the builder's (`marks`).
 //   * asMary(look): any look on her body wears both. looks/index.ts puts every look of hers through it, so the
 //     exports that carry a head of their own (the braid, blue eyes and red lips of the catsuits and Look 2, the dark
 //     ponytail of the pink and black two-piece) all become Mary. Each export's own head is kept in its file as it was
@@ -38,6 +38,12 @@
 // eye is: the builder's own upper lid lowered a little over them as she is baked (MARY_UPPER_LIDS: its blink at 0.15,
 // about 1.4 mm), with EYE SIZE -0.6 and EYE TILT -1, inside the range the builder tuned. Her eyes are baked looking
 // straight ahead (the room's eyes wander: a bake caught them looking aside).
+//
+// BUILDER v0.9.73 (2026-11-23; its agent made five things for Mary and John at Joshua's asking, and gave the settings
+// it pictured her with, which are hers here): a TWO-TONE IRIS (green-hazel with a gold ring round the pupil), her
+// BROWS' SHAPE (arched +0.4), the builder's own FRECKLES (85 % of them, small, on her nose, cheeks and shoulders, never
+// over her paint) and her FACE'S DETAIL (an eyelid crease 0.6, smile lines 0.3, a philtrum 0.5). Her measured face
+// sliders are kept as they were.
 //
 // PAST THE SLIDERS' ENDS. The builder holds a face slider to -1..+1, but each slider is a shape laid by its number, a
 // straight line through 0: the game's bake lays the part past the end itself (bake/faceBeyond.ts), on the shape it
@@ -71,26 +77,32 @@ export const MARY_FACE: Readonly<Record<string, number>> = {
  * MARY'S HEAD in the builder's words (its `HeadLook`, Char_B/src/sarahlab/headLook.ts).
  *   hair   the builder's WAVY LOW PONYTAIL (Lena's style): tied back low, natural waves, loose locks down the sides of
  *          her face -- the nearest of the builder's six to the reference (pictured 2026-11-22), at 0.6 of its length.
- *   eyes   null: the builder's own hazel, which is already the reference's hazel-green.
- *   brows  a dark auburn-brown (the reference's brows are darker than her hair: MEASURED #5a382a in the portrait).
+ *   eyes   green-hazel with a GOLD ring round the pupil (builder v0.9.73's two-tone iris: its agent's Mary, #6c7a42 and
+ *          #bf8f45; before it, the builder's own single hazel).
+ *   brows  a dark auburn-brown (the reference's brows are darker than her hair: MEASURED #5a382a in the portrait),
+ *          arched a little higher (+0.4), as the reference's are.
  *   lips   her own tint at 0.55, as the pink and black two-piece had them: natural, no red.
+ *   marks  the builder's FRECKLES: 85 % of them, small (0.3), its own warm light brown, on her nose, cheeks and
+ *          shoulders (not her forehead); never over her paint.
+ *   detail an eyelid crease (0.6), smile lines (0.3) and a philtrum (0.5), drawn as gentle shade.
  */
 export const MARY_HEAD = {
   hair: { style: 'wavy-ponytail', length: 0.6, colour: MARY_HAIR_COLOUR },
-  eyes: { colour: null },
-  brows: { colour: '#4a2b1d', amount: 1 },
+  eyes: { colour: '#6c7a42', inner: '#bf8f45' },
+  brows: { colour: '#4a2b1d', amount: 1, arch: 0.4 },
   lips: { colour: null, amount: 0.55 },
   lashes: 1,
   face: MARY_FACE,
+  marks: { amount: 0.85, size: 0.3, colour: null, nose: true, cheeks: true, forehead: false, shoulders: true },
+  detail: { crease: 0.6, smile: 0.3, philtrum: 0.5 },
 } as const;
 
 /**
- * HER FRECKLES AND CHEEKS (painted by the game's bake: bake/skinMarks.ts). The reference: freckles thickest over the
- * bridge of her nose and across her upper cheeks, fewer on her forehead and lower cheeks, small and warm brown; her
- * cheeks a little rosier than her forehead (MEASURED in the portrait: cheek #d3876a, forehead #e8a991).
+ * HER ROSY CHEEKS (painted by the game's bake: bake/skinMarks.ts): a little rosier than her forehead, as the reference's
+ * (MEASURED in the portrait: cheek #d3876a, forehead #e8a991). Her freckles are the builder's own now (MARY_HEAD
+ * `marks`); the game's (`freckles`, bake/skinMarks.ts) are kept for a look that wants them.
  */
 export const MARY_SKIN_MARKS: SkinMarks = {
-  freckles: { amount: 0.85, colour: '#9a5634', strength: 0.5, seed: 30 },
   blush: 0.35,
 };
 
@@ -101,7 +113,7 @@ export const MARY_SKIN_MARKS: SkinMarks = {
  */
 export const MARY_UPPER_LIDS = 0.15;
 
-/** A look of hers, worn by Mary: her head, her freckles and her eyes as baked. A look on another body is handed back as it is. */
+/** A look of hers, worn by Mary: her head, her rosy cheeks and her eyes as baked. A look on another body is handed back as it is. */
 export function asMary(look: HeroineLook): HeroineLook {
   if (look.body.model !== 'v2-body') return look;
   return { ...look, body: { ...look.body, head: MARY_HEAD }, skinMarks: MARY_SKIN_MARKS, bakedFace: { upperLids: MARY_UPPER_LIDS } };

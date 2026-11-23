@@ -35,6 +35,7 @@ import type { AppScene, RoomRenderer } from '@charb/app/Scene';
 import type { HeroineLook } from './heroineLook';
 import { PAINT_ATTRIBUTE } from '@charb/sarahlab/bodyPaint';
 import { findPaintedSkin, finishMask, maskText, measureSkin, type MaskPainter } from './paintMask';
+import { paintedBand } from './liveBand';
 
 /** The builder's units in one metre (it draws her in centimetres). */
 export const ROOM_UNITS = UNITS_PER_METRE;
@@ -70,6 +71,11 @@ export interface BuilderRoomOptions {
   readonly prepareScene?: (roomScene: THREE.Scene) => void;
   /** Told what the room is doing while it loads ("body", "outfit", "tee"...), for a loading screen. */
   readonly onProgress?: (stage: string) => void;
+  /**
+   * Leave the look's LIVE BAND (liveBand.ts) out of her paint: the bake, for the game draws it. Left out (anywhere else:
+   * the builder's own body is drawn by its paint), the band is painted into its layer.
+   */
+  readonly leaveOutLiveBand?: boolean;
 }
 
 export interface BuilderRoom {
@@ -310,7 +316,10 @@ export async function openBuilderRoom(options: BuilderRoomOptions): Promise<Buil
   // example Blaze's curved leg panels). Such a mask is one number for every point of her skin, so it can only be made
   // now that the skin she wears is here. It is then written into her saved character as an ordinary hand-painted mask
   // and she is loaded again through the builder's own save card: the builder itself puts the layer on her.
-  const painters = options.look.maskPainters ?? [];
+  const painters = [...(options.look.maskPainters ?? [])];
+  // (a look's live band is paint here, added to its layer's painter, unless the bake leaves it out: liveBand.ts)
+  const liveBand = options.look.liveBand;
+  if (liveBand && !options.leaveOutLiveBand && painters[liveBand.layer]) painters[liveBand.layer] = paintedBand(liveBand, painters[liveBand.layer]);
   /** Her skin and the layers painted by code, kept for `repaintMasks`. */
   let codePainted: { readonly skin: THREE.SkinnedMesh; readonly layers: readonly { readonly layer: number; readonly painter: MaskPainter }[] } | null = null;
   if (painters.some((painter) => painter)) {

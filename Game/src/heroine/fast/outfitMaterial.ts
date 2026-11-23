@@ -161,6 +161,29 @@ export const SUIT_KNITS = Object.freeze({
   mesh: { ...PERFORATED_MESH, stitch: 1.5, strength: 1 },
 });
 
+/** The builder's smooth Flat cloth's own roughness (its surface picture reads 0.92): a live band's, when a look sets no trim. */
+const BAND_FLAT_ROUGHNESS = 0.92;
+
+/**
+ * THE LIVE BAND, in her skin's shader (liveBand.ts). Each point carries three numbers, blended over each triangle:
+ * `across` (how far from the band's middle line, square to it, on her skin AS BAKED), `half` (half the band's width
+ * there) and how much her skin round her has STRETCHED there since the bake (shapedBody.ts `measureBandStretch`, worked
+ * out on the CPU as her shape changes). A pixel is inside the band where |across| times that stretch -- how far it is
+ * NOW -- is under `half`: the band keeps its width however her belly grows.
+ * (First tried: the stretch worked out here, for each triangle, from how her skin changes from one pixel to the next.
+ * Correct on average, but it jumps a little from one triangle to the next, and the band's edge, half a band from its
+ * middle, moved with every jump: a notched edge with orange flecks, 2026-11-23.)
+ *
+ * THE EDGE is blended over about one pixel (how much the inside-ness changes from one pixel to the next), so it is sharp
+ * and smooth at any distance, whatever the size of her picture.
+ */
+const BAND_GLSL = `
+float gdmBandIn(vec3 band) {
+  float inside = band.y - abs(band.x) * clamp(band.z, 0.25, 4.0);
+  return clamp(inside / max(fwidth(inside), 1e-7) + 0.5, 0.0, 1.0) * step(1e-6, band.y);
+}
+`;
+
 /** A live knit's repeat at stitch 1, metres (the builder's athletic knit: 5 cm). */
 const KNIT = Object.freeze({ tileMetres: 0.05 });
 
@@ -213,8 +236,11 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   } : null;
   const printUniforms: Record<string, { value: unknown }> = {};
   prints.forEach((p, i) => { printUniforms[`printMap${i}`] = { value: p.map }; printUniforms[`printTile${i}`] = { value: p.tile }; });
-  /** Where her skin was as baked, and which way it faced: the knit and the prints are laid on by these. */
-  const laidOn = !!knitUniforms || prints.length > 0 || !!toneUniforms;
+  // THE LIVE BAND (liveBand.ts): its colour, when her look has one and its numbers came with it
+  const bandColour = look.band && look.manifest.band ? new THREE.Color(look.manifest.band.colour) : null;
+  const bandUniforms = bandColour ? { bandColour: { value: bandColour } } : null;
+  /** Where her skin was as baked, and which way it faced: the knit, the prints and the live band are laid on by these. */
+  const laidOn = !!knitUniforms || prints.length > 0 || !!toneUniforms || !!bandUniforms;
   // (DEV only: test pages set the knit's numbers by hand)
   if (import.meta.env.DEV && knitUniforms) (window as unknown as { __knit?: unknown }).__knit = knitUniforms;
   const from = fileMaterial as THREE.MeshStandardMaterial;
@@ -238,13 +264,17 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone)) {
+    if (bandUniforms || (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone))) {
+      // (a look with a live band but no shine of its own: nothing else changed)
+      const own: ClothShine = shine ?? {};
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
       const band = (from: number) => `smoothstep(${(from - 0.04).toFixed(3)}, ${from.toFixed(3)}, ownRoughness)`;
-      if (shine.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
-      if (shine.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${shine.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
+      if (own.cloth !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${own.cloth.toFixed(3)}, ${band(CLOTH_FROM)});`);
+      if (own.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${own.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
+      // (the live band is the smooth cloth: its trim's roughness, or the builder's Flat cloth's own)
+      if (bandUniforms) lines.push(`roughnessFactor = mix(roughnessFactor, ${(own.trim ?? BAND_FLAT_ROUGHNESS).toFixed(3)}, bandIn);`);
       // (a metal sheen: after three.js reads its metalness, where the roughness picture says cloth)
-      const metal = shine.metal !== undefined ? [`metalnessFactor = mix(metalnessFactor, ${shine.metal.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g));`] : [];
+      const metal = own.metal !== undefined ? [`metalnessFactor = mix(metalnessFactor, ${own.metal.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g));`] : [];
       // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
       // trim) and the colour is a gray (its channels nearly equal: a red stripe is not), the colour is darkened
       const knitSuit = [
@@ -266,7 +296,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         'float toneLight = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(dot(toneOn, vec3(0.2126, 0.7152, 0.0722)), 1e-4);',
         'diffuseColor.rgb = mix(diffuseColor.rgb, toneTop * toneLight, toneHere * toneUp);',
       );
-      if (shine.darken !== undefined) knitSuit.push(`diffuseColor.rgb *= mix(1.0, ${(1 - shine.darken).toFixed(3)}, knitGray);`);
+      if (own.darken !== undefined) knitSuit.push(`diffuseColor.rgb *= mix(1.0, ${(1 - own.darken).toFixed(3)}, knitGray);`);
       if (knitUniforms) knitSuit.push(
         // THE LIVE KNIT, from three sides (each side's picture weighted by how much her skin faces it), as lighter and
         // darker than its middle: the suit's own colour goes lighter where a stitch stands and darker in its holes
@@ -310,6 +340,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         prints.forEach((p, i) => { if (p.depth > 0) knitSuit.push(
           `printHeight += ${p.depth.toFixed(6)} * printHere${i} * (1.0 - smoothstep(0.012, 0.03, length(fwidth(printAt${i})))) * dot(printShown${i}, vec3(0.3, 0.59, 0.11));`); });
       }
+      // THE LIVE BAND (liveBand.ts), over everything else: its colour wherever this pixel is inside it, the band's
+      // width held at what it was as baked however her skin has stretched since (see BAND_GLSL)
+      if (bandUniforms) knitSuit.push(
+        'float bandIn = gdmBandIn(vBand);',
+        'diffuseColor.rgb = mix(diffuseColor.rgb, bandColour, bandIn);',
+      );
       // (the prints' depth, as the knit's below)
       const printBump = prints.some((p) => p.depth > 0) ? [
         'vec3 printSigmaX = dFdx(-vViewPosition), printSigmaY = dFdy(-vViewPosition);',
@@ -335,6 +371,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
       material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, printUniforms);
         if (toneUniforms) Object.assign(shader.uniforms, toneUniforms);
+        if (bandUniforms) Object.assign(shader.uniforms, bandUniforms);
         if (laidOn) {
           if (knitUniforms) Object.assign(shader.uniforms, knitUniforms);
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
@@ -342,6 +379,10 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
           shader.vertexShader = shader.vertexShader
             .replace('#include <common>', '#include <common>\nattribute vec3 knitRest;\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;')
             .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvKnitPos = transformed;\nvKnitRest = knitRest;\nvKnitNormal = objectNormal;');
+          // (the live band's two numbers for each point: liveBand.ts)
+          if (bandUniforms) shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nattribute vec3 bandAt;\nvarying vec3 vBand;')
+            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvBand = bandAt;');
           // (two tones: how much of this point her arms' bones carry)
           if (toneUniforms) shader.vertexShader = shader.vertexShader
             .replace('#include <common>', `#include <common>\nuniform float toneArm[${TONE_BONES}];\nvarying float vToneArm;`)
@@ -350,16 +391,17 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
             '#include <common>\nvarying vec3 vKnitPos;\nvarying vec3 vKnitRest;\nvarying vec3 vKnitNormal;' +
             (knitUniforms ? '\nuniform sampler2D knitMap;\nuniform float knitTile;\nuniform float knitStrength;\nuniform float knitMiddle;\nuniform sampler2D knitHeightMap;\nuniform float knitDepth;' : '') +
             prints.map((_, i) => `\nuniform sampler2D printMap${i};\nuniform float printTile${i};`).join('') +
-            (toneUniforms ? '\nuniform vec3 toneOn;\nuniform vec3 toneTop;\nuniform float toneLineY;\nvarying float vToneArm;' : ''));
+            (toneUniforms ? '\nuniform vec3 toneOn;\nuniform vec3 toneTop;\nuniform float toneLineY;\nvarying float vToneArm;' : '') +
+            (bandUniforms ? '\nuniform vec3 bandColour;\nvarying vec3 vBand;\n' + BAND_GLSL : ''));
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
-          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + knitBump.join('\n') + '\n' + printBump.join('\n'))
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bandUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, bandIn));\n' : '') + knitBump.join('\n') + '\n' + printBump.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'))
           .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n' + metal.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${shine.cloth}-${shine.trim}-${shine.darken}-${shine.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${shine.knitOn ?? ''}-${(shine.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-v5`;
+      material.customProgramCacheKey = () => `cloth-shine-${own.cloth}-${own.trim}-${own.darken}-${own.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${own.knitOn ?? ''}-${(own.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-${bandUniforms ? 'band2' : ''}-v5`;
     }
     return material;
   };

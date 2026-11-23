@@ -1,6 +1,9 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `a2bf91c`
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `941b8ea`
+(2026-11-23, v0.9.73: a face's details for every character, made for GDM's Mary and John: freckles, a two-tone iris,
+brow shape, an eyelid crease, deep-set eyes, smile lines, a philtrum, and a skin picture laid over the skin; and since
+v0.9.72 his body wears his own skin, never hers). Before that: `a2bf91c`
 (2026-11-21, v0.9.71: his face, eyes, facial hair and twelve hairstyles; in SQUAT and RECLINE her bump carried as she
 stands and her thighs giving way to it, `bellyContact.ts`; seated, the side and back of her hips keep her own weights).
 Before that: `e2ebcf8` (2026-11-21, v0.9.68: her body's fixes seated, her bump keeps its standing shape and her hips stay closed, no pinching

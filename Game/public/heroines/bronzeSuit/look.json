@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "bronzeSuit",
-  "bakedAt": "2026-11-22T03:03:02.430Z",
-  "builderVersion": "0.9.71",
+  "bakedAt": "2026-11-23T08:15:16.177Z",
+  "builderVersion": "0.9.73",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7135232729172332,
+  "barefootHeightMetres": 1.713846967311276,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -18,9 +18,9 @@
     -1
   ],
   "hair": {
-    "style": "braid",
-    "colour": "#1c1b1d",
-    "length": 1
+    "style": "wavy-ponytail",
+    "colour": "#4e2716",
+    "length": 0.6
   },
   "body": "v2-body",
   "files": {
@@ -36,20 +36,29 @@
       "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
       "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
-      "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
+      "sarahHair | sarahHair | 29764 triangles | skinned, 19145 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7001604987523697,
-    "pointsTheBuilderMoved": 73395,
-    "movedMostGeometryUnits": 0.15018303416513146,
+    "crownOverTheFloorMetres": 1.7004841931464125,
+    "pointsTheBuilderMoved": 71800,
+    "movedMostGeometryUnits": 0.15094259712983848,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16342353032718313,
+    "restSkinSpread": 0.16337331890272572,
     "captureMissing": {
       "position": 0,
       "normal": 0
     },
+    "faceSlidersPastTheirEnds": {
+      "sliders": {
+        "browHeight": -0.6000000000000001
+      },
+      "points": 299,
+      "mostMm": 2.3980917547362655
+    },
+    "upperLidsAsBaked": 0.15,
+    "liveBandPoints": 0,
     "albedoCoveredTexels": 7537039,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
@@ -60,6 +69,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-22T03:04:31+00:00"
+    "packedAt": "2026-11-23T09:10:38+00:00"
   }
 }

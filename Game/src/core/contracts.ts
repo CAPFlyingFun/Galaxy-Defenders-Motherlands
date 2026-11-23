@@ -227,6 +227,11 @@ export interface HeroineBody {
   /** Whether she may start a look down at her hand where the baby kicked (not while she fires or runs). */
   setBellyLookAllowed?(ok: boolean): void;
   /**
+   * What she is doing, for how often a kick calls her hand and her look (Joshua, 2026-11-23; bellyTouch.ts
+   * `KICK_REACTION`): 'relaxed' (nothing to do), 'balanced', 'busy'.
+   */
+  setKickMood?(mood: 'relaxed' | 'balanced' | 'busy'): void;
+  /**
    * Her look down at her hand where the baby kicked: how far it is on (0 none .. 1 right at it), and the spot (world) in
    * `out`. First person, the view does the looking (main.ts).
    */

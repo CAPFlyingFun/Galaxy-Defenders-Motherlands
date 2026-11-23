@@ -1,4 +1,4 @@
-import { keepPicture, readPicture } from './pictureStore';
+import { OVERLAY_MAX, keepPicture, keepUpload, pictureImage, pictureName, readPicture } from './pictureStore';
 import { GarmentShapeTransfer } from './garmentShapeTransfer';
 import { BELLY_CURVES, BELLY_CURVE_NAMES, DEFAULT_BELLY_CURVE, type BellyCurve } from './bellyInterpolation';
 import { attachRecoveredMeshes, applyRecoveredBaseline, fitWeights, LEGGINGS_FIT_KEYS, SHIRT_FINE_FIT_KEYS, updateLeggingsHem, releaseRecoveredMeshes } from './recoveredClothes';
@@ -35,7 +35,7 @@ import { breathAt, breathVolumes, layBreathTable } from './breathSkin';
 import { MOTION_SHAPES, LEVEL_LINE_OFFERED, lineModeLine, lineModeNote, nextLineMode, standingShape, type LineMode } from './levelLine';
 import { ensureRest, ensureSkinFabric, fabricFieldState, setFabricFieldLevels } from './fabricMaterial';
 import { BodyCrease, CREASE_SETTLE_MS, unitBefore } from './bodyCrease';
-import { FACE_REST_OFFSET, FACE_REST_SCALE, HER_FACE, faceSpecOf, patchFaceRig, restFromWorld, setFaceRig, type FaceRigState } from './faceRig';
+import { FACE_REST_OFFSET, FACE_REST_SCALE, HER_FACE, faceHasDetails, faceNeedsDetails, faceSpecOf, patchFaceRig, restFromWorld, setFaceRig, type FaceRigState } from './faceRig';
 import { MALE_FACE } from './maleFace';
 import { DRAW_LIFT, REST_SCALE, RoomGarment } from './garment/roomGarment';
 import { ClothSkirt } from './clothSkirt';
@@ -1794,6 +1794,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     layHair();
     const moved = (look: HeadLook) => faceSlidersMoved(look.face).sort().map((id) => `${id}:${look.face[id]}`).join('|');
     if (moved(head) !== moved(was)) applyLook();
+    if (head.overlay?.image !== was.overlay?.image || head.overlay?.amount !== was.overlay?.amount) layOverlay();
   }
   /** One frame of her face: where the camera is in her head's rest frame, the animator, then the shader's uniforms. */
   function faceFrame(dt: number): void {
@@ -1802,6 +1803,9 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
     model.updateMatrixWorld(true);
     const cam = faceMotion.mode === 'camera' ? restFromWorld(b.mesh, camera.position, cameraRest, faceSpecOf(faceMaterial)?.frame) : null;
     faceMotion.step(dt, cam);
+    // THE FACE'S DETAILS' PROGRAM (faceRig.ts `faceNeedsDetails`) is asked for once; her skin's fabric program goes on
+    // first, so that the freckles are told where her paint covers her (faceRig.ts `finishDetails`)
+    if (faceOn && !faceHasDetails(faceMaterial) && faceNeedsDetails(faceLookNow)) ensureSkinFabric(b.mesh, b.material, { layers: PAINT_LAYER_COUNT, rest: shaped.find((x) => x.mesh === b.mesh)?.fields ?? null });
     setFaceRig(faceMaterial, faceOn ? { jaw: faceMotion.jaw, gazeRight: faceMotion.gazeRight, gazeLeft: faceMotion.gazeLeft, blink: faceMotion.blink, ...faceLookNow } : null);
   }
 
@@ -1911,7 +1915,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       });
     }
     const b = bodyOf();
-    if (b && skinFetched && b.material.map === skinFetched.texture && skinId === skinFetched.id) applySkin(true);
+    if (b && skinFetched && baseMap(b) === skinFetched.texture && skinId === skinFetched.id) applySkin(true);
+    if (b && hisEven && baseMap(b) === hisEven && pictureLost(hisEven.image)) applySkin(true);
     // (her even roughness is fetched, not her file's: fetched again if it was dropped)
     if (roughEven && pictureLost(roughEven.image)) { roughEven.dispose(); roughEven = null; applyRoughness(roughWanted); }
   }
@@ -1930,10 +1935,19 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
   function applySkin(fresh = false): void {
     const b = bodyOf();
     if (!b) return;
+    // HIS BODY WEARS HIS OWN SKIN, AND NOTHING OF HERS (a fault found and told, 2026-11-21: the FACE tab's skins are all
+    // pictures of HER body, laid out on her UVs; put on him as he loaded, beside the fetch of his own even skin, whichever
+    // landed last was worn -- and hers usually did: pieces of her skin scattered over him, a brown speck under his left
+    // eye, a strip down his forehead, patches on his jaw and neck. MEASURED: his map was still sarah-v2-skin-even-2048.webp
+    // 8 seconds after he loaded). The choice made in FACE is hers and waits for her: it is not moved, and goes back on
+    // when she does.
+    if (isMaleModel(SARAH_LAB_MODELS[modelIndex].id)) { ++skinRequest; wearHisSkin(b, fresh); return; }
+    // (his skin, kept for a body loaded again, is not left in graphics memory while she is shown)
+    hisEven?.dispose();
     const own = ownMap(b.material), request = ++skinRequest;
     const wear = (t: THREE.Texture | null, id: SkinId) => {
       dropPainter();
-      if (b.material.map !== t) { b.material.map = t; b.material.needsUpdate = true; }
+      if (baseMap(b) !== t || b.material.map !== t) { b.material.map = t; b.material.needsUpdate = true; }
       // THE FILE'S OWN SKIN IS NOT LEFT IN GRAPHICS MEMORY WHEN ANOTHER IS PUT ON (Joshua, 2026-11-13: "not sure if it
       // could be a phone memory thing as well"). MEASURED the same day, counted where the graphics make and let go of
       // each picture: opened in EVEN, the file's own skin is never there (the 3D library takes a picture into graphics
@@ -1947,6 +1961,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       applyRoughness(id !== 'original');
       // (her doors' outsides take her skin's tone: the skin she wears now)
       applyOpening();
+      // (and a picture of his own over it: `layOverlay`)
+      layOverlay();
       refresh();
     };
     if (skinId === 'original') { wear(own, 'original'); freeFetched(); return; }
@@ -1963,6 +1979,36 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       wear(texture, choice.id);
       freeFetched(texture);
       skinFetched = { id: choice.id, texture };
+    });
+  }
+  /** His even skin (scripts/evenSkin.mjs on his file), fetched once and kept for a body loaded again. */
+  let hisEven: THREE.Texture | null = null, hisEvenLoading = false;
+  /**
+   * HIS EVEN SKIN as hers is (one skin colour, his own details kept -- Meshy's colour picture had dark slits where its
+   * islands meet, seen on his chest and arms). Put on only while the body it was asked for is still the one shown; her
+   * fetched skin is never laid on him and never let go for him (`skinFetched` stays hers).
+   */
+  function wearHisSkin(b: { readonly material: THREE.MeshStandardMaterial }, fresh = false): void {
+    dropPainter();
+    const own = ownMap(b.material);
+    const lay = () => {
+      const now = bodyOf();
+      if (!hisEven || disposed || !now || now.material !== b.material || !isMaleModel(SARAH_LAB_MODELS[modelIndex].id)) return;
+      if (b.material.map !== hisEven) { b.material.map = hisEven; b.material.needsUpdate = true; }
+      if (own && own !== hisEven) own.dispose();
+      skinState = 'ready'; layOverlay(); refresh();
+    };
+    if (fresh && hisEven) { hisEven.dispose(); hisEven = null; }
+    if (hisEven) { lay(); return; }
+    // (until it lands he wears his file's own map: never one of hers)
+    if (b.material.map !== own) { b.material.map = own; b.material.needsUpdate = true; }
+    if (hisEvenLoading) return;
+    hisEvenLoading = true; skinState = 'loading'; refresh();
+    void assets.loadTexture(MALE_EVEN_SKIN).then((t) => {
+      hisEvenLoading = false;
+      if (!t || disposed) { t?.dispose(); skinState = t ? 'ready' : 'failed'; refresh(); return; }
+      hisEven = likeOwn(t, own);
+      lay();
     });
   }
   /** Her even roughness (skinChoices.ts `SKIN_EVEN_ROUGHNESS`), fetched once; her file's own put back for ORIGINAL. */
@@ -1983,6 +2029,117 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
         roughEven = t; if (roughWanted) applyRoughness(true);
       });
     }
+  }
+  /**
+   * A PICTURE OF HIS OWN OVER HER SKIN (Joshua, 2026-11-22, for GDM's Mary and John Fisher: "A per-character skin overlay
+   * picture (UV decal) saved with the character, for face detail"; `headLook.ts` `OverlayLook`). Laid over the skin she
+   * wears in her skin's own layout -- its see-through parts showing that skin -- `amount` of it, on a copy of that skin
+   * drawn here (`overlaid`), so her skin's program reads no further picture: a phone has 13 of its 16 at her skin's
+   * fragment stage already ("Six paint layers"). His the same on his skin, in his layout. The copy is drawn again when the
+   * skin under it or the picture changes; the picture is kept on the device (`pictureStore.ts`) and goes with her save.
+   */
+  let overlaid: { readonly material: THREE.MeshStandardMaterial; readonly base: THREE.Texture; readonly key: string; readonly texture: THREE.CanvasTexture } | null = null;
+  let overlayRequest = 0, overlayTimer: ReturnType<typeof setTimeout> | 0 = 0;
+  /** Pictures a look names that this device has not got (a character from another device, imported without them). */
+  const overlayMissing = new Set<string>();
+  /** The skin under the picture: her map, or what the copy was drawn over. */
+  function baseMap(b: { readonly material: THREE.MeshStandardMaterial }): THREE.Texture | null {
+    return overlaid && overlaid.material === b.material && b.material.map === overlaid.texture ? overlaid.base : b.material.map;
+  }
+  function freeOverlay(): void {
+    if (!overlaid) return;
+    const o = overlaid;
+    overlaid = null;
+    if (o.material.map === o.texture) { o.material.map = o.base; o.material.needsUpdate = true; }
+    o.texture.dispose();
+  }
+  /** Lay `head.overlay` over the skin worn (or take it off), a tenth of a second after the last ask (a slider being dragged). */
+  function layOverlay(): void {
+    if (overlayTimer) return;
+    overlayTimer = setTimeout(() => { overlayTimer = 0; drawOverlay(); }, 100);
+  }
+  function drawOverlay(): void {
+    const b = bodyOf();
+    if (!b || disposed) return;
+    if (overlaid && overlaid.material !== b.material) { overlaid.texture.dispose(); overlaid = null; }
+    // (the brush's copy is on: it was made over what was worn, and the picture goes back on with the next skin worn)
+    if (painted) return;
+    const want = head.overlay && head.overlay.amount > 0 ? head.overlay : null, base = baseMap(b);
+    if (!want || !base) { freeOverlay(); refresh(); return; }
+    const key = `${want.image}|${want.amount}`;
+    if (overlaid && overlaid.base === base && overlaid.key === key) {
+      if (b.material.map !== overlaid.texture) { b.material.map = overlaid.texture; b.material.needsUpdate = true; }
+      return;
+    }
+    const request = ++overlayRequest;
+    void pictureImage(want.image).then((img) => {
+      if (request !== overlayRequest || disposed) return;
+      const now = bodyOf();
+      if (!now || now.material !== b.material || baseMap(now) !== base || head.overlay?.image !== want.image || head.overlay.amount !== want.amount || painted) return;
+      if (!img) { overlayMissing.add(want.image); freeOverlay(); refresh(); return; }
+      overlayMissing.delete(want.image);
+      const src = base.image as (CanvasImageSource & { width: number; height: number }) | null;
+      // (a skin with no pixels a canvas can read -- the KTX2 pilot's -- takes no picture over it)
+      const drawable = !!src && ((typeof ImageBitmap !== 'undefined' && src instanceof ImageBitmap) || (typeof HTMLImageElement !== 'undefined' && src instanceof HTMLImageElement)
+        || (typeof HTMLCanvasElement !== 'undefined' && src instanceof HTMLCanvasElement) || (typeof OffscreenCanvas !== 'undefined' && src instanceof OffscreenCanvas));
+      if (!src || !drawable || !(src.width > 0)) { refresh(); return; }
+      const canvas = overlaid && overlaid.material === b.material && (overlaid.texture.image as HTMLCanvasElement).width === src.width && (overlaid.texture.image as HTMLCanvasElement).height === src.height
+        ? overlaid.texture.image as HTMLCanvasElement : Object.assign(document.createElement('canvas'), { width: src.width, height: src.height });
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.globalAlpha = 1; ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = want.amount;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+      const old = overlaid && overlaid.texture.image !== canvas ? overlaid.texture : null;
+      const texture = overlaid && overlaid.texture.image === canvas ? overlaid.texture : likeOwn(new THREE.CanvasTexture(canvas), base) as THREE.CanvasTexture;
+      texture.needsUpdate = true;
+      overlaid = { material: b.material, base, key, texture };
+      if (b.material.map !== texture) { b.material.map = texture; b.material.needsUpdate = true; }
+      old?.dispose();
+      // (the skin under it is not left in graphics memory as well: it goes back in the first time it is drawn)
+      base.dispose();
+      refresh();
+    });
+  }
+  /** A picture from the phone kept on the device and laid over her skin (SKIN PICTURE · UPLOAD): words for the screen if it can not be. */
+  async function uploadOverlay(file: File): Promise<string | null> {
+    try {
+      const { id } = await keepUpload(file, OVERLAY_MAX);
+      if (disposed) return null;
+      setHead({ ...head, overlay: { image: id, amount: head.overlay?.amount ?? 1 } });
+      refresh();
+      return null;
+    } catch (e) { return e instanceof Error ? e.message : 'Could not keep that picture.'; }
+  }
+  /**
+   * SKIN PICTURE · TEMPLATE: the skin worn now, with its layout's triangles drawn faintly over it, saved as a PNG to paint a
+   * picture over -- the same size and layout the picture is laid in.
+   */
+  function overlayTemplate(): void {
+    const b = bodyOf(), base = b ? baseMap(b) : null, src = base?.image as (CanvasImageSource & { width: number; height: number }) | null | undefined;
+    if (!b || !src || !(src.width > 0)) return;
+    const canvas = Object.assign(document.createElement('canvas'), { width: src.width, height: src.height }), ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    try { ctx.drawImage(src, 0, 0); } catch { return; }
+    const geo = b.mesh.geometry, uv = geo.getAttribute('uv'), index = geo.getIndex();
+    if (uv && index) {
+      const W = canvas.width, H = canvas.height, ix = index.array;
+      ctx.strokeStyle = 'rgba(20,20,40,0.28)'; ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      for (let t = 0; t + 2 < index.count; t += 3) {
+        const a = ix[t], c = ix[t + 1], d = ix[t + 2];
+        ctx.moveTo(uv.getX(a) * W, uv.getY(a) * H); ctx.lineTo(uv.getX(c) * W, uv.getY(c) * H); ctx.lineTo(uv.getX(d) * W, uv.getY(d) * H); ctx.closePath();
+      }
+      ctx.stroke();
+    }
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = `skin-template-${headMale ? 'male' : 'female'}-${canvas.width}.png`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    }, 'image/png');
   }
   /** A picture from the phone becomes UPLOAD, and she wears it. */
   async function uploadSkin(file: File): Promise<void> {
@@ -2497,6 +2654,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       buttons.model.style.display = new URLSearchParams(globalThis.location?.search ?? '').get('probe') === 'cloth' ? '' : 'none';
     }
     if (buttons.maleNavel) buttons.maleNavel.style.display = isMaleModel(SARAH_LAB_MODELS[modelIndex].id) ? '' : 'none';
+    // (FACE's SKIN and UPLOAD SKIN are pictures of HER body: not offered on his -- `wearHisSkin`)
+    for (const b of [buttons.skin, buttons.skinUpload]) if (b) b.style.display = isMaleModel(SARAH_LAB_MODELS[modelIndex].id) ? 'none' : '';
     for (const sex of ['female', 'male'] as const) {
       const b = buttons[`base-${sex}`];
       if (!b) continue;
@@ -4255,6 +4414,10 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
         // his hairstyles and his own head on him; FACIAL HAIR where the face has a design for it (his)
         styles: () => hairStylesFor(headMale), own: () => headDefault(headMale), male: () => headMale,
         beard: () => !!(faceMaterial && faceSpecOf(faceMaterial)?.beard),
+        // SKIN PICTURE: a picture of his own over the skin, in its layout (`layOverlay`)
+        uploadOverlay: (file) => uploadOverlay(file),
+        overlayState: () => (head.overlay ? { name: pictureName(head.overlay.image), missing: overlayMissing.has(head.overlay.image) } : null),
+        overlayTemplate: () => overlayTemplate(),
       });
       right.appendChild(headPanel.element);
     }
@@ -9074,11 +9237,10 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           try { buildRig = prepareBuildRig(m, s.fields.basePos, measure.joints, metresPerUnitOf(m, loadedModel)); } catch (error) { console.error('[sarahlab] his build could not be measured; BUILD is off', error); buildRig = null; }
         }
       }
-      // HIS SKIN EVEN as hers is (scripts/evenSkin.mjs on his file: one skin colour, his own details kept -- Meshy's colour
-      // picture had dark slits where its islands meet, seen on his chest and arms)
+      // HIS SKIN EVEN as hers is: put on by applySkin, below, as for every body loaded (`wearHisSkin`; fetched here
+      // beside it, the two raced and her chosen skin was often the one he wore)
       if (isMaleModel(SARAH_LAB_MODELS[modelIndex].id)) {
         const sm = findSkinnedMesh(loadedModel), mat = sm && (Array.isArray(sm.material) ? sm.material[0] : sm.material) as THREE.MeshStandardMaterial;
-        if (mat) void assets.loadTexture(MALE_EVEN_SKIN).then((t) => { if (!t || disposed || model !== loadedModel) { t?.dispose(); return; } const own = mat.map; mat.map = likeOwn(t, own); mat.needsUpdate = true; own?.dispose(); });
         // and his skin's fine relief over it, laid triplanar on his rest place (skinDetail.ts; his Local Texture Lab's maths)
         if (sm && mat) void assets.loadTexture(SKIN_DETAIL_MAP).then((t) => {
           if (!t || disposed || model !== loadedModel) { t?.dispose(); return; }
@@ -9146,6 +9308,8 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
       applySkin();
       // her head, or his (the room keeps one for each body), and its hair, made for that body
       headForBody(isMaleModel(SARAH_LAB_MODELS[modelIndex].id));
+      // (a picture of his own over that body's skin, the head's)
+      layOverlay();
       loadHair();
       // and her face, on her approved v2 body (its measurements are that file's); and his, the same design through his
       // frame, with brows, lashes and lips of his own (maleFace.ts)
@@ -11773,7 +11937,7 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
           return [im.width, im.height];
         },
         // FACE's SKIN as the button sets it (a candidate's file fetched the first time), and what she wears now
-        skinChoice: (id?: SkinId) => { if (id) { skinId = id; applySkin(); } return { chosen: skinId, worn: skinWorn, state: skinState, painted: !!painted, map: bodyOf()?.material.map?.name ?? null, size: (bodyOf()?.material.map?.image as { width?: number } | undefined)?.width ?? null }; },
+        skinChoice: (id?: SkinId) => { if (id) { skinId = id; applySkin(); } return { chosen: skinId, worn: skinWorn, state: skinState, painted: !!painted, map: bodyOf()?.material.map?.name ?? null, src: ((bodyOf()?.material.map?.image as { src?: string } | undefined)?.src ?? '').split('/').pop()?.split('?')[0] ?? null, size: (bodyOf()?.material.map?.image as { width?: number } | undefined)?.width ?? null }; },
         // a stroke of FACE's brush through screen points (CSS pixels), PAINT SKIN switched on for it; what changed
         skinStroke: async (points: readonly (readonly [number, number])[], set?: Partial<typeof brush>) => {
           skinPaintOn = true; Object.assign(brush, set ?? {});
@@ -11811,6 +11975,9 @@ export function buildSarahLabScene(ctx: SceneContext, hooks: SarahLabHooks): App
             head, hair: { worn: hairWorn, loading: hairLoading, shown: hairOn, parts: hairMeshes.map((m) => ({ points: m.geometry.getAttribute('position').count, shorter: m.morphTargetInfluences?.[m.morphTargetDictionary?.[HAIR_LENGTH_MORPH] ?? -1] ?? null, fields: [...(shaped.find((x) => x.mesh === m)?.fields.laid?.keys() ?? [])] })) },
             faceFields: [...(skinFields?.laid?.entries() ?? [])].filter(([name]) => name.startsWith(FACE_FIELD_PREFIX)),
             skinProgram: b ? { rest: !!b.mesh.geometry.getAttribute('fabricRest'), fabric: /\|fabric-\d+-painted-v\d+/.exec(b.material.customProgramCacheKey())?.[0] ?? null, face: /\|face-rig-v\d+/.exec(b.material.customProgramCacheKey())?.[0] ?? null } : null,
+            // the face's details (faceRig.ts `faceNeedsDetails`) and the picture over the skin (`layOverlay`)
+            details: faceMaterial ? faceHasDetails(faceMaterial) : false,
+            overlay: { laid: overlaid ? overlaid.key : null, worn: !!(b && overlaid && b.material.map === overlaid.texture), missing: [...overlayMissing] },
           };
         },
         // the room as its own camera sees it now, as a picture: drawn and copied in this call (a software renderer's

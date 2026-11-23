@@ -34,7 +34,8 @@ const toLinear = (byte: number): number => { const c = byte / 255; return c <= 0
 function mergeAlike(pieces: readonly BakedPiece[]): BakedPiece[] {
   const groups = new Map<string, BakedPiece[]>();
   for (const piece of pieces) {
-    const key = JSON.stringify([piece.map, piece.roughness, piece.metalness, piece.doubleSided, piece.cutOut, !!piece.motion, !!piece.uv, piece.bindMatrix]);
+    // (a shirt's hem band is never joined with another piece: it is drawn over her skin, the others not)
+    const key = JSON.stringify([piece.map, piece.roughness, piece.metalness, piece.doubleSided, piece.cutOut, !!piece.motion, !!piece.uv, piece.bindMatrix, /^tunicDrape/.test(piece.name)]);
     const group = groups.get(key);
     if (group) group.push(piece); else groups.set(key, [piece]);
   }
@@ -124,6 +125,10 @@ export function buildExtraPieces(look: BakedLook, skin: THREE.SkinnedMesh, influ
       // skin (which is painted with the very same bra there) is what shows wherever the two overlap.
       polygonOffset: piece.cutOut, polygonOffsetFactor: piece.cutOut ? 8 : 0, polygonOffsetUnits: piece.cutOut ? 600 : 0,
     });
+    // A PAINTED SHIRT'S HEM BAND (its drape, capturePieces.ts) is the other way round: where it lies on her skin it is
+    // drawn OVER it, as the builder draws it (tunicDrape.ts `feathered`, the same offset), so its smooth bottom edge is
+    // what shows over the shirt's own painted hem.
+    if (/^tunicDrape/.test(piece.name)) { material.polygonOffset = true; material.polygonOffsetFactor = -1; material.polygonOffsetUnits = -4; }
     materials.push(material);
 
     const mesh = new THREE.SkinnedMesh(geometry, material);

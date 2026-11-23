@@ -43,7 +43,7 @@ import type { BakedLookManifest } from '../heroine/fast/bakedLook';
 import { packShape } from '../heroine/fast/shapeFile';
 import { bakeSkinnedUV } from './skinnedUvBake';
 import { layFaceBeyond } from './faceBeyond';
-import { capturePieces } from './capturePieces';
+import { capturePieces, shirtColourFrom } from './capturePieces';
 import { repackUv } from './repackUv';
 import { packPieces } from '../heroine/fast/piecesFile';
 import { measureBand, packBand, type BandPoints } from '../heroine/liveBand';
@@ -196,8 +196,13 @@ async function start(): Promise<void> {
   //  white flecks at his waist. John, 2026-11-21)
   const herPieceOnHim = (mesh: THREE.Mesh): boolean => look.body.model === 'male-base' && /^(cleavageBridge|tunicDrape)$/.test(mesh.name);
   const isExtraPiece = (mesh: THREE.Mesh): boolean => !/^sarah(Hair|Vulva|Vagina)$/.test(mesh.name) && mesh.name !== 'finger-fills' && mesh.name !== 'Mesh_0' && !herPieceOnHim(mesh)
-    && !(look.noCleavageBridge && mesh.name === 'cleavageBridge') && !(look.onlyNamedPieces && !mesh.name);
-  const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece);
+    && !(look.noCleavageBridge && mesh.name === 'cleavageBridge') && !(look.noTunicDrape && mesh.name === 'tunicDrape') && !(look.onlyNamedPieces && !mesh.name);
+  // (a painted shirt's drape takes her shirt's own colour just above it, from her baked picture: capturePieces.ts;
+  //  looked up on her UNPOSED shape, in its own units: her height in them over her height in metres)
+  let lowUnposed = Infinity, highUnposed = -Infinity;
+  for (let i = 0; i < count; i++) { const y = capture.position[i * 3 + 1]; if (y < lowUnposed) lowUnposed = y; if (y > highUnposed) highUnposed = y; }
+  const unposedPerMetre = (highUnposed - lowUnposed) / ((top - bottom) / ROOM_UNITS);
+  const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece, shirtColourFrom(capture.position, layout.uv, albedo, unposedPerMetre));
   // the lowest point of anything she stands on (her sneakers' soles), over the room's floor
   let lowest = bottom;
   room.scene.traverseVisible((node) => {

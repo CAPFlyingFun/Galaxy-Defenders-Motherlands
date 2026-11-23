@@ -976,8 +976,7 @@ use the game's single copy of three.js.
   back against the board; a 0% and a 200% belly (the paint stretches with her: at 200% M2's waist band is a broad patch
   on the side of her belly, as baked paint is); the built game in M1 (packed BC7, no errors). Left for later: the
   A.R.C.H. emblem on the chest (a small painted shape comes out ragged), the board's slimmer ankle boots. MARY'S
-  CASUAL SET (the tee, tank and zip top of the other board) is written in `looks/casualSets.ts` and NOT in the game:
-  his order is these first.
+  CASUAL SET came next, as Joshua's own six (v0.2.161).
 - v0.2.160: THE SIDE BANDS DRAWN LIVE, BUILDER v0.9.73, THE NEW FACES, EVERY OUTFIT RE-BAKED, KICKS IN THREE STATES
   (Joshua, 2026-11-23). (1) THE SIDE BANDS (his: "the stripes on the side changed with the larger belly. Can we keep it
   consistent?", "I don't mind if it goes with the belly, just need to make sure the width is the same regardless of belly
@@ -1013,6 +1012,37 @@ use the game's single copy of three.js.
   door, holstering, drawing or reloading, or past a walk (pace over 1.5); RELAXED otherwise when still (under 0.1 m/s);
   BALANCED otherwise (a walk). The one standing by: busy as their kit is busy or their brain fires, relaxed with nowhere
   to walk, balanced walking. (The 35 % / 40 % before are gone.)
+- v0.2.161: MARY'S SIX CASUAL OUTFITS, M1-M6, JOSHUA'S OWN (Joshua, 2026-11-23, after ChatGPT's casual board,
+  `docs/reference/outfits/mary-john-casual-options-m1-m6-j1-j6.jpg`; my first three, the builder's tops tucked into
+  low-rise leggings with the board's piping and stripes painted on, were stopped: "mine I believe are better then your
+  when it comes to the shirt… Here are the 6 close outfits (M1-M6) based on what's in CCBS without any extra trim and
+  stuff"; "It all works up to 200% belly, I tested in CCBS"). His export, saved as sent:
+  `docs/reference/characters/character-mary-casual-m1-m6-2026-11-23.json`. `looks/casualSets.ts` `CASUAL_EXPORTS` is
+  each save's clothes EXACTLY (the builder's leggings or shorts and top, his fabrics, colours and dials), on his plain
+  catsuit export's body (`EXPORT_BODY`), worn as Mary: M1 `maryCasualTee` (a dark tee, blue bands, over-belly
+  leggings), M2 `maryCasualTank` (burgundy tank), M3 `maryCasualHenley` (light gray henley, purple bands and ankle
+  bands), M4 `maryCasualPolo` (dark polo, orange bands, over-belly shorts), M5 `maryCasualCrop` (dark 3/4-sleeve crop
+  tee, white bands, her belly bare over under-belly leggings), M6 `maryCasualField` (olive crop tee). In Settings ->
+  Outfit with thumbnails, after the catsuits. Gear `maryCasualGear(accent)`: the suits' near-black belt, holsters and
+  guns in each outfit's trim colour, no boots (his sneakers). The shape helpers of Mary's suits moved, unchanged, to
+  `looks/suitShapes.ts` (marySuits.ts imports them). WHAT THE GAME ADDS so they look as in the builder:
+  (1) THE HIGH-NECKED TOPS (M1, M4, M5, M6): the gap under the neck at her cleavage FILLED in the top's own fabric
+  (`fillCleavage`, layer 3) and the builder's cleavage strip left out (`noCleavageBridge`): baked, the strip drew a hole
+  in the tee at her chest. The tank and henley are low enough that the builder lays none.
+  (2) THE SHIRTS' HEM BAND (M1-M4): the builder hangs a painted shirt's level hem band round her hips (its DRAPE,
+  tunicDrape.ts, `PAINTED_SHIRT_DRAPE = 'band'`: a sheet whose other parts are cut, `drapeCut` under 0.5, or faded,
+  its colour's alpha, and laid under her skin). The bake keeps only its cut-kept, shown triangles (capturePieces.ts) and
+  colours them from her shirt's own paint 3-8 cm above each point (`shirtColourFrom`, her baked picture, on her UNPOSED
+  shape: on her posed skin in the room the nearest skin above the hem at her sides was her FINGERS, hanging there, and
+  the band came out skin-coloured); the game draws it a hair over her skin (extraPieces.ts, polygonOffset -1/-4,
+  merged with its like). (3) THE BAKE KEEPS ONLY WHAT THE ROOM DRAWS (capturePieces.ts, a piece's `drawRange`): the
+  builder makes the drape with rows enough for its longest hem and draws only the rows it built; the bake kept them all,
+  and the unbuilt rows, with no place and no bones, fell to her feet: a BLACK WEDGE from her hips to the floor between
+  her legs. Now about 550 points, every one with bones. TRIED AND DROPPED (my own versions): raising a drawn top's
+  `hemFront`/`hemBack` (only cuts its coverage: a ragged white strip), `neckFront` 1.04 on the tee for a collar (it
+  widened the neck), `capOnTrunk` at 1.5 (stepped corners), a 7 mm painted zip (dashes); `noTunicDrape` is kept in
+  HeroineLook, unused. CHECKED against his CCBS pictures (front, three-quarter, side, back), at 0 and 200% (the shirts'
+  paint stretches over her belly, the crop tees leave it bare, nothing floats), and in the built game at 932 x 430.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -78,7 +78,28 @@ function marySuitGear(accent: string): LookGear {
   };
 }
 
+/**
+ * MARY'S CASUAL OUTFITS' GEAR (casualSets.ts; his own six): her catsuits' near-black belt with the outfit's `accent` (its
+ * trim's colour) on its fittings, holsters and pouches, and dark guns glowing it; no boots (she wears the builder's
+ * sneakers, as he saved them); the fabrics' own shine (a tee and leggings, not a glossy suit).
+ */
+function maryCasualGear(accent: string): LookGear {
+  const a = parseInt(accent.slice(1), 16);
+  return {
+    belt: { belt: 0x1b1c20, edge: 0x34373d, buckle: 0xb8bcc4, accent: a, strap: 0x1b1c20, holster: 0x131417, plate: 0x26282d },
+    beltLine: [-0.06, 0.035, 0.1],
+    gun: { metal: 0x16171a, glow: a },
+  };
+}
+
 export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
+  /** MARY'S CASUAL OUTFITS (casualSets.ts): M1 blue, M2 burgundy, M3 purple, M4 orange, M5 white, M6 olive. */
+  maryCasualTee: maryCasualGear('#2f6fe0'),
+  maryCasualTank: maryCasualGear('#a3304a'),
+  maryCasualHenley: maryCasualGear('#8a45d0'),
+  maryCasualPolo: maryCasualGear('#f0641a'),
+  maryCasualCrop: maryCasualGear('#d8dce2'),
+  maryCasualField: maryCasualGear('#9ea84a'),
   /** MARY'S CATSUITS (marySuits.ts): M1 teal, M2 orange, M3 red. */
   maryResearchSuit: marySuitGear('#18c6c8'),
   maryExplorerSuit: marySuitGear('#f2961c'),

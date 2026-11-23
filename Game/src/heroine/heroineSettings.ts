@@ -194,6 +194,12 @@ export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.fre
   ['A.R.C.H. Research Suit (M1)', 'maryResearchSuit'],
   ['Subterranean Explorer (M2)', 'maryExplorerSuit'],
   ['Stealth Operative (M3)', 'maryStealthSuit'],
+  ['Tech Tee & Leggings (casual M1)', 'maryCasualTee'],
+  ['Explorer Tank Set (casual M2)', 'maryCasualTank'],
+  ['Zip Top & Leggings (casual M3)', 'maryCasualHenley'],
+  ['Utility Romper (casual M4)', 'maryCasualPolo'],
+  ['Casual Jacket Set (casual M5)', 'maryCasualCrop'],
+  ['Field Casual (casual M6)', 'maryCasualField'],
   ['Shadow Operative catsuit', 'shadowSuit'],
   ['Anime Space Heroine', 'spaceHeroine'],
   // (the catsuits: each colour in the style chosen under Catsuit style)

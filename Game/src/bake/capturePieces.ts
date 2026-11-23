@@ -16,6 +16,19 @@
 // unposed space to land exactly where it is now. Drawn on her skeleton it
 // therefore starts exactly where the room had it, and moves with her from there.
 //
+// THE SHIRT'S DRAPE (tunicDrape.ts in the builder; 2026-11-23, Joshua's casual
+// tees): a sheet from her waist to her shirt's hem, of which the builder shows a
+// painted shirt only its HEM BAND (PAINTED_SHIRT_DRAPE 'band'): a smooth, level
+// bottom edge round her that spans the creases of her groin and seat. The rest
+// is cut away in its shader (`drapeCut`, over a half kept) or faded out (its
+// point colours' alpha, the faded parts laid just under her skin), and its
+// colour is worked out in its shader from the shirt's fabric. Written down as a
+// sneaker is, all of it came out as a black sheet from her crotch to the floor
+// (its unused rows wait at her feet). So only its triangles that are kept and
+// shown are written, each point coloured with HER SHIRT'S OWN baked colour a
+// few centimetres above it (`shirtColourFrom`: the shirt's main fabric, above
+// its painted hem band, as the builder's band wears the shirt's plain fabric).
+//
 // Colour: the sneakers keep their own point colours and picture. The cleavage
 // strip has neither: the builder's shader works its colour out pixel by pixel
 // (each pixel looks itself up in the top's drawing, and pixels above the
@@ -173,9 +186,44 @@ export interface PieceCapture { readonly pieces: BakedPiece[]; readonly pictures
  * @param fileMotion  her four motion shapes' moves for every point of her skin, from the body file (4 arrays of x, y, z)
  * @param skip        meshes that are not extra pieces (her skin, her hair, parts under her clothes)
  */
+/** The builder's name for a painted shirt's drape below her waist (tunicDrape.ts). */
+export const DRAPE_NAME = 'tunicDrape';
+
+/**
+ * HER SHIRT'S OWN COLOUR a few centimetres above a point of her UNPOSED skin (for the drape's hem band): of her
+ * skin's points from `above[0]` to `above[1]` metres higher, the nearest; its colour in her baked picture (sRGB
+ * bytes). Her skin's points are sorted by height once, so each look-up reads only those at that height. (Unposed, as
+ * she stands in her file with her arms out: posed in the room her fingers hang beside the hem.)
+ */
+export function shirtColourFrom(
+  skinPoints: Float32Array, uv: Float32Array, picture: { readonly size: number; readonly rgba: Uint8Array | Uint8ClampedArray },
+  unitsPerMetre: number, above: readonly [number, number] = [0.03, 0.08],
+): (x: number, y: number, z: number) => [number, number, number] | null {
+  const count = skinPoints.length / 3;
+  const order = Uint32Array.from({ length: count }, (_, k) => k).sort((a, b) => skinPoints[a * 3 + 1] - skinPoints[b * 3 + 1]);
+  const heights = Float32Array.from(order, (v) => skinPoints[v * 3 + 1]);
+  const firstAt = (y: number): number => { let lo = 0, hi = count; while (lo < hi) { const mid = (lo + hi) >> 1; if (heights[mid] < y) lo = mid + 1; else hi = mid; } return lo; };
+  const lo = above[0] * unitsPerMetre, hi = above[1] * unitsPerMetre, size = picture.size;
+  return (x, y, z) => {
+    let best = -1, bestD = Infinity;
+    for (let k = firstAt(y + lo); k < count && heights[k] <= y + hi; k++) {
+      const v = order[k], dx = skinPoints[v * 3] - x, dy = skinPoints[v * 3 + 1] - y, dz = skinPoints[v * 3 + 2] - z, d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = v; }
+    }
+    if (best < 0) return null;
+    // (the bake draws her picture with (0, 0) of her layout at its bottom left, and reads it back from the bottom row)
+    const px = Math.min(size - 1, Math.max(0, Math.floor(uv[best * 2] * size)));
+    const py = Math.min(size - 1, Math.max(0, Math.floor(uv[best * 2 + 1] * size)));
+    const o = (py * size + px) * 4;
+    return [picture.rgba[o], picture.rgba[o + 1], picture.rgba[o + 2]];
+  };
+}
+
 export async function capturePieces(
   renderer: THREE.WebGLRenderer, camera: THREE.Camera, scene: THREE.Scene, skin: THREE.SkinnedMesh, skinWorld: Float32Array,
   fileMotion: readonly Float32Array[], wanted: (mesh: THREE.Mesh) => boolean,
+  /** Her shirt's colour above a point of her UNPOSED skin (`shirtColourFrom`), for a painted shirt's drape. */
+  shirtColour: ((x: number, y: number, z: number) => [number, number, number] | null) | null = null,
 ): Promise<PieceCapture> {
   const pieces: BakedPiece[] = [], pictures: Record<string, Blob> = {}, notes: string[] = [];
   const pictureOf = new Map<string, string>();
@@ -193,7 +241,33 @@ export async function capturePieces(
   for (const mesh of found) {
     const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
     const g = mesh.geometry, points = g.getAttribute('position').count;
-    const fullIndex = g.index ? Uint32Array.from(g.index.array) : Uint32Array.from({ length: points }, (_, k) => k);
+    let fullIndex = g.index ? Uint32Array.from(g.index.array) : Uint32Array.from({ length: points }, (_, k) => k);
+    // ONLY WHAT THE ROOM DRAWS (its draw range). The builder makes a shirt's drape with rows enough for its longest hem
+    // and draws only the rows it has built (tunicDrape.ts `setDrawRange`); the rest have no place and no bones, and
+    // baked they all fell to the point at her feet: a black wedge from her hips to the floor between her legs (Mary's
+    // casual tops, 2026-11-23). (A piece drawn in several runs of materials keeps its runs as they are.)
+    const range = g.drawRange;
+    if (!g.groups.length && (range.start > 0 || range.count < fullIndex.length)) {
+      const from = Math.max(0, range.start), to = Math.min(fullIndex.length, range.start + range.count);
+      notes.push(`${mesh.name}: ${(to - from) / 3} of ${fullIndex.length / 3} triangles drawn`);
+      fullIndex = fullIndex.slice(from, to);
+    }
+    // A PAINTED SHIRT'S DRAPE: only its triangles that are kept (its cut over a half at all three points) and shown
+    // (their points' alpha over a half on average): its hem band. (See the note at the top.)
+    const drape = mesh.name === DRAPE_NAME;
+    if (drape) {
+      const cut = g.getAttribute('drapeCut'), shown = g.getAttribute('color');
+      const keep: number[] = [];
+      for (let t = 0; t + 2 < fullIndex.length; t += 3) {
+        const a = fullIndex[t], b = fullIndex[t + 1], c = fullIndex[t + 2];
+        if (cut && (cut.getX(a) < 0.5 || cut.getX(b) < 0.5 || cut.getX(c) < 0.5)) continue;
+        if (shown && shown.itemSize === 4 && (shown.getW(a) + shown.getW(b) + shown.getW(c)) / 3 < 0.5) continue;
+        keep.push(a, b, c);
+      }
+      notes.push(`${mesh.name}: kept ${keep.length / 3} of ${fullIndex.length / 3} drawn triangles (its hem band)`);
+      fullIndex = Uint32Array.from(keep);
+      if (!keep.length) continue;
+    }
     // the runs of triangles and the material each is drawn with (one run of everything for a one-material mesh)
     const parts: { start: number; count: number; material: THREE.MeshStandardMaterial }[] = Array.isArray(mesh.material) && g.groups.length
       ? g.groups.map((group) => ({ start: group.start, count: Math.min(group.count, fullIndex.length - group.start), material: (mesh.material as THREE.Material[])[group.materialIndex ?? 0] as THREE.MeshStandardMaterial }))
@@ -303,6 +377,13 @@ export async function capturePieces(
       skinningMatrix(skin, four, fourW, target);
       back.copy(target).invert();
       p.applyMatrix4(back).toArray(position, i * 3);
+      // (the drape's hem band: her shirt's own colour just above it, looked up UNPOSED, as she stands in her file:
+      //  in the room her hands hang beside her hips, and the skin just above the hem at her sides was her fingers,
+      //  so the band came out skin-coloured)
+      if (drape && shirtColour) {
+        const shirt = shirtColour(p.x, p.y, p.z);
+        if (shirt) { colour[i * 4] = shirt[0]; colour[i * 4 + 1] = shirt[1]; colour[i * 4 + 2] = shirt[2]; colour[i * 4 + 3] = 255; }
+      }
       n.applyMatrix3(turnBack.setFromMatrix4(back)).normalize().toArray(normal, i * 3);
       const sum = fourW[0] + fourW[1] + fourW[2] + fourW[3] || 1;
       for (let k = 0; k < 4; k++) { bones[i * 4 + k] = four[k]; weights[i * 4 + k] = Math.round((fourW[k] / sum) * 255); }

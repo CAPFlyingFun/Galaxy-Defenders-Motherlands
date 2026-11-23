@@ -14,6 +14,7 @@ import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from '.
 import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
 import { JOHN_LOOK } from './john';
 import { MARY_EXPLORER_SUIT_LOOK, MARY_RESEARCH_SUIT_LOOK, MARY_STEALTH_SUIT_LOOK } from './marySuits';
+import { MARY_CASUAL_CROP_LOOK, MARY_CASUAL_FIELD_LOOK, MARY_CASUAL_HENLEY_LOOK, MARY_CASUAL_POLO_LOOK, MARY_CASUAL_TANK_LOOK, MARY_CASUAL_TEE_LOOK } from './casualSets';
 import { asMary } from './maryHead';
 
 /**
@@ -47,6 +48,13 @@ const SAVED_LOOKS: Readonly<Record<string, HeroineLook>> = {
   maryResearchSuit: MARY_RESEARCH_SUIT_LOOK,
   maryExplorerSuit: MARY_EXPLORER_SUIT_LOOK,
   maryStealthSuit: MARY_STEALTH_SUIT_LOOK,
+  // MARY'S CASUAL OUTFITS (casualSets.ts; his own six, M1-M6)
+  maryCasualTee: MARY_CASUAL_TEE_LOOK,
+  maryCasualTank: MARY_CASUAL_TANK_LOOK,
+  maryCasualHenley: MARY_CASUAL_HENLEY_LOOK,
+  maryCasualPolo: MARY_CASUAL_POLO_LOOK,
+  maryCasualCrop: MARY_CASUAL_CROP_LOOK,
+  maryCasualField: MARY_CASUAL_FIELD_LOOK,
   /** John, Blaze's husband, as Joshua saved him (john.ts): the builder's male body. */
   john: JOHN_LOOK,
 };

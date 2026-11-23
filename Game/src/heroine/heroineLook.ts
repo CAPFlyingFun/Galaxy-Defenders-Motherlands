@@ -68,6 +68,13 @@ export interface HeroineLook {
    */
   readonly onlyNamedPieces?: boolean;
   /**
+   * Leave out the builder's TUNIC DRAPE (tunicDrape.ts: the sheet a painted shirt hangs between her legs, from her waist
+   * to its hem, where paint cannot go). The game does not draw it as the builder does: in Mary's casual tees
+   * (casualSets.ts, 2026-11-23) it came out as a black sheet from her crotch to the floor. A painted shirt ends level
+   * just above her crotch without it.
+   */
+  readonly noTunicDrape?: boolean;
+  /**
    * MARKS ON HER SKIN that the builder cannot draw, painted onto her baked skin picture by the game's bake
    * (bake/skinMarks.ts): freckles, and warmth in her cheeks. Mary's (looks/maryHead.ts). Costs nothing in play: they
    * are part of the picture she already wears.

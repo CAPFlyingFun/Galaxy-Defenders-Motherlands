@@ -1,7 +1,7 @@
 {
   "version": 1,
   "look": "john",
-  "bakedAt": "2026-11-22T04:33:11.788Z",
+  "bakedAt": "2026-11-23T04:49:03.338Z",
   "builderVersion": "0.9.71",
   "belly": 50,
   "vertexCount": 123023,
@@ -17,11 +17,7 @@
     1,
     -1
   ],
-  "hair": {
-    "style": "crew",
-    "colour": "#1c1b1d",
-    "length": 0
-  },
+  "hair": null,
   "body": "male-base",
   "files": {
     "albedo": "albedo.webp",
@@ -37,8 +33,7 @@
       "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "tunicDrape | MeshStandardMaterial | 6560 triangles | skinned, 8400 points, attrs position/normal/fabricRest/fabricRestNormal/color/drapeCut/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
-      "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
-      "sarahHair | sarahHair | 27886 triangles | skinned, 15599 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
+      "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false"
     ],
     "extraPieces": [
       "sneakerL-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
@@ -57,6 +52,14 @@
       "position": 0,
       "normal": 0
     },
+    "faceSlidersPastTheirEnds": {
+      "sliders": {
+        "browHeight": -0.3999999999999999
+      },
+      "points": 352,
+      "mostMm": 1.479613934996542
+    },
+    "upperLidsAsBaked": 0.2,
     "albedoCoveredTexels": 7837284,
     "textureIslands": 330,
     "islandsShrunkTo": 0.8254819869995118
@@ -67,6 +70,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-22T04:34:41+00:00"
+    "packedAt": "2026-11-23T05:07:53+00:00"
   }
 }

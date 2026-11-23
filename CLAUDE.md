@@ -927,6 +927,33 @@ use the game's single copy of three.js.
   the view (`lostpointercapture`) or is lifted anywhere on the page (window `pointerup`/`pointercancel`) is let go.
   Tested on the built game: a lost finger, then a new drag turns the view (no zoom), nothing left in the list; a real
   two-finger pinch still zooms.
+- v0.2.158: MARY "BLAZE" FISHER AND JOHN "SPARKS" FISHER, THEIR FACES (Joshua, 2026-11-22, with ChatGPT's reference
+  portraits and sheet, kept OUT of the repo: Mary 30, auburn hair loosely tied back, hazel-green eyes, freckles; John
+  32, bald, blue-gray eyes, strong brows, light stubble). BLAZE IS MARY: `looks/maryHead.ts` `MARY_HEAD` (the builder's
+  WAVY LOW PONYTAIL in auburn #4e2716 at 0.6 length, her own hazel eyes, auburn-brown brows, her lips' own tint) and
+  `asMary`, which looks/index.ts puts EVERY look on her body through (`SAVED_LOOKS` keep each export's head as saved;
+  `LOOKS` are Mary). JOHN: `looks/johnHead.ts` (no hair, the builder's STUBBLE at 0.45, blue-gray eyes, near-black
+  brows). THE FACE SLIDERS WERE MEASURED, not guessed: the references and the game's heads, same lens, with OpenCV's 68
+  face landmarks (lengths as shares of the distance between the eyes' middles), the profiles and ears by hand on
+  gridded near-flat renders; four bakes, measured each time (the numbers and why: the two head files). PAST THE
+  SLIDERS' ENDS: the builder holds a face slider to -1..+1 (headLook.ts `normaliseHead`), but each is a straight line
+  through 0, so `bake/faceBeyond.ts` lays the rest on the captured shape with the builder's own `faceFieldOn` (held to
+  ±2). Joshua: "the eyes looked a little warped and skewed": eye size and tilt past -1 bent her lids (now inside -1),
+  and the room's eyes WANDER, so a bake caught them looking two ways. NOW EVERY BAKE holds the eyes straight ahead and
+  the mouth shut, and a look's `bakedFace.upperLids` lowers the builder's own upper lid over the eyes (Mary 0.15, John
+  0.2: the relaxed eyes of the references), the bake's copy of the material getting its own face uniforms
+  (skinnedUvBake.ts; the room is untouched). Brows past -1 are kept (Mary -1.6, John -1.4; John's -2 went wavy).
+  FRECKLES AND ROSY CHEEKS: the builder has none, so `bake/skinMarks.ts` paints them into the baked skin picture
+  (`look.skinMarks`, Mary's `MARY_SKIN_MARKS`): placed by the face layer's own sculpt coordinates (`vFaceF`), so they
+  ride her skin and keep off her eyes, brows and lips; thickest over her nose and upper cheeks; 0.8-1.8 mm; a seed, the
+  same freckles every bake; nothing in play. RE-BAKED SO FAR (Joshua: "just do two... later we can redo the rest
+  correctly", waiting on the builder's next features): JOHN, the PINK AND BLACK TWO-PIECE and the SHADOW OPERATIVE; her
+  other outfits keep their old heads (braid, blue eyes) until they are baked again, and pick up Mary's head then. Her
+  hair file is shipped (`models/hair/wavy-ponytail.glb`, light too, `charb-files.json`): 29,764 triangles (the ponytail
+  28,020, the braid 24,654), 1.36 MB once; John bald is 27,886 fewer. Still not matched (told Joshua; his builder
+  prompt): freckles, two-tone irises, brow shapes, deeper face realism and a per-character skin overlay in the builder;
+  her ears stand out less than the reference's (no slider turns an ear out); both mouths 15-20% narrow, her chin short,
+  both jaws narrow (left as they were).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

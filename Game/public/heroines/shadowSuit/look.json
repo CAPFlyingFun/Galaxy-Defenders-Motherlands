@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "shadowSuit",
-  "bakedAt": "2026-11-22T04:24:22.083Z",
+  "bakedAt": "2026-11-23T05:02:00.683Z",
   "builderVersion": "0.9.71",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7133686387932645,
+  "barefootHeightMetres": 1.7134932714305189,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -18,9 +18,9 @@
     -1
   ],
   "hair": {
-    "style": "braid",
-    "colour": "#1c1b1d",
-    "length": 1
+    "style": "wavy-ponytail",
+    "colour": "#4e2716",
+    "length": 0.6
   },
   "body": "v2-body",
   "files": {
@@ -37,20 +37,28 @@
       "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors true, colour #ffffff, rough 1, side 2, patched true",
       "(no name) | Material_0 | 4032 triangles | skinned, 115710 points, attrs jiggle/skinIndex/position/normal/uv/skinWeight/_cloth_cover/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "sarahVagina | MeshStandardMaterial | 14432 triangles | skinned, 7380 points, attrs position/normal/uv/color/softRef/skinIndex/skinWeight, 20 shapes, map no, vertexColors true, colour #ffffff, rough 0.82, side 2, patched true",
-      "sarahHair | sarahHair | 24654 triangles | skinned, 13643 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
+      "sarahHair | sarahHair | 29764 triangles | skinned, 19145 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
     "lowestPointOverTheFloorMetres": -0.013362774164863424,
     "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.7000058646284009,
-    "pointsTheBuilderMoved": 73395,
-    "movedMostGeometryUnits": 0.1541813788714396,
+    "crownOverTheFloorMetres": 1.7001304972656552,
+    "pointsTheBuilderMoved": 71843,
+    "movedMostGeometryUnits": 0.15431723181248175,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16321835057088216,
+    "restSkinSpread": 0.16339184491224937,
     "captureMissing": {
       "position": 0,
       "normal": 0
     },
+    "faceSlidersPastTheirEnds": {
+      "sliders": {
+        "browHeight": -0.6000000000000001
+      },
+      "points": 299,
+      "mostMm": 2.3980917547362655
+    },
+    "upperLidsAsBaked": 0.15,
     "albedoCoveredTexels": 7537039,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
@@ -61,6 +69,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-22T04:26:46+00:00"
+    "packedAt": "2026-11-23T05:06:26+00:00"
   }
 }

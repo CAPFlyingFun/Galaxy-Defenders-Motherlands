@@ -13,8 +13,13 @@ import { SPACE_HEROINE_LOOK } from './spaceHeroine';
 import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
 import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
 import { JOHN_LOOK } from './john';
+import { asMary } from './maryHead';
 
-export const LOOKS: Readonly<Record<string, HeroineLook>> = {
+/**
+ * Every look as saved, before Mary's head goes on (below). The exports keep the heads they were saved with; the game
+ * uses LOOKS.
+ */
+const SAVED_LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
   blazeSuit: BLAZE_SUIT_LOOK,
   /** Blaze exactly as Joshua exported her from the Character Room: the all-pink two-piece (blaze.ts). */
@@ -40,6 +45,14 @@ export const LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** John, Blaze's husband, as Joshua saved him (john.ts): the builder's male body. */
   john: JOHN_LOOK,
 };
+
+/**
+ * THE LOOKS THE GAME USES: every look on her body worn by MARY "BLAZE" FISHER, with her one head and her freckles
+ * (maryHead.ts; Joshua, 2026-11-22). The bake, the game and her hidden live body all read these.
+ */
+export const LOOKS: Readonly<Record<string, HeroineLook>> = Object.fromEntries(
+  Object.entries(SAVED_LOOKS).map(([key, look]) => [key, asMary(look)]),
+);
 
 /** The look the game's heroine wears when the address does not name one. */
 export const DEFAULT_LOOK = 'blazeSuit';

@@ -60,6 +60,36 @@ export interface HeroineLook {
    * above her buckle at a small belly (Joshua, 2026-11-19). Her suit, painted by code, covers that skin already.
    */
   readonly onlyNamedPieces?: boolean;
+  /**
+   * MARKS ON HER SKIN that the builder cannot draw, painted onto her baked skin picture by the game's bake
+   * (bake/skinMarks.ts): freckles, and warmth in her cheeks. Mary's (looks/maryHead.ts). Costs nothing in play: they
+   * are part of the picture she already wears.
+   */
+  readonly skinMarks?: SkinMarks;
+  /**
+   * HER FACE AS IT IS BAKED (skinnedUvBake.ts). The builder's face layer draws her eyes live (gaze, blinks); the bake
+   * keeps one moment of it, which the fast heroine wears for good. Whatever this says, that moment has her eyes looking
+   * straight ahead and her mouth closed. `upperLids` (0..1, the builder's own blink: 0 open, 1 shut) lowers her upper
+   * lids that far over her eyes, a relaxed look in place of the builder's wide-open one (Mary's and John's, 2026-11-22:
+   * an eye made smaller by the face sliders past their ends came out warped). Left out, 0.
+   */
+  readonly bakedFace?: { readonly upperLids: number };
+}
+
+/** Freckles and cheek colour for the bake (bake/skinMarks.ts). */
+export interface SkinMarks {
+  readonly freckles?: {
+    /** 0..1: how many (1 the most the pattern holds where they are thickest). */
+    readonly amount: number;
+    /** '#rrggbb': the colour a freckle is at its darkest. */
+    readonly colour: string;
+    /** 0..1: how far a freckle's middle goes toward that colour. */
+    readonly strength: number;
+    /** Any whole number: the same seed lays the same freckles at every bake. */
+    readonly seed: number;
+  };
+  /** 0..1: how much rosier her cheeks are than the rest of her face. */
+  readonly blush?: number;
 }
 
 /** The belly the game's heroine starts with, percent (the builder's slider runs 0-200). */

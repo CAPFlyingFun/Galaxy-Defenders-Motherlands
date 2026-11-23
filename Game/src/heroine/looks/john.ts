@@ -15,6 +15,7 @@
 // ============================================================================
 import type { HeroineLook } from '../heroineLook';
 import { fillCleavage } from './catsuit';
+import { JOHN_HEAD, JOHN_UPPER_LIDS } from './johnHead';
 
 export const JOHN_LOOK: HeroineLook = {
   name: 'John',
@@ -42,46 +43,18 @@ export const JOHN_LOOK: HeroineLook = {
       "triplets": 0
     }
   },
-  // HIS HEAD (Joshua, 2026-11-21, his export of 2026-11-22 02:11 UTC, "updated look for John with hair and face details",
-  // "Look at head details only, not clothing"): his crew cut, green eyes and face, as exported (builder v0.9.71)
-  "head": {
-    "hair": {
-      "style": "crew",
-      "length": 0,
-      "colour": "#1c1b1d"
-    },
-    "eyes": {
-      "colour": "#4c7a46"
-    },
-    "brows": {
-      "colour": null,
-      "amount": 1
-    },
-    "lips": {
-      "colour": null,
-      "amount": 1
-    },
-    "lashes": 1,
-    "face": {
-      "cheekFullness": 0.7,
-      "jawCorner": -0.03,
-      "chinForward": 0.21,
-      "noseBridge": -0.4,
-      "noseTip": 0.4,
-      "lipFullness": 0.6,
-      "eyeSize": 0.5,
-      "browHeight": 0.3,
-      "cheekbones": -0.3,
-      "faceWidth": -1,
-      "jawWidth": -0.02
-    }
-  }
+  // HIS HEAD: JOHN "SPARKS" FISHER (johnHead.ts; Joshua, 2026-11-22): bald, blue-gray eyes, dark heavy brows, light
+  // stubble, his face measured against ChatGPT's reference portraits. (His export of 2026-11-22 02:11 UTC had a crew cut,
+  // green eyes and a softer face: johnHead.ts keeps its numbers where the measuring did not change them.)
+  "head": JOHN_HEAD
 } as HeroineLook['body'],
   // his clothes, as exported (both paint layers; the rest empty)
   // (his paint layers 1 and 2 are his export's own; layer 3 is the chest fill, painted here)
   // (from 0.5 of the way up his trunk, 70 degrees either side of his front: at her 0.7 and 45 a strip of his chest showed)
   maskPainters: [null, null, fillCleavage(0.966, 0.5, 70)],
   noCleavageBridge: true,
+  // his eyes as baked: straight ahead, his upper lids a little lowered (johnHead.ts)
+  bakedFace: { upperLids: JOHN_UPPER_LIDS },
   clothes: {
   "outfit": "his long-sleeve shirt + tights",
   "shirtLength": 0,

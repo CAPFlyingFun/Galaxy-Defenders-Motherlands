@@ -30,6 +30,8 @@
 // ============================================================================
 import * as THREE from 'three';
 import { dilate } from '@charb/sarahlab/storyBake';
+import type { SkinMarks } from '../heroine/heroineLook';
+import { skinMarksFunctions, skinMarksGlsl } from './skinMarks';
 
 type Shader = Parameters<THREE.Material['onBeforeCompile']>[0];
 
@@ -102,7 +104,7 @@ export function bakeMaterial(original: THREE.Material, tag: string, edit: (shade
  * Bake one channel of her skin into a square picture `size` pixels a side.
  * `skin` is her real skinned mesh in the builder's room, posed as she stands; nothing of it is changed.
  */
-export function bakeSkinnedUV(renderer: THREE.WebGLRenderer, skin: THREE.SkinnedMesh, size: number, camera: THREE.Camera, channel: UvChannel, fileTriangles: ArrayLike<number>, layout: Float32Array): UvPicture {
+export function bakeSkinnedUV(renderer: THREE.WebGLRenderer, skin: THREE.SkinnedMesh, size: number, camera: THREE.Camera, channel: UvChannel, fileTriangles: ArrayLike<number>, layout: Float32Array, marks?: SkinMarks, upperLids = 0): UvPicture {
   const original = Array.isArray(skin.material) ? skin.material[0] : skin.material;
   const source = skin.geometry;
   // WHERE each corner goes in the picture: the baked pictures' own layout (repackUv.ts: the file's islands, moved apart).
@@ -129,12 +131,28 @@ export function bakeSkinnedUV(renderer: THREE.WebGLRenderer, skin: THREE.Skinned
   geometry.setAttribute('bakeUv', uv);
   geometry.setIndex(new THREE.BufferAttribute(triangles, 1));
 
-  const material = bakeMaterial(original, `uv-${channel}`, (shader) => {
+  // (her colour only: the look's freckles and rosy cheeks, skinMarks.ts, just before the colour is kept)
+  const marked = channel === 'albedo' ? skinMarksGlsl(marks) : '';
+  const material = bakeMaterial(original, `uv-${channel}${marked ? `-marks${marked.length}` : ''}`, (shader) => {
+    // HER FACE AT THE MOMENT BAKED (heroineLook.ts `bakedFace`): the builder's face layer hands its uniforms to the
+    // shader (faceRig.ts: `Object.assign(shader.uniforms, uniforms)`), and the room changes them every frame (her eyes
+    // wander, she blinks). This copy gets ITS OWN: eyes straight ahead, mouth closed, upper lids as the look asks. The
+    // room's own drawing is untouched.
+    if (shader.uniforms.faceBlink) {
+      shader.uniforms.faceBlink = { value: Math.max(0, Math.min(1, upperLids)) };
+      shader.uniforms.faceGazeR = { value: new THREE.Vector3(0, 0, 1) };
+      shader.uniforms.faceGazeL = { value: new THREE.Vector3(0, 0, 1) };
+      shader.uniforms.faceJaw = { value: 0 };
+    }
     // the corner goes to its place in the texture layout (0..1 across the picture), not to the screen
     shader.vertexShader = atEndOfMain(`attribute vec2 bakeUv;\n${shader.vertexShader}`, 'gl_Position = vec4(bakeUv * 2.0 - 1.0, 0.0, 1.0);');
     const frame = THREE.ShaderChunk.normalmap_pars_fragment;
     if (!frame.includes(ORIENTED_FRAME)) throw new Error('bake: three.js builds its normal-map frame differently from the version this was written against');
-    shader.fragmentShader = atEndOfMain(shader.fragmentShader.replace('#include <normalmap_pars_fragment>', () => frame.replace(ORIENTED_FRAME, ORIENTED_FRAME_FIX)), UV_TAIL[channel]);
+    // (the marks read the builder's face layer's place on her sculpt, `vFaceF`: a skin without the face layer cannot have them)
+    if (marked && !/varying\s+vec3\s+vFaceF\s*;/.test(shader.fragmentShader)) throw new Error('bake: this look has skin marks but her skin has no face layer to place them by');
+    let fragment = shader.fragmentShader.replace('#include <normalmap_pars_fragment>', () => frame.replace(ORIENTED_FRAME, ORIENTED_FRAME_FIX));
+    if (marked) fragment = fragment.replace('void main() {', () => `${skinMarksFunctions(marks)}\nvoid main() {`);
+    shader.fragmentShader = atEndOfMain(fragment, marked + UV_TAIL[channel]);
   });
 
   // THE CHANGE FROM THE BUILDER'S VERSION: a skinned stand-in on her own skeleton, standing exactly where she does.

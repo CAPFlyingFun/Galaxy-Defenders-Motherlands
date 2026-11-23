@@ -42,6 +42,7 @@ import { bodyFileFor, findBodySkin } from '../heroine/fast/bodyFile';
 import type { BakedLookManifest } from '../heroine/fast/bakedLook';
 import { packShape } from '../heroine/fast/shapeFile';
 import { bakeSkinnedUV } from './skinnedUvBake';
+import { layFaceBeyond } from './faceBeyond';
 import { capturePieces } from './capturePieces';
 import { repackUv } from './repackUv';
 import { packPieces } from '../heroine/fast/piecesFile';
@@ -132,17 +133,24 @@ async function start(): Promise<void> {
   const fileLayout = fileSkin.geometry.getAttribute('uv');
   const layout = repackUv(Float32Array.from({ length: fileLayout.count * 2 }, (_, k) => fileLayout.getComponent(k >> 1, k & 1)), fileTriangles, ISLAND_GAP_TEXELS / ALBEDO_SIZE);
   say(`Baking "${key}": her colour (${ALBEDO_SIZE} px)…`);
-  const albedo = bakeSkinnedUV(renderer, skin, ALBEDO_SIZE, camera, 'albedo', fileTriangles, layout.uv);
+  // (with the look's freckles and rosy cheeks, if it has them: skinMarks.ts; Mary's, maryHead.ts)
+  // (every picture with her eyes straight ahead and her upper lids as the look asks: heroineLook.ts `bakedFace`)
+  const lids = look.bakedFace?.upperLids ?? 0;
+  const albedo = bakeSkinnedUV(renderer, skin, ALBEDO_SIZE, camera, 'albedo', fileTriangles, layout.uv, look.skinMarks, lids);
   say(`Baking "${key}": her surface detail (${NORMAL_SIZE} px)…`);
-  const normal = bakeSkinnedUV(renderer, skin, NORMAL_SIZE, camera, 'normal', fileTriangles, layout.uv);
+  const normal = bakeSkinnedUV(renderer, skin, NORMAL_SIZE, camera, 'normal', fileTriangles, layout.uv, undefined, lids);
   say(`Baking "${key}": her shine (${SURFACE_SIZE} px)…`);
-  const surface = bakeSkinnedUV(renderer, skin, SURFACE_SIZE, camera, 'surface', fileTriangles, layout.uv);
+  const surface = bakeSkinnedUV(renderer, skin, SURFACE_SIZE, camera, 'surface', fileTriangles, layout.uv, undefined, lids);
 
   // ---- 3. her shape: every point of her skin where the builder finally put it -----------------------------------------
   say(`Baking "${key}": her shape…`);
   const rest = restSkinMatrix(skin);
   const capture = captureVertices(renderer, skin, camera, { matrix: rest.matrix });
   const count = capture.count;
+  // A FACE SLIDER PAST THE BUILDER'S -1..+1 (faceBeyond.ts): the room laid each up to its end; the rest is laid here,
+  // on the captured shape, by the builder's own field for that slider (Mary's and John's faces, 2026-11-22).
+  const beyond = layFaceBeyond((look.body.head as { face?: Record<string, number> } | undefined)?.face, fileSkin, look.body.model === 'male-base', capture.position, capture.normal);
+  if (beyond.points) say(`Baking "${key}": face sliders past their ends, ${Object.entries(beyond.sliders).map(([id, x]) => `${id} ${x > 0 ? '+' : ''}${x.toFixed(2)}`).join(', ')}: ${beyond.points.toLocaleString()} points, up to ${beyond.mostMm.toFixed(2)} mm…`);
   // which bones move each point, as the builder has them now (it corrects some of the file's own)
   const boneAttribute = skin.geometry.getAttribute('skinIndex'), weightAttribute = skin.geometry.getAttribute('skinWeight');
   const skinIndex = new Uint16Array(count * 4), skinWeight = new Float32Array(count * 4);
@@ -241,6 +249,7 @@ async function start(): Promise<void> {
       solesOverTheFloorMetres: bottom / ROOM_UNITS, crownOverTheFloorMetres: top / ROOM_UNITS,
       pointsTheBuilderMoved: moved, movedMostGeometryUnits: movedMost, pointsWithChangedBones: weightsChanged,
       restSkinSpread: rest.spread, captureMissing: capture.missing,
+      faceSlidersPastTheirEnds: beyond, upperLidsAsBaked: lids,
       albedoCoveredTexels: albedo.coveredCount, textureIslands: layout.islands, islandsShrunkTo: layout.scale,
     },
   };

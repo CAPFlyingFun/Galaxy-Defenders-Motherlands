@@ -426,7 +426,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
         barefootHeightMetres: BAREFOOT_HEIGHT_METRES, navel: painted!.navel, normalScale: [1, 1], hair: painted!.hair,
         files: { albedo: '', normal: '', surface: '', shape: '', pieces: null },
       },
-      albedo: none, normal: none, surface: none, shape, band: null, pieces: [], piecePictures: new Map(), megabytes: 0,
+      albedo: none, normal: none, surface: none, shape, band: null, waist: null, pieces: [], piecePictures: new Map(), megabytes: 0,
       cpuPicture: null, isPacked: false,   // (no picture of her to read: the belt goes round her middle by shape alone)
       dispose(): void { none.dispose(); },
     };
@@ -473,6 +473,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     triangles: fullIndex,
     // (her live band's numbers smoothed over her skin as she loads: liveBand.ts `smoothBand`)
     band: look.band && smoothBand(look.band, fullIndex, look.shape.position),
+    // (her live waistband's numbers, as the bake measured them the builder's way, each line at its own belly: liveWaist.ts)
+    waist: look.waist,
   });
 
   // ---- 3. her detail levels ----------------------------------------------------------------------------------------
@@ -623,6 +625,9 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   };
   if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
+  // HER LIVE WAISTBAND (liveWaist.ts): its top drawn for her belly as made, and again whenever her belly changes below
+  const setWaistBelly = (belly: number) => (materials as Partial<SkinMaterials>).setWaistBelly?.(belly);
+  setWaistBelly(body.belly);
   skin.castShadow = false;
   skin.receiveShadow = false;
 
@@ -1786,7 +1791,7 @@ if (uHideHead > 0.5) {
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setWaistBelly(body.belly); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       // (ASLEEP, `setLiveAwake`: not stepped at all; her kicks and shape stay as they were until it wakes)

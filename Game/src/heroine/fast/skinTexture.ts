@@ -163,6 +163,10 @@ float skinTileHeight() {
 #else
     float skinBare = 1.0;
 #endif
+#ifdef GDM_WAIST
+    // (not where her live waistband draws her leggings over her skin as baked: outfitMaterial.ts, liveWaist.ts)
+    skinBare *= 1.0 - waistIn;
+#endif
     // the two depths, in metres: the pore tile, and her own skin picture where her colour is
     float skinPores = skinTileHeight();
     float skinHeight = skinBare * (skinTileDepth * skinPores + skinOwnDepth * texture2D(skinOwnMap, vMapUv).r);

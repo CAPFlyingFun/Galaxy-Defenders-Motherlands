@@ -1043,6 +1043,55 @@ use the game's single copy of three.js.
   widened the neck), `capOnTrunk` at 1.5 (stepped corners), a 7 mm painted zip (dashes); `noTunicDrape` is kept in
   HeroineLook, unused. CHECKED against his CCBS pictures (front, three-quarter, side, back), at 0 and 200% (the shirts'
   paint stretches over her belly, the crop tees leave it bare, nothing floats), and in the built game at 932 x 430.
+- v0.2.162: THE CASUAL SIX'S TRIMS, AND M5/M6'S LEGGINGS FOLLOWING HER BELLY (Joshua, 2026-11-23). (1) TRIMS (his: "add
+  the trimmings and stripes so that don't look boring and match the reference color styles"): `looks/casualSets.ts`,
+  PAINTED BY CODE over his saves (nothing of his changed), each outfit's stripes in ITS OWN TRIM'S COLOUR with the
+  board's grey and charcoal panels (`CASUAL_TRIMS`): M1 blue piping over the shoulders (`raglanSeams`), down each side
+  (live) and each leg, a ring round each knee (blue, not the board's teal: his bands are blue); M2 charcoal side panels
+  on the tank (live, under its armholes), grey curves down the front of each thigh and shin, a burgundy line down the
+  outside; M3 violet shoulders and sleeves, charcoal side panels (live), a broad violet stripe down each leg to his
+  ankle bands, grey curves; its raglan's FRONT SEAM IS MEASURED SIDEWAYS (`raglanClear`, how far out from her middle,
+  14 cm at her armpit to 11 cm at her neck; Joshua: "remove that purple part along that neckline... the reference image
+  doesn't have that stripe"): near the base of her neck her trunk is shallow, so its points are all far round from her
+  front and a seam in degrees (56, then 72) left violet bars against his henley's low V's violet edging; now grey runs
+  all round the V (a catsuit cap was tried: a ragged yoke line); M4 orange shoulders and sleeves, a broad side panel (live) carried down the
+  shorts, a zip line down her front, her spine and shoulder blades piped; M5 white shoulders and sleeve stripes, cyan
+  slashes on her thighs and shins; M6 grey side panels and sleeve stripes, charcoal knee pads and cargo pockets. A
+  painted layer cannot see where a garment ends, so EVERY SHAPE IS KEPT INSIDE ITS GARMENT by his numbers on the
+  builder's own measures (paintTemplates.ts: hems -0.1, crop hems 0.29, the tank's armhole 0.8, sleeves 0.32 / 0.3 /
+  0.62, shorts 0.23). THE SHIRTS' HEM BAND takes a live side panel's colour where the panel reaches it
+  (capturePieces.ts `shirtColourFrom` `liveBand`). (2) THE LIVE WAISTBAND (his: "adjust the start stats at 0% look and
+  blend it with 200% so as the belly grows it leggings go below the belly like the belt", then his numbers set by hand
+  in the builder at every 50%): `heroine/liveWaist.ts`, HeroineLook `liveWaist`, `UNDER_BELLY_WAIST` in casualSets.ts:
+  WAISTBAND (FRONT) / HIPS & BACK RISE 0.13/0.37 at 0%, -0.03/0.33 at 50%, -0.06/0.30 at 100%, -0.04/0.27 at 150%,
+  -0.05/0.24 at 200% (the side moves with the back, 0.175 under it, as the builder's dial does; bowl 0.7). A baked
+  picture cannot move a waistband, so the bake draws the leggings 0.04 UNDER THE LEAST of his heights
+  (`bakedWaist`), her skin above that line baked as skin, and writes for each point of the strip how far under each
+  of his five lines and the baked one it is (`waist.bin`, 16-bit, about 11,000 points); her skin's shader blends the two
+  lines either side of her belly (`waistWeights`, outfitMaterial.ts `WAIST_GLSL`, attributes `waistKeys`/`waistMore`)
+  and draws the leggings' own colour and roughness as baked (look.json `waist`) under the blended line, down to 1.5 cm
+  under the baked one; her skin depth and shine are off there (skinTexture.ts, skinShine.ts: `GDM_WAIST`). The lines are
+  the BUILDER'S OWN (bottomCut.ts `waistLine`) on its own measures (bodyRegions.ts `mapBody`: round her on her body
+  file's rest points, her joints as bound by its `readBindJoints`/`measureHuman`), EXCEPT the heights up her trunk,
+  which are her shape's AS BAKED. TRIED AND DROPPED, each pictured: the stripes' own measure (5 cm under the builder's
+  line at her front); the rest heights (an edge torn at the size of her triangles: her baked shape does not keep them
+  evenly point to point); those smoothed (clean at 0%, wavy at 100%); her heights at each line's own belly (at 150 and
+  200% the leggings rode up over her belly: Joshua, "too high and following the wrong line"). Points not written read
+  as far over every line as the file holds, and the drawn edge is softened over no more than 1 cm (`WAIST_SOFTEST`): at
+  first a triangle jumping to them drew a zig-zag line over the strip. A thin line over the edge at 50 and 100% was her
+  stale SKIN HEIGHT picture (the old leggings' edge as a ridge): ALWAYS re-run make_skin_height.py after a re-bake.
+  THE LEGGINGS ARE DRAWN ONLY OVER HER BARE SKIN AS BAKED (roughness under 0.7, `WAIST_BARE_BELOW`, the soft edges of
+  cloth counted in): her top is a layer over them, and where his line is higher than her top's hem (M6's back at 0%,
+  0.37 against the crop's 0.29) they were drawn over the bottom of her shirt (Joshua: "the bottom of the shirt was
+  ragged"). From 1 cm over the baked line down they are drawn over cloth too (their own edging: the builder bakes a
+  faint light line along it). NOT MATCHED YET: at 50 and 100% the builder draws an under-belly waistband as a HOOP
+  (bottomCut.ts `stayAt`, `swingOf`; fabricMaterial.ts: a band hinged at her back, swung down by how her front stands
+  now, bridging under her belly in a U), the game its line along her skin (a point under her belly: Joshua, "too
+  low/pointed"). Also seen, not ours: light specks along the crop tees' hem on bare skin (with skin depth off too).
+  On the builder's own body (Body: Visual) the leggings are at the baked numbers. Joshua has asked the BUILDER'S agent
+  to make the under-belly leggings follow the belly slider by his five settings: on that copy, read them from the
+  builder instead of `UNDER_BELLY_WAIST`. LEFT FOR LATER: the crop tees' own hem is baked paint, and stretched over a
+  belly of 100% and more its edge steps on the picture's pixels.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

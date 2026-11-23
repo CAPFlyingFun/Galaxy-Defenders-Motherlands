@@ -92,6 +92,10 @@ uniform float skinOily, skinWet, skinWetLine, skinWetSplash, skinWetEdge;`)
   {
     // only on her bare skin: where the roughness picture reads below cloth
     float shineBare = 1.0 - smoothstep(${(SKIN_BELOW - 0.04).toFixed(3)}, ${SKIN_BELOW.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g);
+#ifdef GDM_WAIST
+    // (not where her live waistband draws her leggings over her skin as baked: outfitMaterial.ts, liveWaist.ts)
+    shineBare *= 1.0 - waistIn;
+#endif
     // her skin's own shine: rougher and a little darker when dry, smoother when oily
     float shineOwn = skinOily < 0.0 ? -skinOily * ${s.dryRougher.toFixed(3)} : -skinOily * ${s.oilySmoother.toFixed(3)};
     roughnessFactor = clamp(roughnessFactor + shineOwn * shineBare, 0.04, 1.0);

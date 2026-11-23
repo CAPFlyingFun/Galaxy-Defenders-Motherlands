@@ -24,6 +24,7 @@ import * as THREE from 'three';
 import type { BakedLook } from './bakedLook';
 import { freeMaterial } from './bodyFile';
 import { sizedPicture } from '../../core/textureSizes';
+import { WAIST_RANGE, WAIST_SOFTEST, WAIST_UNDER, waistWeights } from '../liveWaist';
 
 export interface SkinMaterials {
   /** For levels of 25 % and over: with her fine surface detail. */
@@ -38,6 +39,8 @@ export interface SkinMaterials {
    * once her skeleton is measured; until then the top colour is only above the line on her trunk.
    */
   setToneArms(armBones: readonly number[], floorY: number): void;
+  /** Her belly now (0-200 %): where her live waistband's top is drawn (liveWaist.ts); nothing when the look has none. */
+  setWaistBelly(belly: number): void;
   dispose(): void;
 }
 
@@ -184,6 +187,30 @@ float gdmBandIn(vec3 band) {
 }
 `;
 
+/**
+ * THE LIVE WAISTBAND, in her skin's shader (liveWaist.ts). Each point carries six numbers, blended over each triangle:
+ * how far under each of his lines it is (`waistKeys` the first four, `waistMore.x` the fifth) and under the baked line
+ * (`waistMore.y`), minus over it, each read as -1..1 and multiplied back by WAIST_RANGE. Her belly weighs his lines
+ * (`waistWeights`, `waistWeightLast`: the two either side of her belly), and the leggings are drawn wherever the pixel
+ * is under the blended line -- but only down to WAIST_UNDER under the baked line, where the baked leggings take over
+ * (their own black edging). Both edges are drawn over one pixel, softened over no more than WAIST_SOFTEST.
+ */
+const WAIST_GLSL = `
+float gdmWaistIn(vec4 keys, vec2 more) {
+  float inside = (dot(keys, waistWeights) + more.x * waistWeightLast) * ${WAIST_RANGE.toFixed(3)};
+  float shown = clamp(inside / clamp(fwidth(inside), 1e-7, ${WAIST_SOFTEST.toFixed(3)}) + 0.5, 0.0, 1.0);
+  float baked = ${WAIST_UNDER.toFixed(3)} - more.y * ${WAIST_RANGE.toFixed(3)};
+  return shown * clamp(baked / clamp(fwidth(baked), 1e-7, ${WAIST_SOFTEST.toFixed(3)}) + 0.5, 0.0, 1.0);
+}
+`;
+
+/**
+ * Roughness under this in her surface picture is her bare skin or the soft edge of a cloth on it (her skin reads under
+ * 0.58, her knits 0.72 and up): the live waistband draws only there. At skinTexture.ts's own 0.58 the edge pixels, half
+ * skin and half cloth, were half drawn, and a pale hairline was left along her top's hem and the baked leggings' edge.
+ */
+const WAIST_BARE_BELOW = 0.7;
+
 /** A live knit's repeat at stitch 1, metres (the builder's athletic knit: 5 cm). */
 const KNIT = Object.freeze({ tileMetres: 0.05 });
 
@@ -239,6 +266,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   // THE LIVE BAND (liveBand.ts): its colour, when her look has one and its numbers came with it
   const bandColour = look.band && look.manifest.band ? new THREE.Color(look.manifest.band.colour) : null;
   const bandUniforms = bandColour ? { bandColour: { value: bandColour } } : null;
+  // THE LIVE WAISTBAND (liveWaist.ts): the leggings' colour and shine as baked, and where her belly has moved its top to
+  const waistAs = look.waist && look.manifest.waist ? look.manifest.waist : null;
+  const waistUniforms = waistAs ? {
+    waistColour: { value: new THREE.Color(waistAs.colour) },
+    waistWeights: { value: new THREE.Vector4(1, 0, 0, 0) }, waistWeightLast: { value: 0 },
+  } : null;
   /** Where her skin was as baked, and which way it faced: the knit, the prints and the live band are laid on by these. */
   const laidOn = !!knitUniforms || prints.length > 0 || !!toneUniforms || !!bandUniforms;
   // (DEV only: test pages set the knit's numbers by hand)
@@ -264,7 +297,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (bandUniforms || (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone))) {
+    if (bandUniforms || waistUniforms || (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone))) {
       // (a look with a live band but no shine of its own: nothing else changed)
       const own: ClothShine = shine ?? {};
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
@@ -273,6 +306,8 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
       if (own.trim !== undefined) lines.push(`roughnessFactor = mix(roughnessFactor, ${own.trim.toFixed(3)}, ${band(TRIM_FROM)});`);
       // (the live band is the smooth cloth: its trim's roughness, or the builder's Flat cloth's own)
       if (bandUniforms) lines.push(`roughnessFactor = mix(roughnessFactor, ${(own.trim ?? BAND_FLAT_ROUGHNESS).toFixed(3)}, bandIn);`);
+      // (the live waistband: the leggings' own roughness, as baked just under their baked line)
+      if (waistAs) lines.push(`roughnessFactor = mix(roughnessFactor, ${waistAs.roughness.toFixed(3)}, waistIn);`);
       // (a metal sheen: after three.js reads its metalness, where the roughness picture says cloth)
       const metal = own.metal !== undefined ? [`metalnessFactor = mix(metalnessFactor, ${own.metal.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g));`] : [];
       // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
@@ -346,6 +381,18 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         'float bandIn = gdmBandIn(vBand);',
         'diffuseColor.rgb = mix(diffuseColor.rgb, bandColour, bandIn);',
       );
+      // THE LIVE WAISTBAND (liveWaist.ts): the leggings' colour up to the line her belly has moved their top to -- ONLY
+      // OVER HER BARE SKIN AS BAKED (her roughness picture under WAIST_BARE_BELOW): her top is a layer
+      // over her leggings, and where his line is higher than her top's hem (M6's back at 0%, 0.37 against 0.29) they
+      // were drawn over the bottom of her shirt (2026-11-23). Its `waistIn` also tells her skin's depth and shine
+      // (skinTexture.ts, skinShine.ts: GDM_WAIST) it is cloth here.
+      if (waistUniforms) knitSuit.push(
+        // (from 1 cm over the baked line down, the cloth there is the leggings' own, and their edging: drawn over, the
+        //  faint light line the builder bakes along it is hidden -- its line a few millimetres off the game's, at 0 it
+        //  was half hidden, a broken dashed line; no top's hem comes within 4 cm of it: WAIST_BAKED_UNDER)
+        `waistIn = gdmWaistIn(vWaistKeys, vWaistMore) * max(1.0 - smoothstep(${(WAIST_BARE_BELOW - 0.04).toFixed(3)}, ${WAIST_BARE_BELOW.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g), step(-0.02, vWaistMore.y * ${WAIST_RANGE.toFixed(3)}));`,
+        'diffuseColor.rgb = mix(diffuseColor.rgb, waistColour, waistIn);',
+      );
       // (the prints' depth, as the knit's below)
       const printBump = prints.some((p) => p.depth > 0) ? [
         'vec3 printSigmaX = dFdx(-vViewPosition), printSigmaY = dFdy(-vViewPosition);',
@@ -372,6 +419,17 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         Object.assign(shader.uniforms, printUniforms);
         if (toneUniforms) Object.assign(shader.uniforms, toneUniforms);
         if (bandUniforms) Object.assign(shader.uniforms, bandUniforms);
+        // (the live waistband: its numbers for each point, its colour and her belly's blend; `waistIn` is declared at
+        //  the top of main so the patches chained after this one can read it)
+        if (waistUniforms) {
+          Object.assign(shader.uniforms, waistUniforms);
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nattribute vec4 waistKeys;\nattribute vec2 waistMore;\nvarying vec4 vWaistKeys;\nvarying vec2 vWaistMore;')
+            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvWaistKeys = waistKeys;\nvWaistMore = waistMore;');
+          shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\n#define GDM_WAIST\nuniform vec3 waistColour;\nuniform vec4 waistWeights;\nuniform float waistWeightLast;\nvarying vec4 vWaistKeys;\nvarying vec2 vWaistMore;\n' + WAIST_GLSL)
+            .replace('void main() {', 'void main() {\n  float waistIn = 0.0;');
+        }
         if (laidOn) {
           if (knitUniforms) Object.assign(shader.uniforms, knitUniforms);
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
@@ -396,12 +454,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
-          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bandUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, bandIn));\n' : '') + knitBump.join('\n') + '\n' + printBump.join('\n'))
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bandUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, bandIn));\n' : '') + (waistUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, waistIn));\n' : '') + knitBump.join('\n') + '\n' + printBump.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'))
           .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n' + metal.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${own.cloth}-${own.trim}-${own.darken}-${own.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${own.knitOn ?? ''}-${(own.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-${bandUniforms ? 'band2' : ''}-v5`;
+      material.customProgramCacheKey = () => `cloth-shine-${own.cloth}-${own.trim}-${own.darken}-${own.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${own.knitOn ?? ''}-${(own.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-${bandUniforms ? 'band2' : ''}-${waistUniforms ? 'waist7' : ''}-v5`;
     }
     return material;
   };
@@ -409,6 +467,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
   freeMaterial(fileMaterial);
   return {
     fine, plain,
+    setWaistBelly(belly: number): void {
+      if (!waistUniforms || !waistAs) return;
+      const w = waistWeights(belly, waistAs.bellies);
+      waistUniforms.waistWeights.value.set(w[0], w[1], w[2], w[3]);
+      waistUniforms.waistWeightLast.value = w[4];
+    },
     setToneArms(armBones: readonly number[], floorY: number): void {
       if (!toneUniforms || !tone) return;
       toneUniforms.toneArm.value.fill(0);

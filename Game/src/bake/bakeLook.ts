@@ -47,6 +47,9 @@ import { capturePieces, shirtColourFrom } from './capturePieces';
 import { repackUv } from './repackUv';
 import { packPieces } from '../heroine/fast/piecesFile';
 import { measureBand, packBand, type BandPoints } from '../heroine/liveBand';
+import { measureWaist, packWaist, trunkPoints, type WaistJoints, type WaistPoints } from '../heroine/liveWaist';
+import { readBindJoints } from '@charb/view/HumanRig';
+import { measureHuman } from '@charb/actor/humanSkeleton';
 import { MOTION_SHAPES } from '../heroine/fast/shapedBody';
 
 /** The pictures' sizes, in pixels a side. Her colour is what the eye reads; her shine needs far less. */
@@ -178,6 +181,10 @@ async function start(): Promise<void> {
     if (band.count !== count) throw new Error(`the live band was measured on ${band.count} points, her shape has ${count}`);
   }
 
+  // ---- 3a'. her LIVE WAISTBAND, if the look has one (liveWaist.ts): which of her points are her trunk, told now, on
+  // her skin as baked (the rest of it is measured once everything else is baked: 3c)
+  const waistTrunk = look.liveWaist ? trunkPoints(measureSkin(skin)) : null;
+
   // ---- 3b. her extra pieces: what the room draws for this outfit that is not her skin (capturePieces.ts) --------------
   say(`Baking "${key}": her extra pieces…`);
   const fileDictionary = fileSkin.morphTargetDictionary ?? {};
@@ -202,7 +209,41 @@ async function start(): Promise<void> {
   let lowUnposed = Infinity, highUnposed = -Infinity;
   for (let i = 0; i < count; i++) { const y = capture.position[i * 3 + 1]; if (y < lowUnposed) lowUnposed = y; if (y > highUnposed) highUnposed = y; }
   const unposedPerMetre = (highUnposed - lowUnposed) / ((top - bottom) / ROOM_UNITS);
-  const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece, shirtColourFrom(capture.position, layout.uv, albedo, unposedPerMetre));
+  const extra = await capturePieces(renderer, camera, room.scene, skin, skinWorld, fileMotion, isExtraPiece, shirtColourFrom(capture.position, layout.uv, albedo, unposedPerMetre, undefined,
+    // (a live side panel reaching her hem: the hem band takes its colour there)
+    band && look.liveBand ? { ...band, colour: look.liveBand.colour } : null));
+
+  // ---- 3c. her LIVE WAISTBAND (liveWaist.ts): how far under each of his lines (and the baked one) each point of her
+  // trunk in the strip is -- up her trunk on her shape as baked, round her on her body file's rest points, her joints
+  // as she was bound (the builder's own readers of them, as its rig reads her); then the leggings' own colour and shine
+  // just under the baked line, which the game draws them in over the strip
+  let waist: WaistPoints | null = null, waistLooks: { colour: string; roughness: number } | null = null;
+  if (look.liveWaist && waistTrunk) {
+    say(`Baking "${key}": her live waistband…`);
+    const restAttr = fileSkin.geometry.getAttribute('position'), restPoint = new THREE.Vector3();
+    const restPoints = new Float32Array(restAttr.count * 3);
+    for (let i = 0; i < restAttr.count; i++) restPoint.fromBufferAttribute(restAttr, i).applyMatrix4(fileSkin.bindMatrix).toArray(restPoints, i * 3);
+    const bind = readBindJoints(file.scene), named = measureHuman(bind).joints;
+    const jointAt = (name: keyof WaistJoints) => { const j = bind[named[name]]; return [j.x, j.y, j.z] as const; };
+    const joints: WaistJoints = { pelvis: jointAt('pelvis'), spine: jointAt('spine'), chest: jointAt('chest'), neck: jointAt('neck'), hipL: jointAt('hipL'), hipR: jointAt('hipR') };
+    // (up her trunk on her shape AS BAKED for every line, round her on her rest points: liveWaist.ts says why; facing
+    //  +1, her pregnant torso reaching further forward than back)
+    waist = measureWaist(look.liveWaist, waistTrunk, restPoints, look.liveWaist.keys.map(() => capture.position).concat([capture.position]), joints, 1);
+    // (the middle of what her pictures hold 0.5-6 cm under the baked line: the leggings and their edging, not a speck)
+    const reds: number[] = [], greens: number[] = [], blues: number[] = [], rough: number[] = [];
+    const at = (rgba: Uint8Array | Uint8ClampedArray, size: number, v: number, channel: number) =>
+      rgba[(Math.min(size - 1, Math.floor(layout.uv[v * 2 + 1] * size)) * size + Math.min(size - 1, Math.floor(layout.uv[v * 2] * size))) * 4 + channel];
+    const bakedUnder = waist.under[waist.under.length - 1];
+    for (let k = 0; k < waist.index.length; k++) {
+      if (bakedUnder[k] < 0.01 || bakedUnder[k] > 0.12) continue;
+      const v = waist.index[k];
+      reds.push(at(albedo.rgba, ALBEDO_SIZE, v, 0)); greens.push(at(albedo.rgba, ALBEDO_SIZE, v, 1)); blues.push(at(albedo.rgba, ALBEDO_SIZE, v, 2));
+      rough.push(at(surface.rgba, SURFACE_SIZE, v, 1));
+    }
+    const middle = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[s.length >> 1] : 0; };
+    const hex = (x: number) => Math.round(x).toString(16).padStart(2, '0');
+    waistLooks = { colour: `#${hex(middle(reds))}${hex(middle(greens))}${hex(middle(blues))}`, roughness: +(middle(rough) / 255).toFixed(3) };
+  }
   // the lowest point of anything she stands on (her sneakers' soles), over the room's floor
   let lowest = bottom;
   room.scene.traverseVisible((node) => {
@@ -259,9 +300,11 @@ async function start(): Promise<void> {
     //  style on him, fastHair.ts. A male look with no head of its own gets none: the default head is HER ponytail.)
     hair: head.hair.style === HAIR_STYLE_NONE || (male && !look.body.head) ? null : { style: head.hair.style, colour: head.hair.colour, length: head.hair.length },
     body: look.body.model,
-    files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null, ...(band ? { band: 'band.bin' } : {}) },
+    files: { albedo: 'albedo.webp', normal: 'normal.webp', surface: 'surface.webp', shape: 'shape.bin', pieces: extra.pieces.length ? 'pieces.bin' : null, ...(band ? { band: 'band.bin' } : {}), ...(waist ? { waist: 'waist.bin' } : {}) },
     // (the live band's colour: the game draws it, liveBand.ts)
     ...(look.liveBand ? { band: { colour: look.liveBand.colour } } : {}),
+    // (the live waistband: the leggings' colour and shine as baked, and the bellies his lines are for: liveWaist.ts)
+    ...(look.liveWaist && waistLooks ? { waist: { ...waistLooks, bellies: look.liveWaist.keys.map((k) => k.belly) } } : {}),
     facts: {
       drawnInTheRoom: drawn,
       extraPieces: extra.notes, lowestPointOverTheFloorMetres: lowest / ROOM_UNITS,
@@ -270,6 +313,7 @@ async function start(): Promise<void> {
       restSkinSpread: rest.spread, captureMissing: capture.missing,
       faceSlidersPastTheirEnds: beyond, upperLidsAsBaked: lids,
       liveBandPoints: band?.index.length ?? 0,
+      liveWaistPoints: waist?.index.length ?? 0,
       albedoCoveredTexels: albedo.coveredCount, textureIslands: layout.islands, islandsShrunkTo: layout.scale,
     },
   };
@@ -281,6 +325,7 @@ async function start(): Promise<void> {
     'look.json': new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }),
   };
   if (band) blobs['band.bin'] = new Blob([packBand(band) as BlobPart], { type: 'application/octet-stream' });
+  if (waist) blobs['waist.bin'] = new Blob([packWaist(waist) as BlobPart], { type: 'application/octet-stream' });
   if (extra.pieces.length) blobs['pieces.bin'] = new Blob([packPieces(extra.pieces) as BlobPart], { type: 'application/octet-stream' });
   Object.assign(blobs, extra.pictures);
 

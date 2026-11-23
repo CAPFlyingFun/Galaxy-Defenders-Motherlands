@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryCasualHenley",
-  "bakedAt": "2026-11-23T13:51:08.891Z",
+  "bakedAt": "2026-11-23T19:39:41.260Z",
   "builderVersion": "0.9.73",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7002272408669499,
+  "barefootHeightMetres": 1.7002010890513433,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -28,7 +28,11 @@
     "normal": "normal.webp",
     "surface": "surface.webp",
     "shape": "shape.bin",
-    "pieces": "pieces.bin"
+    "pieces": "pieces.bin",
+    "band": "band.bin"
+  },
+  "band": {
+    "colour": "#2b2c31"
   },
   "facts": {
     "drawnInTheRoom": [
@@ -43,8 +47,8 @@
     ],
     "extraPieces": [
       "tunicDrape: 7360 of 17120 triangles drawn",
-      "tunicDrape: kept 909 of 7360 drawn triangles (its hem band)",
-      "tunicDrape: 553 points, 909 triangles",
+      "tunicDrape: kept 907 of 7360 drawn triangles (its hem band)",
+      "tunicDrape: 552 points, 907 triangles",
       "sneakerL-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
       "sneakerL-plain: 4090 points, 7280 triangles",
       "sneakerR-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
@@ -52,11 +56,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.7162996810523163,
-    "pointsTheBuilderMoved": 51757,
-    "movedMostGeometryUnits": 0.15041564674822316,
+    "crownOverTheFloorMetres": 1.7162735292367097,
+    "pointsTheBuilderMoved": 51761,
+    "movedMostGeometryUnits": 0.15036512069951635,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16351130655826226,
+    "restSkinSpread": 0.16350318607708852,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -69,8 +73,9 @@
       "mostMm": 2.3980917547362655
     },
     "upperLidsAsBaked": 0.15,
-    "liveBandPoints": 0,
-    "albedoCoveredTexels": 7537039,
+    "liveBandPoints": 14137,
+    "liveWaistPoints": 0,
+    "albedoCoveredTexels": 7537150,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
   },
@@ -80,6 +85,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-23T14:21:14+00:00"
+    "packedAt": "2026-11-23T19:43:40+00:00"
   }
 }

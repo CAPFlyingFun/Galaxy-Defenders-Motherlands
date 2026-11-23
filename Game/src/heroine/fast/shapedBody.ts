@@ -88,6 +88,8 @@ export interface ShapedBodySource {
   readonly triangles?: Uint32Array;
   /** Her look's LIVE BAND numbers, two a point (liveBand.ts), when it has one: handed to her shader as `bandAt`. */
   readonly band?: Float32Array | null;
+  /** Her look's LIVE WAISTBAND numbers, six a point (liveWaist.ts), when it has one: handed to her shader as `waistKeys`, `waistMore`. */
+  readonly waist?: Int16Array | null;
 }
 
 /** One detail level's copy of her: its geometry, and which of her points each of its points is. */
@@ -291,6 +293,19 @@ export class ShapedBody {
       const bandAt = new Float32Array(n * 3);
       for (let k = 0; k < n; k++) { const o = order[k]; bandAt[k * 3] = s.band[o * 2]; bandAt[k * 3 + 1] = s.band[o * 2 + 1]; bandAt[k * 3 + 2] = 1; }
       geometry.setAttribute('bandAt', new THREE.BufferAttribute(bandAt, 3));
+    }
+    // HER LIVE WAISTBAND's six numbers for each point (liveWaist.ts): how far under each of its lines -- the first four
+    // in `waistKeys`, the fifth and the baked one in `waistMore` -- as 16-bit numbers her shader reads as -1..1 (never
+    // changed: her shader blends them by her belly)
+    if (s.waist) {
+      const keys = new Int16Array(n * 4), more = new Int16Array(n * 2);
+      for (let k = 0; k < n; k++) {
+        const o = order[k] * 6;
+        keys[k * 4] = s.waist[o]; keys[k * 4 + 1] = s.waist[o + 1]; keys[k * 4 + 2] = s.waist[o + 2]; keys[k * 4 + 3] = s.waist[o + 3];
+        more[k * 2] = s.waist[o + 4]; more[k * 2 + 1] = s.waist[o + 5];
+      }
+      geometry.setAttribute('waistKeys', new THREE.BufferAttribute(keys, 4, true));
+      geometry.setAttribute('waistMore', new THREE.BufferAttribute(more, 2, true));
     }
     // HER MOTION SHAPES STAY LIVE: the four are carried over, for this level's own points only.
     // (their moves only; a 1 cm sway turns her surface too little for the lighting to show)

@@ -14,6 +14,7 @@
 // ============================================================================
 import type { MaskPainter } from './paintMask';
 import type { LiveBand } from './liveBand';
+import type { LiveWaist } from './liveWaist';
 
 /** One character as the Character Builder's EXPORT writes her (the parts the game uses). */
 export interface HeroineLook {
@@ -56,6 +57,12 @@ export interface HeroineLook {
    * the builder's own body it is painted into its layer as usual.
    */
   readonly liveBand?: LiveBand;
+  /**
+   * LEGGINGS WHOSE TOP SLIDES DOWN UNDER HER BELLY as it grows (liveWaist.ts; Mary's casual M5 and M6, 2026-11-23): the
+   * bake draws them at their lowest, and her skin's shader draws them up to the line for her belly now, blended from
+   * their 0% line to their 200% one. On the builder's own body they are as their layer's numbers say (the 200% ones).
+   */
+  readonly liveWaist?: LiveWaist;
   /**
    * Leave out the strip of fabric the builder stretches across her cleavage (the bake does not keep it). For a suit
    * painted on her skin up to her neck (graySuit.ts), where the paint itself runs into her cleavage.

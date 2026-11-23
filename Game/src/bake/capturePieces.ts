@@ -198,8 +198,16 @@ export const DRAPE_NAME = 'tunicDrape';
 export function shirtColourFrom(
   skinPoints: Float32Array, uv: Float32Array, picture: { readonly size: number; readonly rgba: Uint8Array | Uint8ClampedArray },
   unitsPerMetre: number, above: readonly [number, number] = [0.03, 0.08],
+  /**
+   * A LIVE BAND the game draws over her shirt (liveBand.ts: the casual tops' side panels), which is not in her picture:
+   * where the nearest skin point is inside it, the band's colour ('#rrggbb', a Flat cloth bakes as exactly its tint).
+   */
+  liveBand: { readonly index: Uint32Array; readonly across: Float32Array; readonly half: Float32Array; readonly colour: string } | null = null,
 ): (x: number, y: number, z: number) => [number, number, number] | null {
   const count = skinPoints.length / 3;
+  const inBand = new Set<number>();
+  if (liveBand) for (let j = 0; j < liveBand.index.length; j++) if (Math.abs(liveBand.across[j]) < liveBand.half[j]) inBand.add(liveBand.index[j]);
+  const bandRgb = liveBand ? [1, 3, 5].map((k) => parseInt(liveBand.colour.slice(k, k + 2), 16)) as [number, number, number] : null;
   const order = Uint32Array.from({ length: count }, (_, k) => k).sort((a, b) => skinPoints[a * 3 + 1] - skinPoints[b * 3 + 1]);
   const heights = Float32Array.from(order, (v) => skinPoints[v * 3 + 1]);
   const firstAt = (y: number): number => { let lo = 0, hi = count; while (lo < hi) { const mid = (lo + hi) >> 1; if (heights[mid] < y) lo = mid + 1; else hi = mid; } return lo; };
@@ -211,6 +219,7 @@ export function shirtColourFrom(
       if (d < bestD) { bestD = d; best = v; }
     }
     if (best < 0) return null;
+    if (bandRgb && inBand.has(best)) return [...bandRgb];
     // (the bake draws her picture with (0, 0) of her layout at its bottom left, and reads it back from the bottom row)
     const px = Math.min(size - 1, Math.max(0, Math.floor(uv[best * 2] * size)));
     const py = Math.min(size - 1, Math.max(0, Math.floor(uv[best * 2 + 1] * size)));

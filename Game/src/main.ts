@@ -1625,7 +1625,9 @@ async function start(): Promise<void> {
     },
     onDomeDebug: domeDebug,
     onIntake: intake,
-    onBathroom: () => { if (bathroomLeft <= 0) intake('bathroom'); },
+    // (the 🚽: she goes as she does when she must, so her guns are put away first and nothing is left in her hands for the
+    //  seat: step 5b of the frame, `mustGoNow`)
+    onBathroom: () => { if (bathroomLeft <= 0) mustGoNow = true; },
     onSwap: () => swapCharacter(),
     // 🔦 LIGHT (the prologue): the flashlight off or on (not while the story holds him still, in the opening's dark)
     onLight: () => {
@@ -2431,8 +2433,12 @@ async function start(): Promise<void> {
     {
       const w = heroine.bellyLook?.(lookSpot) ?? 0;
       if (w > 0 && controls.fireHeld) heroine.stopBellyLook?.();
-      if (looked && rig.mode === 'first' && (w > 0 || windedWeight > 0)) {
+      // (sitting down or getting up, her glance over her shoulder or her bow: src/heroine/fast/sitPose.ts SIT_LOOK.
+      //  Turned round as she is, the view goes on from her head's way left and right too, not only up and down)
+      const sitting = heroine.sitLook?.() ?? 0;
+      if (looked && rig.mode === 'first' && (w > 0 || windedWeight > 0 || sitting > 0)) {
         const d = rig.lookDirection;
+        if (sitting > 0) rig.yaw = Math.atan2(d.x, d.z);
         rig.pitch = Math.atan2(d.y, d.x * Math.sin(rig.yaw) + d.z * Math.cos(rig.yaw));
         heroine.freeLook?.();
       }

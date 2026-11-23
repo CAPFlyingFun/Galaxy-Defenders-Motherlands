@@ -896,6 +896,27 @@ use the game's single copy of three.js.
   his diagram, and from the front: see the commit. Her clothes stay on (only the pose for now).
   LATER (Joshua): real toilets in the world that the brain and the player go to (routines.ts already has a bathroom
   place).
+- v0.2.156: HER LOOKS AND HANDS WHILE SHE SITS (Joshua, 2026-11-22, planned with him step by step, Blaze looking right
+  as his example: "toilet 🚽 pops up, she looks down and to the right looking at the toilet while feet stay locked
+  looking until seated completely... before she gets up, she looks down all the way, holds and then her head lifts up as
+  she gets up"; "2.5s prior"; "make the hand stabilizing the direction she is looking"; "Getting up, she should randomly
+  place any hand on the seat next to her hip"; the hand on her thigh and the idle glances were my ideas, his "I like
+  all"; sounds held off). `heroine/fast/sitPose.ts` `SIT_LOOK`, `SIT_HANDS`; fastHeroine.ts `sitHands`, the sit looks
+  beside the kick look. SITTING DOWN she glances over one shoulder, LEFT OR RIGHT AT RANDOM, and down at the seat (95
+  degrees round from her body's way, her chest twisting 15 of it, over the first 0.5 s; tipped at the seat's top, so her
+  head follows it down), her body and feet square; held until her hips land (2 s), back to ahead as she sits back
+  upright. THE HAND ON THAT SIDE goes to the seat's edge beside her hip from 0.8 s to 2.3 s (`seatOut` 0.215 m: the seat
+  is narrower than her hips and thighs, so its outer edge beside her thigh). SEATED she looks ahead, hands on her thighs
+  (the settled sit); on a visit with 5 s or more before her bow (the 12 s one) ONE OR TWO IDLE GLANCES (`spots`: aside,
+  further aside and down, her belly, a little up), each gliding 0.8 s, held 1.2-2 s. 2.5 S BEFORE SHE GETS UP her head
+  BOWS all the way down (her neck's 75 degrees from her torso, over 0.6 s), held while she leans forward and lifted with
+  her hips as she rises. GETTING UP a RANDOM HAND goes to the seat beside its hip (until 1.5 s of the 3 are left: her
+  hips a few cm up) and the other presses on the top of its thigh (until halfway, 1 s left). A hand with a gun in it is
+  left alone; and the 🚽 now goes as "must go now" does (main.ts `onBathroom` sets `mustGoNow`: her guns holstered
+  first, a bar or the door let go). A hand going to the seat or her thigh never makes her lean in for it (`stillShort`).
+  FIRST PERSON the view is her head, so it does all of this; turning the view frees her head until she is up
+  (`freeLook`, `sitLook`), the view going on from her head's way left and right too (main.ts sets `rig.yaw`). John the
+  same.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

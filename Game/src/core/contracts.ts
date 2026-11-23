@@ -207,8 +207,11 @@ export interface HeroineBody {
    * she stands now: its top's height over her floor and how far behind her it is (the point under her hips), metres.
    */
   seatFor?(): { top: number; back: number };
-  /** Sit down onto the seat behind her (SIT.downSeconds), stay this many seconds, then get up (SIT.upSeconds). */
+  /** Sit down onto the seat behind her (SIT.seconds), stay this many seconds, then get up (SIT.seconds). */
   sitFor?(seconds: number): void;
+  /** How much of her own look while she sits is on (0..1; heroine/fast/sitPose.ts SIT_LOOK): first person, turning the
+   *  view frees her head from it (`freeLook`). */
+  sitLook?(): number;
   /**
    * HER STANCE (Joshua, 2026-11-20; heroine/fast/groundPose.ts): standing, crouching, on her belly, or on all fours. She
    * gets there over a second or so (crouching first, then down; up through her crouch).

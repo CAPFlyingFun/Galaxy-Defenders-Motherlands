@@ -57,7 +57,7 @@ import { LowerBody } from './lowerBody';
 import { BellyTouch } from './bellyTouch';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
-import { SIT, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
+import { SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
@@ -561,6 +561,63 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const sitOut: MutableJointTurn[] = [];
   const sitNow: SitPhase = { legs: 0, lean: 0, apart: [0, 0], lift: [0, 0], ahead: 0 };
   const hipsBefore = new THREE.Vector3(), hipsAfter = new THREE.Vector3(), hipsOther = new THREE.Vector3(), rootTurn = new THREE.Quaternion();
+  /**
+   * HER LOOKS AND HANDS WHILE SHE SITS (sitPose.ts SIT_LOOK, SIT_HANDS): the side she glances over sitting down (+1 her
+   * left, -1 her right) and the hand that goes to the seat getting up (0 left, 1 right), each picked at random; where the
+   * seat is (the point on its top under her hips, world); whether the player has taken her head (first person: turned
+   * the view); her glance at the seat now (0..1), her head bowed (0..1), her chest's twist (radians); her idle glances.
+   */
+  let sitSide = 1, sitUpHand: 0 | 1 = 0, sitLookFree = false, sitGlance = 0, sitBow = 0, sitTwist = 0, sitWasDown = false;
+  const sitSeat = new THREE.Vector3();
+  const idle = { left: 0, wait: 0, t: -1, hold: 0, side: 0, tip: 0, last: -1, share: 0 };
+  const sitJob: [boolean, boolean] = [false, false];
+  const sitHandPose: [THREE.Matrix4, THREE.Matrix4] = [new THREE.Matrix4(), new THREE.Matrix4()];
+  const sitPalm = new THREE.Vector3(), sitPalmTo = new THREE.Vector3(), sitFingers = new THREE.Vector3(), sitAcross = new THREE.Vector3();
+  const sitHip = new THREE.Vector3(), sitKnee = new THREE.Vector3(), sitThigh = new THREE.Vector3(), sitTop = new THREE.Vector3();
+  const randomIn = (a: number, b: number): number => a + Math.random() * (b - a);
+  /**
+   * SITTING, HER HANDS (SIT_HANDS): sitting down the hand on the side she looks to, on the seat's edge beside her hip;
+   * getting up, a random hand there and the other pressing on its thigh. A hand with a gun in it, or one busy winded,
+   * is left alone. Each laid flat as her winded palms are (fingerTouch.ts `flatPose`), given to her hands as a job
+   * (handReach.ts), and moved with her each frame.
+   */
+  const sitHands = (): void => {
+    const gettingUp = !sitAsked && sitT > 0;
+    const lookHand: 0 | 1 = sitSide > 0 ? 0 : 1;
+    for (const i of [0, 1] as const) {
+      let want: 'seat' | 'thigh' | null = null;
+      if (sitAsked && i === lookHand && sitT >= SIT_HANDS.seatFrom && sitT < SIT_HANDS.seatUntil) want = 'seat';
+      else if (gettingUp) want = i === sitUpHand ? (sitT > SIT_HANDS.upSeatUntil ? 'seat' : null) : (sitT > SIT_HANDS.upThighUntil ? 'thigh' : null);
+      if (gunIn[i === 0 ? 'left' : 'right'] || windedJob[i]) want = null;
+      if (!want) { if (sitJob[i]) { reach.setJob(i, null); sitJob[i] = false; stayUp[i] = false; } continue; }
+      if (!sitJob[i] && reach.hasJob(i) && !bellyHand.holds(i)) continue;   // (another job has this hand)
+      // (her left is across her forward: x = cos(yaw), z = -sin(yaw); the left hand's side is +, the right's -)
+      const yaw = root.rotation.y, out = i === 0 ? 1 : -1;
+      sitAcross.set(Math.cos(yaw), 0, -Math.sin(yaw));
+      if (want === 'seat') {
+        // the seat's edge beside her hip, the palm flat on it, fingers ahead
+        sitPalm.copy(sitSeat).addScaledVector(sitAcross, out * SIT_HANDS.seatOut);
+        sitPalm.x += Math.sin(yaw) * SIT_HANDS.seatAhead; sitPalm.z += Math.cos(yaw) * SIT_HANDS.seatAhead;
+        sitPalmTo.set(0, -1, 0);
+        sitFingers.set(Math.sin(yaw), 0, Math.cos(yaw));
+      } else {
+        // the top of her thigh, toward her knee, fingers along it and a little in
+        bones[i === 0 ? joints.hipL : joints.hipR].getWorldPosition(sitHip);
+        bones[i === 0 ? joints.kneeL : joints.kneeR].getWorldPosition(sitKnee);
+        sitThigh.copy(sitKnee).sub(sitHip);
+        const length = sitThigh.length();
+        sitThigh.normalize();
+        sitTop.set(0, 1, 0).addScaledVector(sitThigh, -sitThigh.y).normalize();
+        sitPalm.copy(sitHip).addScaledVector(sitThigh, length * SIT_HANDS.thighAlong).addScaledVector(sitTop, SIT_HANDS.thighTop);
+        sitPalmTo.copy(sitTop).negate();
+        sitFingers.copy(sitThigh).addScaledVector(sitAcross, -out * SIT_HANDS.fingersIn);
+        sitFingers.addScaledVector(sitTop, -sitFingers.dot(sitTop)).normalize();
+      }
+      touch.flatPose(i, sitPalm, sitPalmTo, sitFingers, sitHandPose[i]);
+      if (!sitJob[i]) { bellyHand.cancel(i); reach.setJob(i, sitHandPose[i]); stayUp[i] = true; sitJob[i] = true; }
+      else reach.moveJob(i, sitHandPose[i]);
+    }
+  };
   if (!painted) for (const m of [materials.fine, materials.plain]) addSkinShine(m as THREE.MeshStandardMaterial, shine);
   skin.material = materials.fine;
   skin.castShadow = false;
@@ -1629,7 +1686,7 @@ if (uHideHead > 0.5) {
     },
     setEyeOffset(forward: number, higher: number): void { eyeForward = forward; eyeHigher = higher; },
     headPitchRange(): readonly [number, number] { headRange[0] = -HEAD_DOWN_MOST - torsoLean; headRange[1] = HEAD_UP_MOST - torsoLean; return headRange; },
-    freeLook(): void { if (windedW > 0) windedLookFree = true; bellyHand.stopLook(); },
+    freeLook(): void { if (windedW > 0) windedLookFree = true; if (sitT > 0) sitLookFree = true; bellyHand.stopLook(); },
 
     setKnitStitch(stitch: number): void {
       // (only the baked-look materials have a live knit; the DEV Room's way has none)
@@ -1669,7 +1726,19 @@ if (uHideHead > 0.5) {
         back: shape.anklesAhead - SIT.tuck - standing.anklesAheadOfHips - standing.hipsAhead,
       };
     },
-    sitFor(seconds: number): void { sitAsked = true; sitLeft = Math.max(sitLeft, seconds); },
+    sitFor(seconds: number): void {
+      if (!sitAsked && sitT <= 0) {
+        // (a new visit: which shoulder she glances over and which hand helps her up, at random; and where the seat is:
+        //  its top, under where her hips will rest)
+        sitSide = Math.random() < 0.5 ? 1 : -1;
+        sitUpHand = Math.random() < 0.5 ? 0 : 1;
+        const seat = heroine.seatFor!(), yaw = root.rotation.y;
+        sitSeat.set(root.position.x - Math.sin(yaw) * seat.back, root.position.y + seat.top, root.position.z - Math.cos(yaw) * seat.back);
+      }
+      sitAsked = true; sitLeft = Math.max(sitLeft, seconds);
+    },
+    /** How much of her own look while she sits is on (0..1): main.ts frees her head (first person) when the view turns. */
+    sitLook: () => (sitLookFree ? 0 : Math.max(sitGlance, sitBow, idle.share)),
     /** How far through sitting she is (0 standing .. 1 seated), and how far back and down it has her, metres: for tests. */
     sitInfo: () => ({ share: sitT / SIT.seconds, back: ground.seatBack, drop: ground.drop }),
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
@@ -1809,6 +1878,47 @@ if (uHideHead > 0.5) {
       } else if (sitT > 0) sitT = Math.max(0, sitT - frame.dt);
       sitPhase(sitT, sitNow);
       const sitS = sitNow.legs;
+      // HER OWN LOOKS WHILE SHE SITS (SIT_LOOK): the glance over her shoulder at the seat going down; the bow before
+      // she gets up, held as she leans forward and lifted with her hips as she rises; idle glances on a long visit
+      {
+        const dt = frame.dt, gettingUp = !sitAsked && sitT > 0, seated = sitAsked && sitT >= SIT.seconds;
+        sitGlance = sitAsked && sitT > 0 ? (sitT < SIT.seatedAt ? smooth(Math.min(1, sitT / SIT_LOOK.glanceIn)) : 1 - smooth(Math.min(1, (sitT - SIT.seatedAt) / (SIT.seconds - SIT.seatedAt)))) : 0;
+        if (gettingUp) sitBow = sitT >= SIT.seatedAt ? Math.min(1, sitBow + dt / SIT_LOOK.bowIn) : Math.min(sitBow, sitNow.legs);
+        else if (seated && sitLeft <= SIT_LOOK.bowBefore) sitBow = Math.min(1, sitBow + dt / SIT_LOOK.bowIn);
+        else sitBow = 0;
+        // (idle glances: planned as she settles, from the time she has before her head bows)
+        if (seated && !sitWasDown) {
+          const free = sitLeft - SIT_LOOK.bowBefore;
+          idle.left = free >= SIT_LOOK.twoFrom ? 2 : free >= SIT_LOOK.glancesFrom ? 1 : 0;
+          idle.wait = randomIn(SIT_LOOK.gapLeast, SIT_LOOK.gapMost); idle.t = -1;
+        }
+        sitWasDown = seated;
+        idle.share = 0;
+        if (seated) {
+          const length = (hold: number): number => 2 * SIT_LOOK.glide + hold;
+          if (idle.t < 0 && idle.left > 0) {
+            idle.wait -= dt;
+            const hold = randomIn(SIT_LOOK.holdLeast, SIT_LOOK.holdMost);
+            if (idle.wait <= 0 && sitLeft - SIT_LOOK.bowBefore >= length(hold)) {
+              // (a spot, not the one she just looked at)
+              let k = Math.floor(Math.random() * SIT_LOOK.spots.length);
+              if (k === idle.last) k = (k + 1) % SIT_LOOK.spots.length;
+              idle.last = k; idle.side = SIT_LOOK.spots[k][0] * DEG; idle.tip = SIT_LOOK.spots[k][1] * DEG;
+              idle.t = 0; idle.hold = hold;
+            }
+          }
+          if (idle.t >= 0) {
+            idle.t += dt;
+            const back = idle.t - SIT_LOOK.glide - idle.hold;
+            idle.share = idle.t < SIT_LOOK.glide ? smooth(idle.t / SIT_LOOK.glide) : back < 0 ? 1 : 1 - smooth(Math.min(1, back / SIT_LOOK.glide));
+            if (back >= SIT_LOOK.glide) { idle.t = -1; idle.left--; idle.wait = randomIn(SIT_LOOK.gapLeast, SIT_LOOK.gapMost); }
+          }
+        } else idle.t = -1;
+        if (sitT <= 0) { sitLookFree = false; sitBow = 0; }
+        if (sitLookFree) { sitGlance = 0; sitBow = 0; idle.share = 0; }
+        // (her chest twists with her glance, the way she looks)
+        sitTwist = SIT_LOOK.twist * DEG * sitSide * sitGlance;
+      }
       if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS);
       // (from the first moment, for her feet's step out, though her hips have not begun to go down)
       ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
@@ -1930,7 +2040,7 @@ if (uHideHead > 0.5) {
       // (lying down or on all fours, none of this: her body faces the way it lies; her eyes and aim do the looking)
       const upright = 1 - downS;
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
-      const backTurn = facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0;
+      const backTurn = (facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0) + sitTwist;
       // HER HEAD TURNS ABOUT HER TORSO (Joshua, 2026-11-20: "the left and right ended up on the twist axis... it's
       // supposed to be left and right relative to the torso like standing"; then, turned about its own up: "it's rolling
       // and not yawing"; "The head's yaw and pitch need to be fixed to the torso's angle"): it swings left or right
@@ -1964,13 +2074,29 @@ if (uHideHead > 0.5) {
         headSide += wrap(spotSide - headSide) * looking * Math.min(1, flat / 0.15);
         headTip += (spotTip - headTip) * looking;
       }
+      // SITTING, HER OWN LOOKS (SIT_LOOK): over her shoulder and down at the seat (its top under her hips, so her head
+      // follows it down as she goes), a glance round while seated, or her head straight ahead to be bowed (below)
+      if (sitGlance > 0) {
+        skull.updateWorldMatrix(true, false);
+        skull.getWorldPosition(skullAt);
+        const pitch = Math.atan2(sitSeat.y - skullAt.y, Math.max(0.05, Math.hypot(sitSeat.x - skullAt.x, sitSeat.z - skullAt.z)));
+        const [s2, t2] = sideAndTip(sitSide * SIT_LOOK.side * DEG, pitch);
+        headSide += wrap(s2 - headSide) * sitGlance;
+        headTip += (t2 - headTip) * sitGlance;
+      }
+      if (idle.share > 0) {
+        const [s2, t2] = sideAndTip(idle.side, idle.tip);
+        headSide += wrap(s2 - headSide) * idle.share;
+        headTip += (t2 - headTip) * idle.share;
+      }
+      if (sitBow > 0) headSide += wrap(0 - headSide) * sitBow;
       // WINDED, SHE LOOKS ROUND (third person; `lookRound`): her head glides between her belly, chest, feet, hands, her
       // sides and the horizon, by as much as she is bent over
       const roundNow = windedS > 0 && !firstPerson && !windedLookFree;
       if (roundNow) { windedLookNow = lookRound(frame.dt); headSide += wrap(windedLookNow[0] - headSide) * windedS; }
       else if (windedW <= 0) windedLook.on = false;
       const headYaw = yawNow + headSide;
-      const headTurn = facing || looking > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
+      const headTurn = facing || looking > 0 || sitGlance > 0 || idle.share > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
       // (her back's and neck's turns go ALONG HER SPINE, pelvis to neck, not about the world's upright: crouched or
       //  leaning in, she twists in herself instead of swinging sideways)
       root.updateMatrixWorld(true);
@@ -2016,6 +2142,9 @@ if (uHideHead > 0.5) {
         let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
         // (bowed right down, chin to chest; third person, wherever her look round has it: `lookRound`)
         if (windedS > 0 && !windedLookFree) rel += ((roundNow ? windedLookNow[1] : -HEAD_DOWN_MOST) - rel) * windedS;
+        // (sitting: bowed down before she gets up, at the floor by her feet: chin to chest seated upright, and no further
+        //  than the floor as she leans forward; lifting as she rises)
+        if (sitBow > 0) rel += (Math.max(-HEAD_DOWN_MOST, -SIT_LOOK.bowDown * DEG + torsoLean) - rel) * sitBow;
         // (how far her pose already has her head tipped from her torso's line: her forward's pitch, plus her lean)
         skull.updateWorldMatrix(true, false);
         skull.getWorldQuaternion(skullQ);
@@ -2059,10 +2188,12 @@ if (uHideHead > 0.5) {
       root.updateMatrixWorld(true);
       // (and her hands on her knees while she is winded, instead)
       windedHands();
+      sitHands();
       bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0 && windedS === 0);
       // Her hands on their jobs (handReach.ts), over the aim. A hand that cannot get there makes her lean in.
       reach.apply();
-      lower.stillShort(Math.max(reach.short[0], reach.short[1]), frame.dt);
+      // (a hand on its way to the seat or her thigh while she sits down or gets up does not make her lean in for it)
+      lower.stillShort(Math.max(sitJob[0] ? 0 : reach.short[0], sitJob[1] ? 0 : reach.short[1]), frame.dt);
 
       joints2.passive = lower.passive;
       armClear.thighs = !(lower.weight > 0 && lower.mode.startsWith('kneel'));

@@ -30,6 +30,12 @@
 // HER LEAN IS AT HER HIPS (her pelvis tipped about her hip joints, her thighs kept where they are), her back straight
 // and her head up, looking ahead; a little of it in her lower back.
 //
+// HER LOOKS AND HANDS (`SIT_LOOK`, `SIT_HANDS`; fastHeroine.ts): sitting down she glances over a shoulder (left or
+// right at random) and down at the seat, her chest twisting a little, until her hips land, the hand on that side
+// steadying her on the seat's edge; seated she looks ahead (on the long visit a glance or two round); 2.5 s before she
+// gets up her head bows all the way down, held while she leans forward with one hand (at random) on the seat and the
+// other on its thigh, and lifts as she rises.
+//
 // WHERE THE SEAT GOES (`seatShape`): the same sit worked out on her bones without drawing (the builder's
 // `posedJoints`), says how high her hips come to rest above her feet and how far behind them: so the toilet is made
 // for HER (Blaze's long legs sit higher than a short body would) and is put exactly under her hips.
@@ -63,6 +69,51 @@ export const SIT = Object.freeze({
    * (The builder's room puts her hips 0.1 above its stool's top.)
    */
   pad: 0.1,
+});
+
+/**
+ * HER OWN LOOKS WHILE SHE SITS (Joshua, 2026-11-22, Blaze looking right as his example: "toilet 🚽 pops up, she looks
+ * down and to the right looking at the toilet while feet stay locked looking until seated completely... before she gets
+ * up, she looks down all the way, holds and then her head lifts up as she gets up"; "maybe 2.5s prior"; the idle glances
+ * were my idea, his "I like all"). Her head is turned as for a kick (fastHeroine.ts), so first person the view does it;
+ * turning the view frees her head until she is up. GAME TUNING.
+ */
+export const SIT_LOOK = Object.freeze({
+  /** SITTING DOWN she glances over one shoulder (left or right at random) and down at the seat: her head this far round
+   *  from the way her body faces, degrees, her chest twisting `twist` of it with her... */
+  side: 95, twist: 15,
+  /** ...turning there over the first `glanceIn` seconds, held until her hips land (SIT.seatedAt), then back to ahead as
+   *  she sits back upright. */
+  glanceIn: 0.5,
+  /** Her head bowed down this long before she begins to get up, seconds, over `bowIn` seconds; held while she leans
+   *  forward, lifted as she rises (with her hips). Bowed to look `bowDown` degrees below level, at the floor by her feet:
+   *  seated upright that is as far as her neck goes, chin to chest; leaning forward her head stays on the floor (all the
+   *  way down from her LEANING torso folded her head back at her own lap). */
+  bowBefore: 2.5, bowIn: 0.6, bowDown: 72,
+  /** SEATED, IDLE GLANCES: only with at least `glancesFrom` seconds seated before her head bows (the 12 s visit, not the
+   *  5 s one): one, or two from `twoFrom`; each glides `glide` seconds to a spot, holds a while, glides back. */
+  glancesFrom: 5, twoFrom: 8, glide: 0.8, holdLeast: 1.2, holdMost: 2, gapLeast: 0.6, gapMost: 1.4,
+  /** Where she glances: degrees round from the way she faces (+ her left), and up (+) or down (-) from level. */
+  spots: [[50, -12], [-50, -12], [70, -25], [-70, -25], [0, -55], [22, 4], [-22, 4]] as ReadonlyArray<readonly [number, number]>,
+});
+
+/**
+ * HER HANDS WHILE SHE SITS (Joshua: "make the hand stabilizing the direction she is looking"; "Getting up, she should
+ * randomly place any hand on the seat next to her hip"; the other on its thigh, my idea, his "I like all"). GAME TUNING.
+ */
+export const SIT_HANDS = Object.freeze({
+  /** SITTING DOWN: the hand on the side she looks to goes to the seat's edge beside her hip from here, seconds into
+   *  sitting down, until here (her hips are down at SIT.seatedAt; it lets go as she sits back upright). */
+  seatFrom: 0.8, seatUntil: 2.3,
+  /** GETTING UP (seconds left of it: SIT.seconds is seated): a random hand on the seat beside her hip until here (her
+   *  hips a few cm up); the other on its thigh, pressing, until here (about halfway up). */
+  upSeatUntil: 1.5, upThighUntil: 1.0,
+  /** Where on the seat: out from the middle under her hips, across her (the seat is narrower than her hips and thighs,
+   *  so this is its outer edge beside her thigh, the palm part over it), ahead, metres. */
+  seatOut: 0.215, seatAhead: 0.04,
+  /** Where on the thigh: this far from her hip toward her knee (a share of her thigh), the palm this far above the bone
+   *  (the top of her thigh), metres; her fingers turned in toward her middle by this much. */
+  thighAlong: 0.62, thighTop: 0.075, fingersIn: 0.3,
 });
 
 /** Where she is in sitting down (`sitPhase`), each part 0..1 unless said. */

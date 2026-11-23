@@ -13,8 +13,10 @@ import { SPACE_HEROINE_LOOK } from './spaceHeroine';
 import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
 import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
 import { JOHN_LOOK } from './john';
+import { CASUAL_LOOKS } from './casual';
 
 export const LOOKS: Readonly<Record<string, HeroineLook>> = {
+  ...CASUAL_LOOKS,
   /** Blaze in pink and black: the game's Blaze (blazeSuit.ts). */
   blazeSuit: BLAZE_SUIT_LOOK,
   /** Blaze exactly as Joshua exported her from the Character Room: the all-pink two-piece (blaze.ts). */

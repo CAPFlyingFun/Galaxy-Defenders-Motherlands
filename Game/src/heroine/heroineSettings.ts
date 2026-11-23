@@ -190,6 +190,10 @@ export const ZOOM_START_DEFAULT = 0.17;
  */
 export const OUTFIT_CHOICES: readonly (readonly [string, string])[] = Object.freeze([
   ['Pink & black two-piece', 'blazeSuit'],
+  // (Mary's catsuits, M1-M3 of Joshua's board: marySuits.ts)
+  ['A.R.C.H. Research Suit (M1)', 'maryResearchSuit'],
+  ['Subterranean Explorer (M2)', 'maryExplorerSuit'],
+  ['Stealth Operative (M3)', 'maryStealthSuit'],
   ['Shadow Operative catsuit', 'shadowSuit'],
   ['Anime Space Heroine', 'spaceHeroine'],
   // (the catsuits: each colour in the style chosen under Catsuit style)

@@ -74,7 +74,7 @@ const NOTHING: MaskPainter = (surface) => new Float32Array(surface.count).fill(-
 const emptyLayer = (tint: string) => ({ choice: pick(tint), detail: DETAIL, template: null, mask: '' });
 
 /** One of the builder's templates, by its id, with some of its numbers changed. */
-function template(id: string, change: Record<string, unknown>) {
+export function template(id: string, change: Record<string, unknown>) {
   const t = COVERAGE_TEMPLATES.find((one) => one.id === id);
   if (!t) throw new Error(`[catsuit] the builder has no template '${id}'`);
   // (its OWN numbers, so its drawn catsuit's `top: 'catsuit'` and anything the builder adds later come with it)

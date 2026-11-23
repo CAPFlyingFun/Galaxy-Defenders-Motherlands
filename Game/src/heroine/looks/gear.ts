@@ -60,7 +60,29 @@ function catsuitGear(o: { boot: string; trim: string; accent: string; sole: stri
   };
 }
 
+/**
+ * MARY'S SUITS' GEAR (marySuits.ts; Joshua's board, M1-M3): a near-black belt with the suit's `accent` on its buckle and
+ * fittings, slung on her hips, with holsters and pouches; dark guns glowing the accent; low flat combat boots, dark gray,
+ * the accent round their tops and down their fronts (the board's ankle boots); the suit glossy, as on the board.
+ */
+function marySuitGear(accent: string): LookGear {
+  const a = parseInt(accent.slice(1), 16);
+  return {
+    belt: { belt: 0x1b1c20, edge: 0x34373d, buckle: 0xb8bcc4, accent: a, strap: 0x1b1c20, holster: 0x131417, plate: 0x26282d },
+    beltLine: [-0.06, 0.035, 0.1],
+    // (glossy as the board's suits, a satin rather than a latex: 0.34 read as latex)
+    clothShine: { cloth: 0.46, trim: 0.3 },
+    gun: { metal: 0x16171a, glow: a },
+    // (low boots: their tops 70% of the way down her shin)
+    pieces: { plate: '#202226', trim: '#141518', accent, sole: '#0b0b0d', glow: '', boots: true, cuffs: false, shoulders: false, bootTop: 0.7 },
+  };
+}
+
 export const LOOK_GEAR: Readonly<Record<string, LookGear>> = {
+  /** MARY'S CATSUITS (marySuits.ts): M1 teal, M2 orange, M3 red. */
+  maryResearchSuit: marySuitGear('#18c6c8'),
+  maryExplorerSuit: marySuitGear('#f2961c'),
+  maryStealthSuit: marySuitGear('#e0141c'),
   // THE CATSUIT COLOURS, each in its three styles (catsuitStyles.ts): the same gear for every style
   ...inThreeStyles({
     /** THE GOLD CATSUIT: gold boots, a black belt with gold fittings, black guns glowing gold; a metal sheen. */

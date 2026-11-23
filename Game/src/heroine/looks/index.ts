@@ -13,6 +13,7 @@ import { SPACE_HEROINE_LOOK } from './spaceHeroine';
 import { BRONZE_SUIT_HIGH_LOOK, BRONZE_SUIT_LOOK, BRONZE_SUIT_LOW_LOOK } from './bronzeSuit';
 import { COLOUR_CATSUIT_LOOKS, TWO_TONE_LOOKS } from './catsuitStyles';
 import { JOHN_LOOK } from './john';
+import { MARY_EXPLORER_SUIT_LOOK, MARY_RESEARCH_SUIT_LOOK, MARY_STEALTH_SUIT_LOOK } from './marySuits';
 import { asMary } from './maryHead';
 
 /**
@@ -42,6 +43,10 @@ const SAVED_LOOKS: Readonly<Record<string, HeroineLook>> = {
   /** The same catsuit in more colours, and two tones (catsuitStyles.ts). */
   ...COLOUR_CATSUIT_LOOKS,
   ...TWO_TONE_LOOKS,
+  /** Mary's catsuits M1-M3 (marySuits.ts; Joshua's board of Mary's and John's suits, 2026-11-22). */
+  maryResearchSuit: MARY_RESEARCH_SUIT_LOOK,
+  maryExplorerSuit: MARY_EXPLORER_SUIT_LOOK,
+  maryStealthSuit: MARY_STEALTH_SUIT_LOOK,
   /** John, Blaze's husband, as Joshua saved him (john.ts): the builder's male body. */
   john: JOHN_LOOK,
 };

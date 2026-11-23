@@ -954,6 +954,27 @@ use the game's single copy of three.js.
   prompt): freckles, two-tone irises, brow shapes, deeper face realism and a per-character skin overlay in the builder;
   her ears stand out less than the reference's (no slider turns an ear out); both mouths 15-20% narrow, her chin short,
   both jaws narrow (left as they were).
+- v0.2.159: MARY'S THREE CATSUITS, M1-M3 (Joshua, 2026-11-22, ChatGPT's board of Mary's and John's suits,
+  `docs/reference/outfits/mary-john-catsuits-m1-m3-j1-j3.jpg`, compressed, with the casual board
+  `mary-john-casual-options-m1-m6-j1-j6.jpg` and his plain catsuit's screenshot, saved at his word: "can save to your
+  work Branch for later"; "starting with the 3 images in the first image, once I approve those, can move to the
+  other's"). `looks/marySuits.ts`: ALL PAINT, nothing new in 3D. Layer 1 HIS PLAIN CATSUIT EXACTLY AS SAVED (his
+  export of 2026-11-23, `docs/reference/characters/character-blaze-plain-catsuit-2026-11-23.json`: the builder's Full
+  bodysuit, mock collar 1.1, black athletic knit; the catsuits' `EXPORT_BODY`), layer 2 the gap under its collar
+  filled (`fillCleavage(1.1, 0.55)`: from the usual 0.7 a slit of skin showed under her cleavage), layers 3-4 painted
+  by code in the smooth Flat cloth: SHOULDER CAPS (her shoulder tops on her trunk, measured in DEGREES: near her neck
+  her trunk is narrow, a width in lengths ran right across her chest), a SIDE BAND curving in at her waist
+  (`band`, a stripe whose width changes), stripes down her arms and legs, wrist CUFFS, a RING round each knee
+  (`kneeRing`). M1 A.R.C.H. RESEARCH SUIT `maryResearchSuit` teal with white stripes beside it; M2 SUBTERRANEAN EXPLORER
+  `maryExplorerSuit` orange, broad bands, bold knee rings; M3 STEALTH OPERATIVE `maryStealthSuit` thin red lines. Gear
+  (`looks/gear.ts` `marySuitGear`): a near-black belt with the suit's colour on its fittings, holsters and pouches, guns
+  glowing it, LOW boots (`bootTop` 0.7) with it round their tops; the cloth satin-glossy (0.46; 0.34 read as latex).
+  Settings -> Outfit, with thumbnails; worn as Mary (her head and freckles). Checked: front, three-quarter, side and
+  back against the board; a 0% and a 200% belly (the paint stretches with her: at 200% M2's waist band is a broad patch
+  on the side of her belly, as baked paint is); the built game in M1 (packed BC7, no errors). Left for later: the
+  A.R.C.H. emblem on the chest (a small painted shape comes out ragged), the board's slimmer ankle boots. MARY'S
+  CASUAL SET (the tee, tank and zip top of the other board) is written in `looks/casualSets.ts` and NOT in the game:
+  his order is these first.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

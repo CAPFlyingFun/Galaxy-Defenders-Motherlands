@@ -100,6 +100,34 @@ export const BELT = Object.freeze({
   clipShows: 0.016,
 });
 
+/**
+ * A PAINTED SHIRT'S HEM BAND, made as the belt is (`BeltGearSource.hem`): a band round her, pinned to her skin and
+ * pulled straight across every hollow (between her legs, between her cheeks: `bridgeHollows`), whose BOTTOM EDGE is
+ * one level line, the shirt's own hem, so the shirt ends flat as the builder's does. It is a little lower than where
+ * the paint ends (`below`), so the paint's own edge is under it, and lies just off her skin (thin: cloth, not leather).
+ * ITS TOP IS TUCKED ONTO HER (Joshua, 2026-11-23: "can you place the belt as a layer between the leggings and shirt so
+ * it blends"): the shirt is paint, with no thickness to go under, so instead the band's top edge lies on her skin
+ * (`flush` off it, over her painted shirt in the same knit) and its face slopes out to `standOff` + `thick` at its
+ * bottom: no ledge where the shirt's paint runs into it, only the hem standing off her.
+ */
+export const HEM = Object.freeze({
+  /** Its height, top edge to bottom edge (metres). */
+  width: 0.03,
+  /** Its bottom edge this far under where the shirt's paint ends. */
+  below: 0.003,
+  /** Its top edge off her skin: on her, a hair over her painted shirt so the two do not flicker. */
+  flush: 0.0006,
+  /** Level lines from its top to its bottom edge: it lies along her skin's curve between them. */
+  lines: 5,
+  /** At its bottom edge: its inner face off her skin, and its thickness. */
+  standOff: 0.0015,
+  thick: 0.0012,
+  /** How thick a slice of her skin is read at its two heights, for how far out she is there. */
+  slab: 0.008,
+  /** Its cloth: matte, as the builder's athletic knit (fabricLibrary.ts: 0.72), and never metallic. */
+  roughness: 0.75,
+});
+
 /** The colours (one material with each point's own colour: one draw). An outfit can change any of them (`colours`). */
 export const BELT_COLOURS = Object.freeze({
   // (gunmetal grey with lighter edges: her leggings are black, and a black belt on them could not be seen)
@@ -160,6 +188,18 @@ export interface BeltGearSource {
   readonly holsters?: readonly Hand[];
   /** False: no clip pouches (and so no reloading from the belt, only at the table). Left out: the six pouches. */
   readonly pouches?: boolean;
+  /**
+   * A PAINTED SHIRT'S HEM BAND (`HEM`; Joshua, 2026-11-23, of Mary's casual tops: "would the simple way it create like
+   * another belt that follows her bottom edging with matching color"): where her shirt's paint ends, metres over her hip
+   * joints (level all round her: the bake's `drape.aboveHips`), and the shirt's colour there (0xrrggbb, as baked).
+   */
+  readonly hem?: { readonly aboveHips: number; readonly colour: number };
+  /**
+   * Her skin's points AS BAKED (her mesh's own units, as `points`): where her painted shirt's hem is a level line. With
+   * them the hem band is laid on her skin there ONCE and then rides that same skin as her shape changes, as the paint
+   * does (`HEM`); without them it is laid level again on her shape as it is now.
+   */
+  readonly bakedPoints?: Float32Array;
 }
 
 export interface BeltGear {
@@ -201,6 +241,8 @@ export interface BeltGear {
   side(hand: Hand): number[];
   /** Her belly changed shape: the belt and straps are laid again on her skin as it is now. */
   reshape(points: Float32Array, belly: number): void;
+  /** A painted shirt's hem band (`BeltGearSource.hem`): the mesh it is drawn in and its own material, or null. */
+  readonly hem: { readonly mesh: THREE.SkinnedMesh; readonly material: THREE.MeshStandardMaterial } | null;
   /** For the tests: the belt's line (top edge height at the front, side and back), and how many skin points it was found on. */
   info(): { trim: number; front: number; side: number; back: number; holster: Record<Hand, number[]> };
   dispose(): void;
@@ -654,7 +696,7 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
    * than `BELT.hollowLeast`, the belt there is blended straight across from the two places either side where it touches
    * her (as across the gap between her legs, at her front). Her front is left to `hugBody`.
    */
-  function bridgeHollows(edge: Spot[]): void {
+  function bridgeHollows(edge: Spot[]): { k: number; a: number; b: number; t: number }[] {
     const at = new THREE.Vector3();
     const xs = new Float64Array(N), zs = new Float64Array(N);
     for (let k = 0; k < N; k++) { spotPlace(edge[k], at); xs[k] = at.x - cx; zs[k] = at.z - cz; }
@@ -675,7 +717,8 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     for (const k of lower) touches[k] = 1;
     for (const k of upper) touches[k] = 1;
     // each place at her back that does not touch it: how far in from the line between its touching neighbours
-    const fresh: (Spot | null)[] = new Array(N).fill(null);
+    // (and the blends made, each from which two places and how far between: the hem band reads them, `bridgeHem`)
+    const fresh: (Spot | null)[] = new Array(N).fill(null), made: { k: number; a: number; b: number; t: number }[] = [];
     for (let k = 0; k < N; k++) {
       if (touches[k] || Math.cos((k / N) * Math.PI * 2) > -BELT.hollowFrom) continue;
       let l = -1, r = -1;
@@ -689,8 +732,10 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       const lx = xs[a] + (xs[b] - xs[a]) * t, lz = zs[a] + (zs[b] - zs[a]) * t;
       if (Math.hypot(lx, lz) - Math.hypot(xs[k], zs[k]) < BELT.hollowLeast) continue;
       fresh[k] = blendSpot(edge[a], edge[b], t);
+      made.push({ k, a, b, t });
     }
     for (let k = 0; k < N; k++) { const f = fresh[k]; if (f) { edge[k].v = f.v; edge[k].w = f.w; } }
+    return made;
   }
   /** (step 4's blends, kept until every angle's is worked out: each is made from its neighbours' unblended spots) */
   const gapTop: (Spot | null)[] = new Array(N).fill(null), gapBottom: (Spot | null)[] = new Array(N).fill(null);
@@ -894,6 +939,146 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
     return { v, w };
   }
 
+  // ---- 3b. A PAINTED SHIRT'S HEM BAND (`HEM`): level all round her at the shirt's hem, straight across her hollows ---
+  // A few level LINES round her from its top to its bottom edge (HEM.lines), a spot under each place round her on each
+  // (her slices, as the belt's), so the band lies along her skin's curve between them however it bends (two edges
+  // alone made a flat strip, and across the curve under a belly of 100% it went into her: torn bits of it showed). Its
+  // triangles are the last of the pinned piece's, drawn in a cloth material of their own (`hemFrom`).
+  /**
+   * THE BAND RIDES THE PAINT'S OWN SKIN (Joshua, 2026-11-23, of the band at a big belly: "it's riding too high on the
+   * bigger bellies. It needs to follow the paint edge"). The shirt's paint ends on a level line on her skin AS BAKED;
+   * as her belly grows that skin is drawn down and out under it, and the paint's edge with it, while a band laid level
+   * again at her hips' height each time stayed where it was, above it. So, given her points as baked, its lines' spots
+   * are found on THAT shape, once (`hemBase`: the same few skin points), with how far up or down each must go to be
+   * exactly level there (`hemLevelFix`); after that they are never chosen again: as her shape changes they go where
+   * those skin points go, as the paint does.
+   * ...AND IS PULLED ACROSS HER HOLLOWS AS SHE IS NOW (Joshua: "make sure it follows around the belly and everything
+   * with the offset around the buttock and front at smaller belly sizes"): each time her shape changes, each line is
+   * pulled straight across wherever it dips in under the outline a band stretched round her would take, seen from
+   * above (`bridgeHollows`, all the way round: between her cheeks, across the tops of her thighs in front), on her
+   * shape as it is NOW: so a small belly has it spanning her front and her seat, and a big one, whose front stands
+   * out, has it lying on her bump. And its points stand off her skin along her skin's own facing there, as the band
+   * lies now (`pushHem`), not straight out level: under a bump her skin faces down.
+   */
+  const bakedRest = src.hem && src.bakedPoints && src.bakedPoints.length === src.points.length ? new Float32Array(count * 3) : null;
+  if (bakedRest) {
+    const p = new THREE.Vector3();
+    for (let v = 0; v < count; v++) { p.fromArray(src.bakedPoints!, v * 3).applyMatrix4(meshToRest); bakedRest[v * 3] = p.x; bakedRest[v * 3 + 1] = p.y; bakedRest[v * 3 + 2] = p.z; }
+  }
+  /** Do `work` on her shape as baked (her rest points swapped for it, and put back). */
+  const onBaked = (work: () => void): void => {
+    if (!bakedRest) { work(); return; }
+    const now = rest.slice();
+    rest.set(bakedRest);
+    try { work(); } finally { rest.set(now); }
+  };
+  /** Its lines' heights, top first (rest frame, metres): its bottom HEM.below under where the paint ends. */
+  const hemHeights = (): number[] => {
+    const bottom = hipY + (src.hem ? src.hem.aboveHips : 0) - HEM.below;
+    return Array.from({ length: HEM.lines }, (_, i) => bottom + HEM.width * (1 - i / (HEM.lines - 1)));
+  };
+  /** How far each line stands off her skin, top first: tucked onto her at its top, its thickness out at its bottom. */
+  const hemOffs = Array.from({ length: HEM.lines }, (_, i) => HEM.flush + (HEM.standOff + HEM.thick - HEM.flush) * (i / (HEM.lines - 1)));
+  /** Each line's spots as chosen (never pulled across a hollow), its spots as now (the pinned points' own), and its fix up or down to level. */
+  const hemBase: Spot[][] = [], hemLines: Spot[][] = [], hemLevelFix: Float32Array[] = [];
+  /** ...and that fix for each place as the lines are pulled across now (a pulled place: the two it is pulled between's, blended). */
+  const hemFixNow: Float32Array[] = [];
+  /**
+   * How far INSIDE her skin each chosen spot lies, straight out (a spot is the mix of a few of her skin's points, and a
+   * mix of points on a curve lies inside it), added to how far that place stands off her, and the same as pulled now.
+   * Without it her skin came through its top edge, tucked 0.6 mm onto her, in a scallop under her belly (M1, 0%).
+   */
+  const hemInset: Float32Array[] = [], hemInsetNow: Float32Array[] = [];
+  /** Every pinned point of the band: its line, its place round her, how far off her skin, and the way it lies (its bottom edge's two rows face down). */
+  const hemPoints: { line: number; k: number; off: number; point: number }[] = [];
+  let hemFrom = -1;
+  /** Choose its lines' spots on her shape as it is (the baked one, when it rides it): level, on her outside. */
+  const placeHemBase = (): void => {
+    if (!src.hem) return;
+    // her skin round her middle, by angle (the band's own slices)
+    const bins: number[][] = Array.from({ length: N }, () => []);
+    for (const v of middle) {
+      const dx = rest[v * 3] - cx, dz = rest[v * 3 + 2] - cz;
+      bins[(Math.round((((Math.atan2(dx, dz) / (Math.PI * 2)) * N) % N) + N) % N)].push(v);
+    }
+    const at = new THREE.Vector3();
+    hemHeights().forEach((y, i) => {
+      // how far out she is at that height in each slice (none: the gap between her legs, taken from the slices beside)
+      const r = new Float32Array(N);
+      for (let k = 0; k < N; k++) for (const v of bins[k]) if (Math.abs(rest[v * 3 + 1] - y) < HEM.slab) r[k] = Math.max(r[k], Math.hypot(rest[v * 3] - cx, rest[v * 3 + 2] - cz));
+      for (let pass = 0; pass < N && r.some((x) => x <= 0); pass++) {
+        const was = r.slice();
+        for (let k = 0; k < N; k++) if (was[k] <= 0) r[k] = Math.max(was[(k + N - 1) % N], was[(k + 1) % N]);
+      }
+      const base: Spot[] = [], fix = new Float32Array(N), inset = new Float32Array(N);
+      for (let k = 0; k < N; k++) {
+        const out = outwardAt((k / N) * Math.PI * 2);
+        const spot = spotAt(new THREE.Vector3(cx + out.x * r[k], y, cz + out.z * r[k]), middle, at, out);
+        base.push(spot);
+        fix[k] = y - at.y;
+        // (the furthest out of its skin points, straight out from the spot)
+        for (const v of spot.v) inset[k] = Math.max(inset[k], (rest[v * 3] - at.x) * out.x + (rest[v * 3 + 2] - at.z) * out.z);
+      }
+      hemBase[i] = base; hemLevelFix[i] = fix; hemInset[i] = inset;
+      if (!hemLines[i]) hemLines[i] = base.map((b) => ({ v: b.v, w: b.w }));
+      if (!hemFixNow[i]) hemFixNow[i] = new Float32Array(N);
+      if (!hemInsetNow[i]) hemInsetNow[i] = new Float32Array(N);
+    });
+  };
+  /** Each line pulled straight across her hollows as she is shaped NOW, from its spots as chosen. */
+  const bridgeHem = (): void => {
+    for (let i = 0; i < hemLines.length; i++) {
+      const line = hemLines[i], base = hemBase[i], fix = hemLevelFix[i], now = hemFixNow[i], inset = hemInset[i], insetNow = hemInsetNow[i];
+      for (let k = 0; k < N; k++) { line[k].v = base[k].v; line[k].w = base[k].w; }
+      now.set(fix); insetNow.set(inset);
+      for (const { k, a, b, t } of bridgeHollows(line)) { now[k] = fix[a] * (1 - t) + fix[b] * t; insetNow[k] = inset[a] * (1 - t) + inset[b] * t; }
+    }
+  };
+  /** Each point's push: off her skin along its facing as the band lies now, and up or down to its line's level. */
+  const pushHem = (): void => {
+    if (!hemLines.length) return;
+    const L = hemLines.length, at: THREE.Vector3[][] = hemLines.map((line) => line.map((spot) => spotPlace(spot, new THREE.Vector3())));
+    const u = new THREE.Vector3(), w = new THREE.Vector3(), n = new THREE.Vector3();
+    for (const p of hemPoints) {
+      const i = p.line, k = p.k, row = at[i];
+      u.subVectors(row[(k + 1) % N], row[(k + N - 1) % N]);
+      w.subVectors(at[Math.min(L - 1, i + 1)][k], at[Math.max(0, i - 1)][k]);
+      n.crossVectors(u, w);
+      // (facing out from her: the same side as straight out level there)
+      const out = outwardAt((k / N) * Math.PI * 2);
+      if (n.x * out.x + n.z * out.z < 0) n.negate();
+      if (n.lengthSq() < 1e-14) n.copy(out); else n.normalize();
+      const off = p.off + hemInsetNow[i][k];
+      pinned.push[p.point * 3] = n.x * off;
+      pinned.push[p.point * 3 + 1] = n.y * off + hemFixNow[i][k];
+      pinned.push[p.point * 3 + 2] = n.z * off;
+    }
+  };
+  /** Laid again on her shape as it is now (no baked shape to ride: `bakedRest`). */
+  const placeHem = (): void => { placeHemBase(); bridgeHem(); pushHem(); };
+  if (src.hem) {
+    onBaked(placeHemBase);
+    bridgeHem();
+    const colour = linear(src.hem.colour), at = new THREE.Vector3(), push = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
+    hemFrom = pinned.index.length;
+    // a row of its points: on a line's spots, so far off her skin, facing so (its push is worked out by `pushHem`)
+    const row = (line: number, off: number, hint: (k: number) => THREE.Vector3): number[] =>
+      hemLines[line].map((spot, k) => {
+        spotPlace(spot, at);
+        push.set(0, hemFixNow[line][k], 0);
+        const point = pinned.point(spot, push, hint(k), colour, at.add(push));
+        hemPoints.push({ line, k, off, point });
+        return point;
+      });
+    const outwardOf = (k: number) => outwardAt((k / N) * Math.PI * 2), last = HEM.lines - 1, outer = HEM.standOff + HEM.thick;
+    // its outer face, line to line, from its top tucked onto her to its bottom standing off her; then its bottom edge
+    // (facing down): the shirt's hem, flat
+    const face = hemOffs.map((off, i) => row(i, off, outwardOf));
+    for (let i = 0; i < last; i++) pinned.strip(face[i], face[i + 1], true);
+    pinned.strip(row(last, outer, () => down), row(last, HEM.standOff, () => down), true);
+    pushHem();
+  }
+
   // ---- 4. THE PINNED PIECE: belt, buckle, straps; one skinned mesh on her own skeleton ------------------------------
   const pointCount = pinned.spots.length;
   const geometry = new THREE.BufferGeometry();
@@ -961,7 +1146,13 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
   lay(src.points);
 
   const beltMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.3 });
-  const belt = new THREE.SkinnedMesh(geometry, beltMaterial);
+  // (the shirt's hem band, if she has one: the last of the triangles, in cloth)
+  const hemMaterial = src.hem ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: HEM.roughness, metalness: 0 }) : null;
+  if (hemMaterial && hemFrom >= 0) {
+    geometry.addGroup(0, hemFrom, 0);
+    geometry.addGroup(hemFrom, pinned.index.length - hemFrom, 1);
+  }
+  const belt = new THREE.SkinnedMesh(geometry, hemMaterial ? [beltMaterial, hemMaterial] : beltMaterial);
   belt.name = 'belt-and-straps';
   belt.matrix.copy(skin.matrix);
   belt.matrix.decompose(belt.position, belt.quaternion, belt.scale);
@@ -1107,12 +1298,16 @@ export function buildBeltGear(src: BeltGearSource): BeltGear {
       const p = new THREE.Vector3();
       for (let v = 0; v < count; v++) { p.fromArray(points, v * 3).applyMatrix4(meshToRest); rest[v * 3] = p.x; rest[v * 3 + 1] = p.y; rest[v * 3 + 2] = p.z; }
       placeBelt(belly);
+      // (the hem band rides the skin its paint is on, pulled across her hollows as she is now; laid afresh only if it
+      //  has no baked shape to ride)
+      if (bakedRest) { bridgeHem(); pushHem(); } else placeHem();
       weigh();
       lay(points);
     },
+    hem: hemMaterial ? { mesh: belt, material: hemMaterial } : null,
     info: () => ({ trim: trimPoints, front: +where(0).toFixed(3), side: +where(90).toFixed(3), back: +where(180).toFixed(3), holster: holsterInfo }),
     dispose(): void {
-      belt.removeFromParent(); geometry.dispose(); beltMaterial.dispose();
+      belt.removeFromParent(); geometry.dispose(); beltMaterial.dispose(); hemMaterial?.dispose();
       for (const mesh of holsterMeshes) { mesh.removeFromParent(); mesh.geometry.dispose(); }
       pouchMesh.removeFromParent(); pouchGeometry.dispose(); holsterMaterial.dispose();
       clipMesh.removeFromParent(); clipMesh.dispose(); clipShape.geometry.dispose(); emptyBase.dispose();

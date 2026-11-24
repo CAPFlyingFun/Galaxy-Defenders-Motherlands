@@ -28,6 +28,7 @@ import { unpackWaist } from '../liveWaist';
 import { unpackPieces, type BakedPiece } from './piecesFile';
 import { loadPackedSized, packedPicturesOn } from './packedPictures';
 import { decodeSized, keepSized, textureCap } from '../../core/textureSizes';
+import type { HemKnit } from '../shirtHem';
 
 export interface BakedLookManifest {
   readonly version: 1;
@@ -61,7 +62,7 @@ export interface BakedLookManifest {
    */
   readonly body?: 'v2-body' | 'male-base';
   /** File names, beside look.json. */
-  readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null; readonly band?: string; readonly waist?: string };
+  readonly files: { readonly albedo: string; readonly normal: string; readonly surface: string; readonly shape: string; readonly pieces: string | null; readonly band?: string; readonly waist?: string; readonly drape?: string };
   /** A LIVE BAND the game draws on her (liveBand.ts; its numbers in `files.band`): its colour, '#rrggbb'. */
   readonly band?: { readonly colour: string };
   /**
@@ -69,6 +70,18 @@ export interface BakedLookManifest {
    * roughness as baked just under their baked line, and the bellies (%) each of its lines is for.
    */
   readonly waist?: { readonly colour: string; readonly roughness: number; readonly bellies: readonly number[] };
+  /**
+   * A PAINTED SHIRT'S HEM BAND the game draws as a belt-like band (beltGear.ts `hem`): where the shirt's paint ends,
+   * metres over her hip joints (level all round her), the shirt's colour just above there ('#rrggbb'), and its knit
+   * (shirtHem.ts `HemKnit`: the band is dressed in the shirt's own swatch, at the size the room lays it on her).
+   */
+  readonly hem?: { readonly aboveHips: number; readonly colour: string; readonly knit?: HemKnit };
+  /**
+   * A PAINTED SHIRT'S HEM RUN LIVE (liveDrape.ts): which paint layer is the shirt (its paint at each of her points in
+   * `files.drape`), its template's length (its hem, the builder's `shirtHem`), its knit, and what is under it where the
+   * drape takes its paint off (outfitMaterial.ts HEM_GLSL): the colour ('#rrggbb') and roughness of the leggings' fabric.
+   */
+  readonly drape?: { readonly layer: number; readonly length: number; readonly knit: HemKnit; readonly under: string; readonly underRoughness: number };
   /**
    * HER BIG PICTURES PACKED for the graphics chip (scripts/make_ktx2.py; packedPictures.ts), when the look has them:
    * the .ktx2 files, her colour at 1024 for the CPU (the belt's waistband), and when they were made (a mark on their
@@ -96,6 +109,8 @@ export interface BakedLook {
   readonly band: Float32Array | null;
   /** Her live waistband's numbers, six a point (under each of its lines, then its baked one: liveWaist.ts), or null. */
   readonly waist: Int16Array | null;
+  /** How much of her painted shirt covers each of her points, 0-255 (liveDrape.ts), or null when her hem is not live. */
+  readonly drapeCover: Uint8Array | null;
   /** The outfit's extra pieces (empty when it has none), and their pictures by file name. */
   readonly pieces: readonly BakedPiece[];
   readonly piecePictures: ReadonlyMap<string, THREE.Texture>;
@@ -209,17 +224,20 @@ export async function loadBakedLook(look: string, renderer?: THREE.WebGLRenderer
   const pieceBytes = manifest.files.pieces ? await bytesOf(manifest.files.pieces) : null;
   const bandBytes = manifest.files.band ? await bytesOf(manifest.files.band) : null;
   const waistBytes = manifest.files.waist ? await bytesOf(manifest.files.waist) : null;
+  const drapeBytes = manifest.files.drape ? await bytesOf(manifest.files.drape) : null;
   // (her colour for the page to read: the small copy when the big one is packed)
   const small = packed ? await loadBitmap(folder + packed.albedoSmall + packedMark) : null;
   const shape = unpackShape(shapeBytes);
   const pieces = pieceBytes ? unpackPieces(pieceBytes) : [];
   const band = bandBytes ? unpackBand(bandBytes, manifest.vertexCount) : null;
   const waist = waistBytes ? unpackWaist(waistBytes, manifest.vertexCount) : null;
+  // (one byte a point, as the bake wrote it)
+  const drapeCover = drapeBytes && drapeBytes.byteLength === manifest.vertexCount ? new Uint8Array(drapeBytes) : null;
   // the pieces' own pictures (her two sneakers share one)
   const piecePictures = new Map<string, THREE.Texture>();
   for (const name of new Set(pieces.map((p) => p.map).filter((m): m is string => !!m))) piecePictures.set(name, await loadPicture(folder + name + bake, true));
   return {
-    manifest, albedo, normal, surface, shape, band, waist, pieces, piecePictures,
+    manifest, albedo, normal, surface, shape, band, waist, drapeCover, pieces, piecePictures,
     cpuPicture: small ?? ((albedo.image as CanvasImageSource | undefined) ?? null),
     isPacked: !!packed && !fellBack,
     megabytes: fetchedBytes / 1048576,

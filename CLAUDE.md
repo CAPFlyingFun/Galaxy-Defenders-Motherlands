@@ -293,7 +293,10 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.73 (copied 2026-11-23 from its `main` 941b8ea at Joshua's word, "go ahead as well on the builder":
+- THE BUILDER, v0.9.74 (copied 2026-11-23 from its `main` 00bb88e at Joshua's word, "the other agent is pushing V0.9.74
+  of CCBS now so you can use what it did for the leggings": the under-belly leggings' waistband follows the belly slider
+  by his five settings, `paintTemplates.ts` `UNDER_BELLY_FOLLOW`; see v0.2.163). Before that v0.9.73
+  (copied 2026-11-23 from its `main` 941b8ea at Joshua's word, "go ahead as well on the builder":
   a face's details for every character, made for Mary and John: freckles, a two-tone iris, brow shape, an eyelid crease,
   deep-set eyes, smile lines, a philtrum, a skin picture over the skin; since v0.9.72 his body wears his own skin, so
   builderRoom.ts 5c finds it on him already). Before that v0.9.71 (copied 2026-11-21 from its `main` a2bf91c at Joshua's
@@ -1084,14 +1087,71 @@ use the game's single copy of three.js.
   cloth counted in): her top is a layer over them, and where his line is higher than her top's hem (M6's back at 0%,
   0.37 against the crop's 0.29) they were drawn over the bottom of her shirt (Joshua: "the bottom of the shirt was
   ragged"). From 1 cm over the baked line down they are drawn over cloth too (their own edging: the builder bakes a
-  faint light line along it). NOT MATCHED YET: at 50 and 100% the builder draws an under-belly waistband as a HOOP
+  faint light line along it). NOT MATCHED YET (MATCHED in v0.2.163: the game's lines are the builder's hoop now): at 50
+  and 100% the builder draws an under-belly waistband as a HOOP
   (bottomCut.ts `stayAt`, `swingOf`; fabricMaterial.ts: a band hinged at her back, swung down by how her front stands
   now, bridging under her belly in a U), the game its line along her skin (a point under her belly: Joshua, "too
   low/pointed"). Also seen, not ours: light specks along the crop tees' hem on bare skin (with skin depth off too).
-  On the builder's own body (Body: Visual) the leggings are at the baked numbers. Joshua has asked the BUILDER'S agent
-  to make the under-belly leggings follow the belly slider by his five settings: on that copy, read them from the
-  builder instead of `UNDER_BELLY_WAIST`. LEFT FOR LATER: the crop tees' own hem is baked paint, and stretched over a
+  On the builder's own body (Body: Visual) the leggings are at the baked numbers. Joshua had the BUILDER'S agent
+  make the under-belly leggings follow the belly slider by his settings (v0.9.74): `UNDER_BELLY_WAIST` is read from the
+  builder since v0.2.163. LEFT FOR LATER: the crop tees' own hem is baked paint, and stretched over a
   belly of 100% and more its edge steps on the picture's pixels.
+- v0.2.163: BUILDER v0.9.74, THE UNDER-BELLY WAISTBAND AS THE BUILDER'S HOOP, M3'S NECKLINE, AND A PAINTED SHIRT'S HEM AS A
+  BAND (Joshua, 2026-11-23). (1) BUILDER v0.9.74 (see THE BUILDER above); EVERY OUTFIT RE-BAKED on it (his standing
+  rule: all 29 looks, skin heights, packed pictures and all 180 thumbnails; the thumbnails before and after pictured, the
+  same but for M1-M6). (2) M5/M6'S WAISTBAND IS THE BUILDER'S OWN:
+  casualSets.ts `UNDER_BELLY_WAIST` is its `UNDER_BELLY_FOLLOW` (his settings at 0 to 200% by 25s), and under her belly
+  each line is THE BUILDER'S HOOP as it lies on her at that belly (bakeLook.ts `builderHoops`: for each key belly with a
+  hinge the room is set to it and her skin read, `bottomCut.hoopInside` on it, in trunk lengths; liveWaist.ts
+  `measureWaist(lines, told, ...)` takes those where given, the old line elsewhere): the U under her belly the builder
+  draws, not a point. (3) M3'S NECKLINE (his: "remove that purple part along that neckline... the reference image doesn't
+  have that stripe"; then "M3 looks good now"): see `raglanClear` in the v0.2.162 entry. (4) A PAINTED SHIRT'S HEM, M1-M4
+  (his: "why does the bottom of the shirt look weird compared to mine JSON I shared? It looks all ragged"; "Make it exactly
+  like CCBS and have it run live"; "Your band is not clean like CCBS… it's slightly high and fades at the end…. The way
+  bottom should be a flat line"; "would the simple way it create like another belt that follows her bottom edging with
+  matching color"; "Go live with it"; then, of the builder's own band in CCBS at a big belly: "make sure the edging is
+  touching the belly/shirt all around the body as it's actually offset in CCBS"; "Do your belt edging until the other
+  agent fixes it, plus it would save possible fps"; "make sure it follows around the belly and everything with the
+  offset around the buttock and front at smaller belly sizes"). The builder hangs a painted shirt's hem from a DRAPE (a
+  sheet round her hips, built again on her as she changes); baked once and moved on her bones in the game's own stance,
+  it and her skin a few mm under it took turns in front and its bottom edge came out a saw-tooth (tried: cut and faded
+  per pixel as the builder does, led 2 mm toward the eye, its bones smoothed along it, kept only where it hangs clear of
+  her); left out, the shirt's paint followed her skin into the creases at her pelvis.
+  NOW, THE BAND (casualSets.ts `hem: 'band'`, HeroineLook `hemBand` + `noTunicDrape`): the drape is not baked; the bake
+  levels her shirt's paint at the drape's own bottom row (bakeLook.ts `levelShirtHem`: her skin's hang value laid
+  straight across that height) and writes look.json `hem`: its height over her hip joints, its colour and THE SHIRT'S
+  KNIT (shirtHem.ts `HemKnit`: swatch, tint, one repeat in metres as the room lays it on her, 4.5 cm for his athletic at
+  stitch 1, and how matte the shirt is BAKED, its surface picture's median there, 0.922: at the fabric's own 0.72 the band
+  read lighter than M1's dark tee and M2's tank). The game draws a BAND made as her belt is (beltGear.ts `HEM`):
+  - 3 cm tall, FIVE LEVEL LINES from its top to its bottom (`HEM.lines`), so it bends with her skin (two edges alone
+    made a flat strip, which went into her under a 100% belly: torn bits of it showed);
+  - its BOTTOM EDGE one level line all round her, 3 mm under where the paint ends;
+  - RIDING THE PAINT'S OWN SKIN: its lines' spots are chosen ONCE on her shape as baked (`bakedPoints`, `hemBase`, with
+    each one's fix to exactly level, `hemLevelFix`), then go where those skin points go as her belly grows, as the paint
+    does (laid level again each time, it rode high at 150 and 200%: his "It needs to follow the paint edge");
+  - PULLED ACROSS HER HOLLOWS AS SHE IS NOW (`bridgeHem`, the belt's `bridgeHollows` all the way round, each time her
+    shape changes): small bellies have it spanning her front and her seat; a big one, whose front stands out, has it on
+    her bump;
+  - standing off her along her skin's own facing as the band lies now (`pushHem`; under a bump her skin faces down),
+    plus how far inside her skin each spot lies (`hemInset`: a spot is a mix of skin points, and a mix on a curve is
+    inside it; without it her skin came through its top in a scallop, M1 at 0%);
+  - in the SHIRT'S OWN KNIT (shirtHem.ts `dressInKnit`: the builder's swatch cut and dyed as its fabric panel does, laid
+    by the builder's fabric shader; its points' own colour switched off, or the knit came out 0.43 as bright);
+  - ITS TOP TUCKED ONTO HER (his: "can you place the belt as a layer between the leggings and shirt so it blends"; a
+    painted shirt has no thickness to go under): its top line 0.6 mm off her skin over the painted shirt, sloping out to
+    2.7 mm at the bottom: no ledge where the shirt runs into it.
+  Its cost: laid again only when her belly changes (a few ms), one more draw. Only a top with a LENGTH has one (the crop
+  tees, M5 and M6, have their own hem). Her side panels and M4's zip and spine piping stop at its top (the band is the
+  shirt's colour all round). PICTURED: M1-M4 close at 0, 100 and 200% from her front, three-quarter, side and back, M3
+  at 50, 125 and 150% too.
+  THE LIVE HEM, PARKED (casualSets.ts `hem: 'live'`, HeroineLook `liveDrape`; liveDrape.ts, shapedBody.ts `setHemHang`,
+  outfitMaterial.ts HEM_GLSL: in the tree, used by no look; the M3 snapshot on branch `live-hem-drape-v2-wip`): the
+  builder's own TunicDrape fitted on her in the game (about 0.27 s a fitting, again whenever her belly changes or she
+  settles into another stance), her shirt's paint left whole by the bake (`unhang`) and cut live by the drape's `hang`
+  (drape.bin, look.json `drape`: the shirt's cover and what is under it). It matches the builder, and so it stands off a
+  big belly as the builder's does (its fall rule, `DRAPE_SLOPE`, and its smoothing hold it out at her bump's outline).
+  Joshua is having the builder's agent fix that; when its copy comes, set M1-M4 to 'live' and check it against the band.
+  (A first live try that baked the cut once, at her baked belly: branch `live-hem-drape-wip`.)
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

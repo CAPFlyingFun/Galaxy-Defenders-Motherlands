@@ -1,6 +1,8 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `941b8ea`
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `00bb88e`
+(2026-11-23, v0.9.74: the under-belly leggings' waistband follows the belly slider by Joshua's five settings,
+`paintTemplates.ts` `UNDER_BELLY_FOLLOW`, `followedAt`). Before that: `941b8ea`
 (2026-11-23, v0.9.73: a face's details for every character, made for GDM's Mary and John: freckles, a two-tone iris,
 brow shape, an eyelid crease, deep-set eyes, smile lines, a philtrum, and a skin picture laid over the skin; and since
 v0.9.72 his body wears his own skin, never hers). Before that: `a2bf91c`

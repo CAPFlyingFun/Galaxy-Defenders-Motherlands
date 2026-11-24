@@ -46,6 +46,7 @@
 import type { HeroineLook } from '../heroineLook';
 import type { LiveBand } from '../liveBand';
 import { bakedWaist, type LiveWaist, type WaistNumbers } from '../liveWaist';
+import { UNDER_BELLY_FOLLOW } from '@charb/sarahlab/paintTemplates';
 import { turnBetween, type LegPlace, type MaskPainter } from '../paintMask';
 import { RADIANS, any, armStripe, band, kneeRing, painter, sideBand, through, LEG_PATH } from './suitShapes';
 import { fillCleavage } from './catsuit';
@@ -190,14 +191,21 @@ function casualLook(
   painted: readonly { readonly colour: string; readonly paint: MaskPainter }[] = [],
   side?: { readonly on: number; readonly trunk: LiveBand['trunk'] },
   waist?: LiveWaist['keys'],
+  /**
+   * Its shirt's hem: 'baked' the builder's drape baked as a piece (as in v0.2.162); 'band' a band the game makes as it
+   * makes her belt (`hemBand`); 'live' the builder's drape run live (`liveDrape`, held off until the builder's band
+   * touches her: see below).
+   */
+  hem: 'baked' | 'band' | 'live' = 'baked',
 ): HeroineLook {
-  // (a live waistband: his leggings, the first layer, baked at the least of his heights; the game moves their top
+  // (a live waistband: his leggings, the first layer, baked at the least of his heights, and NOT following her belly
+  //  in the builder's room as it bakes -- v0.9.74's `follow` -- whatever size she is baked at; the game moves their top
   //  between his lines as her belly grows: liveWaist.ts)
   const liveWaist: LiveWaist | null = waist ? { layer: 0, keys: waist } : null;
   const low = liveWaist ? bakedWaist(liveWaist) : null;
   const saved = clothes.layers.filter((layer) => layer !== null);
   const layers = low ? saved.map((layer, i) => i !== 0 || !layer.template ? layer : {
-    ...layer, template: { ...layer.template, params: { ...layer.template.params, riseFront: low[0], riseSide: low[1], riseBack: low[2], lowBowl: low[3] } },
+    ...layer, template: { ...layer.template, params: { ...layer.template.params, riseFront: low[0], riseSide: low[1], riseBack: low[2], lowBowl: low[3], follow: null } },
   }) : saved;
   const top = layers[1];
   const fill = neck !== null && top ? [{ choice: top.choice, detail: top.detail, template: null, mask: '' }] : [];
@@ -215,6 +223,22 @@ function casualLook(
       ...painted.map((p) => p.paint),
     ],
     ...(fill.length ? { noCleavageBridge: true } : {}),
+    // THE SHIRT'S HEM (Joshua, 2026-11-23: "why does the bottom of the shirt look weird compared to mine JSON I shared? It
+    // looks all ragged"). The builder hangs a painted shirt's level hem band round her hips and builds it again on her
+    // whenever her shape or stance changes; baked once and moved on her bones in the game's own stance, it and her skin
+    // a few millimetres under it took turns in front, and its bottom edge came out a saw-tooth. Two ways the game does
+    // it instead, both tried the same day:
+    // - 'live': the builder's own drape run on her (liveDrape.ts), her shirt's paint taken off under it by its numbers.
+    //   As in the builder it stands off a big belly (its fall rule holds it out at her bump's outline: Joshua's CCBS
+    //   picture of the henley at a big belly), and every fitting is about 0.27 s of work. Held off (Joshua: "Do your
+    //   belt edging until the other agent fixes it, plus it would save possible fps"; "hold off on live").
+    // - 'band': a band made as her belt is (beltGear.ts `HEM`), its bottom edge one level line, laid on her skin as
+    //   baked, where the shirt's paint ends, pulled straight across her hollows (front and seat), then riding that skin as
+    //   her belly grows, as the paint does; in the shirt's own knit, its top tucked onto her. The bake leaves the paint
+    //   ending on that level line (bakeLook.ts `levelShirtHem`).
+    // (Only a top with a length has one: the crop tees, M5 and M6, have none.) M3 first, then M1, M2 and M4 (Joshua,
+    // 2026-11-23: "For now, only do M3"; of M3 with the band: "Looks great so far").
+    ...(hem === 'band' ? { noTunicDrape: true, hemBand: true } : hem === 'live' ? { noTunicDrape: true, liveDrape: true } : {}),
     ...(side ? { liveBand: { colour: painted[side.on].colour, layer: first + side.on, trunk: side.trunk } } : {}),
     ...(liveWaist ? { liveWaist } : {}),
     // (the room's unnamed sheet over her crotch, in her skin's colour, is left out: heroineLook.ts)
@@ -245,19 +269,15 @@ const T = CASUAL_TRIMS;
 
 /**
  * THE UNDER-BELLY LEGGINGS' WAISTBAND, M5 and M6 (Joshua, 2026-11-23: set by hand in the builder at every 50% of her
- * belly and sent as his screenshots, "which I manually adjusted per every 50%"): at each, its front, side and back
- * heights up her trunk and its bowl (0.7, as he saved them). He sets WAISTBAND (FRONT) and HIPS & BACK RISE; the builder
- * moves the side with the back (paintTemplates.ts `riseBack`), 0.175 under it as in both his saves. Between two of his
- * bellies the game blends the two lines (liveWaist.ts `waistWeights`).
+ * belly, "which I manually adjusted per every 50%"; since builder v0.9.74 the builder's own, `UNDER_BELLY_FOLLOW`, its
+ * under-belly leggings following her belly slider by them): at each, its front, side and back heights up her trunk and
+ * its bowl (0.7, as he saved them). He sets WAISTBAND (FRONT) and HIPS & BACK RISE; the builder moves the side with the
+ * back (paintTemplates.ts `riseBack`), 0.175 under it as in both his saves. READ FROM THE BUILDER, so a change of his
+ * numbers there comes with the next copy of it. Between two of his bellies the game blends the two lines (liveWaist.ts
+ * `waistWeights`); the bake asks the builder where each line lies on her (`followedAt`, and its hoop under her belly).
  */
 const under = (front: number, back: number): WaistNumbers => [front, +(back - 0.175).toFixed(3), back, 0.7];
-export const UNDER_BELLY_WAIST: LiveWaist['keys'] = Object.freeze([
-  { belly: 0, waist: under(0.13, 0.37) },
-  { belly: 50, waist: under(-0.03, 0.33) },
-  { belly: 100, waist: under(-0.06, 0.3) },
-  { belly: 150, waist: under(-0.04, 0.27) },
-  { belly: 200, waist: under(-0.05, 0.24) },
-]);
+export const UNDER_BELLY_WAIST: LiveWaist['keys'] = Object.freeze(UNDER_BELLY_FOLLOW.map((k) => ({ belly: k.belly, waist: under(k.front, k.back) })));
 
 /**
  * M1 TECH TEE & LEGGINGS (his crew neck: the builder's drawn crew, 1.8 cm under the base of her neck). The board's
@@ -272,7 +292,7 @@ export const MARY_CASUAL_TEE_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M1, 0
       leg: (p, knee) => any(outerLeg(p, 0.13, 0.95, () => 0.005), kneeRing(p, knee, { wide: 0.045, tall: 0.06, half: 0.004, lift: 0.005 })),
     }),
   },
-], { on: 0, trunk: sidePanel(0.005, 0.004) });
+], { on: 0, trunk: sidePanel(0.005, 0.004) }, undefined, 'band');
 
 /**
  * M2 EXPLORER TANK SET. The board's charcoal side panels on his burgundy tank (live, under its armholes), and on the
@@ -282,7 +302,7 @@ export const MARY_CASUAL_TANK_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M2, 
   { colour: T.charcoal, paint: painter({}) },
   { colour: T.lightGrey, paint: painter({ leg: (p) => any(thighCurve(p, 0.007), shinCurve(p, 0.007)) }) },
   { colour: T.tankBurgundy, paint: painter({ leg: (p) => outerLeg(p, 0.13, 0.95, () => 0.004) }) },
-], { on: 0, trunk: sidePanel(0.03, 0.018, 0.74) });
+], { on: 0, trunk: sidePanel(0.03, 0.018, 0.74) }, undefined, 'band');
 
 /**
  * M3 ZIP TOP & LEGGINGS (the henley). The board's violet shoulders and sleeves (down to his violet sleeve bands) and
@@ -302,7 +322,7 @@ export const MARY_CASUAL_HENLEY_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M3
       leg: (p) => Math.min(outerLeg(p, 0.13, 0.9, through([[0.13, 0.011], [0.47, 0.017], [0.9, 0.01]])), before(p, 0.91, 0.01)),
     }),
   },
-], { on: 0, trunk: sidePanel(0.028, 0.018) });
+], { on: 0, trunk: sidePanel(0.028, 0.018) }, undefined, 'band');
 
 /**
  * M4 UTILITY ROMPER (the polo and shorts). The board's orange: shoulders and sleeves (down to his orange sleeve bands),
@@ -326,7 +346,7 @@ export const MARY_CASUAL_POLO_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M4, 
       leg: (p) => Math.min(outerLeg(p, -0.05, 0.2, () => 0.02), before(p, 0.23, 0.015)),
     }),
   },
-], { on: 0, trunk: sidePanel(0.026, 0.02) });
+], { on: 0, trunk: sidePanel(0.026, 0.02) }, undefined, 'band');
 
 /**
  * M5 CASUAL JACKET SET (the dark crop tee). The board's jacket colours: white over her shoulders and down the outside

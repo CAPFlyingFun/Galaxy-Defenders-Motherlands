@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryCasualTee",
-  "bakedAt": "2026-11-23T16:11:13.401Z",
-  "builderVersion": "0.9.73",
+  "bakedAt": "2026-11-23T23:30:29.554Z",
+  "builderVersion": "0.9.74",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.70034425763808,
+  "barefootHeightMetres": 1.700449163810051,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -34,6 +34,17 @@
   "band": {
     "colour": "#2f6fe0"
   },
+  "hem": {
+    "aboveHips": -0.0038,
+    "colour": "#14141a",
+    "knit": {
+      "family": "athletic",
+      "colour": 4,
+      "tileM": 0.04499,
+      "opacity": 1,
+      "roughness": 0.922
+    }
+  },
   "facts": {
     "drawnInTheRoom": [
       "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
@@ -47,9 +58,6 @@
       "sarahHair | sarahHair | 29764 triangles | skinned, 19145 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [
-      "tunicDrape: 7360 of 17120 triangles drawn",
-      "tunicDrape: kept 907 of 7360 drawn triangles (its hem band)",
-      "tunicDrape: 552 points, 907 triangles",
       "sneakerL-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
       "sneakerL-plain: 4090 points, 7280 triangles",
       "sneakerR-pictured: 5108 points, 9660 triangles, picture sneaker.webp",
@@ -57,11 +65,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.7164166978234465,
-    "pointsTheBuilderMoved": 51533,
-    "movedMostGeometryUnits": 0.1524414577069529,
+    "crownOverTheFloorMetres": 1.7165216039954174,
+    "pointsTheBuilderMoved": 51707,
+    "movedMostGeometryUnits": 0.15113828132590923,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.1614152963202605,
+    "restSkinSpread": 0.16324423359963136,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -75,7 +83,8 @@
     },
     "upperLidsAsBaked": 0.15,
     "liveBandPoints": 14137,
-    "albedoCoveredTexels": 7537039,
+    "liveWaistPoints": 0,
+    "albedoCoveredTexels": 7537150,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
   },
@@ -85,6 +94,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-23T17:59:46+00:00"
+    "packedAt": "2026-11-24T00:34:57+00:00"
   }
 }

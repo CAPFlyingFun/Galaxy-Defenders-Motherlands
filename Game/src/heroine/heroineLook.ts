@@ -75,12 +75,28 @@ export interface HeroineLook {
    */
   readonly onlyNamedPieces?: boolean;
   /**
-   * Leave out the builder's TUNIC DRAPE (tunicDrape.ts: the sheet a painted shirt hangs between her legs, from her waist
-   * to its hem, where paint cannot go). The game does not draw it as the builder does: in Mary's casual tees
-   * (casualSets.ts, 2026-11-23) it came out as a black sheet from her crotch to the floor. A painted shirt ends level
-   * just above her crotch without it.
+   * Leave out the builder's TUNIC DRAPE (tunicDrape.ts: the sheet a painted shirt hangs round her hips, a level hem
+   * band). The builder builds it again on her whenever she moves; baked once and moved on her bones in the game's own
+   * stance, it and her skin under it took turns in front and its bottom edge came out a saw-tooth (Mary's casual tops,
+   * casualSets.ts, 2026-11-23: "It looks all ragged"). Her shirt's paint ends on the band's level line all the same
+   * (bakeLook.ts `levelShirtHem`), and the game draws a band of its own there (`hemBand`).
    */
   readonly noTunicDrape?: boolean;
+  /**
+   * A PAINTED SHIRT'S HEM BAND drawn by the game (beltGear.ts `HEM`; Joshua, 2026-11-23: "another belt that follows her
+   * bottom edging with matching color"): a band made the way her belt is, level at the shirt's hem, straight across her
+   * hollows. The bake measures where the shirt's paint ends and its colour there (look.json `hem`), and leaves the
+   * builder's own hem band out (`noTunicDrape`).
+   */
+  readonly hemBand?: boolean;
+  /**
+   * A PAINTED SHIRT'S HEM RUN LIVE (liveDrape.ts; Joshua, 2026-11-23: "Go live with it… the live band that works and looks
+   * like CCBS"): the builder's own drape, fitted on her in the game as its room fits it, and her skin's shirt paint taken
+   * off under it by its numbers (outfitMaterial.ts HEM_GLSL). The bake leaves the shirt's paint whole (`unhang`), writes
+   * the shirt's cover at each of her points (drape.bin) and what is under it (look.json `drape`); set it with
+   * `noTunicDrape` (the drape is the game's, not a baked piece).
+   */
+  readonly liveDrape?: boolean;
   /**
    * MARKS ON HER SKIN that the builder cannot draw, painted onto her baked skin picture by the game's bake
    * (bake/skinMarks.ts): freckles, and warmth in her cheeks. Mary's (looks/maryHead.ts). Costs nothing in play: they

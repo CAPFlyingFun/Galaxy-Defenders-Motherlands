@@ -65,6 +65,8 @@ import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
 import { buildExtraPieces } from './extraPieces';
 import { buildBeltGear, type BeltGear } from './beltGear';
+import { dressInKnit } from '../shirtHem';
+import { makeLiveDrape, type LiveDrape } from './liveDrape';
 import { buildSuitGear, type SuitGear } from './suitGear';
 import { LOOK_GEAR } from '../looks/gear';
 import { loadFastHair, type FastHair } from './fastHair';
@@ -426,7 +428,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
         barefootHeightMetres: BAREFOOT_HEIGHT_METRES, navel: painted!.navel, normalScale: [1, 1], hair: painted!.hair,
         files: { albedo: '', normal: '', surface: '', shape: '', pieces: null },
       },
-      albedo: none, normal: none, surface: none, shape, band: null, waist: null, pieces: [], piecePictures: new Map(), megabytes: 0,
+      albedo: none, normal: none, surface: none, shape, band: null, waist: null, drapeCover: null, pieces: [], piecePictures: new Map(), megabytes: 0,
       cpuPicture: null, isPacked: false,   // (no picture of her to read: the belt goes round her middle by shape alone)
       dispose(): void { none.dispose(); },
     };
@@ -475,6 +477,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     band: look.band && smoothBand(look.band, fullIndex, look.shape.position),
     // (her live waistband's numbers, as the bake measured them the builder's way, each line at its own belly: liveWaist.ts)
     waist: look.waist,
+    // (her shirt's cover, when her hem runs live: liveDrape.ts)
+    hemCover: look.manifest.drape ? look.drapeCover : null,
   });
 
   // ---- 3. her detail levels ----------------------------------------------------------------------------------------
@@ -511,6 +515,10 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   const plainLevels = keepSharp ? new DetailLevels(maker, 2, fullIndex) : levels;
 
   // Her skin starts at full detail: the file's own geometry (all 43 shapes) is swapped for her baked one.
+  // (A LIVE HEM, liveDrape.ts: her body file's own rest points and directions are kept for it -- her map and the
+  //  fabric's pattern -- before the file's geometry is let go. Only for a look whose hem runs live.)
+  const drapeAs = look.manifest.drape && look.drapeCover ? look.manifest.drape : null;
+  const drapeRest = drapeAs ? { position: floats(fileGeometry.getAttribute('position'), 3), normal: floats(fileGeometry.getAttribute('normal'), 3) } : null;
   skin.geometry = body.build(100, fullIndex);
   fileGeometry.dispose();
   // (only her four motion shapes are on her now, in MOTION_SHAPES' order)
@@ -728,6 +736,19 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
       if (top - root.position.y < look.manifest.barefootHeightMetres * 0.45) continue;   // (it is all below her hips)
       for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) breath.patch(material);
     }
+  }
+  // ---- 7b. A PAINTED SHIRT'S HEM, RUN LIVE (liveDrape.ts; Joshua, 2026-11-23: "Go live with it"): the builder's own
+  // drape, on her, in the shirt's own fabric, and her skin's shirt paint taken off under it by its numbers, as the
+  // builder's room does. Fitted at her first frame, as she stands.
+  let drape: LiveDrape | null = null;
+  if (drapeAs && drapeRest && look.drapeCover) {
+    say('her shirt\'s hem');
+    drape = await makeLiveDrape({
+      skin, fileScene: file.scene, rest: drapeRest.position, restNormal: drapeRest.normal,
+      skinIndex: holdIndex, skinWeight: holdWeight, points: () => body.points,
+      motion: MOTION_SHAPES.map((_, k) => body.motionMoves(k)), cover: look.drapeCover,
+      length: drapeAs.length, knit: drapeAs.knit, onHang: (hang) => body.setHemHang(hang),
+    });
   }
   /** Her vitals as the game last gave them; until it does, a quiet breath at rest (14 a minute, half a litre). */
   let vitals: BodyVitals | null = null;
@@ -1085,7 +1106,18 @@ if (uHideHead > 0.5) {
     line: lookGear?.beltLine,
     holsters: lookGear?.holsters,
     pouches: lookGear?.pouches,
+    // (a painted shirt's hem band, made as the belt is: beltGear.ts `HEM`; its height and colour from the bake)
+    ...(look.manifest.hem ? { hem: { aboveHips: look.manifest.hem.aboveHips, colour: parseInt(look.manifest.hem.colour.slice(1), 16) }, bakedPoints: look.shape.position } : {}),
   });
+  // (the hem band dressed in the shirt's own knit, once its swatch is in: shirtHem.ts `dressInKnit`; until then, and if
+  // it cannot be had, its plain colour)
+  let hemKnit: THREE.Texture | null = null, gearGone = false;
+  const knit = look.manifest.hem?.knit, hemPiece = gear.hem;
+  if (knit && hemPiece) {
+    void dressInKnit(hemPiece.mesh, hemPiece.material, knit, unitsPerMetre).then((texture) => {
+      if (gearGone) texture?.dispose(); else hemKnit = texture;
+    });
+  }
   /** The thighs with a holster drawn (an outfit may have one: looks/gear.ts); a gun put away on the other is stowed out of sight. */
   const holstered = lookGear?.holsters ?? (['left', 'right'] as const);
   // ---- 8c. the outfit's fitted pieces (suitGear.ts; Joshua, 2026-11-18, the gray and red suit): tall flat boots, wrist
@@ -1791,7 +1823,7 @@ if (uHideHead > 0.5) {
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setWaistBelly(body.belly); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setWaistBelly(body.belly); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); drape?.reshape(); }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       // (ASLEEP, `setLiveAwake`: not stepped at all; her kicks and shape stay as they were until it wakes)
@@ -1803,7 +1835,7 @@ if (uHideHead > 0.5) {
       const read = live?.takeShape() ?? null;
       if (read && live) {
         body.setBuilderWeights(read.weights, live.openShape.weights, read.points, live.openShape.points);
-        setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly);
+        setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); drape?.reshape();
       }
 
       // Her breath: her skin's move from her vitals (or a quiet breath at rest), and her bones' at the same pace.
@@ -2227,6 +2259,9 @@ if (uHideHead > 0.5) {
       reach.holdWrists();
       // Her fingers closed onto a bar she holds, each until it touches (fingerTouch.ts): last, over her finished pose.
       touch.apply(frame.dt, reach.grip, [reach.progress(0), reach.progress(1)]);
+      // Her shirt's live hem (liveDrape.ts), over her finished pose: her belly's motion carried over, and fitted again
+      // once she has stood a moment in a stance other than the one it was fitted to.
+      drape?.update(frame.dt, moving);
 
 
       // Her detail level: the fixed one asked for, or AUTO's.
@@ -2268,7 +2303,9 @@ if (uHideHead > 0.5) {
       for (const hand of ['left', 'right'] as const) { guns[hand].object.removeFromParent(); guns[hand].dispose(); }
       hair?.dispose();
       pieces.dispose();
+      drape?.dispose();
       gear.dispose();
+      gearGone = true; hemKnit?.dispose(); hemKnit = null;
       suit?.dispose();
       skin.onBeforeRender = () => {};
       body.dispose();

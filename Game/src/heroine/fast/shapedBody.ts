@@ -90,6 +90,12 @@ export interface ShapedBodySource {
   readonly band?: Float32Array | null;
   /** Her look's LIVE WAISTBAND numbers, six a point (liveWaist.ts), when it has one: handed to her shader as `waistKeys`, `waistMore`. */
   readonly waist?: Int16Array | null;
+  /**
+   * Her PAINTED SHIRT'S cover, one byte a point (the bake's drape.bin), when her look's hem runs live (liveDrape.ts):
+   * handed to her shader with the live drape's `hang` as `hemCut` (outfitMaterial.ts HEM_GLSL), where her shirt's paint
+   * is taken off under the drape as the builder's room takes it off.
+   */
+  readonly hemCover?: Uint8Array | null;
 }
 
 /** One detail level's copy of her: its geometry, and which of her points each of its points is. */
@@ -166,6 +172,12 @@ export class ShapedBody {
   private bandTriangles: Uint32Array | null = null;
   private bandSum: Float32Array | null = null;
   private bandWeight: Float32Array | null = null;
+  /**
+   * HER LIVE HEM'S CUT (liveDrape.ts): how far each of her points is under her shirt's live drape (`TunicDrape.hang`, cut
+   * where it is over a half), as last fitted; all 0 until it first is (her shirt's paint whole). Null when her look's hem
+   * is not live.
+   */
+  private hemHang: Float32Array | null = null;
   /** For each point of those triangles, the first point in the same place (liveBand.ts `samePlace`): summed as one. */
   private bandOne: Int32Array | null = null;
   /** ...and those points. */
@@ -195,6 +207,26 @@ export class ShapedBody {
       this.bandSum = new Float32Array(n);
       this.bandWeight = new Float32Array(n);
     }
+    if (source.hemCover && source.hemCover.length === n) this.hemHang = new Float32Array(n);
+  }
+
+  /**
+   * HER LIVE HEM HAS BEEN FITTED AGAIN (liveDrape.ts `onHang`): how far each of her points is under it, for every level's
+   * `hemCut` (her shirt's paint is taken off where it is over a half: outfitMaterial.ts HEM_GLSL).
+   */
+  setHemHang(hang: ArrayLike<number>): void {
+    if (!this.hemHang || hang.length !== this.hemHang.length) return;
+    this.hemHang.set(hang);
+    for (const level of this.levels.values()) this.fillHem(level);
+  }
+
+  /** A level's `hemCut`: her live hem's cut for its points (x; its shirt cover, y, never changes). */
+  private fillHem(level: Level): void {
+    const at = level.geometry.getAttribute('hemCut') as THREE.BufferAttribute | undefined;
+    if (!at || !this.hemHang) return;
+    const H = at.array as Float32Array, hang = this.hemHang, order = level.order;
+    for (let k = 0; k < order.length; k++) H[k * 2] = hang[order[k]];
+    at.needsUpdate = true;
   }
 
   /** Her points as shaped now (x, y, z each, every point of the full body). Read only: do not write into it. */
@@ -307,6 +339,13 @@ export class ShapedBody {
       geometry.setAttribute('waistKeys', new THREE.BufferAttribute(keys, 4, true));
       geometry.setAttribute('waistMore', new THREE.BufferAttribute(more, 2, true));
     }
+    // HER LIVE HEM'S CUT for each point (liveDrape.ts): how far under the drape (x, written by `fillHem`) and how much of
+    // her shirt's paint is there (y, never changed): her shader takes the shirt's paint off where both say so
+    if (s.hemCover && this.hemHang) {
+      const hemCut = new Float32Array(n * 2);
+      for (let k = 0; k < n; k++) hemCut[k * 2 + 1] = s.hemCover[order[k]] / 255;
+      geometry.setAttribute('hemCut', new THREE.BufferAttribute(hemCut, 2));
+    }
     // HER MOTION SHAPES STAY LIVE: the four are carried over, for this level's own points only.
     // (their moves only; a 1 cm sway turns her surface too little for the lighting to show)
     const live = this.isLive(detail);
@@ -334,6 +373,7 @@ export class ShapedBody {
     const level: Level = { detail, geometry, order, triangles, live };
     this.levels.set(detail, level);
     this.fill(level);
+    this.fillHem(level);
     return geometry;
   }
 

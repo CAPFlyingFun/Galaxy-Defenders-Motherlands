@@ -36,6 +36,19 @@
 // heights). Heights as baked keep to her skin the same way, smooth at every
 // belly, a few millimetres from the builder's. Round her is the rest shape's, as
 // the builder's (it only slides the line along itself).
+// UNDER HER BELLY THE LINE IS THE BUILDER'S HOOP (2026-11-23, builder v0.9.74;
+// Joshua, of the game's line at 50 and 100%: "the front legging lines appear too
+// low/pointed"). A waistband whose front is under her belly is not a line along
+// her skin in the builder: it is a HOOP, a tilted ring hinged at the middle of
+// her back and swung down by how far her front stands out, that runs level
+// across under her bump (bottomCut.ts `stayAt`, `planeAt`). Along her skin the
+// line came to a point under her belly, where the hoop is a shallow U. So for
+// every one of his lines that is a hoop (the builder's `lowSpec` gives it a
+// hinge: his 50 to 200%), the bake asks the builder itself how far inside the
+// hoop each point is (`hoopInside`, as the room draws it), ON HER SHAPE AT THAT
+// LINE'S BELLY, and writes that; the lines that are not (his 0%) are measured as
+// above. His numbers are read from the builder (`UNDER_BELLY_FOLLOW`,
+// `followedAt`: the leggings following her belly, as its own room has them).
 // Which points are her trunk (not her arms or head) is told as the stripes tell
 // it (paintMask.ts `trunkPlace`).
 // ============================================================================
@@ -134,27 +147,26 @@ export function trunkPoints(surface: PaintSurface): Uint8Array {
 
 /**
  * THE BAKE: for each point of her trunk (`trunk`) in or near the strip, how far under each of his lines it is, and
- * under the baked one, as the builder's paint has it (`builderMeasures`): round her on her body file's rest points
- * (`rest`), up her trunk on `shapes` (one for each of his lines in his order, then one for the baked line: her shape
- * as baked for every one, the header says why); three numbers a point, in her bind space, the same points in the same
- * order.
+ * under the baked one. `lines`: his lines in his order, then the baked one. A line with a list in `told` (the builder's
+ * hoop, worked out by the bake: how far inside it every point of her skin is, trunk lengths, + inside) is that; a line
+ * without one is measured as the builder's paint has it (`builderMeasures`): round her on her body file's rest points
+ * (`rest`), up her trunk on her shape as baked (`baked`: the header says why); three numbers a point, in her bind
+ * space, the same points in the same order.
  */
 export function measureWaist(
-  waist: LiveWaist, trunk: Uint8Array, rest: ArrayLike<number>, shapes: readonly ArrayLike<number>[], joints: WaistJoints, facing: number,
+  lines: readonly WaistNumbers[], told: readonly (ArrayLike<number> | null)[], trunk: Uint8Array, rest: ArrayLike<number>, baked: ArrayLike<number>,
+  joints: WaistJoints, facing: number,
 ): WaistPoints {
-  if (waist.keys.length < 1 || waist.keys.length > WAIST_KEYS_MOST) throw new Error(`a live waistband has 1 to ${WAIST_KEYS_MOST} lines`);
-  const lines = [...waist.keys.map((k) => k.waist), bakedWaist(waist)];
-  if (shapes.length !== lines.length) throw new Error('measureWaist: a shape for each line, and one as baked');
+  if (lines.length < 2 || lines.length > WAIST_KEYS_MOST + 1) throw new Error(`a live waistband has 1 to ${WAIST_KEYS_MOST} lines, and the baked one`);
+  if (told.length !== lines.length) throw new Error('measureWaist: a told list (or null) for each line');
   const index: number[] = [], under: number[][] = lines.map(() => []);
   const measure = builderMeasures(joints, facing);
   const d = new Array<number>(lines.length);
   for (let v = 0; v < trunk.length; v++) {
     if (!trunk[v]) continue;
-    const around = measure(rest[v * 3], rest[v * 3 + 1], rest[v * 3 + 2]).around;
-    for (let k = 0; k < lines.length; k++) {
-      const p = shapes[k];
-      d[k] = waistLine(lines[k], around).height - measure(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]).trunk;
-    }
+    const at = measure(rest[v * 3], rest[v * 3 + 1], rest[v * 3 + 2]).around;
+    const up = measure(baked[v * 3], baked[v * 3 + 1], baked[v * 3 + 2]).trunk;
+    for (let k = 0; k < lines.length; k++) d[k] = told[k] ? told[k]![v] : waistLine(lines[k], at).height - up;
     if (Math.max(...d) < -WAIST_OVER || Math.min(...d) > WAIST_BELOW) continue;
     index.push(v); d.forEach((x, k) => under[k].push(x));
   }

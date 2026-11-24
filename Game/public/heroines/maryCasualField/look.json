@@ -1,8 +1,8 @@
 {
   "version": 1,
   "look": "maryCasualField",
-  "bakedAt": "2026-11-23T17:43:12.325Z",
-  "builderVersion": "0.9.73",
+  "bakedAt": "2026-11-23T22:23:27.519Z",
+  "builderVersion": "0.9.74",
   "belly": 10,
   "vertexCount": 115710,
   "barefootHeightMetres": 1.700425690885005,
@@ -32,7 +32,7 @@
     "waist": "waist.bin"
   },
   "waist": {
-    "colour": "#141319",
+    "colour": "#131319",
     "roughness": 0.922,
     "bellies": [
       0,
@@ -79,8 +79,8 @@
     },
     "upperLidsAsBaked": 0.15,
     "liveBandPoints": 0,
-    "liveWaistPoints": 10904,
-    "albedoCoveredTexels": 7537039,
+    "liveWaistPoints": 11252,
+    "albedoCoveredTexels": 7537150,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
   },
@@ -90,6 +90,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-23T18:09:21+00:00"
+    "packedAt": "2026-11-24T00:45:26+00:00"
   }
 }

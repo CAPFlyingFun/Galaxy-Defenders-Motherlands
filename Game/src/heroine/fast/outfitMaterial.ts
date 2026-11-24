@@ -205,6 +205,18 @@ float gdmWaistIn(vec4 keys, vec2 more) {
 `;
 
 /**
+ * HER SHIRT'S LIVE HEM, in her skin's shader (liveDrape.ts). Each point carries two numbers (shapedBody.ts `hemCut`): how
+ * far it is under the builder's drape as last fitted on her (`TunicDrape.hang`) and how much of her shirt's paint is
+ * there (the bake's drape.bin). Where both are over a half her shirt's paint is taken off, as the builder's room takes
+ * it off (fabricMaterial.ts: the shirt layer times 1 - fabricEdge(hang)), and the leggings' colour under it shows. Each
+ * edge drawn as the builder draws its edges (`fabricEdge`: over three quarters of a pixel, never under 0.002).
+ */
+const HEM_GLSL = `
+float gdmHemEdge(float m) { float w = max(fwidth(m) * 0.75, 0.002); return smoothstep(0.5 - w, 0.5 + w, m); }
+float gdmHemIn(vec2 cut) { return gdmHemEdge(cut.x) * gdmHemEdge(cut.y); }
+`;
+
+/**
  * Roughness under this in her surface picture is her bare skin or the soft edge of a cloth on it (her skin reads under
  * 0.58, her knits 0.72 and up): the live waistband draws only there. At skinTexture.ts's own 0.58 the edge pixels, half
  * skin and half cloth, were half drawn, and a pale hairline was left along her top's hem and the baked leggings' edge.
@@ -272,6 +284,9 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     waistColour: { value: new THREE.Color(waistAs.colour) },
     waistWeights: { value: new THREE.Vector4(1, 0, 0, 0) }, waistWeightLast: { value: 0 },
   } : null;
+  // HER SHIRT'S LIVE HEM (liveDrape.ts): what is under the shirt where the drape takes its paint off
+  const hemAs = look.drapeCover && look.manifest.drape ? look.manifest.drape : null;
+  const hemUniforms = hemAs ? { hemColour: { value: new THREE.Color(hemAs.under) } } : null;
   /** Where her skin was as baked, and which way it faced: the knit, the prints and the live band are laid on by these. */
   const laidOn = !!knitUniforms || prints.length > 0 || !!toneUniforms || !!bandUniforms;
   // (DEV only: test pages set the knit's numbers by hand)
@@ -297,7 +312,7 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
     // A SHINIER SUIT (a look's `clothShine`): after three.js reads the roughness picture, every spot that reads as cloth
     // takes the look's roughness instead -- its knit one, or its smooth trim's -- each blended in over a short range so
     // the edges stay soft. A few lines in the shader; her skin, face and hair keep their own.
-    if (bandUniforms || waistUniforms || (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone))) {
+    if (bandUniforms || waistUniforms || hemUniforms || (shine && (shine.cloth !== undefined || shine.trim !== undefined || shine.darken !== undefined || shine.metal !== undefined || shine.knit || prints.length || tone))) {
       // (a look with a live band but no shine of its own: nothing else changed)
       const own: ClothShine = shine ?? {};
       const lines: string[] = ['float ownRoughness = roughnessFactor;'];
@@ -308,6 +323,8 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
       if (bandUniforms) lines.push(`roughnessFactor = mix(roughnessFactor, ${(own.trim ?? BAND_FLAT_ROUGHNESS).toFixed(3)}, bandIn);`);
       // (the live waistband: the leggings' own roughness, as baked just under their baked line)
       if (waistAs) lines.push(`roughnessFactor = mix(roughnessFactor, ${waistAs.roughness.toFixed(3)}, waistIn);`);
+      // (her shirt's live hem: the leggings' own roughness where it takes the shirt's paint off)
+      if (hemAs) lines.push(`roughnessFactor = mix(roughnessFactor, ${hemAs.underRoughness.toFixed(3)}, hemIn);`);
       // (a metal sheen: after three.js reads its metalness, where the roughness picture says cloth)
       const metal = own.metal !== undefined ? [`metalnessFactor = mix(metalnessFactor, ${own.metal.toFixed(3)}, smoothstep(${(CLOTH_FROM - 0.04).toFixed(3)}, ${CLOTH_FROM.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g));`] : [];
       // THE DARKER KNIT: right after her colour is read, where the roughness picture says knit (not skin, not the smooth
@@ -393,6 +410,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         `waistIn = gdmWaistIn(vWaistKeys, vWaistMore) * max(1.0 - smoothstep(${(WAIST_BARE_BELOW - 0.04).toFixed(3)}, ${WAIST_BARE_BELOW.toFixed(3)}, texture2D(roughnessMap, vRoughnessMapUv).g), step(-0.02, vWaistMore.y * ${WAIST_RANGE.toFixed(3)}));`,
         'diffuseColor.rgb = mix(diffuseColor.rgb, waistColour, waistIn);',
       );
+      // HER SHIRT'S LIVE HEM (liveDrape.ts, HEM_GLSL), last: under the drape, where it takes her shirt's paint off, the
+      // leggings' colour (her stripes on the shirt go with it, as everything painted over a shirt the builder cuts)
+      if (hemUniforms) knitSuit.push(
+        'hemIn = gdmHemIn(vHemCut);',
+        'diffuseColor.rgb = mix(diffuseColor.rgb, hemColour, hemIn);',
+      );
       // (the prints' depth, as the knit's below)
       const printBump = prints.some((p) => p.depth > 0) ? [
         'vec3 printSigmaX = dFdx(-vViewPosition), printSigmaY = dFdy(-vViewPosition);',
@@ -430,6 +453,16 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
             .replace('#include <common>', '#include <common>\n#define GDM_WAIST\nuniform vec3 waistColour;\nuniform vec4 waistWeights;\nuniform float waistWeightLast;\nvarying vec4 vWaistKeys;\nvarying vec2 vWaistMore;\n' + WAIST_GLSL)
             .replace('void main() {', 'void main() {\n  float waistIn = 0.0;');
         }
+        // (her shirt's live hem: its two numbers for each point and the colour under the shirt; `hemIn` at the top of main)
+        if (hemUniforms) {
+          Object.assign(shader.uniforms, hemUniforms);
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nattribute vec2 hemCut;\nvarying vec2 vHemCut;')
+            .replace('#include <morphtarget_vertex>', '#include <morphtarget_vertex>\nvHemCut = hemCut;');
+          shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nuniform vec3 hemColour;\nvarying vec2 vHemCut;\n' + HEM_GLSL)
+            .replace('void main() {', 'void main() {\n  float hemIn = 0.0;');
+        }
         if (laidOn) {
           if (knitUniforms) Object.assign(shader.uniforms, knitUniforms);
           // (where the point is on her, before her bones move it: the knit stays put on her as she moves. After her
@@ -454,12 +487,12 @@ export function makeSkinMaterials(fileMaterial: THREE.Material, look: BakedLook,
         }
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <map_fragment>', '#include <map_fragment>\n' + knitSuit.join('\n'))
-          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bandUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, bandIn));\n' : '') + (waistUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, waistIn));\n' : '') + knitBump.join('\n') + '\n' + printBump.join('\n'))
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bandUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, bandIn));\n' : '') + (waistUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, waistIn));\n' : '') + (hemUniforms ? 'normal = normalize(mix(normal, nonPerturbedNormal, hemIn));\n' : '') + knitBump.join('\n') + '\n' + printBump.join('\n'))
           .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + lines.join('\n'))
           .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n' + metal.join('\n'));
       };
       // (three.js keeps one compiled shader per key: this one is its own)
-      material.customProgramCacheKey = () => `cloth-shine-${own.cloth}-${own.trim}-${own.darken}-${own.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${own.knitOn ?? ''}-${(own.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-${bandUniforms ? 'band2' : ''}-${waistUniforms ? 'waist7' : ''}-v5`;
+      material.customProgramCacheKey = () => `cloth-shine-${own.cloth}-${own.trim}-${own.darken}-${own.metal}-${tone ? 'tone' : ''}-${!!knitUniforms}-${own.knitOn ?? ''}-${(own.prints ?? []).map((p) => p.on + p.file + (p.depth ?? 0)).join('|')}-${bandUniforms ? 'band2' : ''}-${waistUniforms ? 'waist7' : ''}-${hemUniforms ? 'hem1' : ''}-v5`;
     }
     return material;
   };

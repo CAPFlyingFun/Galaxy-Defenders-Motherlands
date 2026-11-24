@@ -489,3 +489,12 @@
 .gd-crouch { right: calc(var(--safe-right) + var(--edge) + 124px); }
 .gd-prone { right: calc(var(--safe-right) + var(--edge) + 70px); }
 .gd-stance.is-on { border-color: #5ee8c8; background: rgba(94, 232, 200, 0.28); color: #eafff9; }
+
+/* TEST TOOLS -> Ground colours (v0.2.166): one row per kind of ground, its name, then base and accent as the phone's own
+   colour pickers with their codes */
+.gd-ground-colours { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 2px; }
+.gd-ground-colours-title { font: 600 13px system-ui; color: #cfe8e2; }
+.gd-ground-colour { display: grid; grid-template-columns: 64px 34px 66px 34px 66px; align-items: center; gap: 6px; font: 12px system-ui; color: #e8f1ef; }
+.gd-ground-colour input[type="color"] { width: 34px; height: 26px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px; background: none; }
+.gd-ground-colour code { font: 11px ui-monospace, monospace; color: #b9cbc7; }
+.gd-ground-colours .gd-button { align-self: flex-start; margin-top: 4px; }

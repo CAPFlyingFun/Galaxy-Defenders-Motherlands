@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { sizedPictureAsync } from "../../core/textureSizes";
 import type { CarveData, HydroRiver, HydroLake } from "./carve";
 import { riverCarveRadius, FLAT_FRAC, HALF_WORLD } from "./carveCore";
+import { tileIdOf } from "./terrainSampling";
 
 // ============================================================================
 // hydro.ts -- the island's rivers, streams and lakes: their water, their
@@ -502,12 +503,12 @@ function splitByTile(run: HydroRiver, cellOf: (v: number) => number): { piece: H
   for (let i = 1; i < pts.length; i++) {
     const c = cellOf(pts[i][0]), r = cellOf(pts[i][2]);
     if (c === col && r === row) continue;
-    out.push({ piece: { ...run, tile: String.fromCharCode(65 + col) + (row + 1), pts: pts.slice(start, i + 1) }, col, row });
+    out.push({ piece: { ...run, tile: tileIdOf(col, row), pts: pts.slice(start, i + 1) }, col, row });
     start = i;
     col = c;
     row = r;
   }
-  if (pts.length - 1 > start) out.push({ piece: { ...run, tile: String.fromCharCode(65 + col) + (row + 1), pts: pts.slice(start) }, col, row });
+  if (pts.length - 1 > start) out.push({ piece: { ...run, tile: tileIdOf(col, row), pts: pts.slice(start) }, col, row });
   return out;
 }
 
@@ -771,7 +772,7 @@ export class KauaiHydro {
     /** The tile (column or row) a place is in, island metres. */
     const cellOf = (v: number): number => Math.min(across - 1, Math.max(0, Math.floor((v + HALF_WORLD) / S)));
     const chunkOf = (col: number, row: number): Chunk => {
-      const tile = String.fromCharCode(65 + col) + (row + 1);
+      const tile = tileIdOf(col, row);
       let c = this.chunks.get(tile);
       if (!c) {
         c = {

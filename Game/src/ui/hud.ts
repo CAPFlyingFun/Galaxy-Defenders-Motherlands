@@ -26,7 +26,8 @@ import { toGameX, toGameY } from '../core/orientation';
 import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
-import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { GROUND_COLOURS, GROUND_KINDS, groundColoursNow, type GroundKind } from '../world/island/groundPaint';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -78,6 +79,11 @@ export interface HudOptions {
    */
   bellyText?(percent: number): string;
   onBellyStep?(by: number): void;
+  /**
+   * TEST TOOLS -> Ground colours (v0.2.166): a kind of ground's base (0) or accent (1) colour changed, as hex; or all
+   * back to the approved palette (`kind` null). Live on the island; remembered on this phone.
+   */
+  onGroundColour?(kind: GroundKind | null, which: 0 | 1, hex: string): void;
 }
 
 /** How far the stick's knob can travel from its middle, in pixels. */
@@ -425,6 +431,9 @@ export class Hud {
     // quarter of the memory of the one above; 4096 only on a computer (a phone is never offered what would close it)
     const sizeChoices = textureSizesOffered().map((s) => [String(s), s] as const);
     choiceRow('World textures', 'worldTextures', sizeChoices, 'The largest the island\'s ground, river, tree and bark pictures, her suit\'s fabric and the skin\'s pores are drawn (pixels; each step down is a quarter of the memory). The sky and the coastline stay as they are; the shadows are 1024 at 512 and under, 2048 above. It changes while you play.');
+    choiceRow('Ground', 'ground', GROUND_CHOICES, 'Solid colours: the island\'s own palette, with a fine pattern near you that fades to plain colour further off; no pictures to download, lighter for the phone. Textures: the ground pictures as before. Changes at once.');
+    choiceRow('Island grid', 'islandGrid', ISLAND_GRID_CHOICES, 'How many tiles the 56 km island is cut into: the nine round you are loaded in full. Smaller tiles load and build quicker but cover less. To compare on your phone; 16 x 16 is the default. Changing it reloads the game.');
+    choiceRow('Rivers & lakes', 'rivers', [['Off', 'off'], ['On', 'on']], 'The real island\'s rivers and lakes, cut into the ground and filled. Off until the island\'s own lakes are made. Changing it reloads the game.');
     choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Changes at once.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');
     // HER OUTFIT, AS PICTURES (Joshua, 2026-11-20: "a little thumbnail of what they look like, like in CCBS... bake the
@@ -630,6 +639,36 @@ export class Hud {
       });
     }
     element('small', 'gd-note', settings, 'Clear saved files: everything the game keeps on this phone (its code, outfits, the builder\'s files, the island) is let go and the game starts again, downloading it all. Your settings are kept.');
+    // GROUND COLOURS (v0.2.166; for Joshua to tune the island's palette on his phone and send the numbers): each kind of
+    // ground's base and accent colour as the phone's own colour picker, live on the island; Reset puts back the
+    // approved palette (world/island/groundPaint.ts GROUND_COLOURS).
+    if (options.onGroundColour) {
+      const box = element('div', 'gd-ground-colours', settings);
+      element('span', 'gd-ground-colours-title', box, 'Ground colours (base · accent)');
+      const pickers: { kind: GroundKind; which: 0 | 1; input: HTMLInputElement }[] = [];
+      const now = groundColoursNow();
+      for (const kind of GROUND_KINDS) {
+        const row = element('label', 'gd-ground-colour', box);
+        element('span', '', row, kind);
+        for (const which of [0, 1] as const) {
+          const input = element('input', '', row);
+          input.type = 'color';
+          input.value = now[kind][which].toLowerCase();
+          const hexText = element('code', '', row, now[kind][which].toUpperCase());
+          input.addEventListener('input', () => { hexText.textContent = input.value.toUpperCase(); options.onGroundColour?.(kind, which, input.value); });
+          pickers.push({ kind, which, input });
+        }
+      }
+      const reset = element('button', 'gd-button', box, 'Reset to the approved colours');
+      tapButton(reset, () => {
+        options.onGroundColour?.(null, 0, '');
+        for (const p of pickers) {
+          p.input.value = GROUND_COLOURS[p.kind][p.which].toLowerCase();
+          (p.input.nextElementSibling as HTMLElement).textContent = GROUND_COLOURS[p.kind][p.which];
+        }
+      });
+      element('small', 'gd-note', settings, 'The island\'s Solid colours ground: tap a colour to change it, and see it on the ground at once (close Settings to look). Kept on this phone; send Claude the codes you like. Reset puts back the approved palette.');
+    }
     // (THE BRAIN'S THOUGHTS over the one standing by: Joshua, 2026-11-21, "so I can know what it's 'Thinking'")
     choiceRow('AI thoughts', 'npcThoughts', [['Show', 'on'], ['Hide', 'off']], 'A bubble over the one you are not playing (John while you play Blaze, Blaze while you play John): who, AUTO or MANUAL and their rounds; what their brain is doing now; why (🎯 its fight, 🩺 its needs); what is next; how the last order ended (✓ done, ⏸ stopped, ✗ failed and why); and their needs as it sees them (🚽 💧 🍽️ 🔋, ⚠️ danger). Changes at once.');
 

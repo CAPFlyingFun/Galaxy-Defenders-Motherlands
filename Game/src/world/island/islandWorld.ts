@@ -25,11 +25,22 @@
 // at a time, nearest first (tileStreamer.ts), the river and lake water is built
 // a chunk a frame as its ground comes in (hydro.ts), and the forest starts
 // loading only once all the tiles round her are in (trees.ts `begin`).
+//
+// SETTINGS -> WORLD, v0.2.166 (Joshua, 2026-11-24, the island plan):
+//  - GROUND: Solid colours (the default: his approved palette, no pictures)
+//    or Textures (Beyond Extinction's pictures, as before). Live: groundPaint.ts.
+//  - ISLAND GRID: 8 x 8, 16 x 16 (the default), 32 x 32 or 64 x 64 tiles, the
+//    same heights cut smaller (kauai/height32/, height64/:
+//    scripts/make_island_tiles_n.py), to compare. Changing it restarts.
+//  - RIVERS & LAKES: off by default ("Don't draw for now as the island
+//    waterways are still messed up"): no water and no channels cut into the
+//    ground, the real valleys left as the land has them. The code stays, for
+//    the island's own lakes later. Changing it restarts.
 // ============================================================================
 import * as THREE from 'three';
 import type { GroundPoint } from '../collision';
 import type { Walls } from '../../input/playerMotion';
-import { loadGroundPictures } from './groundPaint';
+import { createGroundPaint, type GroundKind, type GroundMode } from './groundPaint';
 import { TileStreamer, type IslandManifest } from './tileStreamer';
 import { createFarIsland } from './farIsland';
 import { createOcean, WATER_Y, type Ocean } from './ocean';
@@ -96,6 +107,12 @@ export interface IslandWorld {
   treeCounts(): { trees: number; draws: number } | null;
   /** Settings -> WORLD -> Landscaping, live (treeObjects.ts). */
   setLandscaping(mode: Landscaping): void;
+  /** Settings -> WORLD -> Ground, live: Solid colours or Textures (groundPaint.ts). */
+  setGround(mode: GroundMode): void;
+  /** TEST TOOLS -> Ground colours: a kind's base (0) or accent (1) colour, live on every tile. */
+  setGroundColour(kind: GroundKind, which: 0 | 1, hex: string): void;
+  /** The grid the island was opened with (tiles across), for the readout. */
+  readonly grid: number;
   /** Every frame: tiles follow her, the sea follows the camera. */
   update(seconds: number, herX: number, herZ: number, camera: THREE.Camera): void;
   dispose(): void;
@@ -150,20 +167,34 @@ class IslandWalls implements Walls {
  * Open the island. `base` is where its files are (the game's address + "island/"); `scene` gets the daytime sky
  * picture and the haze. Waits for the list of tiles and the far island; the tiles round her load after (`ready`).
  */
-export async function createIslandWorld(base: string, scene: THREE.Scene, options: { landscaping?: Landscaping } = {}): Promise<IslandWorld> {
+/** What Settings -> WORLD says about the island (see the top of this file). */
+export interface IslandOptions {
+  landscaping?: Landscaping;
+  ground?: GroundMode;
+  /** Tiles across: 8, 16, 32 or 64 (16 by default). */
+  grid?: number;
+  rivers?: boolean;
+}
+
+/** The list of tiles for each grid (8 x 8 is Beyond Extinction's own manifest). */
+const MANIFEST_OF: Record<number, string> = { 8: 'manifest.json', 16: 'manifest16.json', 32: 'manifest32.json', 64: 'manifest64.json' };
+
+export async function createIslandWorld(base: string, scene: THREE.Scene, options: IslandOptions = {}): Promise<IslandWorld> {
   const origin = new THREE.Vector2(ARRIVAL.x, ARRIVAL.z);
-  // (the list of tiles first, then the ground's pictures, one at a time: groundPaint.ts)
-  const manifest = await fetch(`${base}kauai/manifest16.json`).then((r) => r.json() as Promise<IslandManifest>);
-  const pictures = await loadGroundPictures(base);
+  const grid = MANIFEST_OF[options.grid ?? 16] ? options.grid ?? 16 : 16;
+  // (the list of tiles first, then the ground's paint: Textures fetches its pictures one at a time, Solid colours none)
+  const manifest = await fetch(`${base}kauai/${MANIFEST_OF[grid]}`).then((r) => r.json() as Promise<IslandManifest>);
+  const paint = await createGroundPaint(base, options.ground ?? 'colours');
   const group = new THREE.Group();
   group.name = 'island';
-  // the rivers and lakes: fetched at once (the tiles wait for them, to cut their channels in: carve.ts)
-  const carve = new CarveData(base);
-  void carve.prefetch();
-  const tiles = new TileStreamer(manifest, pictures, base, origin, carve);
+  // the rivers and lakes (when on): fetched at once (the tiles wait for them, to cut their channels in: carve.ts)
+  const rivers = options.rivers === true;
+  const carve = rivers ? new CarveData(base) : null;
+  if (carve) void carve.prefetch();
+  const tiles = new TileStreamer(manifest, paint, base, origin, carve);
   group.add(tiles.group);
   const islandSize = manifest.totalM ?? manifest.tileSizeM * tiles.across;
-  const far = await createFarIsland(base, islandSize, pictures, { shown: tiles.shown, origin, across: tiles.across, tileSize: tiles.tileSize });
+  const far = await createFarIsland(base, islandSize, paint, { shown: tiles.shown, origin, across: tiles.across, tileSize: tiles.tileSize });
   group.add(far);
   const ocean: Ocean = createOcean(base, islandSize, origin);
   group.add(ocean.mesh);
@@ -173,14 +204,15 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   const waterGroup = new THREE.Group();
   waterGroup.position.set(-origin.x, 0, -origin.y);
   group.add(waterGroup);
-  const hydro = new KauaiHydro(waterGroup, base, carve, { across: tiles.across, tileSize: tiles.tileSize });
+  // (none with Rivers & lakes off: nothing of theirs is fetched or built)
+  const hydro = carve ? new KauaiHydro(waterGroup, base, carve, { across: tiles.across, tileSize: tiles.tileSize }) : null;
   const hydroGround = {
     surfaceHeightAt: (ix: number, iz: number) => tiles.fineHeightAtIsland(ix, iz),
     tileReadyAt: (ix: number, iz: number) => tiles.tileReadyAtIsland(ix, iz),
   };
   // THE FOREST (trees.ts, Beyond Extinction's photo trees on the real vegetation maps), in the island's own metres as
   // the rivers are; Settings -> WORLD -> Landscaping picks photos, 3D trees near her, 3D only, or none (live)
-  const trees = new IslandTrees(waterGroup, base, options.landscaping ?? 'hybrid');
+  const trees = new IslandTrees(waterGroup, base, options.landscaping ?? 'off');
   /** She is playing (`startStreaming`), and whether the forest has been let start (once the tiles round her are in). */
   let playing = false, forestBegun = false;
 
@@ -201,7 +233,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   }).catch(() => { /* the plain haze colour stays */ });
 
   const groundAt = (x: number, z: number): number => tiles.heightAt(x, z);
-  const waterAt = (x: number, z: number): number | null => hydro.waterLevelAt(x + origin.x, z + origin.y);
+  const waterAt = (x: number, z: number): number | null => hydro?.waterLevelAt(x + origin.x, z + origin.y) ?? null;
   const standAt = (x: number, z: number): number => {
     const ground = groundAt(x, z);
     const level = waterAt(x, z);
@@ -212,6 +244,9 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     // (her body is about 0.25 m round: a trunk stops her that far from its bark)
     walls: new IslandWalls(groundAt, standAt, (x, z) => trees.trunkBlocks(x + origin.x, z + origin.y, BODY_RADIUS)),
     setLandscaping: (mode) => trees.setMode(mode),
+    setGround: (mode) => { void paint.setMode(mode); },
+    setGroundColour: (kind, which, hex) => paint.setColour(kind, which, hex),
+    grid,
     standAt,
     waterAt,
     seaLevel: WATER_Y,
@@ -237,7 +272,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       tiles.update(herX, herZ);
       // (nothing of the water is built, nor the forest started, before she is playing)
       if (!playing) { ocean.update(seconds, camera); return; }
-      hydro.update(seconds, hydroGround);
+      hydro?.update(seconds, hydroGround);
       // THE FOREST once every tile round her is in (the first time; after that it streams with the camera as before)
       if (!forestBegun) {
         const { ready, total } = tiles.loadState(herX, herZ);
@@ -249,7 +284,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     },
     dispose() {
       tiles.dispose();
-      hydro.dispose();
+      hydro?.dispose();
+      paint.dispose();
       trees.dispose();
       far.geometry.dispose();
       (far.material as THREE.Material).dispose();

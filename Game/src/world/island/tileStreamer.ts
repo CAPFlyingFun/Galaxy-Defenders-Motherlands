@@ -40,8 +40,8 @@
 //     (carve.ts), as in Beyond Extinction.
 // ============================================================================
 import * as THREE from 'three';
-import { FAR_TILE_SEG, SEG, renderedSurfaceHeight } from './terrainSampling';
-import { makeGroundMaterial, type GroundPictures } from './groundPaint';
+import { FAR_TILE_SEG, SEG, renderedSurfaceHeight, tileIdOf } from './terrainSampling';
+import type { GroundPaint } from './groundPaint';
 import type { CarveData } from './carve';
 
 /** The island's list of tiles (public/island/kauai/manifest16.json since v0.2.150; only what is used here). */
@@ -98,6 +98,13 @@ export class TileStreamer {
   readonly tileSize: number;
   private readonly S: number;
   private readonly P: number;
+  /**
+   * The grids this island's tiles are built with, near her and further off: SEG and FAR_TILE_SEG, but NEVER FINER THAN
+   * THE TILE'S OWN HEIGHT PICTURE (v0.2.166): a 64 x 64 grid's tile has 64 squares of heights across, and 192 squares
+   * there would only cut the same slopes into more triangles.
+   */
+  private readonly fineSeg: number;
+  private readonly halfSeg: number;
   /** Half the grid in tiles less a half: tile (col, row)'s centre is ((col - mid) * S, (row - mid) * S). */
   private readonly mid: number;
   private readonly byId = new Map<string, IslandManifest['tiles'][number]>();
@@ -125,17 +132,20 @@ export class TileStreamer {
    * @param origin  the arrival point in the island's own metres: the game's (0, 0)
    * @param carve   the rivers and lakes, cut into each tile's heights as it arrives (null: none)
    */
-  constructor(private readonly manifest: IslandManifest, pictures: GroundPictures, private readonly base: string, private readonly origin: THREE.Vector2, private readonly carve: CarveData | null = null) {
+  constructor(private readonly manifest: IslandManifest, paint: GroundPaint, private readonly base: string, private readonly origin: THREE.Vector2, private readonly carve: CarveData | null = null) {
     this.S = this.tileSize = manifest.tileSizeM;
     this.P = manifest.tilePixels;
-    // (the island is 56 km across: 16 tiles of 3.5 km, or Beyond Extinction's 8 of 7 km)
+    this.fineSeg = Math.min(SEG, this.P - 1);
+    this.halfSeg = Math.min(FAR_TILE_SEG, this.P - 1);
+    // (the island is 56 km across: 16 tiles of 3.5 km, or Beyond Extinction's 8 of 7 km; 32 or 64 by Settings)
     this.across = Math.round((manifest.totalM ?? manifest.tileSizeM * 8) / manifest.tileSizeM);
     this.mid = (this.across - 1) / 2;
     this.shownBytes = new Uint8Array(this.across * this.across);
     for (const t of manifest.tiles) this.byId.set(t.id, t);
     this.group.name = 'island-tiles';
-    this.material = makeGroundMaterial(pictures);
-    this.skirtMaterial = makeGroundMaterial(pictures);
+    // (from the island's one ground paint: Solid colours or Textures, changed for every tile at once)
+    this.material = paint.material();
+    this.skirtMaterial = paint.material();
     this.skirtMaterial.side = THREE.DoubleSide;
     this.shown = new THREE.DataTexture(this.shownBytes, this.across, this.across, THREE.RedFormat, THREE.UnsignedByteType);
     this.shown.magFilter = this.shown.minFilter = THREE.NearestFilter;
@@ -150,7 +160,7 @@ export class TileStreamer {
   private colAtIsland(ix: number): number { return Math.round(ix / this.S + this.mid); }
   private static key(col: number, row: number): string { return `${col},${row}`; }
   /** A tile's name: its column's letter (A west) and its row's number (1 north): "N9". */
-  private static idOf(col: number, row: number): string { return String.fromCharCode(65 + col) + (row + 1); }
+  private static idOf(col: number, row: number): string { return tileIdOf(col, row); }
   /** Kept inside the grid. */
   private inGrid(n: number): number { return Math.min(this.across - 1, Math.max(0, n)); }
 
@@ -171,7 +181,7 @@ export class TileStreamer {
   fineHeightAtIsland(ix: number, iz: number): number {
     const t = this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)));
     if (!t?.heights) return 0;
-    return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, SEG);
+    return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, this.fineSeg);
   }
   tileReadyAtIsland(ix: number, iz: number): boolean {
     return !!this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)))?.heights;
@@ -255,7 +265,7 @@ export class TileStreamer {
     const half = this.S / 2;
     const dx = Math.max(0, Math.abs(gameX + this.origin.x - t.cx) - half);
     const dz = Math.max(0, Math.abs(gameZ + this.origin.y - t.cz) - half);
-    return Math.hypot(dx, dz) <= FINE_WITHIN ? SEG : FAR_TILE_SEG;
+    return Math.hypot(dx, dz) <= FINE_WITHIN ? this.fineSeg : this.halfSeg;
   }
 
   /** Rebuild (at most) one tile whose grid no longer suits where she is: a few hundredths of a second, now and then. */
@@ -290,7 +300,7 @@ export class TileStreamer {
   private async load(col: number, row: number, key: string): Promise<void> {
     const id = TileStreamer.idOf(col, row);
     const entry = this.byId.get(id)!;
-    const tile: Tile = { id, col, row, cx: (col - this.mid) * this.S, cz: (row - this.mid) * this.S, seg: FAR_TILE_SEG, wanted: true };
+    const tile: Tile = { id, col, row, cx: (col - this.mid) * this.S, cz: (row - this.mid) * this.S, seg: this.halfSeg, wanted: true };
     this.tiles.set(key, tile);
     let heights: Float32Array;
     try {

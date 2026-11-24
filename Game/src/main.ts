@@ -52,6 +52,7 @@ import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import type { IslandWorld } from './world/island/islandWorld';
 import { PregnancyPlan, weekText } from './heroine/pregnancyPlan';
+import { GROUND_COLOURS, GROUND_COLOURS_KEY, GROUND_KINDS, groundColoursNow } from './world/island/groundPaint';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
 import { Door, DoorUse, DOOR, bodyRadius as doorBodyRadius } from './world/door';
@@ -431,7 +432,9 @@ async function start(): Promise<void> {
   if (onIsland) {
     meter.step('island', 'Opening the island…');
     const { createIslandWorld } = await import('./world/island/islandWorld');
-    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, { landscaping: graphics.landscaping });
+    island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, {
+      landscaping: graphics.landscaping, ground: graphics.ground, grid: graphics.islandGrid, rivers: graphics.rivers === 'on',
+    });
     scene.add(island.group);
     let told = -1;
     // (HER TILE ONLY before play, v0.2.150: the 8 round her come in one at a time once she is playing, `startStreaming`
@@ -1582,6 +1585,21 @@ async function start(): Promise<void> {
     bellyText,
     // HER BELLY A STORY STEP either way (the test buttons: what a quest or event does)
     onBellyStep(by) { stepBelly(by); },
+    // GROUND COLOURS (TEST TOOLS, v0.2.166): live on the island, remembered on this phone (only the kinds changed)
+    onGroundColour(kind, which, hex) {
+      let saved: Record<string, [string, string]> = {};
+      try { saved = JSON.parse(localStorage.getItem(GROUND_COLOURS_KEY) ?? '{}') as Record<string, [string, string]>; } catch { /* none */ }
+      if (kind === null) {
+        try { localStorage.removeItem(GROUND_COLOURS_KEY); } catch { /* nothing kept */ }
+        for (const k of GROUND_KINDS) for (const w of [0, 1] as const) island?.setGroundColour(k, w, GROUND_COLOURS[k][w]);
+        return;
+      }
+      const pair = saved[kind] ?? [...groundColoursNow()[kind]] as [string, string];
+      pair[which] = hex;
+      saved[kind] = pair;
+      try { localStorage.setItem(GROUND_COLOURS_KEY, JSON.stringify(saved)); } catch { /* not remembered: nothing to do */ }
+      island?.setGroundColour(kind, which, hex);
+    },
     onGraphicsChange(key, value) {
       graphics[key] = value;
       saveSetting(key, value);
@@ -1626,6 +1644,7 @@ async function start(): Promise<void> {
       else if (key === 'vitalsShown') vitalsPanel.setShown(graphics.vitalsShown);
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
+      else if (key === 'ground') island?.setGround(graphics.ground); // (live: groundPaint.ts)
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
       else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity' || key === 'paceCap') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
@@ -2745,6 +2764,8 @@ async function start(): Promise<void> {
         const inside = vitals.contents;
         lines.push(`gut ${Math.round(inside.foodMl)}+${Math.round(inside.waterMl)} · bladder ${Math.round(inside.bladderMl)}`);
         // (the island's forest: trees drawn, in how many draws)
+        // (the island's grid, ground and rivers as chosen in Settings -> WORLD: v0.2.166)
+        if (island) lines.push(`isle ${island.grid}x${island.grid} · ${graphics.ground === 'textures' ? 'tex' : 'colours'} · rivers ${graphics.rivers}`);
         const forest = island?.treeCounts();
         if (forest) lines.push(`trees ${forest.trees} · ${forest.draws} draws`);
         // (graphics memory asked for, an ESTIMATE: core/gpuTally.ts; and where the last start stopped, if the phone

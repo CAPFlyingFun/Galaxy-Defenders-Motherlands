@@ -325,38 +325,29 @@
    hud.ts `followStick` keeps it over the stick wherever the stick is. This is only its place before that first look. */
 /* (the word over the stick: hidden, wherever Edit controls has put the stick) */
 .gd-walk-stick .gd-pace { display: none; }
-.gd-hud > .gd-pace-cap[hidden] { display: none; }
-.gd-hud > .gd-pace-cap {
+/* THE TOP PACE, A CURVE OVER THE MOVE STICK (v0.2.169; hud.ts `makePaceArc`, PACE_ARC): a picture inside the stick,
+   sized and placed as shares of it (--arc-size, --arc-at), so it moves and scales with the stick. The picture itself
+   takes no touch (its empty corners belong to the view and the stick); only its four sections do. */
+.gd-pace-arc {
   position: absolute;
-  left: calc(var(--safe-left) + var(--edge));
-  bottom: calc(var(--safe-bottom) + var(--edge) + 6px + 200px + 4px);
-  width: 200px;
-  display: flex;
-  gap: 3px;
-  touch-action: none;
+  left: var(--arc-at);
+  top: var(--arc-at);
+  width: var(--arc-size);
+  height: var(--arc-size);
+  overflow: visible;
+  pointer-events: none;
 }
-.gd-pace-cap-option {
-  flex: 1;
-  height: 26px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  background: var(--navy);
-  color: var(--text);
-  font: inherit;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  touch-action: none;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-.gd-pace-cap-option.is-on { border-color: var(--gold); background: rgba(255, 213, 107, 0.85); color: #1a1406; }
-/* (the pace she is at now: a teal ring, and its word in teal unless it is the gold one) */
-.gd-pace-cap-option.is-now { box-shadow: 0 0 0 2px var(--teal); }
-.gd-pace-cap-option.is-now:not(.is-on) { color: var(--teal); }
+.gd-pace-seg { pointer-events: auto; cursor: pointer; touch-action: none; }
+.gd-pace-seg-shape { fill: var(--navy); stroke: var(--line); stroke-width: 1; }
+/* (11 px at the stick's own 200 px: the curve's picture is drawn at that size and scaled with the stick) */
+.gd-pace-seg-text { fill: var(--text); font-size: 11px; font-weight: 800; letter-spacing: 0.05em; pointer-events: none; }
+/* (the one chosen: gold; the pace she is at now: a teal edge, and its word in teal unless it is the gold one) */
+.gd-pace-seg.is-on .gd-pace-seg-shape { fill: rgba(255, 213, 107, 0.88); stroke: var(--gold); }
+.gd-pace-seg.is-on .gd-pace-seg-text { fill: #1a1406; }
+.gd-pace-seg.is-now .gd-pace-seg-shape { stroke: var(--teal); stroke-width: 2.4; }
+.gd-pace-seg.is-now:not(.is-on) .gd-pace-seg-text { fill: var(--teal); }
 /* (winded: she can only walk, whatever is chosen) */
-.gd-pace-cap.is-winded .gd-pace-cap-option { opacity: 0.45; }
+.gd-pace-arc.is-winded .gd-pace-seg { opacity: 0.45; }
 /* ---- Her vitals card: the top left corner, the FPS line under it (Joshua's layout, 2026-11-18) ------------- */
 .gd-hud > .gd-top-slot {
   position: absolute;

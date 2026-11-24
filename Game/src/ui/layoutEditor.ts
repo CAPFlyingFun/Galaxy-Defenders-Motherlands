@@ -42,7 +42,8 @@ const TAP_SLOP = 6;
 /** The controls that can be moved: a name for the save, how to find it on the page, and what to call it. */
 const CONTROLS = [
   { id: 'move', selector: '.gd-walk-stick', label: 'MOVE stick' },
-  { id: 'paceCap', selector: '.gd-pace-cap', label: 'Top pace (WALK..SPRINT)' },
+  // (The 'paceCap' control, "Top pace (WALK..SPRINT)", was listed here until v0.2.169: the top pace is now a curve that
+  //  is part of the MOVE stick, hud.ts `makePaceArc`. A place saved for it is simply never read again.)
   { id: 'camera', selector: '.gd-look-stick', label: 'CAMERA stick' },
   { id: 'fire', selector: '.gd-fire', label: 'FIRE' },
   { id: 'view', selector: '.gd-view', label: 'View switch' },

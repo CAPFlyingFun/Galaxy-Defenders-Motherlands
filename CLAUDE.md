@@ -21,7 +21,7 @@ use the game's single copy of three.js.
 - World: Joshua's `Half_Sphere.obj` dome (12 slices = 12 dome sections, each with its own HP; a section at zero
   shatters and lets enemies through) over a simple grid city; the heroine in a central plaza. The dome is reused
   for later themes (island, countryside).
-- Cameras: third person (default: drag to rotate, pinch to zoom, auto-aim) and first person (camera at her head
+- Cameras: third person (drag to rotate, pinch to zoom, auto-aim) and first person, THE START VIEW SINCE v0.2.169 (camera at her head
   bone, offset so looking down shows her belly, as in Beyond Extinction; manual aim and fire). No jumping.
   FIRST PERSON IS HER HEAD (Joshua, 2026-11-20: "un-hide the head and always keep it visible and just offset forward at
   touch and keep same eye height like in Beyond Extinction... it can only bend what the head can do"; `fastHeroine.ts`
@@ -1327,6 +1327,34 @@ use the game's single copy of three.js.
   copies, one wound each way, drawn with the ground's own one-sided material (the copy facing the camera is drawn, lit
   with the facing of the ground above it): pictured the same view with the skirts and without, the same hills, no
   streak, no crack. One shader fewer (the skirts' two-sided copy of the ground's material is gone).
+- v0.2.169: FIRST PERSON AT THE START, FOLLOW IN THIRD, THE TOP PACE AS A CURVE ON THE STICK, HER HEAD LEVEL WALKING
+  SIDEWAYS (Joshua, 2026-11-24, his screenshots of v0.2.168; planned with him first, his mockup pick, "Looks good to me").
+  (1) THE VIEWS ("The starting default view is 1st person, and starting 3rd person view is following"): every start is
+  in first person (main.ts, `?view=third` for test pages); third person opens on FOLLOW, aimed by hand or not
+  (`cameraStyle`, `manualStyle`); the CAM button's choice lasts until the game is closed (no longer kept on the phone:
+  'gdm.cameraStyle' and 'gdm.cameraStyleManual' are not read). Firing still brings the shoulder camera for 1.2 s.
+  (2) THE TOP PACE, A CURVE JOINED TO THE MOVE STICK ("layout the speed selectors as a curve that matches the size or
+  link it to the joystick so it's all together in one"; his first screenshot: the old row, 200 px wide over a 150 px
+  stick, hung past its left side and WALK was under the phone's camera cutout): hud.ts `makePaceArc`, `PACE_ARC`: four
+  ring sections over the stick's top, from 112 to 28 degrees round it (math angles), 105-131 px from its middle at the
+  stick's own 200 px, sized by each word (6:5:5:8), the word along the ring's middle (`textPath`), gold the top pace
+  chosen, a teal edge the pace she is at, dimmed winded. It is a picture INSIDE the stick, sized as a share of it, so it
+  moves and scales with the stick in Edit controls; "Top pace" left the Edit controls list (a saved place for it is not
+  read). A tap on a section picks it and does not reach the stick (stopPropagation). Nothing of it is left of the
+  stick's left side; it ends short of the CAMERA stick beside it. PICTURED at 932 x 430: the default layout with BASICS
+  and with ALL her vitals (its top just under the FPS line), and his own layout (MOVE 150 px at the left, CAMERA 94 px
+  beside it: clear of both). A tap on JOG: JOG gold, 'gdm.paceCap' 2, the stick untouched.
+  (3) HER HEAD LEVEL WALKING SIDEWAYS ("keep the head level like in real life so it doesn't bank left/right like how we
+  did running+... but the head still faces the camera's direction while the rest of the body can offset a different
+  direction"): her head's frame leans with her torso at a walk; looking ahead that lean tips her head down, but with her
+  head turned from her torso (walking sideways, looking ahead) it became a bank, and in first person the view also rose
+  by it. fastHeroine.ts `headNoRoll` (HEAD_NO_ROLL_FROM 0.15 .. HEAD_NO_ROLL_AT 0.6 m/s, standing up only: not crouched,
+  down or winded): `steadyHead` keeps her head's way and turns its up into the upright plane through it (no bank); first
+  person the player's look is taken as a way in the world while she moves (`sideAndTip`, as third person takes a
+  target), so the view keeps its pitch. Standing, sitting, crouched, winded, at the table or a bar: as before.
+  MEASURED in the built game, first person, Blaze walking (1.1 m/s), the camera's worst bank and its pitch off from the
+  one asked for, v0.2.168 -> v0.2.169: sideways right 7.6 / 7.5 -> 0.3 / 0.2 degrees; sideways left 7.8 / 7.7 -> 0.5 /
+  0.3; diagonal 2.8 / 1.2 -> 0.0 / 0.0; ahead 0 / 0 -> 0 / 0.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

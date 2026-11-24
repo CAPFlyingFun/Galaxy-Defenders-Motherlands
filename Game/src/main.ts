@@ -233,8 +233,6 @@ const TABLE_WALK = 1.1;
  * 10 %) and full term (deliveryBump, 150 %, week 42). How far along she is between them slows her paces and tires her sooner
  * (src/input/pace.ts PACES_FULL_TERM, src/vitals/heroineVitals.ts byPaceFullTerm). LATER: read from her look.
  */
-/** Where the third-person camera style is kept on this device. */
-const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
 /**
  * THE CAMERA STYLES AIMED BY HAND (Joshua, 2026-11-19: "allow some camera modes in manual... walking is fine, trying to
  * shoot and aim would be different and would need a closer view"): over her shoulder (the aiming view), follow, and
@@ -242,7 +240,6 @@ const CAMERA_STYLE_KEY = 'gdm.cameraStyle';
  * whatever is chosen, so the crosshair aims where she does. Kept on this device apart from the other list.
  */
 const MANUAL_CAMERA_STYLES: readonly CameraStyle[] = ['shoulder', 'follow', 'sideLeft', 'sideRight'];
-const MANUAL_CAMERA_STYLE_KEY = 'gdm.cameraStyleManual';
 const MANUAL_AIM_HOLD = 1.2;
 /** Her move, for squaring her feet up between moves (see GAIT_RESET). */
 type Gait = 'stand' | 'ahead' | 'back' | 'left' | 'right' | 'go';
@@ -1130,18 +1127,13 @@ async function start(): Promise<void> {
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   // (her guns' bursts, src/world/burstFire.ts, are in her kit: `burst`)
 
-  // THE CAMERA STYLE in third person (src/camera/cameraRig.ts; Joshua, 2026-11-18): the CAM button goes round them,
-  // and the choice is kept on this device.
+  // THE CAMERA STYLE in third person (src/camera/cameraRig.ts; Joshua, 2026-11-18): the CAM button goes round them.
+  // EVERY START OPENS ON FOLLOW (Joshua, 2026-11-24: "starting 3rd person view is following"), aimed by hand or not; the
+  // CAM button's choice lasts until the game is closed. (It was kept on the phone, 'gdm.cameraStyle' and
+  // 'gdm.cameraStyleManual', and aimed by hand it started over her shoulder.) Firing still brings the shoulder camera
+  // for a moment (MANUAL_AIM_HOLD).
   let cameraStyle: CameraStyle = 'follow';
-  try {
-    const kept = localStorage.getItem(CAMERA_STYLE_KEY) as CameraStyle | null;
-    if (kept && CAMERA_STYLES.includes(kept)) cameraStyle = kept;
-  } catch { /* (no storage: follow) */ }
-  let manualStyle: CameraStyle = 'shoulder';
-  try {
-    const kept = localStorage.getItem(MANUAL_CAMERA_STYLE_KEY) as CameraStyle | null;
-    if (kept && MANUAL_CAMERA_STYLES.includes(kept)) manualStyle = kept;
-  } catch { /* (no storage: over her shoulder) */ }
+  let manualStyle: CameraStyle = 'follow';
   /** Seconds since FIRE was last held (aimed by hand: the camera stays over her shoulder this long after). */
   let sinceFire = Infinity;
   rig.droneLimit = DOME_RADIUS - 3;
@@ -1707,10 +1699,8 @@ async function start(): Promise<void> {
       if (aimedByHand()) {
         // (aimed by hand: its own few styles)
         manualStyle = MANUAL_CAMERA_STYLES[(MANUAL_CAMERA_STYLES.indexOf(manualStyle) + 1) % MANUAL_CAMERA_STYLES.length];
-        try { localStorage.setItem(MANUAL_CAMERA_STYLE_KEY, manualStyle); } catch { /* (kept for this visit only) */ }
       } else {
         cameraStyle = CAMERA_STYLES[(CAMERA_STYLES.indexOf(cameraStyle) + 1) % CAMERA_STYLES.length];
-        try { localStorage.setItem(CAMERA_STYLE_KEY, cameraStyle); } catch { /* (kept for this visit only) */ }
       }
       applyView();
     },
@@ -1804,6 +1794,9 @@ async function start(): Promise<void> {
   }
 
   hud.topSlot().appendChild(vitalsPanel.element);
+  // EVERY START IS IN FIRST PERSON (Joshua, 2026-11-24: "The starting default view is 1st person"); the 1st/3rd button
+  // goes to third person, which opens on Follow (above). `?view=third` starts in third person, for test pages.
+  if (new URLSearchParams(location.search).get('view') !== 'third') rig.setMode('first');
   // (the camera style and the buttons for the view she starts in)
   applyView();
 

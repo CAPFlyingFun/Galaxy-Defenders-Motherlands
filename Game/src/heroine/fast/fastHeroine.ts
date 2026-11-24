@@ -119,6 +119,15 @@ const EYE_ABOVE = 0.051;
 /** Her head kept level from this ground speed (m/s, a fast walk) fully by this one (a jog): see "KEPT LEVEL FROM A JOG UP". */
 const HEAD_LEVEL_FROM = 1.6;
 const HEAD_LEVEL_AT = 2.4;
+/**
+ * HER HEAD NEVER BANKS WHILE SHE MOVES (v0.2.169; Joshua, 2026-11-24: "When walking sideways looking ahead, can we keep
+ * the head level like in real life so it doesn't bank left/right... but the head still faces the camera's direction
+ * while the rest of the body can offset a different direction?"): from HEAD_NO_ROLL_FROM to HEAD_NO_ROLL_AT m/s,
+ * standing up (not crouched, down or winded), her head keeps no sideways tilt (`steadyHead`). Its way and its pitch
+ * stay as they were. GAME TUNING.
+ */
+const HEAD_NO_ROLL_FROM = 0.15;
+const HEAD_NO_ROLL_AT = 0.6;
 const HEAD_UP_MOST = (55 * Math.PI) / 180;
 const HEAD_DOWN_MOST = (75 * Math.PI) / 180;
 /**
@@ -1008,6 +1017,9 @@ if (uHideHead > 0.5) {
   const spineAxis = new THREE.Vector3();
   /** How far her head's frame leans with her torso this frame, radians (her torso's lean; none from a jog up). */
   let headFrameLean = 0;
+  /** How much of her head's sideways tilt is taken out this frame, 0..1 (HEAD_NO_ROLL_FROM: moving, upright). */
+  let headNoRoll = 0;
+  const levelU = new THREE.Vector3();
   /**
    * HER TORSO'S FRAME: her body's way `yaw` leaned forward by `lean` (radians): its forward, up and side (her left as
    * the compass turns), written into torsoF, torsoU, torsoS.
@@ -1055,6 +1067,19 @@ if (uHideHead > 0.5) {
     const ct = Math.cos(tip), st = Math.sin(tip);
     wantF.copy(rightNeat).multiplyScalar(ct).addScaledVector(torsoU, st);
     wantU.copy(rightNeat).multiplyScalar(-st).addScaledVector(torsoU, ct);
+    // NO BANK WHILE SHE MOVES (v0.2.169, HEAD_NO_ROLL_FROM): her torso's forward lean is her head's tip when she looks
+    // ahead, but a SIDEWAYS TILT (a bank) when her head is turned from her torso, walking one way and looking another
+    // (measured before: 2.9 degrees walking, looking 84 aside). Moving, her head keeps the way it looks (wantF, so the
+    // first-person view looks exactly where it did) and its up is turned into the upright plane through that way:
+    // the world's up less its part along her look. Looking straight ahead nothing changes (her up is in that plane
+    // already). Past straight up or down there is no such plane, and it is left as it is.
+    if (headNoRoll > 0) {
+      levelU.set(0, 1, 0).addScaledVector(wantF, -wantF.y);
+      if (levelU.lengthSq() > 1e-4 && levelU.dot(wantU) > 0) {
+        wantU.lerp(levelU.normalize(), headNoRoll);
+        wantU.addScaledVector(wantF, -wantU.dot(wantF)).normalize();
+      }
+    }
     wantS.crossVectors(wantF, wantU).normalize();
     // (the turn that takes the one set of directions onto the other: want · now⁻¹; a basis's inverse is its transpose)
     nowBasis.makeBasis(nowF, nowU, nowS);
@@ -2129,10 +2154,26 @@ if (uHideHead > 0.5) {
       // a jog up, eased between (HEAD_LEVEL_FROM .. HEAD_LEVEL_AT, m/s). Running she leans; her head does not.
       const levelS = Math.min(1, Math.max(0, (motion.speed - HEAD_LEVEL_FROM) / (HEAD_LEVEL_AT - HEAD_LEVEL_FROM)));
       headFrameLean = torsoLean * (1 - levelS * levelS * (3 - 2 * levelS));
+      // (and no sideways tilt of her head while she moves, standing up: `steadyHead`, HEAD_NO_ROLL_FROM)
+      const movingS = Math.min(1, Math.max(0, (motion.speed - HEAD_NO_ROLL_FROM) / (HEAD_NO_ROLL_AT - HEAD_NO_ROLL_FROM)));
+      headNoRoll = movingS * movingS * (3 - 2 * movingS) * upright * (1 - crouchS) * (1 - windedS);
       let headSide = 0, headTip = facing?.headPitch ?? 0;
       if (facing) {
-        if (firstPerson) headSide = wrap(facing.head - yawNow);
-        else [headSide, headTip] = sideAndTip(facing.head - yawNow, headTip);
+        if (firstPerson) {
+          headSide = wrap(facing.head - yawNow);
+          // MOVING, THE VIEW KEEPS ITS PITCH (v0.2.169, with no bank, HEAD_NO_ROLL_FROM): first person the player's
+          // pitch is a tip from her torso's line, which is right looking ahead; walking one way and looking 90 degrees
+          // another, her torso's forward lean no longer tips her head down, and the view rose by it (measured: 7.5
+          // degrees up walking sideways, 0 walking ahead). Moving, the player's look is taken as a way in the world, as
+          // third person takes a target (`sideAndTip`), so the view looks exactly where it is asked to.
+          if (headNoRoll > 0) {
+            const [side, tip] = sideAndTip(facing.head - yawNow, headTip);
+            if (Math.abs(wrap(side - headSide)) < Math.PI / 2) {
+              headSide += wrap(side - headSide) * headNoRoll;
+              headTip += (tip - headTip) * headNoRoll;
+            }
+          }
+        } else [headSide, headTip] = sideAndTip(facing.head - yawNow, headTip);
       }
       // SHE LOOKS DOWN AT HER HAND WHERE THE BABY KICKED (bellyTouch.ts `look`; Joshua, 2026-11-20), over where she was
       // looking: her head turned and tipped toward the spot by as much as the look is on (in first person too: the

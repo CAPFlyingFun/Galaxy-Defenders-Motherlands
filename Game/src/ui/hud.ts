@@ -143,14 +143,18 @@ const SAME_TAP_MS = 700;
  * the button), or another part of the game pressing the button for the player (the control editor's
  * "Switch view": src/ui/layoutEditor.ts).
  */
-function tapButton(button: HTMLElement, tap: () => void): void {
+function tapButton(button: HTMLElement | SVGElement, tap: () => void): void {
   let answeredAt = -Infinity;
-  button.addEventListener('pointerdown', (event) => {
+  // (a picture's piece, an SVG element, can be a button too: the top pace's sections. Its events are typed as plain
+  //  events, so each is read as the pointer or mouse event it is)
+  button.addEventListener('pointerdown', (e) => {
+    const event = e as PointerEvent;
     if (event.pointerType === 'mouse' && event.button !== 0) return; // only the mouse's main button
     answeredAt = performance.now();
     tap();
   });
-  button.addEventListener('click', (event) => {
+  button.addEventListener('click', (e) => {
+    const event = e as MouseEvent;
     // `detail` counts the presses of a real tap or mouse click (1, 2...); it is 0 for a click nothing pressed.
     if (event.detail === 0 && performance.now() - answeredAt > SAME_TAP_MS) tap();
   });
@@ -158,8 +162,84 @@ function tapButton(button: HTMLElement, tap: () => void): void {
 
 /** The top pace's four choices, slowest first (input/pace.ts PACES). */
 const PACE_CAP_NAMES = ['WALK', 'JOG', 'RUN', 'SPRINT'] as const;
-/** The gap between the top pace row and the MOVE stick's top, px. */
-const PACE_CAP_ABOVE = 4;
+/**
+ * THE TOP PACE'S CURVE OVER THE MOVE STICK (v0.2.169; GAME TUNING). Measured in px at the stick's own size (200 px
+ * across, its middle at 0, 0: hud.css `.gd-walk-stick`), and angles in degrees round its middle as a clock's hands are not: 0 to its right,
+ * 90 straight up, going round to the left (as in school maths). The curve is drawn in a picture sized as a share of
+ * the stick (`.gd-pace-arc`), so a stick made bigger or smaller (Edit controls) takes the curve with it.
+ *   inner, outer  the band's edges from the stick's middle (the stick's own edge is 100 + its 2 px border). Its top
+ *                 stays under her vitals card's chips and FPS line with all her vitals shown (pictured at 932 x 430)
+ *   from, to      where the band begins (upper left) and ends (upper right). It begins short of straight up-left so
+ *                 nothing reaches past the stick's LEFT side (the phone's camera cutout is there on Joshua's layout:
+ *                 the old row was wider than the stick and WALK hung under it); it ends before the CAMERA stick
+ *                 beside it (16 px away on Joshua's layout).
+ *   gap           the space between two sections
+ *   share         each section's share of the band, by its word's length (SPRINT needs the most room)
+ */
+const PACE_ARC = { inner: 105, outer: 131, from: 112, to: 28, gap: 2, share: [6, 5, 5, 8] } as const;
+/** The stick's own size the curve is measured at, px (hud.css `.gd-walk-stick` width). */
+const PACE_ARC_STICK = 200;
+/** The picture's half-size, px at that size: it reaches the band's outer edge with a little to spare. */
+const PACE_ARC_HALF = 136;
+
+/** A point on a circle round the stick's middle, as the picture is laid out (y down): angle in degrees, as PACE_ARC. */
+function arcPoint(radius: number, degrees: number): string {
+  const a = (degrees * Math.PI) / 180;
+  return `${(radius * Math.cos(a)).toFixed(2)} ${(-radius * Math.sin(a)).toFixed(2)}`;
+}
+
+/**
+ * THE TOP PACE, FOUR CURVED SECTIONS OVER THE MOVE STICK (Joshua, 2026-11-24: "layout the speed selectors as a curve
+ * that matches the size or link it to the joystick so it's all together in one"; his mockup pick): drawn as a child of
+ * the stick, so it moves and scales with it. Each section is a piece of a ring (two arcs joined at their ends), its word
+ * written along the ring's middle (`textPath`). Returns the picture and its four sections (WALK first).
+ */
+function makePaceArc(stick: HTMLElement): { arc: SVGSVGElement; sections: SVGGElement[] } {
+  const SVG = 'http://www.w3.org/2000/svg';
+  const arc = document.createElementNS(SVG, 'svg');
+  arc.setAttribute('class', 'gd-pace-arc');
+  arc.setAttribute('viewBox', `${-PACE_ARC_HALF} ${-PACE_ARC_HALF} ${PACE_ARC_HALF * 2} ${PACE_ARC_HALF * 2}`);
+  // (sized and placed as shares of the stick, so it scales with it: the CSS reads these two numbers)
+  arc.style.setProperty('--arc-size', `${((PACE_ARC_HALF * 2) / PACE_ARC_STICK) * 100}%`);
+  arc.style.setProperty('--arc-at', `${(-(PACE_ARC_HALF * 2 - PACE_ARC_STICK) / 2 / PACE_ARC_STICK) * 100}%`);
+  const { inner, outer, from, to, gap, share } = PACE_ARC;
+  const middle = (inner + outer) / 2;
+  const total = share.reduce((a, b) => a + b, 0);
+  const room = from - to - gap * (share.length - 1);   // (the degrees left for the sections themselves)
+  let start = from;
+  const sections = PACE_CAP_NAMES.map((name, i) => {
+    const end = start - (room * share[i]) / total;
+    const g = document.createElementNS(SVG, 'g');
+    g.setAttribute('class', 'gd-pace-seg');
+    // the section: along the outer edge clockwise (sweep 1), in to the inner edge, back along it, and closed
+    const shape = document.createElementNS(SVG, 'path');
+    shape.setAttribute('class', 'gd-pace-seg-shape');
+    shape.setAttribute('d', `M${arcPoint(outer, start)} A${outer} ${outer} 0 0 1 ${arcPoint(outer, end)} L${arcPoint(inner, end)} A${inner} ${inner} 0 0 0 ${arcPoint(inner, start)} Z`);
+    g.appendChild(shape);
+    // its word, along the band's middle (an unseen path for the text to follow), centred, a third of a letter down
+    const id = `gd-pace-arc-${i}`;
+    const line = document.createElementNS(SVG, 'path');
+    line.setAttribute('id', id);
+    line.setAttribute('d', `M${arcPoint(middle, start)} A${middle} ${middle} 0 0 1 ${arcPoint(middle, end)}`);
+    line.setAttribute('fill', 'none');
+    g.appendChild(line);
+    const text = document.createElementNS(SVG, 'text');
+    text.setAttribute('class', 'gd-pace-seg-text');
+    text.setAttribute('dy', '0.35em');
+    const along = document.createElementNS(SVG, 'textPath');
+    along.setAttribute('href', `#${id}`);
+    along.setAttribute('startOffset', '50%');
+    along.setAttribute('text-anchor', 'middle');
+    along.textContent = name;
+    text.appendChild(along);
+    g.appendChild(text);
+    arc.appendChild(g);
+    start = end - gap;
+    return g;
+  });
+  stick.appendChild(arc);
+  return { arc, sections };
+}
 
 /** The bellies every outfit is pictured at for Settings (public/thumbs/; the one nearest hers is shown). */
 const THUMB_BELLIES = [10, 50, 80, 120, 150] as const;
@@ -176,12 +256,9 @@ export class Hud {
   private readonly stickKnob: HTMLElement;
   private readonly stickRings: HTMLElement[];
   private readonly paceLabel: HTMLElement;
-  /** The top pace's row over the MOVE stick, and its four choices (WALK, JOG, RUN, SPRINT). */
-  private readonly paceCapRow: HTMLElement;
-  private readonly paceCapOptions: HTMLElement[];
-  /** When the row next looks where the stick is (ms), and where it put itself last ("left,top"). */
-  private paceCapCheckAt = 0;
-  private paceCapAt = '';
+  /** The top pace's curve over the MOVE stick, and its four sections (WALK, JOG, RUN, SPRINT). */
+  private readonly paceArc: SVGSVGElement;
+  private readonly paceCapOptions: SVGGElement[];
   /** What the stick last showed, so the page is only touched when it changes. */
   private shownPace = '';
   private shownRing = -1;
@@ -278,21 +355,23 @@ export class Hud {
     // hidden since v0.2.164: the TOP PACE row below sits where it was and shows her pace itself.)
     this.paceLabel = element('span', 'gd-pace', this.stick);
     // THE TOP PACE (Joshua's handoff, 2026-11-23: "Keep the existing five-ring dynamic joystick; add a tappable
-    // maximum-pace selector (Walk / Jog / Run / Sprint)"): a row of four just over the stick, the one chosen lit GOLD;
-    // the pace she is at now ringed in teal (`setPace`), as the word over the stick used to say it. The stick pushed to
-    // its edge builds up to the chosen one and no further (input/pace.ts `ceiling`); the rings work as ever below it.
-    // A control of its own (Edit controls: "Top pace"), so a MOVE stick made smaller there does not shrink it; until it
-    // is moved there itself it FOLLOWS THE STICK, wherever the stick is put (`followStick`). (First it sat higher, over
-    // the word: with all her vitals shown it landed on the WEEK chip and the FPS line, pictured at 932 x 430.)
-    this.paceCapRow = element('div', 'gd-pace-cap', this.root);
-    this.paceCapOptions = PACE_CAP_NAMES.map((name, i) => {
-      const option = element('button', 'gd-pace-cap-option', this.paceCapRow, name);
-      option.type = 'button';
-      tapButton(option, () => {
+    // maximum-pace selector (Walk / Jog / Run / Sprint)"): the one chosen lit GOLD, the pace she is at now ringed in
+    // teal (`setPace`), as the word over the stick used to say it; winded, all dimmed. The stick pushed to its edge
+    // builds up to the chosen one and no further (input/pace.ts `ceiling`); the rings work as ever below it.
+    // SINCE v0.2.169 A CURVE OVER THE STICK, PART OF IT (Joshua, 2026-11-24, `makePaceArc`): it moves and scales with
+    // the stick in Edit controls (no control of its own any more: "Top pace" left the list, a place saved for it is
+    // never read). It was a row of four over the stick, wider than it, so on his layout WALK hung past the stick's left
+    // side under the phone's camera cutout.
+    const paceArc = makePaceArc(this.stick);
+    this.paceArc = paceArc.arc;
+    this.paceCapOptions = paceArc.sections.map((section, i) => {
+      // (a section is inside the stick: its touch must not ALSO grab the stick and move her)
+      section.addEventListener('pointerdown', (event) => event.stopPropagation());
+      tapButton(section, () => {
         this.setPaceCap(i + 1);
         options.onGraphicsChange('paceCap', i + 1);
       });
-      return option;
+      return section;
     });
     this.setPaceCap(options.graphics.paceCap);
     this.stickKnob = element('div', 'gd-stick-knob', this.stick);
@@ -941,41 +1020,15 @@ export class Hud {
       // (the pace she is at, ringed in the top pace row; winded, the whole row dimmed: she can only walk)
       const now = PACE_CAP_NAMES.findIndex((n) => n === name.toUpperCase());
       this.paceCapOptions.forEach((option, k) => option.classList.toggle('is-now', k === now));
-      this.paceCapRow.classList.toggle('is-winded', name.toUpperCase() === 'WINDED');
+      this.paceArc.classList.toggle('is-winded', name.toUpperCase() === 'WINDED');
     }
-    this.followStick();
     if (ring !== this.shownRing) {
       this.shownRing = ring;
       this.stickRings.forEach((circle, k) => circle.classList.toggle('is-on', k === ring - 1));
     }
   }
 
-  /**
-   * THE TOP PACE ROW FOLLOWS THE STICK: just over the MOVE stick's top, centred on it, wherever the stick is and however
-   * big (Edit controls), unless the row has been placed there itself (a pinned control keeps its own place). Looked at
-   * four times a second (reading where the stick is costs the page a little), and moved only when the stick has.
-   */
-  private followStick(): void {
-    const now = performance.now();
-    if (now < this.paceCapCheckAt) return;
-    this.paceCapCheckAt = now + 250;
-    const row = this.paceCapRow;
-    if (row.dataset.gdmPinned === '1') return;
-    const stick = this.stick.getBoundingClientRect(), root = this.root.getBoundingClientRect();
-    if (stick.width === 0) { row.hidden = true; return; }
-    row.hidden = false;
-    const width = row.offsetWidth || 200, height = row.offsetHeight || 26;
-    const left = Math.max(4, stick.left - root.left + (stick.width - width) / 2);
-    const top = stick.top - root.top - height - PACE_CAP_ABOVE;
-    const key = `${Math.round(left)},${Math.round(top)}`;
-    if (key === this.paceCapAt) return;
-    this.paceCapAt = key;
-    row.style.left = `${Math.round(left)}px`;
-    row.style.top = `${Math.round(top)}px`;
-    row.style.bottom = 'auto';
-  }
-
-  /** Light the top pace chosen (1 walk .. 4 sprint) in the row over the MOVE stick. */
+  /** Light the top pace chosen (1 walk .. 4 sprint) on the curve over the MOVE stick. */
   setPaceCap(cap: number): void {
     this.paceCapOptions.forEach((option, k) => option.classList.toggle('is-on', k === cap - 1));
   }

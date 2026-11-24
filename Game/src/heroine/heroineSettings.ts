@@ -36,9 +36,10 @@ export type ShadowChoice = 'on' | 'off';
 export type MapChoice = 'island' | 'town' | 'prologue';
 
 /** Settings -> WORLD -> Landscaping (src/world/island/treeObjects.ts). */
-export type LandscapingChoice = 'images' | 'hybrid' | 'objects' | 'off';
+// (FLORA, 2026-11-24: 'flora', the island's own sci-fi flora: src/world/island/flora/floraPlanting.ts)
+export type LandscapingChoice = 'images' | 'hybrid' | 'objects' | 'off' | 'flora';
 export const LANDSCAPING_CHOICES: readonly (readonly [string, LandscapingChoice])[] = [
-  ['Images only', 'images'], ['Hybrid', 'hybrid'], ['Objects only', 'objects'], ['Off', 'off'],
+  ['Images only', 'images'], ['Hybrid', 'hybrid'], ['Objects only', 'objects'], ['Sci-fi flora', 'flora'], ['Off', 'off'],
 ];
 /** Settings -> WORLD -> Ground (src/world/island/groundPaint.ts): the approved solid colours, or the old pictures. */
 export type GroundChoice = 'colours' | 'textures';
@@ -67,7 +68,7 @@ function asIslandGrid(v: string | null): IslandGrid | null {
 function asLandscaping(v: string | null): LandscapingChoice {
   // (OFF unless chosen: Joshua, 2026-11-24, "set the default landscaping to off" while the island's own sci-fi flora is
   //  made; a choice already saved on the phone still wins)
-  return v === 'images' || v === 'objects' || v === 'hybrid' ? v : 'off';
+  return v === 'images' || v === 'objects' || v === 'hybrid' || v === 'flora' ? v : 'off';
 }
 
 export interface HeroineSettings {

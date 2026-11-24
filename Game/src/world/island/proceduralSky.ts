@@ -284,12 +284,13 @@ void main() {
   }
   // THE AURORA (night): curtains low over the horizon, rippling along it
   if (uAurora > 0.01 && y > 0.04) {
-    float az = atan(d.z, d.x);
-    float baseY = 0.2 + 0.14 * n2(vec2(az * 2.5 + uTime * 0.04, uTime * 0.02));
+    // (the noise is read round a CIRCLE, the way she looks on the compass: read along the compass angle it jumped where
+    //  the angle goes from -180 to +180 degrees, a hard edge in the curtains due west)
+    float baseY = 0.2 + 0.14 * n2(flatD * 2.5 + vec2(uTime * 0.04, uTime * 0.02));
     float rise = y - baseY;
     float curtain = smoothstep(0.0, 0.03, rise) * exp(-max(rise, 0.0) * 4.5);
-    float rays = 0.55 + 0.45 * n2(vec2(az * 45.0, uTime * 0.25));
-    float patches = smoothstep(0.25, 0.75, n2(vec2(az * 1.6 - uTime * 0.03, 4.2)));
+    float rays = 0.55 + 0.45 * n2(flatD * 45.0 + vec2(0.0, uTime * 0.25));
+    float patches = smoothstep(0.25, 0.75, n2(flatD * 1.6 + vec2(-uTime * 0.03, 4.2)));
     vec3 ac = mix(vec3(0.1, 1.0, 0.65), vec3(0.5, 0.35, 1.0), smoothstep(0.0, 0.3, rise));
     col += ac * curtain * rays * patches * uAurora * 0.95;
   }

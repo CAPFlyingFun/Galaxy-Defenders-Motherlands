@@ -467,7 +467,7 @@ export class Hud {
     choiceRow('Clouds', 'clouds', [['On', 'on'], ['Off', 'off']], 'A few soft clouds drifting (a storm always has them). Off is a little lighter for the phone. Changes at once.');
     choiceRow('Island grid', 'islandGrid', ISLAND_GRID_CHOICES, 'How many tiles the 56 km island is cut into: the nine round you are loaded in full. Smaller tiles load and build quicker but cover less. To compare on your phone; 16 x 16 is the default. Changing it reloads the game.');
     choiceRow('Rivers & lakes', 'rivers', [['Off', 'off'], ['On', 'on']], 'The real island\'s rivers and lakes, cut into the ground and filled. Off until the island\'s own lakes are made. Changing it reloads the game.');
-    choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Changes at once.');
+    choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Sci-fi flora: the island\'s own giant mushrooms and alien plants (some glow at night). Changes at once.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');
     // HER OUTFIT, AS PICTURES (Joshua, 2026-11-20: "a little thumbnail of what they look like, like in CCBS... bake the
     // images at 10%, 50%, 80%, 120%, and 150% and it will pick the closest based on the belly slider"): every outfit

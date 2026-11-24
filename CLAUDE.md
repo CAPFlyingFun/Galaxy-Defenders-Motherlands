@@ -1267,7 +1267,7 @@ use the game's single copy of three.js.
   THE SCI-FI FLORA, FIRST BATCH (Joshua: "assign other agents to help work on creating custom Sci-fi landscaping like
   giant mushrooms, plants, etc"): made by a helper agent in its own worktree (/home/claude/gdm-flora), branch
   `flora-wip` (aca70fd), NOT merged: `src/world/island/flora/` (floraKit, floraModels, floraMaterial, floraSpecies),
-  `flora-lab.html` + `src/floraLab.ts`. 11 kinds in code, one InstancedMesh geometry each with near and far models
+  `flora-lab.html` + `src/floraLab.ts` (MERGED and planted in v0.2.168). 11 kinds in code, one InstancedMesh geometry each with near and far models
   within budget, vertex colours, two shared materials (lit, glow), glow per instance in six colours, `uniforms.night`:
   Lantern Cap and Umber Parasol (8-15 m), Sky Parasol and Rust Crown (giants, 20-40 m), Glowbell and Button clusters
   (0.1-5 m), Shelf Fungus Boulder and Shelf Tiers, Siphon Coral, Crescent Fern, Spore Pods. Its own notes: clusters at
@@ -1299,7 +1299,34 @@ use the game's single copy of three.js.
   ocean.ts `setSky` (its reflected sky: it was a fixed day colour, so the night sea glowed). Readout: `sky 13:15 ·
   clear`. Test pages: `gdm.sky({ hour, event, cycle, clouds })`. PICTURED at 932 x 430: midday with clouds, sunrise
   over the sea, sunset inland, the moon rising in the east with its path on the sea, stars, the aurora, the bands, the
-  storm. Not yet: rain, the ocean handoff's other ideas (depth colours, foam), the flora's glow tied to `night`.
+  storm. Not yet: rain, the ocean handoff's other ideas (depth colours, foam).
+- v0.2.168: THE SCI-FI FLORA PLANTED ON THE ISLAND, ITS GLOW BY THE SKY'S NIGHT, AND THE DARK STREAK ON THE HILLS
+  (Joshua, 2026-11-24: "Good to push so I can test the landscaping in the game... they will load if I turn landscaping
+  on"; then, of his screenshot, "this dark streak I see in the mountains ⛰️ is that a river or a gap?"; 16 x 16 his pick
+  of the grids, "a good compromise"). (1) THE FLORA: the helper agent's branch `flora-wip` (worktree
+  /home/claude/gdm-flora) merged: the 11 kinds of v0.2.166's first batch, and their PLANTING
+  (`world/island/flora/floraPlanting.ts` `IslandFlora`): Settings -> WORLD -> Landscaping -> SCI-FI FLORA (the trees are
+  off with it; `LandscapingChoice` 'flora', live). Three layers of patches planted as the camera nears, nearest first, let
+  go far off: SMALL ground cover a place tried every 8 m, drawn to about 205 m; MEDIUM the tall caps (to 470 m) and shelf
+  boulders (310) every 20 m; GIANTS one place a 400 m square, to 1.5 km. Each place by a steady number made from where it
+  is (the same island grows the same plants), kept to the ground that suits it by height and slope as the ground is
+  coloured (beach pods and coral, grass clusters and ferns, the forest's caps and giants, rock's boulders, cliffs' shelf
+  tiers), nothing in the sea, 25-80 m kept clear round her arrival. ONE InstancedMesh per kind and detail (at most 22
+  draws), refilled with what is in front of the camera; near and far models swapped by the 3D trees' dithered wipe; the
+  tall stems are SOLID (`trunkBlocks`). Glow colours in patches of about 190 m. THE GLOW FOLLOWS THE SKY (islandWorld.ts
+  `setEnvironment`: `flora.setNight(env.night)`; the Picture sky keeps it at its daytime glow). The flora lab:
+  `flora-lab.html` (in LAB_PAGES). MEASURED (built game, the forest at (-800, 0), 13:15): 448 plants in 18 draws, about
+  116,000 triangles; the frame 79 draws, about 638,000; pictured at 13:15, 17:48, 21:30 and with the aurora. The fades in
+  motion are for his phone (the software test browser runs at 1-2 FPS). (2) THE AURORA'S SEAM (proceduralSky.ts): its
+  noise was read along the compass angle, which jumps from -180 to +180 degrees due west: a hard edge in the curtains
+  there. Now read round a circle (`flatD`), seamless. (3) THE DARK STREAK (his screenshot: a dark dashed line across the
+  green hills inland, in mine too): NOT A RIVER (rivers are off) NOR A GAP: the hanging edge walls of the tiles (their
+  "skirts", tileStreamer.ts `skirtGeometry`), which hide the cracks where a fine tile meets a coarser one. They were drawn
+  from both sides, and three.js turns a face's light round when its BACK is seen, as if that ground faced down: where a
+  fine tile's edge sits a little under its neighbour's, that strip of wall showed nearly black. Now each wall is two
+  copies, one wound each way, drawn with the ground's own one-sided material (the copy facing the camera is drawn, lit
+  with the facing of the ground above it): pictured the same view with the skirts and without, the same hills, no
+  streak, no crack. One shader fewer (the skirts' two-sided copy of the ground's material is gone).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

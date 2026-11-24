@@ -50,6 +50,8 @@ import { IslandTrees } from './trees';
 import { createSkyPicture, type SkyPicture } from './skyPicture';
 import { createProceduralSky, type Environment, type ProceduralSky } from './proceduralSky';
 import type { Landscaping } from './treeObjects';
+// (FLORA, 2026-11-24: the island's own sci-fi flora, Settings -> WORLD -> Landscaping -> Sci-fi flora)
+import { IslandFlora } from './flora/floraPlanting';
 
 /** The arrival point in the island's own metres (Beyond Extinction's spawn, from its manifest). */
 const ARRIVAL = { x: 21290, z: 1288 };
@@ -106,8 +108,13 @@ export interface IslandWorld {
   startStreaming(): void;
   /** The forest, for the readout: trees drawn and in how many draws. */
   treeCounts(): { trees: number; draws: number } | null;
-  /** Settings -> WORLD -> Landscaping, live (treeObjects.ts). */
+  /** Settings -> WORLD -> Landscaping, live (treeObjects.ts; 'flora' the sci-fi flora, flora/floraPlanting.ts). */
   setLandscaping(mode: Landscaping): void;
+  /**
+   * FLORA: NIGHT, 0 day .. 1 night: the sci-fi flora's glowing parts light up (flora/floraMaterial.ts). For the sky's
+   * time of day to call.
+   */
+  setNight(n: number): void;
   /** Settings -> WORLD -> Ground, live: Solid colours or Textures (groundPaint.ts). */
   setGround(mode: GroundMode): void;
   /** TEST TOOLS -> Ground colours: a kind's base (0) or accent (1) colour, live on every tile. */
@@ -222,7 +229,12 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   };
   // THE FOREST (trees.ts, Beyond Extinction's photo trees on the real vegetation maps), in the island's own metres as
   // the rivers are; Settings -> WORLD -> Landscaping picks photos, 3D trees near her, 3D only, or none (live)
-  const trees = new IslandTrees(waterGroup, base, options.landscaping ?? 'off');
+  // (FLORA: with 'flora' the trees are off, and the sci-fi flora is planted instead, in the same island metres, kept
+  //  clear round her arrival point: flora/floraPlanting.ts)
+  const landscaping = options.landscaping ?? 'off';
+  const trees = new IslandTrees(waterGroup, base, landscaping === 'flora' ? 'off' : landscaping);
+  const flora = new IslandFlora(waterGroup, landscaping === 'flora', [{ x: ARRIVAL.x, z: ARRIVAL.z }]);
+  let floraOn = landscaping === 'flora';
   /** She is playing (`startStreaming`), and whether the forest has been let start (once the tiles round her are in). */
   let playing = false, forestBegun = false;
 
@@ -260,6 +272,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       (scene.background as THREE.Color).set(HAZE);
       fog.color.set(HAZE); fog.near = FOG_NEAR; fog.far = FOG_FAR;
       ocean.setSky(new THREE.Color(0x9fc6df));
+      flora.setNight(0); // (the picture's sky is always day: the flora at its daytime glow)
     } else {
       // (the picture let go: its 2048 x 1024 on the graphics chip and in the page)
       pictureSky?.dispose(); pictureSky = null;
@@ -282,8 +295,10 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   return {
     group,
     // (her body is about 0.25 m round: a trunk stops her that far from its bark)
-    walls: new IslandWalls(groundAt, standAt, (x, z) => trees.trunkBlocks(x + origin.x, z + origin.y, BODY_RADIUS)),
-    setLandscaping: (mode) => trees.setMode(mode),
+    walls: new IslandWalls(groundAt, standAt, (x, z) => trees.trunkBlocks(x + origin.x, z + origin.y, BODY_RADIUS) || flora.trunkBlocks(x + origin.x, z + origin.y, BODY_RADIUS)),
+    // (FLORA: 'flora' turns the trees off and the flora on; any other choice the other way round)
+    setLandscaping: (mode) => { floraOn = mode === 'flora'; trees.setMode(floraOn ? 'off' : mode); flora.setActive(floraOn); },
+    setNight: (n) => flora.setNight(n),
     setGround: (mode) => { void paint.setMode(mode); },
     setSkyMode(mode) {
       skyMode = mode;
@@ -296,6 +311,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       (scene.background as THREE.Color).copy(env.fog);
       fog.color.copy(env.fog); fog.near = env.fogNear; fog.far = env.fogFar;
       ocean.setSky(env.seaSky);
+      // (the sci-fi flora's glow follows the night: v0.2.168)
+      flora.setNight(env.night);
     },
     setGroundColour: (kind, which, hex) => paint.setColour(kind, which, hex),
     grid,
@@ -304,7 +321,8 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     seaLevel: WATER_Y,
     arrivalFacing: ARRIVAL_FACING,
     groundAt,
-    treeCounts: () => trees.counts,
+    // (FLORA: its plants and draws when it is the landscaping)
+    treeCounts: () => (floraOn ? flora.counts : trees.counts),
     async ready(x, z, say) {
       // (HER TILE ONLY, v0.2.150: the streamer loads nothing else until `startStreaming`)
       tiles.update(x, z);
@@ -328,10 +346,11 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       // THE FOREST once every tile round her is in (the first time; after that it streams with the camera as before)
       if (!forestBegun) {
         const { ready, total } = tiles.loadState(herX, herZ);
-        if (ready >= total) { forestBegun = true; trees.begin(); }
+        if (ready >= total) { forestBegun = true; trees.begin(); flora.begin(); }
       }
       // (the forest by the CAMERA, in the island's metres: what is near the view is what is drawn)
       trees.update(seconds, camera.position.x + origin.x, camera.position.z + origin.y, hydroGround, hydro);
+      flora.update(seconds, camera, camera.position.x + origin.x, camera.position.z + origin.y, hydroGround, hydro);
       ocean.update(seconds, camera);
     },
     dispose() {
@@ -339,6 +358,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       hydro?.dispose();
       paint.dispose();
       trees.dispose();
+      flora.dispose();
       far.geometry.dispose();
       (far.material as THREE.Material).dispose();
       ocean.dispose();

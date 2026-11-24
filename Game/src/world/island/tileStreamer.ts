@@ -109,9 +109,8 @@ export class TileStreamer {
   private readonly mid: number;
   private readonly byId = new Map<string, IslandManifest['tiles'][number]>();
   private readonly tiles = new Map<string, Tile>();
+  /** The ground's material, for the tiles and their skirts alike (v0.2.168: the skirts had a two-sided copy). */
   private readonly material: THREE.MeshStandardMaterial;
-  /** The skirts' copy, drawn from both sides (a wall's front can face either way, depending on the edge). */
-  private readonly skirtMaterial: THREE.MeshStandardMaterial;
   private readonly shownBytes: Uint8Array;
   /** The tiles still to load round her, nearest first (v0.2.150: one at a time). */
   private queue: [number, number][] = [];
@@ -145,8 +144,6 @@ export class TileStreamer {
     this.group.name = 'island-tiles';
     // (from the island's one ground paint: Solid colours or Textures, changed for every tile at once)
     this.material = paint.material();
-    this.skirtMaterial = paint.material();
-    this.skirtMaterial.side = THREE.DoubleSide;
     this.shown = new THREE.DataTexture(this.shownBytes, this.across, this.across, THREE.RedFormat, THREE.UnsignedByteType);
     this.shown.magFilter = this.shown.minFilter = THREE.NearestFilter;
     this.shown.needsUpdate = true;
@@ -363,7 +360,7 @@ export class TileStreamer {
     mesh.position.set(tile.cx - this.origin.x, 0, tile.cz - this.origin.y);
     mesh.name = `island-${tile.id}`;
     mesh.receiveShadow = true; // (her real shadow falls on the ground itself)
-    const skirt = new THREE.Mesh(skirtGeometry(geometry, seg, SKIRT_DROP), this.skirtMaterial);
+    const skirt = new THREE.Mesh(skirtGeometry(geometry, seg, SKIRT_DROP), this.material);
     mesh.add(skirt);
     mesh.updateMatrixWorld(true);
     return mesh;
@@ -373,7 +370,6 @@ export class TileStreamer {
   dispose(): void {
     for (const [key, t] of [...this.tiles]) this.drop(key, t);
     this.material.dispose();
-    this.skirtMaterial.dispose();
     this.shown.dispose();
   }
 }
@@ -466,9 +462,19 @@ function skirtGeometry(grid: THREE.PlaneGeometry, seg: number, drop: number): TH
     const a = at(ax, az), b = at(bx, bz);
     const A = [p.getX(a), p.getY(a), p.getZ(a)], B = [p.getX(b), p.getY(b), p.getZ(b)];
     const An = [n.getX(a), n.getY(a), n.getZ(a)], Bn = [n.getX(b), n.getY(b), n.getZ(b)];
-    positions.push(...A, ...B, B[0], B[1] - drop, B[2], ...A, B[0], B[1] - drop, B[2], A[0], A[1] - drop, A[2]);
+    const Bd = [B[0], B[1] - drop, B[2]], Ad = [A[0], A[1] - drop, A[2]];
+    // EACH WALL TWICE, ONE COPY WOUND EACH WAY (v0.2.168; Joshua's "dark streak in the mountains"): a wall's face
+    // can be toward the camera on either side, depending on the edge. It was one copy drawn from both sides, and
+    // three.js turns a face's light round when its BACK is seen (as if the ground faced down): wherever a fine tile's
+    // edge sits a little below its coarser neighbour's, that strip of wall showed nearly black, a dark dashed line
+    // along the tile's edge on the hills. Now the copy facing the camera is drawn (its back is culled) and lit with
+    // the ground's own facing above it, so it takes the ground's colour and light and does not show.
+    positions.push(...A, ...B, ...Bd, ...A, ...Bd, ...Ad);   // one way round
     normals.push(...An, ...Bn, ...Bn, ...An, ...Bn, ...An);
     heights.push(A[1], B[1], B[1], A[1], B[1], A[1]);
+    positions.push(...A, ...Bd, ...B, ...A, ...Ad, ...Bd);   // the other
+    normals.push(...An, ...Bn, ...Bn, ...An, ...An, ...Bn);
+    heights.push(A[1], B[1], B[1], A[1], A[1], B[1]);
   };
   for (let i = 0; i < seg; i++) {
     wall(i, 0, i + 1, 0);       // north edge

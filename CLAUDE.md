@@ -325,14 +325,15 @@ use the game's single copy of three.js.
   SINCE v0.2.150 read cut into 16 x 16 tiles of 3.5 km, `height16/`: see v0.2.150 below).
   The 3 x 3 tiles round her are loaded (in a worker), the one(s) within 500 m of her at the fine grid (192 phone /
   256 computer) and the rest at half; past them one coarse mesh of the whole island (`overview.png`, made by
-  `scripts/make_island_overview.py`). Sea, shore and day sky from Beyond Extinction. The game's (0, 0) is her arrival
+  `scripts/make_island_overview.py`). Sea, shore and day sky from Beyond Extinction; the GROUND in the island's own solid
+  colours since v0.2.166 (Beyond Extinction's pictures kept as a setting). The game's (0, 0) is her arrival
   point, BE's Wailua beach spawn (island metres 21290, 1288), facing inland; heights are metres above the sea and she
   stands on the drawn ground (`setPosition(x, z, y)`; the camera keeps above the ground). She wades to 0.6 m deep and
   cannot climb slopes over 1.2 m up per metre. The table, bars and door stand on the beach beside her. The domed town
   is kept as a test map (Settings -> WORLD -> Map, `gdm.map`, `?map=town`) until Joshua picks its place on the island.
   Her FEET stand on the ground under each of them (`footGround.ts` 9, `setGround`): she comes down to her lower
   planted foot's ground, the higher knee bends, each foot is tipped along its slope (up to about 28 degrees).
-  RIVERS AND LAKES (Joshua, 2026-11-19; `carve.ts`, `carveCore.ts`, `hydro.ts`, from BE): the real waterways are cut
+  RIVERS AND LAKES, OFF BY DEFAULT SINCE v0.2.166 (Settings -> WORLD -> Rivers & lakes) (Joshua, 2026-11-19; `carve.ts`, `carveCore.ts`, `hydro.ts`, from BE): the real waterways are cut
   into each tile's heights as it arrives and filled with water levelled on the FINE grid (`fineHeightAtIsland`), built
   per tile once its 4 neighbours are in. In a river or lake deeper than 1.25 m she is held up to her shoulders
   (`standAt`: a stand-in until swimming); the sea still stops her past her knees. `waterLevelAt` takes the NEAREST
@@ -346,7 +347,7 @@ use the game's single copy of three.js.
   draws`. At the arrival: about 1,000-4,800 trees in 47-82 draws, 2 triangles each.
   LANDSCAPING, PHASE 2 (Joshua, 2026-11-20: "Only Image Landscaping / Hybrid - Image + Objects / Only Objects";
   `treeObjects.ts`, `treeModels.ts`): Settings -> WORLD -> Landscaping (`gdm.landscaping`, `?land=`; live): Images only,
-  HYBRID (default: within 60-80 m each photo turns into a 3D model of its kind on the same spot), Objects only (3D to
+  HYBRID (the default until v0.2.166, now OFF: within 60-80 m each photo turns into a 3D model of its kind on the same spot), Objects only (3D to
   280 m, light models past 80 m), Off. The 3D trees are made in code after Thronemound's tree maker (leaning, flared,
   tapering trunks; boughs on a golden spiral; palm/cycad/sago/fern rosettes of drooping fronds; conifer tiers; leaf
   cards from one leaf picture drawn in code), Thronemound's bark photos (`public/island/bark/`), a palm bark drawn in
@@ -1225,6 +1226,54 @@ use the game's single copy of three.js.
   `setBelly` returns whether her points moved; once the builder's shape has come from her live body they do not (her
   shape is the builder's from then on), so fastHeroine.ts measures nothing again until the live body's next reading;
   only her waistband's shader takes the new percent at once.
+- v0.2.166: THE ISLAND'S OWN GROUND, THE GRID AS A SETTING, RIVERS OFF, LANDSCAPING OFF (Joshua, 2026-11-24, after going
+  over his and ChatGPT's Master Island Implementation Handoff, kept outside the repo; the agreed plan is
+  `docs/plan/MOTHERLANDS_PLAN.md` section 9). (1) GROUND (Settings -> WORLD -> Ground, `gdm.ground`, `?ground=`, live;
+  `world/island/groundPaint.ts` `GroundPaint`): SOLID COLOURS, THE DEFAULT ("Keep the textures in settings, but add a new
+  default option which is just solid colors"), no pictures: his approved palette (`GROUND_COLOURS`: reef, sand, grass,
+  forest floor, soil on bare hillsides 31-37 degrees, rock, basalt, crystal peaks with light flecks: NO SNOW, his "I think
+  so yes"), each kind a base and an accent mixed by noise made from the place (blotches, rock's layers, cracks, grass
+  strokes, 5 cm grain), laid from above on flat ground and from the side on steep faces; the patterns within about 35 m
+  of the camera, the grain within 8 m, past that each kind's plain blend (detail too small to see only shimmers). The
+  noise's cells repeat every 1,024 (`gnoise`): the plain hash went blocky far from the island's middle (a float's
+  digits). TEXTURES: the seven pictures exactly as before, fetched only when chosen and let go when not. One GroundPaint
+  for every tile and the far island: the same uniform objects, so a change reaches every tile; switching remakes the
+  shader once. TEST TOOLS -> Ground colours: the phone's own colour picker for every base and accent, live, kept on the
+  phone (`gdm.groundColours`, only the changed kinds), Reset to the approved palette; he sends the codes. Today the
+  textures cost 14 picture reads for EVERY ground pixel (each kind sampled twice, rock and mountain three ways, all of
+  them whatever the height). THE DAYLIGHT'S WHITE BALANCE (`DAYLIGHT_BALANCE` 1.938 / 1.7 / 1.379): in the game the
+  approved colours came out pale and grey-blue, the beach nearly white (the island's blue sky light x 1.7: MEASURED, the
+  sand painted #808080 showed (94, 100, 110), flat ground lit at 52 / 59 / 73% per channel; Beyond Extinction's pictures
+  were made warm to make up for it); the solid colours are multiplied by its inverse, so flat ground in daylight shows
+  the swatches (pictured: the beach now warm cream, within the ground's own +-10% patches). Measure again if the
+  island's lights change. (2) ISLAND GRID (Settings -> WORLD -> Island grid, `gdm.islandGrid`, `?grid=`, restarts):
+  8 x 8 (Beyond Extinction's own), 16 x 16 (the default), 32 x 32 (1.75 km) or 64 x 64 (875 m), cut by
+  `scripts/make_island_tiles_n.py 32|64` from the same 7 km tiles (`height32/`, `height64/`, `manifest32/64.json`;
+  every piece read back and checked; edges shared). TILE NAMES go on past Z as a spreadsheet's columns (AA ... BL:
+  terrainSampling.ts `tileIdOf`; the old one letter ran into symbols). A tile's grid is never finer than its own heights
+  (tileStreamer.ts `fineSeg`/`halfSeg`: a 64 x 64 tile has 64 squares of data). THE OFFLINE COPY fingerprints each
+  height folder AS ONE (vite.config.ts `tileFolder`, sw.js `fingerprintFor`): 5,600 tiles a line each would have made
+  sw.js about 360 KB, fetched on every open; it went from 59 to 44 KB. (3) RIVERS & LAKES (`gdm.rivers`, `?rivers=`,
+  restarts): OFF by default ("Don't draw for now as the island waterways are still messed up"): no water, no channels
+  cut in, nothing of theirs fetched; the trees take no water as none. (4) LANDSCAPING defaults to OFF ("set the default
+  landscaping to off"; a saved choice still wins). The readout's `isle 16x16 · colours · rivers off`.
+  MEASURED (the built game in the software test browser, 466 x 215, touch, both characters, her arrival; FPS is for his
+  phone): today's island (v0.2.165, textures, rivers on) 9 tiles, island 369,648 triangles, graphics est. 83 -> 120 MB;
+  now at 16 x 16, colours: 369,312 triangles, 74 -> 110 MB (the ground pictures, about 9 MB), 7 ground and 4 riverbed
+  pictures fewer to fetch; textures 83 -> 119 MB. Island triangles by grid: 8 x 8 311,712 (6 tiles: she is near its
+  east edge), 16 x 16 369,312, 32 x 32 300,960, 64 x 64 162,720 (less than half); the start and the tiles' streaming
+  about the same in this browser for all four (play at 31-33 s; the 9 tiles in 22-24 s after). An early 10 s later
+  start at 16 x 16 was noise (run again: 32.6 s). His phone decides.
+  THE SCI-FI FLORA, FIRST BATCH (Joshua: "assign other agents to help work on creating custom Sci-fi landscaping like
+  giant mushrooms, plants, etc"): made by a helper agent in its own worktree (/home/claude/gdm-flora), branch
+  `flora-wip` (aca70fd), NOT merged: `src/world/island/flora/` (floraKit, floraModels, floraMaterial, floraSpecies),
+  `flora-lab.html` + `src/floraLab.ts`. 11 kinds in code, one InstancedMesh geometry each with near and far models
+  within budget, vertex colours, two shared materials (lit, glow), glow per instance in six colours, `uniforms.night`:
+  Lantern Cap and Umber Parasol (8-15 m), Sky Parasol and Rust Crown (giants, 20-40 m), Glowbell and Button clusters
+  (0.1-5 m), Shelf Fungus Boulder and Shelf Tiers, Siphon Coral, Crescent Fern, Spore Pods. Its own notes: clusters at
+  5 m look faceted, plain giants' gills go dark by day (the sky light from below is navy), the fern's glow spreads, the
+  shelf tiers need something behind them, the Sky Parasol's threads look like blades up close. Before merging: add
+  'flora-lab.html' to vite.config.ts LAB_PAGES. Waiting for his review.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

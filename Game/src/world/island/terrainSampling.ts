@@ -36,6 +36,18 @@ export const SEG: number = (() => {
 export const FAR_TILE_SEG = Math.max(16, Math.round(SEG / 2));
 
 /**
+ * A TILE'S NAME from its column and row (0-based): A1 is the north-west tile. Columns go A, B, ... Z, then AA, AB, ...
+ * as a spreadsheet's do (v0.2.166: the 32 x 32 and 64 x 64 grids have more than 26 columns; the old one-letter names
+ * ran on into symbols past Z). The 8 x 8 and 16 x 16 grids' names are unchanged. scripts/make_island_tiles_n.py names
+ * the files the same way.
+ */
+export function tileIdOf(col: number, row: number): string {
+  let letters = '';
+  for (let n = col + 1; n > 0; n = Math.floor((n - 1) / 26)) letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
+  return letters + (row + 1);
+}
+
+/**
  * The height of grid corner (gi, gj) of a tile, 0..SEG each way: the height picture's value at that place, blended
  * from its four nearest points. Exactly what the tile's mesh is built with.
  */

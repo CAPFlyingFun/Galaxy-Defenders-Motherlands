@@ -413,9 +413,9 @@ export class IslandTrees {
 
   /**
    * Every frame. `camX`/`camZ`: the camera, in the island's own metres; `ground` the ground as drawn (island metres);
-   * `hydro` the rivers and lakes, so a new patch keeps off them.
+   * `hydro` the rivers and lakes, so a new patch keeps off them (null: Rivers & lakes off, no water anywhere).
    */
-  update(dt: number, camX: number, camZ: number, ground: HydroGround, hydro: KauaiHydro): void {
+  update(dt: number, camX: number, camZ: number, ground: HydroGround, hydro: KauaiHydro | null): void {
     this.time.value += dt;
     if (!this.ready) return;
     // let go of patches that drifted past KEEP_M (memory stays bounded)
@@ -434,10 +434,10 @@ export class IslandTrees {
     }
     // a couple a frame, nearest first; not before the rivers and lakes are known (or trees could stand in a channel)
     this.buildQueue.sort((a, b) => ((a.ci * CHUNK - camX) ** 2 + (a.cj * CHUNK - camZ) ** 2) - ((b.ci * CHUNK - camX) ** 2 + (b.cj * CHUNK - camZ) ** 2));
-    for (let n = 0; hydro.isLoaded && n < BUILD_PER_FRAME && this.buildQueue.length; n++) {
+    for (let n = 0; (!hydro || hydro.isLoaded) && n < BUILD_PER_FRAME && this.buildQueue.length; n++) {
       const { ci, cj } = this.buildQueue.shift()!;
       const x0 = ci * CHUNK, z0 = cj * CHUNK;
-      const water = hydro.waterNear(x0 - WATER_MARGIN, z0 - WATER_MARGIN, x0 + CHUNK + WATER_MARGIN, z0 + CHUNK + WATER_MARGIN, WATER_MARGIN);
+      const water = hydro ? hydro.waterNear(x0 - WATER_MARGIN, z0 - WATER_MARGIN, x0 + CHUNK + WATER_MARGIN, z0 + CHUNK + WATER_MARGIN, WATER_MARGIN) : null;
       this.buildCell(ci, cj, ground, water);
     }
     // a whole patch is hidden once it is past the fade (each tree fades by itself before that); no photos at all in

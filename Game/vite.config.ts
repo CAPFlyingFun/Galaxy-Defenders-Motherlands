@@ -209,7 +209,12 @@ function pwa(): Plugin {
       const app = files.filter((f) => !isBig(f) && !LAB_PAGES.includes(f));
       const big = files.filter(isBig);
       const hashes: Record<string, string> = {};
-      for (const f of big) hashes[f] = hashOf(f);
+      // THE ISLAND'S HEIGHT TILES ARE FINGERPRINTED BY FOLDER (v0.2.166): with the 32 x 32 and 64 x 64 grids there are
+      // about 5,600 of them, and a line each made sw.js about 360 KB, which the phone fetches on every open. They are
+      // the real island's heights, cut up, and never change: one fingerprint for each folder's whole contents does.
+      const tileFolder = (f: string) => /^island\/kauai\/height\d*\//.exec(f)?.[0];
+      for (const f of big) if (!tileFolder(f)) hashes[f] = hashOf(f);
+      for (const folder of new Set(big.map(tileFolder).filter((f): f is string => !!f))) hashes[folder] = fingerprint(big.filter((f) => f.startsWith(folder)));
       const sw = `// Written by the build (vite.config.ts, pwa()). Do not edit: it is replaced on every build.
 const APP = 'gdm-app-${fingerprint(app)}';
 const FILES = 'gdm-files';
@@ -222,6 +227,8 @@ const SCOPE = new URL('./', self.location).pathname;
 const keyOf = (path, hash) => SCOPE + path + '?h=' + hash;
 /** A file's path in the game (from a full address): 'heroines/blaze/albedo.ktx2', or null if it is not the game's. */
 const pathOf = (url) => (url.origin === self.location.origin && url.pathname.startsWith(SCOPE) ? decodeURIComponent(url.pathname.slice(SCOPE.length)) : null);
+/** A big file's fingerprint: its own, or its folder's (the island's height tiles: one for each folder). */
+const fingerprintFor = (path) => (path === null ? undefined : HASHES[path] || HASHES[(/^island\\/kauai\\/height\\d*\\//.exec(path) || [''])[0]]);
 const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 // THE GAME IS UP: the page says so once it is playing (main.ts, 'gdm-up'); an install waits for it (or 90 s at most)
@@ -277,7 +284,7 @@ self.addEventListener('install', (event) => {
       const old = await caches.open(name);
       for (const request of await old.keys()) {
         const path = pathOf(new URL(request.url));
-        const hash = path && HASHES[path];
+        const hash = path && fingerprintFor(path);
         if (!hash || await files.match(keyOf(path, hash))) continue;
         const response = await old.match(request);
         if (!response || !response.ok) continue;
@@ -302,7 +309,7 @@ self.addEventListener('activate', (event) => {
     for (const request of await files.keys()) {
       const url = new URL(request.url);
       // (kept only while its fingerprint is the current one for its path)
-      if (HASHES[pathOf(url)] !== url.searchParams.get('h')) await files.delete(request);
+      if (fingerprintFor(pathOf(url)) !== url.searchParams.get('h')) await files.delete(request);
     }
     await self.clients.claim();
   })());
@@ -330,7 +337,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // A BIG FILE: the stored copy of THESE contents if there is one; otherwise the network, kept under its fingerprint.
-  const hash = HASHES[path];
+  const hash = fingerprintFor(path);
   if (hash) {
     const key = keyOf(path, hash);
     event.respondWith(caches.open(FILES).then((files) => files.match(key).then((hit) => hit || fetch(request).then((response) => {
@@ -349,7 +356,7 @@ self.addEventListener('fetch', (event) => {
 });
 `;
       writeFileSync(join(dist, 'sw.js'), sw);
-      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install; ${big.length} big files (outfits, builder, island) kept on first use, each by its own fingerprint`);
+      console.log(`[pwa] wrote dist/sw.js: ${app.length} app files kept at install; ${big.length} big files (outfits, builder, island) kept on first use, each by its own fingerprint (the island's height tiles by folder)`);
     },
   };
 }

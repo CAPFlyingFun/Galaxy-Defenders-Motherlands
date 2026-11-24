@@ -1,6 +1,6 @@
 # Galaxy Defenders: Motherlands — Story & Game Plan
 
-**Last updated:** 2026-11-22
+**Last updated:** 2026-11-24 (section 9, the island world)
 **Sources:** Joshua's development handoff of 2026-11-22 (his story planning with ChatGPT, and ChatGPT's review of `main`
 at v0.2.148), plus what was measured and fixed in the game the same day.
 **Status:** the story below is PROVISIONAL, not canon until Joshua approves it. The game's running design decisions
@@ -306,7 +306,62 @@ meet.
 steady memory, smooth exploring, one set of world coordinates, good-looking characters and places, and systems made
 to be used again rather than one-off scene changes.
 
-## 9. How the work is done (Joshua's standing rules, and the handoff's)
+## 9. The island world (agreed with Joshua, 2026-11-24)
+
+From his and ChatGPT's *Master Island Implementation Handoff* (kept outside the repo), gone over with Joshua on
+2026-11-24. That handoff replaces the earlier island streaming and landscape ideas; section 8's tile sizes are now a
+setting (below).
+
+### The direction (approved in the handoff)
+
+| Area | Decision |
+|---|---|
+| Environment | Hybrid tropical and alien; giant glowing and non-glowing fungi; original, inspired by the *atmosphere* of ARK Aberration/Extinction, copying nothing |
+| History | Native ecosystems, engineered species, a past catastrophe (its cause and the Mother Overlord's identity left open for the story) |
+| Population | Working towns and abandoned wilderness, mixed |
+| Creatures | Mixed wildlife; bonding through trust (not mechanical recruitment) |
+| Housing | City homes to buy and furnish; modular bases built in the wild |
+| Terrain | Solid colours and light procedural detail; the island's own inland water |
+| Delivery | One polished region at a time, alongside the story; never the whole island first |
+
+### What Joshua decided on 2026-11-24
+
+- **The ground is solid colours by default, the textures kept as a setting** ("Keep the textures in settings, but add a
+  new default option which is just solid colors"). His approved palette, each kind a base and an accent colour mixed by
+  noise near the camera and plain blended colour further off: reef `#9CC7B4`/`#5E9C8C`, sand `#D7D4C1`/`#BDB49A`,
+  grass `#468D72`/`#528C9F`, forest floor `#234F43`/`#2F6A55`, soil on bare hillsides `#8B6652`/`#6E4F40`, rock
+  `#6B6661`/`#8B6652`, basalt `#414952`/`#2B3138`, crystal peaks `#414952`/`#76659C` with light flecks ("a nice
+  sci-fi feel, but still somewhat familiar"). Built in v0.2.166; tunable on his phone in TEST TOOLS.
+- **The biomes stay by height, as now** (no painted biome map).
+- **No snow:** the peaks are basalt and crystal ("I think so yes"). The real summit is 1,598 m; the snow was Beyond
+  Extinction's look.
+- **The grid is a setting:** 8 × 8, 16 × 16 (the default), 32 × 32 or 64 × 64, to compare on the phone before
+  choosing. Smaller tiles are not promised to be faster: measured, not assumed (the handoff's own warning).
+- **Rivers and lakes off for now** ("the island waterways are still messed up"): no water, no channels cut in; the code
+  kept for the island's own lakes, reservoirs and pools later.
+- **Landscaping off by default** while the island's own flora is made. The first sci-fi flora (11 kinds: four giant
+  and large mushrooms, two clusters, two shelf fungi, glowing coral tubes, a fern, spore pods) was made in code on
+  branch `flora-wip`, waiting for his review.
+- **The first region's place: undecided.**
+
+### The order
+
+1. Baseline measurements of the island as it was (v0.2.166: done, in the commit).
+2. The solid-colour ground (v0.2.166).
+3. The grid setting, compared on his phone (v0.2.166).
+4. Day and night (sun, sky, haze and light colour), which the glowing flora needs.
+5. The first region, with the island's own flora and its glow at night.
+6. Then, as the story needs them: local wildlife and people, a settlement or base, transport, bonding, crafting,
+   housing.
+
+### Left open (the handoff's own list)
+
+The map's layout, biome shares, how many settlements, the species, mushroom heights, companion limits, the length of a
+day, what weather events do, vehicle speeds and the catastrophe itself.
+
+---
+
+## 10. How the work is done (Joshua's standing rules, and the handoff's)
 
 - Work on `claude-work`; `main` moves only when Joshua approves. Ask "good to push or wait?" in a normal message.
   After a push, wait for its deploy to succeed and 5 more minutes before another.

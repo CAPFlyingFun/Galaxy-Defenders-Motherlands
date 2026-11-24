@@ -39,8 +39,22 @@ export type LandscapingChoice = 'images' | 'hybrid' | 'objects' | 'off';
 export const LANDSCAPING_CHOICES: readonly (readonly [string, LandscapingChoice])[] = [
   ['Images only', 'images'], ['Hybrid', 'hybrid'], ['Objects only', 'objects'], ['Off', 'off'],
 ];
+/** Settings -> WORLD -> Ground (src/world/island/groundPaint.ts): the approved solid colours, or the old pictures. */
+export type GroundChoice = 'colours' | 'textures';
+export const GROUND_CHOICES: readonly (readonly [string, GroundChoice])[] = [['Solid colours', 'colours'], ['Textures', 'textures']];
+/** Settings -> WORLD -> Island grid: tiles across the 56 km island (src/world/island/islandWorld.ts). */
+export type IslandGrid = 8 | 16 | 32 | 64;
+export const ISLAND_GRID_CHOICES: readonly (readonly [string, IslandGrid])[] = [
+  ['8 x 8 (7 km tiles)', 8], ['16 x 16 (3.5 km)', 16], ['32 x 32 (1.75 km)', 32], ['64 x 64 (875 m)', 64],
+];
+function asIslandGrid(v: string | null): IslandGrid | null {
+  const n = Number(v);
+  return n === 8 || n === 16 || n === 32 || n === 64 ? n : null;
+}
 function asLandscaping(v: string | null): LandscapingChoice {
-  return v === 'images' || v === 'objects' || v === 'off' ? v : 'hybrid';
+  // (OFF unless chosen: Joshua, 2026-11-24, "set the default landscaping to off" while the island's own sci-fi flora is
+  //  made; a choice already saved on the phone still wins)
+  return v === 'images' || v === 'objects' || v === 'hybrid' ? v : 'off';
 }
 
 export interface HeroineSettings {
@@ -112,9 +126,26 @@ export interface HeroineSettings {
   /**
    * LANDSCAPING (Joshua, 2026-11-20: "three modes under a new landscaping: Only Image Landscaping / Hybrid - Image +
    * Objects / Only Objects"; src/world/island/treeObjects.ts): Images only (Beyond Extinction's photo trees), Hybrid
-   * (the default: real 3D trees near the camera, photos beyond), Objects only (3D trees to 280 m), or Off. Live.
+   * (real 3D trees near the camera, photos beyond), Objects only (3D trees to 280 m), or Off, THE DEFAULT since
+   * v0.2.166 (Joshua, 2026-11-24: the island's own sci-fi flora is being made). Live.
    */
   landscaping: LandscapingChoice;
+  /**
+   * THE ISLAND'S GROUND (v0.2.166; Joshua, 2026-11-24: "Keep the textures in settings, but add a new default option
+   * which is just solid colors"): Solid colours, the default, his approved palette with no pictures, or Textures, the
+   * ground pictures as before. Live.
+   */
+  ground: GroundChoice;
+  /**
+   * THE ISLAND GRID (v0.2.166; Joshua: "add the grid size if possible adjustable from the 8x8, 16x16, 32x32, 64x64"):
+   * how many tiles across the island is cut into, to compare them; 16 the default. Restarts the game.
+   */
+  islandGrid: IslandGrid;
+  /**
+   * RIVERS & LAKES (v0.2.166; Joshua: "Don't draw for now as the island waterways are still messed up"): off by
+   * default, no water and no channels cut in. Restarts the game.
+   */
+  rivers: ShadowChoice;
   /**
    * HER PREGNANCY, to test (Joshua, 2026-11-19: "a toggle pregnancy on/off as well as a full range belly slider from
    * 0-200%, but only 10-150% is the default range with unlock available... like the CCBS"; heroine/pregnancyPlan.ts).
@@ -271,6 +302,9 @@ export const SETTING_KEYS = Object.freeze({
   catsuitNeck: 'gdm.catsuitNeck',
   map: 'gdm.map',
   landscaping: 'gdm.landscaping',
+  ground: 'gdm.ground',
+  islandGrid: 'gdm.islandGrid',
+  rivers: 'gdm.rivers',
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
@@ -365,6 +399,9 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     map: ((v) => (v === 'town' || v === 'prologue' ? v : 'island'))(address.get('map') ?? read(SETTING_KEYS.map)),
     // (Hybrid unless another was chosen; v0.2.93's Trees off is kept as Off)
     landscaping: asLandscaping(address.get('land') ?? read(SETTING_KEYS.landscaping) ?? (read('gdm.trees') === 'off' || address.get('trees') === 'off' ? 'off' : null)),
+    ground: (address.get('ground') ?? read(SETTING_KEYS.ground)) === 'textures' ? 'textures' : 'colours',
+    islandGrid: asIslandGrid(address.get('grid')) ?? asIslandGrid(read(SETTING_KEYS.islandGrid)) ?? 16,
+    rivers: (address.get('rivers') ?? read(SETTING_KEYS.rivers)) === 'on' ? 'on' : 'off',
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',

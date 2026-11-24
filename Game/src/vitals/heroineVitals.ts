@@ -448,7 +448,7 @@ export class HeroineVitals {
   }
 
   /**
-   * HOW MANY WEEKS PREGNANT she is now (0: not pregnant): Settings and the time lapse change it while she plays
+   * HOW MANY WEEKS PREGNANT she is now (0: not pregnant): Settings and story steps change it while she plays
    * (heroine/pregnancyPlan.ts). Her heart, breathing and staying power follow from the next step.
    */
   setWeeks(weeks: number): void {

@@ -382,11 +382,18 @@ export class ShapedBody {
    * size and at the size she was baked at, so at her baked size she is exactly as the builder made her.
    * Every level made so far is refilled (a few milliseconds; call it sparingly).
    */
-  setBelly(percent: number): void {
+  /**
+   * Her belly, percent. Returns whether her points MOVED: once the builder's own shape has come from her live body
+   * (`setBuilderWeights`), her shape is the builder's, not this number's, so nothing is reshaped here (it was the same
+   * work twice a step, v0.2.165) and the new shape comes with the live body's next reading.
+   */
+  setBelly(percent: number): boolean {
     const belly = Math.max(0, Math.min(200, Math.round(percent)));
-    if (belly === this.belly) return;
+    if (belly === this.belly) return false;
     this.belly = belly;
+    if (this.builderChange) return false;
     this.reshape();
+    return true;
   }
 
   /**

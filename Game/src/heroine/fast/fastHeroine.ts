@@ -1846,8 +1846,16 @@ if (uHideHead > 0.5) {
       lastUpdateAt = now;
 
       // Her belly follows what was asked, a step at a time (each step rewrites her points).
+      // ONE RESHAPE A STEP (v0.2.165): once her live body has given her the builder's own shape, her points do not move
+      // here (shapedBody.ts setBelly says so) and what is measured off them waits for its next reading, below; only her
+      // waistband's shader takes the new percent at once.
       bellyWait -= frame.dt;
-      if (bellyWanted !== body.belly && bellyWait <= 0) { bellyWait = BELLY_EVERY; body.setBelly(bellyWanted); setWaistBelly(body.belly); setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); drape?.reshape(); }
+      if (bellyWanted !== body.belly && bellyWait <= 0) {
+        bellyWait = BELLY_EVERY;
+        const moved = body.setBelly(bellyWanted);
+        setWaistBelly(body.belly);
+        if (moved) { setLiveShape(); layBreath(); bodyEggs = measureEggs(); roomFor = '?'; gear.reshape(body.points, body.belly); drape?.reshape(); }
+      }
 
       // THE LIVE BODY: everything of her that is not drawn is run on, and what her baby does to her skin is taken from it.
       // (ASLEEP, `setLiveAwake`: not stepped at all; her kicks and shape stay as they were until it wakes)

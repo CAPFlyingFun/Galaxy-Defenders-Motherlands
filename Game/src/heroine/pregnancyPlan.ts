@@ -8,8 +8,17 @@
 // 10% for a while; then pregnancy is switched on with her belly still at 10%,
 // which is week 12; from there it grows with the weeks (over quests, etc.) to
 // 150% at week 42; pregnancy switches off at the birth, and over 3-4 game
-// months her belly settles to 30%. And a TIME LAPSE to test it: week 12 to 42
-// at one day a second (a week every 7 s), stopping at 42 exactly: 224 s.
+// months her belly settles to 30%.
+//
+// HER BELLY MOVES BY STORY EVENTS, ONE PERCENT AT A TIME (Joshua, 2026-11-24:
+// "remove the playback but keep the slider and pregnancy on/off... each 1% will
+// grow based off the storyline/events... Just have event/quest triggers that
+// will add +1%"; "Also add an -1% after birth so it is set up as well for
+// later"): `stepBelly` below. The TIME LAPSE (week 12 to 42 at a day a second)
+// is gone: run without a break it set her live body's shape again every second,
+// and the builder's breathing code threw away about 35 MB a second doing it
+// (measured, M1, v0.2.164); it closed the game on his iPhone. A step now and
+// then, from a quest, costs that once.
 //
 // The weeks come from the builder's own chart (Char_B/src/sarahlab/baby.ts,
 // v0.9.49: her START at week 12, her BIGGEST at her delivery week, on the
@@ -25,8 +34,8 @@ import { readPregnancy } from '@charb/sarahlab/pregnancy';
 
 /** The belly slider's ranges, percent (as in the builder: its usual range, and all of it once unlocked). */
 export const BELLY_RANGE = Object.freeze({ least: 10, most: 150, unlockedLeast: 0, unlockedMost: 200 });
-/** THE TIME LAPSE: one day a second, a week every 7 seconds (Joshua). */
-export const LAPSE_SECONDS_PER_WEEK = 7;
+/** How far ONE story event moves her belly, percent (Joshua: "+1%", and "-1%" after the birth). */
+export const BELLY_STEP = 1;
 
 export class PregnancyPlan {
   /** Her own numbers, as the builder reads them from her look. */
@@ -38,8 +47,6 @@ export class PregnancyPlan {
   readonly after: number;
   /** Whether her look says she is pregnant. */
   readonly lookPregnant: boolean;
-  /** The time lapse: the week it is at (null while it is not running). */
-  lapseWeek: number | null = null;
 
   /** @param pregnancy  her look's `body.pregnancy` (the builder's saved-character numbers), or nothing */
   constructor(pregnancy: unknown) {
@@ -73,21 +80,15 @@ export class PregnancyPlan {
     return a[a.length - 1][0];
   }
 
-  /** Start the time lapse at week 12 (her belly at her START). */
-  startLapse(): void {
-    this.lapseWeek = EARLY_WEEK;
-  }
-
   /**
-   * Run the time lapse on by `dt` seconds: one day a second. Returns her belly for the week it has reached; it stops
-   * (lapseWeek back to null) on her delivery week exactly.
+   * HER BELLY ONE STORY STEP ON (`by` +1 as she grows, -1 as she settles after the birth): the belly she has now
+   * moved by `by` percent, kept to the slider's range (all of 0-200% once unlocked). The same number either way, so a
+   * quest, an event or the test buttons in Settings all move her alike.
    */
-  stepLapse(dt: number): number {
-    if (this.lapseWeek === null) return this.start;
-    this.lapseWeek = Math.min(this.deliveryWeek, this.lapseWeek + dt / LAPSE_SECONDS_PER_WEEK);
-    const belly = this.bellyFor(this.lapseWeek);
-    if (this.lapseWeek >= this.deliveryWeek) this.lapseWeek = null;
-    return belly;
+  stepBelly(belly: number, by: number, unlocked: boolean): number {
+    const least = unlocked ? BELLY_RANGE.unlockedLeast : BELLY_RANGE.least;
+    const most = unlocked ? BELLY_RANGE.unlockedMost : BELLY_RANGE.most;
+    return Math.max(least, Math.min(most, Math.round(belly) + by));
   }
 }
 

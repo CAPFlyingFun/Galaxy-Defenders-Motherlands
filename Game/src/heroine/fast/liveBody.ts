@@ -56,7 +56,7 @@ import { navelOffsetOf } from '@charb/sarahlab/navelSoft';
  * times a second while the slider moves). Now: once her belly has stayed put this long (seconds)...
  */
 const LIVE_BELLY_SETTLE = 0.35;
-/** ...or, while it keeps changing (the time lapse), at most this often: a few percent at a time late in the lapse. */
+/** ...or, while it keeps changing (the slider dragged), at most this often. */
 const LIVE_BELLY_EVERY = 1;
 /**
  * HER SHAPE, AS THE BUILDER WEIGHS IT (Joshua, 2026-11-19: the time lapse made "a pointy belly... it needs to basically
@@ -96,7 +96,7 @@ export interface LiveBody {
   /** How many kicks are showing this frame. */
   kicking(): number;
   /**
-   * HER BELLY AND HER PREGNANCY changed in the game (Settings, the time lapse; heroine/pregnancyPlan.ts): the hidden
+   * HER BELLY AND HER PREGNANCY changed in the game (Settings, a story step; heroine/pregnancyPlan.ts): the hidden
    * body follows, by the room's own BELLY slider and PREGNANT button, so the baby's kicks come from a womb her size, and
    * none come while she is not pregnant. Her belly is passed on once it settles (or at most once a second while it keeps changing).
    */

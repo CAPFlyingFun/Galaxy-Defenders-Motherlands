@@ -452,11 +452,11 @@ use the game's single copy of three.js.
 - HER PREGNANCY (Joshua, 2026-11-19; `Game/src/heroine/pregnancyPlan.ts`): Settings -> PREGNANCY has Pregnancy on/off
   (`gdm.pregnant`), a Belly slider 10-150% with a lock that opens all of 0-200% (`gdm.belly`, `gdm.bellyUnlocked`), the
   week shown beside it off HER OWN builder chart (Blaze: START 10% = week 12, BIGGEST 150% at week 42, END 30%; the
-  builder's hybrid curve), and a TIME LAPSE from week 12 to her delivery week at a day a second (7 s a week, 224 s),
-  stopping there exactly, with the week in a chip at the top (a tap stops it). Off: her belly is only her shape (no
+  builder's hybrid curve), and +1% / −1% buttons: a STORY STEP, what a quest or event does (main.ts `stepBelly`, see
+  v0.2.165; the TIME LAPSE that was here is gone). Off: her belly is only her shape (no
   weeks for her vitals, no slowing, the hidden live body's PREGNANT pressed off so no kicks). The story's plan: 10% not pregnant for a while; pregnancy on at 10% (= week 12);
-  growing with the weeks over quests to 150% at 42; off at the birth; over 3-4 game months settling to 30%. The birth and
-  the settling are for later.
+  growing with the weeks over quests to 150% at 42 (+1% a story event); off at the birth; over 3-4 game months settling
+  to 30% (−1% a story event). The birth and the settling are for later.
   HER BELLY'S SHAPE comes from the builder itself (Joshua, 2026-11-19: the time lapse gave "a pointy belly"; "update
   every 1%"): the hidden live body's belly follows hers once it has stayed put 0.35 s (or once a second while it keeps
   changing: at every whole percent at once, dragging the slider closed the game on the iPhone), and 0.2 s after a change the WEIGHTS the
@@ -1206,6 +1206,25 @@ use the game's single copy of three.js.
   CHANGED BY IT: coming down from 50 on the same 90 s, she stands WINDED to its 20 s most (was about 12 s) and walks only
   until 30 s after empty (was 16). Her breath sounds play breath by breath from her chest's own cycle, so they keep to
   the rate. Test pages: `gdm.vitalsTuning` (live), `gdm.elapsed` (the game's own clock).
+- v0.2.165: THE TIME LAPSE TAKEN OUT, HER BELLY MOVED BY STORY STEPS (Joshua, 2026-11-24: the time lapse kept closing the
+  game on his iPhone in M1, `maryResearchSuit`; the Shadow Operative played; moving the slider at random never crashed.
+  "let's remove the playback but keep the slider and pregnancy on/off... each 1% will grow based off the
+  storyline/events, so it won't be running all the time using memory. Just have event/quest triggers that will add
+  +1%"; "Also add an -1% after birth so it is set up as well for later"). WHY IT CLOSED: late in the lapse her belly
+  went up a percent about every second, and each time her hidden live body took the new size, the builder's own
+  breathing code (Char_B `SarahLabScene.ts` `layBreath` -> `levelLine.ts` `standingShape`, `breathSkin.ts`
+  `breathVolumes`) made about 1.4 MB arrays five times over, and her drawn body was reshaped TWICE (once for the number,
+  once for the builder's shape): MEASURED, 178 MB of big arrays thrown away in 5 s of the lapse on M1 (a page's memory
+  peaked at 747 MB, Shadow 662). A step now and then costs that once. (1) THE TIME LAPSE IS GONE: its button and the week
+  chip at the top (hud.ts, hud.css), `PregnancyPlan.lapseWeek`/`startLapse`/`stepLapse` and its frame step (main.ts).
+  The slider and Pregnancy on/off are as they were. (2) A STORY STEP: main.ts `stepBelly(by)` (+1 as she grows, −1 as
+  she settles after the birth; `PregnancyPlan.stepBelly`, `BELLY_STEP`), kept to the slider's range, saved as her
+  setting, her body, live body and vitals told at once. THE ONE WAY a quest, an event or a chapter moves her belly: give
+  it to the chapter's world as the prologue's hooks are given (story/chapters/*). Settings -> PREGNANCY: "−1% (after the
+  birth)" and "+1% (story event)" do the same; test pages `gdm.stepBelly(1)`. (3) ONE RESHAPE A STEP: shapedBody.ts
+  `setBelly` returns whether her points moved; once the builder's shape has come from her live body they do not (her
+  shape is the builder's from then on), so fastHeroine.ts measures nothing again until the live body's next reading;
+  only her waistband's shader takes the new percent at once.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:
@@ -1224,7 +1243,7 @@ use the game's single copy of three.js.
   true)`; Body: Performance only; `?john=off` leaves him out); he has no hidden live body of his own. main.ts
   `Character` { name, body, vitals, ownTurn, x, z, yaw }: `blaze`, `john`, `playing`; the one not played stands where
   left, drawn and updated, his or her OWN vitals stepped (standing still) and fed to the body. His vitals are his own
-  `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and time lapse are always Blaze's.
+  `HeroineVitals` (age 30, never pregnant); the belly slider, pregnancy and story steps are always Blaze's.
   🔄 SWAP (hud.ts `.gd-swap`, right of the gear; Edit controls "Swap character"): waits until the one played has
   finished what they are in the middle of (the table, a bar, a door, a holster/draw, a reload, winded, the toilet),
   then hands the controls, vitals card and turn to the other where they stand; a "Now playing: X" notice. EACH HOLDS

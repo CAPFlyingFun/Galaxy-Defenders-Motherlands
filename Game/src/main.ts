@@ -989,7 +989,8 @@ async function start(): Promise<void> {
   }
 
   // HER PREGNANCY, to test (Joshua, 2026-11-19; heroine/pregnancyPlan.ts): on or off and her belly, from Settings (as
-  // her look has them until changed), the week off her own chart, and the time lapse from week 12 to her delivery week.
+  // her look has them until changed), and the week off her own chart. In the story her belly moves by EVENTS, a percent
+  // at a time (`stepBelly`, below; Joshua, 2026-11-24: the time lapse taken out).
   const { LOOKS: ALL_LOOKS } = await import('./heroine/looks');
   const plan = new PregnancyPlan((ALL_LOOKS[tableLook]?.body as { pregnancy?: unknown } | undefined)?.pregnancy);
   if (graphics.pregnant === null) graphics.pregnant = plan.lookPregnant ? 'on' : 'off';
@@ -1010,7 +1011,7 @@ async function start(): Promise<void> {
   const stanceAsked = (): 'stand' | 'crouch' | 'prone' | 'fours' => (stance === 'down' ? (pregnantNow() ? 'fours' : 'prone') : stance);
   /** She is on her belly or all fours (or getting there) and moving, or getting down or up: no aiming or firing. */
   let stanceNoAim = false;
-  /** Her belly and pregnancy as Settings (or the time lapse) have them, on her body, her live body and her vitals. */
+  /** Her belly and pregnancy as Settings (or a story step) have them, on her body, her live body and her vitals. */
   const applyPregnancy = (): void => {
     // (Blaze's alone: in the prologue there is no Blaze, and nothing of hers is put on John)
     if (!blaze) return;
@@ -1021,6 +1022,22 @@ async function start(): Promise<void> {
     (blaze?.vitals ?? vitals).setWeeks(herPregnant() ? plan.weekFor(belly) : 0);
   };
   applyPregnancy();
+  /**
+   * HER BELLY ONE STORY STEP (Joshua, 2026-11-24: "event/quest triggers that will add +1%"; "Also add an -1% after
+   * birth so it is set up as well for later"): `by` +1 as she grows, -1 as she settles after the birth, kept to the
+   * slider's range. THE ONE WAY a quest, an event or a chapter moves her belly (give it to the chapter's world, as the
+   * prologue's is given its hooks), the same as the two test buttons in Settings -> PREGNANCY. Kept as her setting, so
+   * it is where she was the next time the game starts. Returns her belly now.
+   */
+  const stepBelly = (by: number): number => {
+    const belly = plan.stepBelly(graphics.belly ?? plan.start, by, graphics.bellyUnlocked);
+    if (belly === graphics.belly) return belly;
+    graphics.belly = belly;
+    saveSetting('belly', belly);
+    applyPregnancy();
+    hud.showBelly(belly);
+    return belly;
+  };
   /** Her belly as Settings shows it: the percent and the week it stands for (or "not pregnant"). */
   const bellyText = (percent: number): string => herPregnant() ? `${percent}% · ${weekText(plan.weekFor(percent))}` : `${percent}% · not pregnant`;
   const vitalsPanel = new VitalsPanel();
@@ -1563,21 +1580,15 @@ async function start(): Promise<void> {
     },
     graphics,
     bellyText,
-    // THE TIME LAPSE: pregnant, from week 12 at a day a second (a tap again stops it where it is)
-    onTimeLapse() {
-      if (plan.lapseWeek !== null) { plan.lapseWeek = null; saveSetting('belly', graphics.belly); hud.showBelly(graphics.belly ?? plan.start, null); return; }
-      graphics.pregnant = 'on';
-      saveSetting('pregnant', 'on');
-      plan.startLapse();
-    },
+    // HER BELLY A STORY STEP either way (the test buttons: what a quest or event does)
+    onBellyStep(by) { stepBelly(by); },
     onGraphicsChange(key, value) {
       graphics[key] = value;
       saveSetting(key, value);
-      // (her pregnancy and belly take hold at once; moving the belly by hand stops the time lapse)
+      // (her pregnancy and belly take hold at once)
       if (key === 'pregnant' || key === 'belly' || key === 'bellyUnlocked') {
-        if (key === 'belly') plan.lapseWeek = null;
         applyPregnancy();
-        hud.showBelly(graphics.belly ?? plan.start, null);
+        hud.showBelly(graphics.belly ?? plan.start);
         return;
       }
       // Detail, the target frame rate and sharpness take hold at once; a different body (or its skin) is a different
@@ -1764,6 +1775,8 @@ async function start(): Promise<void> {
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       // (the game's own clock, seconds of play: for test pages that time things in game time, not the browser's)
       get elapsed() { return elapsed; },
+      // (her belly a story step, as a quest would: gdm.stepBelly(1), gdm.stepBelly(-1))
+      stepBelly,
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
       // (each one's brain: what it is doing and what it has done, for the test pages)
@@ -2648,15 +2661,6 @@ async function start(): Promise<void> {
     // (the 🚽 button: from her urge, hidden while she is already going)
     hud.setBathroom(bathroomLeft > 0 ? null : reading.bathroomUrge);
     hud.setPace(pace.name, pace.ring);
-    // THE TIME LAPSE (Settings -> PREGNANCY): a day a second of play, her belly off her chart, to her delivery week
-    if (plan.lapseWeek !== null) {
-      const belly = plan.stepLapse(dt);
-      graphics.belly = Math.round(belly);
-      applyPregnancy();
-      const week = plan.lapseWeek;
-      hud.showBelly(belly, week === null ? null : weekText(week), true);
-      if (week === null) saveSetting('belly', graphics.belly); // (it has stopped at her delivery week: kept)
-    }
 
     // THE THOUGHT BUBBLE over the one standing by (Settings -> TEST TOOLS -> AI thoughts): just above their head, now
     // that the camera has moved for this frame; their brain's lines (npc/thoughts.ts), written 10 times a second

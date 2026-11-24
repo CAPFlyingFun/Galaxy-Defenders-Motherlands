@@ -73,10 +73,11 @@ export interface HudOptions {
   onIntake?(action: IntakeAction): void;
   /**
    * HER PREGNANCY, to test (heroine/pregnancyPlan.ts): what her belly percent is as a week ("week 24", or "not
-   * pregnant"), and the time lapse (week 12 to her delivery week, a day a second) started or stopped.
+   * pregnant"), and her belly moved ONE STORY STEP (`by` +1 as she grows, -1 as she settles after the birth): the
+   * same step a quest or an event takes (main.ts `stepBelly`).
    */
   bellyText?(percent: number): string;
-  onTimeLapse?(): void;
+  onBellyStep?(by: number): void;
 }
 
 /** How far the stick's knob can travel from its middle, in pixels. */
@@ -217,12 +218,10 @@ export class Hud {
   private readonly domeLabel: HTMLElement;
   /** The box the readout is in: always made, hidden while "Show full readout" is off (`setDebug`). */
   private readonly debugPanel: HTMLElement;
-  /** THE PREGNANCY rows in Settings: the belly slider and its value, and the time lapse's button; and the chip on screen. */
+  /** THE PREGNANCY rows in Settings: the belly slider and its value. */
   private bellySlider: HTMLInputElement | null = null;
   private pregnantSelect: HTMLSelectElement | null = null;
   private bellyValue: HTMLElement | null = null;
-  private lapseButton: HTMLElement | null = null;
-  private readonly lapseChip: HTMLElement;
   private bellyTextOf: (percent: number) => string = (p) => `${p}%`;
 
   constructor(host: HTMLElement, private readonly controls: Controls, options: HudOptions) {
@@ -242,11 +241,6 @@ export class Hud {
     this.domeLabel = element('pre', '', debug);
     debug.hidden = !options.debug;
     // (the dome's test buttons are in Settings now, TEST TOOLS: Joshua, 2026-11-18, the corner was cluttered)
-
-    // ---- Top middle: the time lapse's week (only while it runs; a tap stops it) -------------------------------------
-    this.lapseChip = element('button', 'gd-lapse-chip', this.root);
-    this.lapseChip.hidden = true;
-    tapButton(this.lapseChip, () => options.onTimeLapse?.());
 
     // ---- Bottom left: moving ------------------------------------------------
     const move = element('div', 'gd-move', this.root);
@@ -508,7 +502,8 @@ export class Hud {
     };
     // ---- Settings: her pregnancy, to test (Joshua, 2026-11-19; heroine/pregnancyPlan.ts) --------------------------
     // On or off; her belly on a slider (10-150%, or all of 0-200% once unlocked, as in the Character Builder), with the
-    // week it stands for beside it; and the time lapse from week 12 to her delivery week, a day a second.
+    // week it stands for beside it; and her belly a story step either way (+1% / -1%: Joshua, 2026-11-24, the time lapse
+    // taken out, "event/quest triggers that will add +1%", "an -1% after birth").
     element('h2', 'gd-settings-part', settings, 'PREGNANCY');
     this.pregnantSelect = choiceRow('Pregnancy', 'pregnant', [['On', 'on'], ['Off', 'off']], 'On: her belly stands for a week of her pregnancy (her chart in the Character Builder: 10% is week 12, 150% week 42), her baby kicks, and she tires sooner as it grows.').querySelector('select');
     if (options.bellyText) this.bellyTextOf = options.bellyText;
@@ -554,11 +549,13 @@ export class Hud {
       this.bellySlider = slider;
       this.bellyValue = value;
     }
-    if (options.onTimeLapse) {
+    if (options.onBellyStep) {
       const row = element('div', 'gd-debug-row', settings);
-      this.lapseButton = element('button', 'gd-button', row, 'Time lapse ▶ week 12 → 42');
-      tapButton(this.lapseButton, () => options.onTimeLapse?.());
-      element('small', 'gd-note', settings, 'Plays her pregnancy from week 12 to week 42 at a day a second (a week every 7 s; 3 min 44 s), and stops at 42. Close Settings to watch; tap the week at the top of the screen to stop.');
+      const down = element('button', 'gd-button', row, '−1% (after the birth)');
+      const up = element('button', 'gd-button', row, '+1% (story event)');
+      tapButton(down, () => options.onBellyStep?.(-1));
+      tapButton(up, () => options.onBellyStep?.(1));
+      element('small', 'gd-note', settings, 'What a quest or story event does to her belly: one percent at a time, up as she grows, down as she settles after the birth (to her 30%).');
     }
 
     // ---- Settings: her skin's shine (Joshua, 2026-11-19: "dry skin a little darker, more oily or wet skin ... the shine")
@@ -784,17 +781,14 @@ export class Hud {
 
   /** Which dome section the test buttons act on, and its health (debug only). */
   /**
-   * HER BELLY changed by the game (the time lapse): the slider and its value follow, and the chip at the top shows the
-   * week (`lapse` true) or goes away. The time lapse's button says Play or Stop.
+   * HER BELLY changed by the game (a story step, or the lock bringing it back into range): the slider and its value
+   * follow; and her Pregnancy on or off, when given.
    */
-  showBelly(percent: number, lapse: string | null, pregnant?: boolean): void {
+  showBelly(percent: number, pregnant?: boolean): void {
     const p = Math.round(percent);
     if (this.pregnantSelect && pregnant !== undefined) this.pregnantSelect.value = pregnant ? '0' : '1'; // (the list's On, Off)
     if (this.bellySlider && this.bellySlider.value !== String(p)) this.bellySlider.value = String(p);
     if (this.bellyValue) this.bellyValue.textContent = this.bellyTextOf(p);
-    this.lapseChip.hidden = lapse === null;
-    if (lapse !== null) this.lapseChip.textContent = `⏱ ${lapse} · ${p}%  ■`;
-    if (this.lapseButton) this.lapseButton.textContent = lapse === null ? 'Time lapse ▶ week 12 → 42' : 'Stop the time lapse ■';
   }
 
   /**

@@ -70,6 +70,11 @@ export interface Ocean {
   readonly ready: Promise<void>;
   /** Every frame: the sea follows the camera, and its waves move on. */
   update(seconds: number, camera: THREE.Camera): void;
+  /**
+   * THE SKY COLOUR IT REFLECTS (v0.2.166, the procedural sky's time of day): as a paint program's colour, read as the
+   * sea's own fixed one always was (0x9fc6df by day), so the daytime sea looks as before and the night sea goes dark.
+   */
+  setSky(colour: THREE.Color): void;
   dispose(): void;
 }
 
@@ -213,6 +218,9 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
   return {
     ready,
     mesh,
+    // (the same double reading of the colour as the fixed one above, `new Color(...).convertSRGBToLinear()`, so the
+    //  daytime sea is exactly as it was)
+    setSky(colour) { sky.copy(colour).convertSRGBToLinear(); },
     update(seconds, camera) {
       uTime.value += seconds;
       mesh.position.set(camera.position.x, WATER_Y, camera.position.z);

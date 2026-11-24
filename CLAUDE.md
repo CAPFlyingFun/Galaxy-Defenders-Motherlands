@@ -1274,6 +1274,32 @@ use the game's single copy of three.js.
   5 m look faceted, plain giants' gills go dark by day (the sky light from below is navy), the fern's glow spreads, the
   shelf tiers need something behind them, the Sky Parasol's threads look like blades up close. Before merging: add
   'flora-lab.html' to vite.config.ts LAB_PAGES. Waiting for his review.
+- v0.2.167: THE PROCEDURAL SKY, WITH A TIME OF DAY (Joshua, 2026-11-24: "let's create a procedural sky as it gives up
+  more options and saves textures/memory. It can be as a separate option in settings"; his and ChatGPT's "Procedural
+  Sky & Ocean" handoff and his two concept sheets, kept outside the repo: day, sunrise, sunset, tropical storm, starry
+  night with a moon, cyan aurora, violet alien bands, night storm). `world/island/proceduralSky.ts`: (1) `environmentAt`
+  makes the WHOLE MOMENT from the hour and the event: sun and moon directions, the sky's zenith and horizon, the
+  sunrise/sunset glow, clouds' colours, the key light (the SUN by day, the MOON by night, never from under the horizon,
+  both faint where they hand over so shadows never jump), the sky light from above and below, the haze (colour and
+  distances: a storm brings it in to 500-6000 m), the sea's reflected sky, and `night` 0..1 (stars, moon, and the flora's
+  glow next). Five STOPS by the sun's height (night, twilight, sunset, golden, day) blended smoothly; the DAY stop is the
+  island's light exactly as it has always been, and THE SUN'S PATH (rises east, 59 degrees up at noon in the south, sets
+  west) puts the sun within a fifth of a degree of the old fixed light at 13:15 (`SKY_TODAY_HOUR`, the default hour), so
+  the ground's calibrated colours (DAYLIGHT_BALANCE) hold. (2) `createProceduralSky`: one box round the camera, as the
+  sky picture is, its shader working out each pixel: the gradient, the sun's disc and glow, seeded twinkling stars, the
+  moon (a disc with darker seas and a glow), clouds (4 octaves of noise on a ceiling, drifting, lit toward the sun),
+  the storm's dimming and LIGHTNING (main.ts: every 4-14 s, a flash fading over a third of a second, lighting the sky
+  and the sky light), the AURORA (curtains low over the horizon, rippling; only as it gets dark), the ALIEN BANDS (four
+  glowing arcs, faint by day). No pictures: the old sky picture was 2048 x 1024, about 11 MB on the graphics chip and
+  0.5 MB to fetch. SETTINGS -> WORLD (all live): Sky (Procedural, the default, or Picture: the old one, fetched only
+  when chosen and let go when not, the lights back to the old daylight), Time of day (a slider, 0-24, that follows a
+  running clock), Day cycle (Stopped, the default, or a whole day in 12, 24, 48 or 96 real minutes), Sky event (Clear,
+  Tropical storm, Aurora, Alien bands), Clouds (on/off). main.ts `stepSky` each frame lights the world from it
+  (skyLight, keyLight, `keyDirNow`); islandWorld.ts `setSkyMode`, `setEnvironment` (the sky, haze, background, sea);
+  ocean.ts `setSky` (its reflected sky: it was a fixed day colour, so the night sea glowed). Readout: `sky 13:15 ·
+  clear`. Test pages: `gdm.sky({ hour, event, cycle, clouds })`. PICTURED at 932 x 430: midday with clouds, sunrise
+  over the sea, sunset inland, the moon rising in the east with its path on the sea, stars, the aurora, the bands, the
+  storm. Not yet: rain, the ocean handoff's other ideas (depth colours, foam), the flora's glow tied to `night`.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

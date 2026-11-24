@@ -18,6 +18,7 @@
 //   ?heroine=fast | room | standin     ?detail=auto | 100 ... 1     ?fps=30 | 45 | 60
 //   ?sharp=1 | 2                       ?body=light | full           ?look=blazeSuit | blaze
 // ============================================================================
+import { SKY_TODAY_HOUR, type SkyEvent } from '../world/island/proceduralSky';
 import { wearsLightSkin } from '@charb/sarahlab/skinChoice';
 import { TARGET_FPS, type TargetFps } from './fast/autoDetail';
 import { nearestDetail, type Detail } from './fast/detailLevels';
@@ -46,6 +47,18 @@ export const GROUND_CHOICES: readonly (readonly [string, GroundChoice])[] = [['S
 export type IslandGrid = 8 | 16 | 32 | 64;
 export const ISLAND_GRID_CHOICES: readonly (readonly [string, IslandGrid])[] = [
   ['8 x 8 (7 km tiles)', 8], ['16 x 16 (3.5 km)', 16], ['32 x 32 (1.75 km)', 32], ['64 x 64 (875 m)', 64],
+];
+/** Settings -> WORLD -> Sky (src/world/island/proceduralSky.ts): drawn by code with a time of day, or the old picture. */
+export type SkyChoice = 'procedural' | 'picture';
+export const SKY_CHOICES: readonly (readonly [string, SkyChoice])[] = [['Procedural (time of day)', 'procedural'], ['Picture (daytime)', 'picture']];
+/** Settings -> WORLD -> Sky event. */
+export const SKY_EVENT_CHOICES: readonly (readonly [string, SkyEvent])[] = [
+  ['Clear', 'clear'], ['Tropical storm', 'storm'], ['Aurora (at night)', 'aurora'], ['Alien bands', 'bands'],
+];
+/** Settings -> WORLD -> Day cycle: real minutes a whole game day takes (0: the clock stands still). */
+export type SkyCycle = 0 | 12 | 24 | 48 | 96;
+export const SKY_CYCLE_CHOICES: readonly (readonly [string, SkyCycle])[] = [
+  ['Stopped', 0], ['A day in 12 min', 12], ['A day in 24 min', 24], ['A day in 48 min', 48], ['A day in 96 min', 96],
 ];
 function asIslandGrid(v: string | null): IslandGrid | null {
   const n = Number(v);
@@ -146,6 +159,17 @@ export interface HeroineSettings {
    * default, no water and no channels cut in. Restarts the game.
    */
   rivers: ShadowChoice;
+  /**
+   * THE SKY (v0.2.167; Joshua, 2026-11-24: "let's create a procedural sky as it gives up more options and saves
+   * textures/memory. It can be as a separate option in settings"): `sky` Procedural (the default) or Picture; `skyHour`
+   * the time of day, 0-24 (13:15 is the island's light as it has always been); `skyCycle` real minutes a game day takes
+   * (0: stopped); `skyEvent` clear, a tropical storm, an aurora at night or alien bands; `clouds` on or off. All live.
+   */
+  sky: SkyChoice;
+  skyHour: number;
+  skyCycle: SkyCycle;
+  skyEvent: SkyEvent;
+  clouds: ShadowChoice;
   /**
    * HER PREGNANCY, to test (Joshua, 2026-11-19: "a toggle pregnancy on/off as well as a full range belly slider from
    * 0-200%, but only 10-150% is the default range with unlock available... like the CCBS"; heroine/pregnancyPlan.ts).
@@ -305,6 +329,11 @@ export const SETTING_KEYS = Object.freeze({
   ground: 'gdm.ground',
   islandGrid: 'gdm.islandGrid',
   rivers: 'gdm.rivers',
+  sky: 'gdm.sky',
+  skyHour: 'gdm.skyHour',
+  skyCycle: 'gdm.skyCycle',
+  skyEvent: 'gdm.skyEvent',
+  clouds: 'gdm.clouds',
   pregnant: 'gdm.pregnant',
   belly: 'gdm.belly',
   bellyUnlocked: 'gdm.bellyUnlocked',
@@ -402,6 +431,11 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     ground: (address.get('ground') ?? read(SETTING_KEYS.ground)) === 'textures' ? 'textures' : 'colours',
     islandGrid: asIslandGrid(address.get('grid')) ?? asIslandGrid(read(SETTING_KEYS.islandGrid)) ?? 16,
     rivers: (address.get('rivers') ?? read(SETTING_KEYS.rivers)) === 'on' ? 'on' : 'off',
+    sky: (address.get('sky') ?? read(SETTING_KEYS.sky)) === 'picture' ? 'picture' : 'procedural',
+    skyHour: asNumber(address.get('hour') ?? read(SETTING_KEYS.skyHour), 0, 24) ?? SKY_TODAY_HOUR,
+    skyCycle: ((v) => (v === 12 || v === 24 || v === 48 || v === 96 ? v : 0))(Number(address.get('cycle') ?? read(SETTING_KEYS.skyCycle))) as SkyCycle,
+    skyEvent: ((v) => (v === 'storm' || v === 'aurora' || v === 'bands' ? v : 'clear'))(address.get('event') ?? read(SETTING_KEYS.skyEvent)) as SkyEvent,
+    clouds: (address.get('clouds') ?? read(SETTING_KEYS.clouds)) === 'off' ? 'off' : 'on',
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
     belly: asNumber(address.get('belly') ?? read(SETTING_KEYS.belly), 0, 200),
     bellyUnlocked: read(SETTING_KEYS.bellyUnlocked) === 'true',

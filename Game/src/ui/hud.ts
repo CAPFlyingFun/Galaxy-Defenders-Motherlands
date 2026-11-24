@@ -27,7 +27,7 @@ import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import { GROUND_COLOURS, GROUND_KINDS, groundColoursNow, type GroundKind } from '../world/island/groundPaint';
-import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, SKY_CHOICES, SKY_CYCLE_CHOICES, SKY_EVENT_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -164,6 +164,12 @@ const PACE_CAP_ABOVE = 4;
 /** The bellies every outfit is pictured at for Settings (public/thumbs/; the one nearest hers is shown). */
 const THUMB_BELLIES = [10, 50, 80, 120, 150] as const;
 
+/** An hour of the day (0-24, with fractions) as a 24-hour clock: 13.25 -> "13:15". */
+function clockText(hour: number): string {
+  const minutes = Math.round(hour * 60) % 1440;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
 export class Hud {
   private readonly root: HTMLElement;
   private readonly stick: HTMLElement;
@@ -228,6 +234,9 @@ export class Hud {
   private bellySlider: HTMLInputElement | null = null;
   private pregnantSelect: HTMLSelectElement | null = null;
   private bellyValue: HTMLElement | null = null;
+  /** Settings -> WORLD -> Time of day: its slider and value, which follow the clock while a day cycle runs. */
+  private skyHourSlider: HTMLInputElement | null = null;
+  private skyHourValue: HTMLElement | null = null;
   private bellyTextOf: (percent: number) => string = (p) => `${p}%`;
 
   constructor(host: HTMLElement, private readonly controls: Controls, options: HudOptions) {
@@ -432,6 +441,30 @@ export class Hud {
     const sizeChoices = textureSizesOffered().map((s) => [String(s), s] as const);
     choiceRow('World textures', 'worldTextures', sizeChoices, 'The largest the island\'s ground, river, tree and bark pictures, her suit\'s fabric and the skin\'s pores are drawn (pixels; each step down is a quarter of the memory). The sky and the coastline stay as they are; the shadows are 1024 at 512 and under, 2048 above. It changes while you play.');
     choiceRow('Ground', 'ground', GROUND_CHOICES, 'Solid colours: the island\'s own palette, with a fine pattern near you that fades to plain colour further off; no pictures to download, lighter for the phone. Textures: the ground pictures as before. Changes at once.');
+    // THE SKY (v0.2.167; Joshua, 2026-11-24: "let's create a procedural sky as it gives up more options and saves
+    // textures/memory. It can be as a separate option in settings"; world/island/proceduralSky.ts)
+    choiceRow('Sky', 'sky', SKY_CHOICES, 'Procedural: the sky drawn by code with a time of day: sun, moon and stars, clouds, sunrise and sunset, and the sky events below; the light, the haze and the sea follow it. Nothing to download. Picture: the daytime sky picture as before. Changes at once.');
+    {
+      // (its own slider here, the time of day; it follows the clock while a day cycle runs: `setSkyHour`)
+      const line = element('label', 'gd-choice gd-slider', settings);
+      element('span', '', line, 'Time of day');
+      const value = element('b', '', line, clockText(options.graphics.skyHour));
+      const slider = element('input', '', line);
+      slider.type = 'range';
+      slider.min = '0'; slider.max = '24'; slider.step = '0.25';
+      slider.value = String(options.graphics.skyHour);
+      slider.addEventListener('input', () => {
+        const v = Number(slider.value);
+        value.textContent = clockText(v);
+        options.onGraphicsChange('skyHour', v);
+      });
+      this.skyHourSlider = slider;
+      this.skyHourValue = value;
+    }
+    element('small', 'gd-note', settings, 'The procedural sky\'s hour: 13:15 is the island\'s light as it has always been; the sun rises about 6:00 and sets about 18:00. Changes at once.');
+    choiceRow('Day cycle', 'skyCycle', SKY_CYCLE_CHOICES, 'Stopped: the time of day stays where the slider is. Otherwise the clock runs and a whole day takes that long.');
+    choiceRow('Sky event', 'skyEvent', SKY_EVENT_CHOICES, 'Clear; a tropical storm (slate clouds, dim light, haze, lightning); an aurora (curtains of light, as it gets dark); or alien bands across the sky (faint by day, bright by night). Changes at once.');
+    choiceRow('Clouds', 'clouds', [['On', 'on'], ['Off', 'off']], 'A few soft clouds drifting (a storm always has them). Off is a little lighter for the phone. Changes at once.');
     choiceRow('Island grid', 'islandGrid', ISLAND_GRID_CHOICES, 'How many tiles the 56 km island is cut into: the nine round you are loaded in full. Smaller tiles load and build quicker but cover less. To compare on your phone; 16 x 16 is the default. Changing it reloads the game.');
     choiceRow('Rivers & lakes', 'rivers', [['Off', 'off'], ['On', 'on']], 'The real island\'s rivers and lakes, cut into the ground and filled. Off until the island\'s own lakes are made. Changing it reloads the game.');
     choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Changes at once.');
@@ -823,6 +856,13 @@ export class Hud {
    * HER BELLY changed by the game (a story step, or the lock bringing it back into range): the slider and its value
    * follow; and her Pregnancy on or off, when given.
    */
+  /** THE TIME OF DAY as the clock moves it (a day cycle running): the slider and its value follow, unless being dragged. */
+  setSkyHour(hour: number): void {
+    if (!this.skyHourSlider || !this.skyHourValue || document.activeElement === this.skyHourSlider) return;
+    this.skyHourSlider.value = String(Math.round(hour * 4) / 4);
+    this.skyHourValue.textContent = clockText(hour);
+  }
+
   showBelly(percent: number, pregnant?: boolean): void {
     const p = Math.round(percent);
     if (this.pregnantSelect && pregnant !== undefined) this.pregnantSelect.value = pregnant ? '0' : '1'; // (the list's On, Off)

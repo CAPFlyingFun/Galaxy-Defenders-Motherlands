@@ -48,6 +48,7 @@ import { CarveData } from './carve';
 import { KauaiHydro } from './hydro';
 import { IslandTrees } from './trees';
 import { createSkyPicture, type SkyPicture } from './skyPicture';
+import { createProceduralSky, type Environment, type ProceduralSky } from './proceduralSky';
 import type { Landscaping } from './treeObjects';
 
 /** The arrival point in the island's own metres (Beyond Extinction's spawn, from its manifest). */
@@ -113,6 +114,10 @@ export interface IslandWorld {
   setGroundColour(kind: GroundKind, which: 0 | 1, hex: string): void;
   /** The grid the island was opened with (tiles across), for the readout. */
   readonly grid: number;
+  /** Settings -> WORLD -> Sky, live: drawn by code with a time of day, or Beyond Extinction's picture (proceduralSky.ts). */
+  setSkyMode(mode: SkyMode): void;
+  /** THE MOMENT'S SKY (procedural only): the sky's colours, sun, moon, stars, clouds and events, the haze, the sea's reflection. */
+  setEnvironment(env: Environment, seconds: number): void;
   /** Every frame: tiles follow her, the sea follows the camera. */
   update(seconds: number, herX: number, herZ: number, camera: THREE.Camera): void;
   dispose(): void;
@@ -174,7 +179,12 @@ export interface IslandOptions {
   /** Tiles across: 8, 16, 32 or 64 (16 by default). */
   grid?: number;
   rivers?: boolean;
+  /** The sky: drawn by code (the default) or Beyond Extinction's picture. */
+  sky?: SkyMode;
 }
+
+/** Settings -> WORLD -> Sky. */
+export type SkyMode = 'procedural' | 'picture';
 
 /** The list of tiles for each grid (8 x 8 is Beyond Extinction's own manifest). */
 const MANIFEST_OF: Record<number, string> = { 8: 'manifest.json', 16: 'manifest16.json', 32: 'manifest32.json', 64: 'manifest64.json' };
@@ -216,21 +226,51 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   /** She is playing (`startStreaming`), and whether the forest has been let start (once the tiles round her are in). */
   let playing = false, forestBegun = false;
 
-  // THE SKY: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), and a light haze.
-  // Drawn straight from the picture (skyPicture.ts, v0.2.147): as `scene.background` three.js turned it into a
-  // 1024 cube with six depth buffers, about 48 MB more on the graphics chip for the same sky.
+  // THE SKY (Settings -> WORLD -> Sky, v0.2.166), and a light haze. Two ways:
+  //  PROCEDURAL, the default: drawn by code with a time of day (proceduralSky.ts); main.ts works out the moment's
+  //    Environment each frame and gives it here (`setEnvironment`: the sky, the haze and the sea's reflection) and to
+  //    the lights. Nothing downloaded.
+  //  PICTURE: Beyond Extinction's daytime sky picture (no lighting from it: her look stays as tuned), drawn straight
+  //    from the picture (skyPicture.ts, v0.2.147: as `scene.background` three.js turned it into a 1024 cube with six
+  //    depth buffers, about 48 MB more on the graphics chip). Fetched only when chosen; let go when not.
   scene.background = new THREE.Color(HAZE);
   scene.fog = new THREE.Fog(HAZE, FOG_NEAR, FOG_FAR);
+  const fog = scene.fog;
+  let skyMode: SkyMode = options.sky ?? 'procedural';
   let skyPicture: THREE.Texture | null = null;
-  let sky: SkyPicture | null = null;
+  let pictureSky: SkyPicture | null = null;
+  let pictureLoading: Promise<void> | null = null;
+  let drawnSky: ProceduralSky | null = null;
   let gone = false; // (the island let go before the picture arrived: it is not put up)
-  // (WAITED FOR, v0.2.151: in with the island's own step, not loading behind the characters')
-  await new THREE.TextureLoader().loadAsync(`${base}sky/daysky_bg.jpg`).then((picture) => {
-    if (gone) { picture.dispose(); return; }
-    skyPicture = picture;
-    sky = createSkyPicture(picture);
-    scene.add(sky.mesh); // (the haze colour stays as the background, under it: seen only if the picture never comes)
-  }).catch(() => { /* the plain haze colour stays */ });
+  const loadPictureSky = (): Promise<void> => {
+    if (pictureSky) return Promise.resolve();
+    pictureLoading ??= new THREE.TextureLoader().loadAsync(`${base}sky/daysky_bg.jpg`).then((picture) => {
+      if (gone) { picture.dispose(); return; }
+      skyPicture = picture;
+      pictureSky = createSkyPicture(picture);
+    }).catch(() => { /* the plain haze colour stays */ }).finally(() => { pictureLoading = null; });
+    return pictureLoading;
+  };
+  /** The sky chosen is put up and the other taken down (the procedural one is made the first time it is wanted). */
+  const showSky = (): void => {
+    if (skyMode === 'picture') {
+      drawnSky?.mesh.removeFromParent();
+      if (pictureSky) scene.add(pictureSky.mesh); // (the haze colour stays as the background: seen only if it never comes)
+      // the haze and the sea as they always were by day (the picture's sky has no time of day)
+      (scene.background as THREE.Color).set(HAZE);
+      fog.color.set(HAZE); fog.near = FOG_NEAR; fog.far = FOG_FAR;
+      ocean.setSky(new THREE.Color(0x9fc6df));
+    } else {
+      // (the picture let go: its 2048 x 1024 on the graphics chip and in the page)
+      pictureSky?.dispose(); pictureSky = null;
+      skyPicture?.dispose(); skyPicture = null;
+      drawnSky ??= createProceduralSky();
+      scene.add(drawnSky.mesh);
+    }
+  };
+  // (WAITED FOR when it is the picture, v0.2.151: in with the island's own step, not loading behind the characters')
+  if (skyMode === 'picture') await loadPictureSky();
+  showSky();
 
   const groundAt = (x: number, z: number): number => tiles.heightAt(x, z);
   const waterAt = (x: number, z: number): number | null => hydro?.waterLevelAt(x + origin.x, z + origin.y) ?? null;
@@ -245,6 +285,18 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     walls: new IslandWalls(groundAt, standAt, (x, z) => trees.trunkBlocks(x + origin.x, z + origin.y, BODY_RADIUS)),
     setLandscaping: (mode) => trees.setMode(mode),
     setGround: (mode) => { void paint.setMode(mode); },
+    setSkyMode(mode) {
+      skyMode = mode;
+      if (mode === 'picture') void loadPictureSky().then(() => { if (skyMode === 'picture' && !gone) showSky(); });
+      showSky();
+    },
+    setEnvironment(env, seconds) {
+      if (skyMode !== 'procedural' || !drawnSky) return;
+      drawnSky.update(env, seconds);
+      (scene.background as THREE.Color).copy(env.fog);
+      fog.color.copy(env.fog); fog.near = env.fogNear; fog.far = env.fogFar;
+      ocean.setSky(env.seaSky);
+    },
     setGroundColour: (kind, which, hex) => paint.setColour(kind, which, hex),
     grid,
     standAt,
@@ -291,8 +343,9 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       (far.material as THREE.Material).dispose();
       ocean.dispose();
       gone = true;
-      sky?.dispose();
+      pictureSky?.dispose();
       skyPicture?.dispose();
+      drawnSky?.dispose();
     },
   };
 }

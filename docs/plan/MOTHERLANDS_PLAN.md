@@ -349,7 +349,9 @@ setting (below).
 1. Baseline measurements of the island as it was (v0.2.166: done, in the commit).
 2. The solid-colour ground (v0.2.166).
 3. The grid setting, compared on his phone (v0.2.166).
-4. Day and night (sun, sky, haze and light colour), which the glowing flora needs.
+4. Day and night (sun, sky, haze and light colour), which the glowing flora needs: the procedural sky, v0.2.167 (Joshua:
+   "let's create a procedural sky as it gives up more options and saves textures/memory"), with sky events (storm,
+   aurora, alien bands) after his concept sheets.
 5. The first region, with the island's own flora and its glow at night.
 6. Then, as the story needs them: local wildlife and people, a settlement or base, transport, bonding, crafting,
    housing.

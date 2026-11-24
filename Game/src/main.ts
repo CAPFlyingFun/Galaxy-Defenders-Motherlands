@@ -52,6 +52,8 @@ import { Tracers } from './world/tracers';
 import { WeaponTable } from './world/weaponTable';
 import type { IslandWorld } from './world/island/islandWorld';
 import { PregnancyPlan, weekText } from './heroine/pregnancyPlan';
+import { environmentAt, makeEnvironment, type SkyEvent } from './world/island/proceduralSky';
+import type { SkyCycle } from './heroine/heroineSettings';
 import { GROUND_COLOURS, GROUND_COLOURS_KEY, GROUND_KINDS, groundColoursNow } from './world/island/groundPaint';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
@@ -434,6 +436,7 @@ async function start(): Promise<void> {
     const { createIslandWorld } = await import('./world/island/islandWorld');
     island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, {
       landscaping: graphics.landscaping, ground: graphics.ground, grid: graphics.islandGrid, rivers: graphics.rivers === 'on',
+      sky: graphics.sky,
     });
     scene.add(island.group);
     let told = -1;
@@ -511,11 +514,55 @@ async function start(): Promise<void> {
 
   // Two plain lights for the heroine. (The city, ground and dome glow by themselves and ignore lights.)
   const skyLight = new THREE.HemisphereLight(0xcfe0ff, 0x1a2740, 1.7);
+  // THE KEY LIGHT'S DIRECTION (toward the sun or moon) and how far from her it stands (its old place, (-4, 10, 6)):
+  // fixed as it has always been, or the procedural sky's sun by day and moon by night (`stepSky`)
+  const DAY_KEY_DIR = new THREE.Vector3(-4, 10, 6).normalize();
+  const KEY_REACH = Math.hypot(4, 10, 6);
+  const keyDirNow = DAY_KEY_DIR.clone();
+  // THE PROCEDURAL SKY'S CLOCK AND MOMENT (v0.2.167; world/island/proceduralSky.ts): the hour (Settings -> Time of day,
+  // moved on by Day cycle), a storm's lightning, and the Environment worked out from them each frame
+  let skyHour = graphics.skyHour;
+  const environment = makeEnvironment();
+  let lightning = 0, nextLightning = 6, skyHourShown = 0;
+  /**
+   * Each frame on the island with the procedural sky: the clock moves on (if a day cycle runs), a storm may flash, and
+   * the moment's sky, light, haze and sea are set (the island's own parts by `island.setEnvironment`).
+   */
+  const stepSky = (dt: number, realDt: number): void => {
+    if (!island || graphics.sky !== 'procedural') return;
+    if (graphics.skyCycle > 0) skyHour = (skyHour + dt * 24 / (graphics.skyCycle * 60)) % 24;
+    // LIGHTNING in a storm: now and then (every 4-14 s), a flash that dies away over a third of a second
+    if (graphics.skyEvent === 'storm') {
+      nextLightning -= dt;
+      if (nextLightning <= 0) { lightning = 1; nextLightning = 4 + Math.random() * 10; }
+    }
+    lightning = Math.max(0, lightning - dt * 3);
+    environmentAt(environment, skyHour, graphics.skyEvent, graphics.clouds === 'on', lightning * lightning);
+    skyLight.color.copy(environment.hemiSky);
+    skyLight.groundColor.copy(environment.hemiGround);
+    skyLight.intensity = environment.hemiIntensity;
+    keyLight.color.copy(environment.keyColour);
+    keyLight.intensity = environment.keyIntensity;
+    keyDirNow.copy(environment.keyDir);
+    island.setEnvironment(environment, dt);
+    // (the Settings slider follows a running clock, four times a second)
+    skyHourShown += realDt;
+    if (graphics.skyCycle > 0 && skyHourShown > 0.25) { skyHourShown = 0; hud.setSkyHour(skyHour); }
+  };
   scene.add(skyLight);
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   keyLight.position.set(-4, 10, 6);
   scene.add(keyLight);
   scene.add(keyLight.target);
+  /**
+   * THE ISLAND'S OWN DAYTIME LIGHT, as it has always been (and as the procedural sky's 13:15 is): a blue-white sky light
+   * from above and dark blue from below, and a white sun from (-4, 10, 6). The ground's colours were measured in it.
+   */
+  const dayLight = (): void => {
+    skyLight.color.set(0xcfe0ff); skyLight.groundColor.set(0x1a2740); skyLight.intensity = 1.7;
+    keyLight.color.set(0xffffff); keyLight.intensity = 1.5;
+    keyDirNow.copy(DAY_KEY_DIR);
+  };
   // (beneath the island there is no sky and no sun: only the faintest light, so he is never quite lost in the black;
   //  his flashlight does the rest)
   if (tunnel) { skyLight.color.set(0x8a9bb5); skyLight.groundColor.set(0x1a140e); skyLight.intensity = 0.07; keyLight.intensity = 0; }
@@ -1645,6 +1692,10 @@ async function start(): Promise<void> {
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       else if (key === 'ground') island?.setGround(graphics.ground); // (live: groundPaint.ts)
+      // (the sky: live. Back to the picture, the lights go back to the island's own daytime light)
+      else if (key === 'sky') { island?.setSkyMode(graphics.sky); if (graphics.sky === 'picture') dayLight(); }
+      else if (key === 'skyHour') skyHour = graphics.skyHour;
+      else if (key === 'skyCycle' || key === 'skyEvent' || key === 'clouds') { /* live: read every frame (stepSky) */ }
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
       else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity' || key === 'paceCap') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
@@ -1796,6 +1847,14 @@ async function start(): Promise<void> {
       get elapsed() { return elapsed; },
       // (her belly a story step, as a quest would: gdm.stepBelly(1), gdm.stepBelly(-1))
       stepBelly,
+      // (the procedural sky for test pages: gdm.sky({ hour: 19, event: 'aurora', cycle: 0, clouds: 'on' }); the moment now)
+      sky(patch: { hour?: number; event?: SkyEvent; cycle?: SkyCycle; clouds?: 'on' | 'off' } = {}) {
+        if (patch.hour !== undefined) skyHour = graphics.skyHour = patch.hour;
+        if (patch.event) graphics.skyEvent = patch.event;
+        if (patch.cycle !== undefined) graphics.skyCycle = patch.cycle;
+        if (patch.clouds) graphics.clouds = patch.clouds;
+        return { hour: skyHour, event: graphics.skyEvent, night: environment.night, key: environment.keyIntensity };
+      },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
       // (each one's brain: what it is doing and what it has done, for the test pages)
@@ -2377,7 +2436,9 @@ async function start(): Promise<void> {
     heroine.setEyeOffset?.(graphics.eyeForward / 100, graphics.eyeHigher / 100);
     // (the key light, its shadow box and the patch of ground that shows her real shadow all go with her)
     const feetY = groundUnder(motion.x, motion.z); // (the island's ground under her; 0 on the town)
-    keyLight.position.set(motion.x - 4, feetY + 10, motion.z + 6);
+    // (its direction: the procedural sky's sun or moon, or the fixed one, (-4, 10, 6), as it has always been)
+    stepSky(dt, realDt);
+    keyLight.position.set(motion.x + keyDirNow.x * KEY_REACH, feetY + keyDirNow.y * KEY_REACH, motion.z + keyDirNow.z * KEY_REACH);
     keyLight.target.position.set(motion.x, feetY, motion.z);
     shadowFloor.position.x = motion.x;
     shadowFloor.position.z = motion.z;
@@ -2766,6 +2827,8 @@ async function start(): Promise<void> {
         // (the island's forest: trees drawn, in how many draws)
         // (the island's grid, ground and rivers as chosen in Settings -> WORLD: v0.2.166)
         if (island) lines.push(`isle ${island.grid}x${island.grid} · ${graphics.ground === 'textures' ? 'tex' : 'colours'} · rivers ${graphics.rivers}`);
+        // (the procedural sky's hour and event: v0.2.167)
+        if (island && graphics.sky === 'procedural') lines.push(`sky ${String(Math.floor(skyHour)).padStart(2, '0')}:${String(Math.floor((skyHour % 1) * 60)).padStart(2, '0')} · ${graphics.skyEvent}${graphics.skyCycle ? ` · day ${graphics.skyCycle} min` : ''}`);
         const forest = island?.treeCounts();
         if (forest) lines.push(`trees ${forest.trees} · ${forest.draws} draws`);
         // (graphics memory asked for, an ESTIMATE: core/gpuTally.ts; and where the last start stopped, if the phone

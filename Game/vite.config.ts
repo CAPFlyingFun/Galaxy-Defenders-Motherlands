@@ -202,7 +202,7 @@ function pwa(): Plugin {
         return hash.digest('hex').slice(0, 12);
       };
       // (the test and bake pages are not kept at all)
-      const LAB_PAGES = ['armor-lab.html', 'bake.html', 'heroine-lab.html', 'vitals-lab.html'];
+      const LAB_PAGES = ['armor-lab.html', 'bake.html', 'flora-lab.html', 'heroine-lab.html', 'vitals-lab.html'];
       // THE BIG FILES, kept as they are first used, each by its own fingerprint: her outfits, fabrics and their pictures
       // in Settings (about 135 small ones), the builder's files, the island's tiles, the sounds (audio/: her breathing)
       const isBig = (f: string) => /^(heroines|fabrics|thumbs|charb|island|audio)\//.test(f);

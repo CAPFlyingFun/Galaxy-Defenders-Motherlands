@@ -30,7 +30,8 @@ import * as THREE from 'three';
 import { sizedPicture } from '../../core/textureSizes';
 import { KINDS, TRUNK_SHARE, drawLeafPicture, drawPalmBark, makeKindModels, type Kind, type KindModels } from './treeModels';
 
-export type Landscaping = 'images' | 'hybrid' | 'objects' | 'off';
+// (FLORA, 2026-11-24: 'flora' is the island's own sci-fi flora, flora/floraPlanting.ts; the trees are off with it)
+export type Landscaping = 'images' | 'hybrid' | 'objects' | 'off' | 'flora';
 
 /** Where a photo tree and its 3D model swap (metres from the camera, level). GAME TUNING. */
 export const SWAP_M = { start: 60, end: 80 } as const;

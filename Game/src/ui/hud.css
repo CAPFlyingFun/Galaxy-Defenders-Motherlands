@@ -339,8 +339,8 @@
 }
 .gd-pace-seg { pointer-events: auto; cursor: pointer; touch-action: none; }
 .gd-pace-seg-shape { fill: var(--navy); stroke: var(--line); stroke-width: 1; }
-/* (11 px at the stick's own 200 px: the curve's picture is drawn at that size and scaled with the stick) */
-.gd-pace-seg-text { fill: var(--text); font-size: 11px; font-weight: 800; letter-spacing: 0.05em; pointer-events: none; }
+/* (14 px at the stick's own 200 px since v0.2.170, the bigger curve; the picture is scaled with the stick) */
+.gd-pace-seg-text { fill: var(--text); font-size: 14px; font-weight: 800; letter-spacing: 0.05em; pointer-events: none; }
 /* (the one chosen: gold; the pace she is at now: a teal edge, and its word in teal unless it is the gold one) */
 .gd-pace-seg.is-on .gd-pace-seg-shape { fill: rgba(255, 213, 107, 0.88); stroke: var(--gold); }
 .gd-pace-seg.is-on .gd-pace-seg-text { fill: #1a1406; }
@@ -348,6 +348,57 @@
 .gd-pace-seg.is-now:not(.is-on) .gd-pace-seg-text { fill: var(--teal); }
 /* (winded: she can only walk, whatever is chosen) */
 .gd-pace-arc.is-winded .gd-pace-seg { opacity: 0.45; }
+/* THE LOCK'S LANE (v0.2.170; hud.ts LOCK_LANE, `makeLockLane`): a column over the stick's top, in shares of the stick
+   (its radius is 50 % of it): from 1.05 radii over its middle (2.5 % over its top) to 2.05 (a whole radius higher), a
+   quarter of a radius either side. Unseen until the thumb pushes past the rim; the chevrons light from the bottom up as
+   it goes, the lock grows gold when the thumb is in it; LOCKED, only the lock stays, gold, over the stick. */
+.gd-lock-lane {
+  position: absolute;
+  left: 37.5%;
+  width: 25%;
+  bottom: 102.5%;
+  height: 50%;
+  border: 1px dashed rgba(94, 232, 200, 0.55);
+  border-radius: 999px;
+  background: rgba(4, 6, 13, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding-top: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.gd-lock-lane.is-arming, .gd-lock-lane.is-ready, .gd-lock-lane.is-locked { opacity: 1; }
+.gd-lock-lane-lock {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 1px solid var(--line);
+  background: var(--navy);
+  transition: transform 0.12s;
+}
+.gd-lock-lane-chevron { color: var(--teal); font-size: 14px; line-height: 1; opacity: 0.35; }
+.gd-lock-lane-chevron:nth-child(4) { opacity: 0.85; }
+.gd-lock-lane-chevron:nth-child(3) { opacity: 0.6; }
+.gd-lock-lane.is-ready .gd-lock-lane-chevron { opacity: 1; }
+.gd-lock-lane.is-ready .gd-lock-lane-lock, .gd-lock-lane.is-locked .gd-lock-lane-lock {
+  transform: scale(1.15);
+  border-color: var(--gold);
+  background: rgba(255, 213, 107, 0.88);
+}
+/* (locked and no thumb in the lane: the lock alone, no column or chevrons, sitting just over the stick's top, not up at
+    the lane's end where, on the default layout, it lay over the WEEK chip and the FPS line the whole time she ran) */
+.gd-lock-lane.is-locked:not(.is-arming):not(.is-ready) { border-color: transparent; background: none; justify-content: flex-end; padding-top: 0; }
+.gd-lock-lane.is-locked:not(.is-arming):not(.is-ready) .gd-lock-lane-chevron { display: none; }
+/* (the knob, held at the top edge by the lock: gold) */
+.gd-walk-stick.is-locked .gd-stick-knob { background: rgba(255, 213, 107, 0.7); }
 /* ---- Her vitals card: the top left corner, the FPS line under it (Joshua's layout, 2026-11-18) ------------- */
 .gd-hud > .gd-top-slot {
   position: absolute;
@@ -368,6 +419,10 @@
 .gd-walk-stick, .gd-move:has(.gd-look-stick:not([hidden])) .gd-walk-stick { width: 200px; height: 200px; }
 .gd-move:has(.gd-look-stick:not([hidden])) { width: calc(200px + var(--gap) + var(--stick)); height: 200px; }
 .gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { left: calc(200px + var(--gap)); }
+/* (v0.2.170: the top pace's curve now runs round the MOVE stick's right side, 146 px from its middle, 46 past its edge:
+   the CAMERA stick is set 56 px off it, not 16, so the two do not meet) */
+.gd-move:has(.gd-look-stick:not([hidden])) .gd-look-stick { --gap: 56px; }
+.gd-move:has(.gd-look-stick:not([hidden])) { --gap: 56px; }
 
 /* ---- Settings: the camera's sliders (FOV for each view, the starting zoom) ---------------------------------- */
 .gd-settings label.gd-slider { flex-wrap: wrap; gap: 4px 8px; }

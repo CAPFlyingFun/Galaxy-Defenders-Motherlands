@@ -241,6 +241,14 @@ const TABLE_WALK = 1.1;
  */
 const MANUAL_CAMERA_STYLES: readonly CameraStyle[] = ['shoulder', 'follow', 'sideLeft', 'sideRight'];
 const MANUAL_AIM_HOLD = 1.2;
+/**
+ * THE LOCK GIVES UP ON A WALL (v0.2.170, GAME TUNING): locked, she has LOCK_START_SECONDS to get going, then if she goes
+ * slower than LOCK_STUCK_SPEED m/s over the ground (a wall, a tree trunk, deep water hold her) for LOCK_STUCK_SECONDS,
+ * the lock lets go.
+ */
+const LOCK_START_SECONDS = 1.5;
+const LOCK_STUCK_SPEED = 0.3;
+const LOCK_STUCK_SECONDS = 0.8;
 /** Her move, for squaring her feet up between moves (see GAIT_RESET). */
 type Gait = 'stand' | 'ahead' | 'back' | 'left' | 'right' | 'go';
 /**
@@ -1136,6 +1144,9 @@ async function start(): Promise<void> {
   let manualStyle: CameraStyle = 'follow';
   /** Seconds since FIRE was last held (aimed by hand: the camera stays over her shoulder this long after). */
   let sinceFire = Infinity;
+  /** THE LOCK (step 1 of the frame): where she was a frame ago and that frame's length, how long she has been locked, and
+   *  how long she has been held up while locked. */
+  const lockRun = { x: 0, z: 0, dt: 0, for: 0, stuck: 0 };
   rig.droneLimit = DOME_RADIUS - 3;
   if (island) {
     // the island: the camera sees out to the far coast (16 km of haze), keeps over the hills, and the drone is free
@@ -1508,6 +1519,8 @@ async function start(): Promise<void> {
     from.body.setFirstPerson(false);
     from.body.setSideSteps?.(null);
     from.body.setBellySupport?.(false);
+    // (the lock on the stick is the player's, not theirs: it does not go with them, or on to the next one)
+    controls.autoRun = false;
     // (their brain has them from now: their needs, and in AUTO their fight; it starts from nothing wanted)
     Object.assign(from.kit.wants, { walkTo: null, look: null, aimAt: null, fire: false });
     from.brain?.setMode('ai');
@@ -2139,6 +2152,24 @@ async function start(): Promise<void> {
     controls.moveScale = graphics.moveSensitivity / 100;
     rig.lookScale = graphics.lookSensitivity / 100;
     controls.sample();
+    // THE LOCK (v0.2.170; Controls `autoRun`, the MOVE stick's lane in hud.ts): she runs ahead by herself until a
+    // clear push ahead or back on the stick (Controls), or until here: she is WINDED (out of stamina, as she stops
+    // anyway: Joshua, "Stop like normal when out of stamina"), BUSY (the table, a bar, the door), going to the toilet or
+    // must go, DOWN (prone or all fours), or BLOCKED (a wall, a tree, deep water: barely moving for LOCK_STUCK_SECONDS
+    // once she has had LOCK_START_SECONDS to get going). Where she goes is where the camera looks (as the stick is held
+    // full ahead: first person her head is the camera; third person ahead of the camera).
+    {
+      // (how fast she really went last frame, over the ground: the walls and water hold her where the stick does not)
+      const ran = lockRun.dt > 0 ? Math.hypot(motion.x - lockRun.x, motion.z - lockRun.z) / lockRun.dt : 0;
+      lockRun.x = motion.x; lockRun.z = motion.z; lockRun.dt = dt;
+      if (controls.autoRun) {
+        lockRun.for += dt;
+        lockRun.stuck = lockRun.for > LOCK_START_SECONDS && ran < LOCK_STUCK_SPEED ? lockRun.stuck + dt : 0;
+        const stop = pace.holdLeft > 0 || busyNow() || doorUse.holding || mustGoNow || bathroomLeft > 0 || stance === 'down'
+          || lockRun.stuck > LOCK_STUCK_SECONDS;
+        if (stop) { controls.autoRun = false; controls.sample(); }
+      } else { lockRun.for = 0; lockRun.stuck = 0; }
+    }
     // Looking around: a drag on the picture, plus the camera stick (first person). The stick's push is squared
     // (keeping its sign) so a small push aims finely and a full push turns quickly.
     const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;   // (rig.lookScale turns these as it does a drag)

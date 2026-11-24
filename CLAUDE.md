@@ -1355,6 +1355,32 @@ use the game's single copy of three.js.
   MEASURED in the built game, first person, Blaze walking (1.1 m/s), the camera's worst bank and its pitch off from the
   one asked for, v0.2.168 -> v0.2.169: sideways right 7.6 / 7.5 -> 0.3 / 0.2 degrees; sideways left 7.8 / 7.7 -> 0.5 /
   0.3; diagonal 2.8 / 1.2 -> 0.0 / 0.0; ahead 0 / 0 -> 0 / 0.
+- v0.2.170: THE TOP PACE CURVE TURNED ROUND THE STICK'S SIDE AND BIGGER, AND THE LOCK (Joshua, 2026-11-24: "the buttons
+  are a touch too small"; planned with him, every style drawn: speed A one cycling button (TCS's PACE plate, which cycled
+  CRAWL/WALK/RUN by a fixed stick), B the curve bigger, C a button that also swipes; lock 1 TRADDOMIUM's lane, 2 a lock
+  button, 3 a double tap; his pick "B, but rotated it all clockwise about 60°" and "#1"; "Stop like normal when out of
+  stamina"; "If speed is locked, camera turns the head which also changes her direction... if not locked, will be exactly
+  like now"). (1) THE CURVE (hud.ts `PACE_ARC`): from 77 degrees (just right of straight up, where the lock's lane rises)
+  round the stick's RIGHT side to -45 (below its middle), 106-146 px from its middle at its own 200 px (40 deep, was 26),
+  words 14 px (were 11). The default CAMERA stick is set 56 px off the MOVE stick (hud.css `--gap`, was 16) so the curve
+  clears it; a CAMERA stick placed in Edit controls keeps its own place (Joshua's sat 16 px off: to be moved over by him).
+  (2) THE LOCK, AFTER TRADDOMIUM'S FIRST VERSION (`legacy/v0-main` src/input/autoRun.ts, MoveStick.ts; it had a lane, not
+  TCS): push the MOVE stick up PAST ITS RIM and a lane rises from its top (hud.ts `LOCK_LANE`, `makeLockLane`, `laneAt`;
+  hud.css `.gd-lock-lane`): chevrons from 1.1 of its radius, the 🔒 at 1.55 (155 px at its own size; TRADDOMIUM's 1.9 of
+  a 64 px stick), only for a push within 35 degrees of straight up; reaching the lock only makes it READY (gold), lifting
+  the thumb THERE locks (sliding back out is a change of mind); unseen until a thumb goes past the rim. LOCKED
+  (input/controls.ts `autoRun`): the stick reads full ahead, so she builds up to the top pace chosen and the pace curve
+  changes her speed while locked; where she goes is where the camera looks (first person her head; third person ahead of
+  the camera); the 🔒 stays just over the stick, gold, the knob near its top. IT LETS GO: a clear push ahead or back on
+  the stick (`AUTO_RUN_CANCEL` 0.45, and more than to the side: a sideways push does not), W or S; and in main.ts step 1
+  when she is WINDED, busy (table, bar, door), going to the toilet, down (prone or all fours) or BLOCKED (under 0.3 m/s
+  over the ground for 0.8 s once she has had 1.5 s to get going: `LOCK_*`); a swap of characters. (3) A STICK MADE
+  SMALLER OR BIGGER IN EDIT CONTROLS (hud.ts `wireStick`): the finger is measured in the stick's own size (its drawn
+  scale), so the knob stays under it and the drawn rim is a full push. Before, on his 75 % stick, a full push took a
+  third more than the rim, past the drawn rings. TESTED in the built game at 932 x 430: the lane arming and ready, locked
+  she ran at 6.05 m/s (the sprint, his top pace) where the camera looked, turned with it (the view turned 90: she went
+  the new way); a push to the side kept it, a pull back ended it, PRONE ended it, run into the sea she stopped at 0.6 m
+  deep and it let go; on a stick at his 150 px the drawn rim read a full push and the lane locked; no errors.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -23,6 +23,12 @@ const CLICK_SLOP = 6;
 /** What kind of view the game is in, which changes what a mouse click means. */
 export type ClickMode = 'look-only' | 'click-fires';
 
+/**
+ * How far ahead or back the stick must be pushed to take her back from the lock, 0..1 (and more ahead or back than to
+ * the side). TRADDOMIUM's own number: "0.90 across and 0.08 up is an ordinary sidestep". GAME TUNING.
+ */
+const AUTO_RUN_CANCEL = 0.45;
+
 export class Controls {
   // ---- Written by the HUD's on-screen controls ------------------------------
   stickX = 0;
@@ -31,6 +37,14 @@ export class Controls {
   lookStickX = 0;
   lookStickY = 0;
   buttonFire = false;
+  /**
+   * THE LOCK (v0.2.170; Joshua, 2026-11-24, his pick of TRADDOMIUM's first version: push the MOVE stick up past its
+   * rim, let go on the 🔒): she runs ahead by herself, as if the stick were held full forward, at the top pace chosen;
+   * the camera steers her. Set by the HUD (hud.ts, the stick's lane) when the thumb is lifted on the lock; cleared here
+   * by a clear push ahead or back on the stick (or a W / S key), and by the game when she is winded, blocked, busy or
+   * down (main.ts). A push to the side does not cancel it (an untidy thumb is not a change of mind).
+   */
+  autoRun = false;
 
   // ---- Read by the game after sample() --------------------------------------
   moveX = 0;
@@ -91,6 +105,12 @@ export class Controls {
     this.moveX = Math.max(-1, Math.min(1, sx + keyX));
     this.moveY = Math.max(-1, Math.min(1, sy + keyY));
     this.fireHeld = this.buttonFire || this.keys.has(' ');
+    // LOCKED: a clear push ahead or back takes her back by hand (TRADDOMIUM's rule: the axis that wins matters more
+    // than the raw amount, so a sideways push with a little up in it does not); otherwise full ahead, nothing aside
+    if (this.autoRun) {
+      if ((Math.abs(sy) > AUTO_RUN_CANCEL && Math.abs(sy) > Math.abs(sx)) || keyY !== 0) this.autoRun = false;
+      else { this.moveX = 0; this.moveY = 1; }
+    }
   }
 
   /** How far the view was dragged sideways since the last call, in pixels (right is +). */

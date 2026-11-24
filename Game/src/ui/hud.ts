@@ -167,22 +167,65 @@ const PACE_CAP_NAMES = ['WALK', 'JOG', 'RUN', 'SPRINT'] as const;
  * across, its middle at 0, 0: hud.css `.gd-walk-stick`), and angles in degrees round its middle as a clock's hands are not: 0 to its right,
  * 90 straight up, going round to the left (as in school maths). The curve is drawn in a picture sized as a share of
  * the stick (`.gd-pace-arc`), so a stick made bigger or smaller (Edit controls) takes the curve with it.
- *   inner, outer  the band's edges from the stick's middle (the stick's own edge is 100 + its 2 px border). Its top
- *                 stays under her vitals card's chips and FPS line with all her vitals shown (pictured at 932 x 430)
- *   from, to      where the band begins (upper left) and ends (upper right). It begins short of straight up-left so
- *                 nothing reaches past the stick's LEFT side (the phone's camera cutout is there on Joshua's layout:
- *                 the old row was wider than the stick and WALK hung under it); it ends before the CAMERA stick
- *                 beside it (16 px away on Joshua's layout).
+ *   inner, outer  the band's edges from the stick's middle (the stick's own edge is 100 + its 2 px border). v0.2.170:
+ *                 BIGGER, 40 px deep (was 26; Joshua: "the buttons are a touch too small", his pick "B", the curve
+ *                 made bigger)
+ *   from, to      where the band begins and ends. v0.2.170: TURNED ABOUT 60 DEGREES CLOCKWISE (his "B, but rotated
+ *                 it all clockwise about 60°"), round the stick's RIGHT side, from just right of straight up (where
+ *                 the lock's lane rises: LOCK_LANE) to below the stick's middle on its right. Nothing of it is left of
+ *                 the stick (the phone's camera cutout is there on his layout). The CAMERA stick beside it is set
+ *                 further over (hud.css, its --gap) so the two do not meet.
  *   gap           the space between two sections
  *   share         each section's share of the band, by its word's length (SPRINT needs the most room)
  */
-const PACE_ARC = { inner: 105, outer: 131, from: 112, to: 28, gap: 2, share: [6, 5, 5, 8] } as const;
+const PACE_ARC = { inner: 106, outer: 146, from: 77, to: -45, gap: 2.5, share: [6, 5, 5, 8] } as const;
 /** The stick's own size the curve is measured at, px (hud.css `.gd-walk-stick` width). */
 const PACE_ARC_STICK = 200;
 /** The picture's half-size, px at that size: it reaches the band's outer edge with a little to spare. */
-const PACE_ARC_HALF = 136;
+const PACE_ARC_HALF = 150;
 
-/** A point on a circle round the stick's middle, as the picture is laid out (y down): angle in degrees, as PACE_ARC. */
+/**
+ * THE LOCK'S LANE (v0.2.170; Joshua, 2026-11-24, his pick #1, TRADDOMIUM's first version, `legacy/v0-main`
+ * src/input/autoRun.ts): push the MOVE stick up PAST ITS RIM and a lane of chevrons rises from its top with a 🔒 at
+ * its end; let go ON the lock and she runs ahead by herself (Controls `autoRun`). Its rules, kept:
+ *   - a full push ahead never locks it: there has to be travel past the rim (`from`);
+ *   - reaching the lock only gets it READY; the lock happens when the thumb is lifted there, so sliding back out of
+ *     it is a free change of mind;
+ *   - only a push that is roughly UP counts (within `cone` degrees of straight up): a hard drag to the side past the
+ *     rim is a big push to the side, not a lock.
+ * Distances are in the stick's own radius (its middle to its edge: MOVE_TRAVEL at its own size), so a stick made
+ * bigger or smaller in Edit controls keeps them. TRADDOMIUM's lock was at 1.9 radii of a 64 px stick (122 px); ours
+ * is 100 px across its middle-to-edge, so 1.55 (155 px, 116 on Joshua's 75 % stick). GAME TUNING.
+ */
+const LOCK_LANE = { from: 1.1, lock: 1.55, cone: 35 } as const;
+
+/**
+ * The lock's lane: a column over the stick's top, three chevrons and the 🔒 at its end, unseen until a thumb pushes
+ * past the rim (a ladder up the side of the screen all the time was what TRADDOMIUM's earlier build got wrong). A child
+ * of the stick, sized as shares of it (hud.css `.gd-lock-lane`), so it moves and scales with it. Takes no touch: the
+ * stick holds the thumb (pointer capture) wherever it goes.
+ */
+function makeLockLane(stick: HTMLElement): { lane: HTMLElement; chevrons: HTMLElement[] } {
+  const lane = element('div', 'gd-lock-lane', stick);
+  element('span', 'gd-lock-lane-lock', lane, '🔒');
+  const chevrons = [0, 1, 2].map(() => element('span', 'gd-lock-lane-chevron', lane, '▲'));
+  return { lane, chevrons };
+}
+
+/**
+ * Where a thumb is in the lock's lane, from how far it is from the stick's middle in the stick's own radii (x right,
+ * y UP; past the rim too, the stick holds the thumb wherever it goes): 'none' inside the rim's margin or off to the
+ * side, 'arming' in the lane, 'ready' in the lock. TRADDOMIUM's `laneAt`.
+ */
+function laneAt(x: number, y: number): 'none' | 'arming' | 'ready' {
+  const reach = Math.hypot(x, y);
+  if (reach < LOCK_LANE.from) return 'none';
+  if (y / reach < Math.cos((LOCK_LANE.cone * Math.PI) / 180)) return 'none';
+  return reach >= LOCK_LANE.lock ? 'ready' : 'arming';
+}
+
+/** A point on a circle round the stick's middle, as the picture is laid out (y down): angle in degrees, as PACE_ARC.
+ *  (Angles under 0 are below the stick's middle: the turned curve of v0.2.170 runs down to -45.) */
 function arcPoint(radius: number, degrees: number): string {
   const a = (degrees * Math.PI) / 180;
   return `${(radius * Math.cos(a)).toFixed(2)} ${(-radius * Math.sin(a)).toFixed(2)}`;
@@ -259,6 +302,12 @@ export class Hud {
   /** The top pace's curve over the MOVE stick, and its four sections (WALK, JOG, RUN, SPRINT). */
   private readonly paceArc: SVGSVGElement;
   private readonly paceCapOptions: SVGGElement[];
+  /** The lock's lane over the MOVE stick (LOCK_LANE), where the thumb is in it now, and what the knob shows locked. */
+  private readonly lockLane: HTMLElement;
+  private laneNow: 'none' | 'arming' | 'ready' = 'none';
+  private shownLocked = false;
+  /** A thumb is on the MOVE stick now (the knob is its to place). */
+  private moveHeld = false;
   /** What the stick last showed, so the page is only touched when it changes. */
   private shownPace = '';
   private shownRing = -1;
@@ -374,11 +423,22 @@ export class Hud {
       return section;
     });
     this.setPaceCap(options.graphics.paceCap);
+    // THE LOCK'S LANE (LOCK_LANE): it rises from the stick's top while the thumb pushes up past the rim
+    this.lockLane = makeLockLane(this.stick).lane;
     this.stickKnob = element('div', 'gd-stick-knob', this.stick);
     this.wireStick(this.stick, this.stickKnob, (x, y) => {
       controls.stickX = x;
       controls.stickY = y;
-    }, MOVE_TRAVEL);
+    }, MOVE_TRAVEL, {
+      reach: (x, y) => { this.moveHeld = true; this.showLane(laneAt(x, y)); },
+      // (lifted IN the lock: she runs on by herself; lifted anywhere else, nothing; the knob is the lock's to place)
+      lift: () => {
+        this.moveHeld = false;
+        if (this.laneNow === 'ready') controls.autoRun = true;
+        this.showLane('none');
+        this.shownLocked = !controls.autoRun;   // (so the next setPace places the knob as the lock has it)
+      },
+    });
 
     // The CAMERA stick (first person only; Joshua, 2026-11-16: "fire with your right hand and move the camera
     // around in 1st person with your left"). It sits in the bottom-left corner under the walk stick, so the left
@@ -972,19 +1032,28 @@ export class Hud {
    * STICK_TRAVEL pixels from the middle) and `write` is told where it is, each direction -1..1
    * (right is +x, UP on the screen is +y). Letting go writes 0, 0 and the knob springs back.
    */
-  private wireStick(stick: HTMLElement, knob: HTMLElement, write: (x: number, y: number) => void, travel = STICK_TRAVEL): void {
+  private wireStick(stick: HTMLElement, knob: HTMLElement, write: (x: number, y: number) => void, travel = STICK_TRAVEL,
+    hooks?: { reach(x: number, y: number): void; lift(): void }): void {
     const release = () => {
       knob.style.transform = '';
       write(0, 0);
+      hooks?.lift();
     };
     const move = (event: PointerEvent) => {
       // How far the finger is from the middle of the stick, limited to the knob's travel.
       const box = stick.getBoundingClientRect();
       // (measured on the screen, then turned into the game's own right and down: src/core/orientation.ts)
-      const screenDx = event.clientX - (box.left + box.width / 2);
-      const screenDy = event.clientY - (box.top + box.height / 2);
+      // A STICK MADE BIGGER OR SMALLER IN EDIT CONTROLS (v0.2.170): it is drawn scaled (layoutEditor.ts `pin`), so its
+      // rim is nearer or further on the screen than `travel`; the finger is measured in the stick's OWN size, so the
+      // knob stays under the finger and its rim is a full push whatever its size. (Before, on a stick at 75 % a full
+      // push took a third more than the rim, past the drawn rings.)
+      const scale = box.width / Math.max(1, stick.offsetWidth) || 1;
+      const screenDx = (event.clientX - (box.left + box.width / 2)) / scale;
+      const screenDy = (event.clientY - (box.top + box.height / 2)) / scale;
       let dx = toGameX(screenDx, screenDy);
       let dy = toGameY(screenDx, screenDy);
+      // (where the thumb is before the knob is held to the rim: the lock's lane is out past it)
+      hooks?.reach(dx / travel, -dy / travel);
       const length = Math.hypot(dx, dy);
       if (length > travel) {
         dx *= travel / length;
@@ -1022,10 +1091,28 @@ export class Hud {
       this.paceCapOptions.forEach((option, k) => option.classList.toggle('is-now', k === now));
       this.paceArc.classList.toggle('is-winded', name.toUpperCase() === 'WINDED');
     }
+    // LOCKED (Controls `autoRun`): the 🔒 stays just over the stick, gold, and the knob rests near the stick's top edge,
+    // as a thumb holding it ahead would; a thumb on the stick places the knob itself
+    const locked = this.controls.autoRun;
+    if (locked !== this.shownLocked) {
+      this.shownLocked = locked;
+      this.lockLane.classList.toggle('is-locked', locked);
+      this.stick.classList.toggle('is-locked', locked);
+      // (0.72 of the way up: the lock sits just over the rim, and the knob just under it)
+      if (!this.moveHeld) this.stickKnob.style.transform = locked ? `translate(0px, ${-MOVE_TRAVEL * 0.72}px)` : '';
+    }
     if (ring !== this.shownRing) {
       this.shownRing = ring;
       this.stickRings.forEach((circle, k) => circle.classList.toggle('is-on', k === ring - 1));
     }
+  }
+
+  /** Show where the thumb is in the lock's lane: unseen, the chevrons lighting as it goes up, or the lock ready. */
+  private showLane(where: 'none' | 'arming' | 'ready'): void {
+    if (where === this.laneNow) return;
+    this.laneNow = where;
+    this.lockLane.classList.toggle('is-arming', where === 'arming');
+    this.lockLane.classList.toggle('is-ready', where === 'ready');
   }
 
   /** Light the top pace chosen (1 walk .. 4 sprint) on the curve over the MOVE stick. */

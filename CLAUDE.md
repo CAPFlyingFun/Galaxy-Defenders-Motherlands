@@ -831,7 +831,7 @@ use the game's single copy of three.js.
   power outage"; "Look at the TypeScript version"; its `PrologueCafeteriaScene.ts`): one spot light made at the start
   and never hidden (strength 0 when off: no shader rebuild), NO SHADOWS from it (mine first started at his eyes with
   shadows, and his own head left the passage black), from the CAMERA in first person and from his HEAD in third, along
-  where the camera looks; BE's colour, cone (pi/7), soft edge (0.35) and fall-off (decay 1), and BE's tone mapping
+  where the camera looks (since v0.2.164 from the LENS of the lamp in his hand, at the spot his eyes look at); BE's colour, cone (pi/7), soft edge (0.35) and fall-off (decay 1), and BE's tone mapping
   (ACES filmic, exposure 1.15), the prologue only. It DIMS NEAR ROCK (`rayLength`: full from 25 m, in step nearer),
   or a wall two metres off was a white disc. 🔦 LIGHT on the rail (hud.ts `setLight`, where HOLSTER is; Edit controls).
   THE STORY (`story/storyDirector.ts`): a chapter is a SCRIPT of awaits that reads like the draft
@@ -1152,6 +1152,60 @@ use the game's single copy of three.js.
   big belly as the builder's does (its fall rule, `DRAPE_SLOPE`, and its smoothing hold it out at her bump's outline).
   Joshua is having the builder's agent fix that; when its copy comes, set M1-M4 to 'live' and check it against the band.
   (A first live try that baked the cut once, at her baked belly: branch `live-hem-drape-wip`.)
+- v0.2.164: THE FLASHLIGHT IN HIS HAND, THE TOP PACE, AND HER BREATHING CATCHING UP (Joshua's handoff, 2026-11-23,
+  `GDM_Flashlight_Stamina_Breathing_Joystick_Handoff.docx`, kept outside the repo: "Here are a few things I saw that
+  needs addressing"). (1) THE FLASHLIGHT (the prologue): a lamp in John's RIGHT HAND (`world/prologue/flashlightProp.ts`):
+  a PISTOL-GRIP lamp, as expedition and rescue lights often are, because his closed hand is the game's one measured hold,
+  a gun's (`seatGunInHand`): a plain tube in that fist would run out of his thumb's side, sideways or up. Its grip where
+  a gun's is, an expedition-yellow body (a dark one was lost against the rock, pictured), a black rubber grip, a steel
+  bezel and a lens that glows the beam's warm white while it is lit (four draws, no shadow). FastHeroine `holdLight`
+  (asked every frame, so a body made again takes it up) and `lightAt`: with no gun in that hand his RIGHT ARM points it,
+  as an arm points a gun (aimArms.ts), its elbow bent more (`LIGHT_ELBOW_EXTRA` 50 degrees on top of a gun's 22: at 35,
+  from the side, it still read as a gun held out; `ArmAim.elbowExtra`); with no gun in either hand his upper body does
+  not turn for it (`torsoShare` 0); not while he is down (his arms are on the ground). THE BEAM (flashlight.ts) STARTS AT
+  THE LENS and points at THE SPOT HIS EYES LOOK AT (`aimAt`: where the line from his eyes, his head's own way, `eyeView`,
+  meets the rock, 1.5 to 16 m on): first person his eyes are the camera, so the crosshair's spot is lit as before;
+  third person it is where he looks (from the side views the camera looks across him). A LENS IN THE ROCK (his hand can
+  reach into a wall) starts the beam 5 cm short of the rock on the line from his eyes, or the passage went dark. Kept:
+  its colour, cone, soft edge, fall-off, flicker, dimming near rock, the spill over him, the LIGHT button. Pictured at
+  932 x 430: third person (shoulder, follow, side L and R), first person level, 34 down and 29 up, facing a wall.
+  (2) THE TOP PACE (his doc: "Keep the existing five-ring dynamic joystick; add a tappable maximum-pace selector"):
+  WALK / JOG / RUN / SPRINT in a row just over the MOVE stick (hud.ts `paceCapRow`, hud.css `.gd-pace-cap`, 200 x 26
+  px), the one chosen lit GOLD and the pace she is at RINGED TEAL (it says what the word over the stick said, now hidden;
+  dimmed while she is winded). Its own control in Edit controls ("Top pace"), so a MOVE stick made smaller there does
+  not shrink it; until it is placed there itself it FOLLOWS THE STICK wherever the stick is (`followStick`, looked at
+  four times a second). (First over the word: with all her vitals shown it landed on the WEEK chip and the FPS line;
+  pictured at 932 x 430 on the default layout and on his, the stick at 75% and lower.) input/pace.ts `ceiling`: the stick at its edge builds up to it and no further, the rings as ever below
+  it; lowered while she runs she eases down a pace a second (13.5 -> 2.5 mph over 3 s, at most 1.9 m/s each second).
+  Settings key `gdm.paceCap` (remembered; `?pace_cap=1..4`), read every frame, the one played either character.
+  A LIMIT ON HER PACE CREPT (found measuring the top pace; then Joshua, 2026-11-24, his screenshot of v0.2.163, Mary at 0%
+  stamina running 8.8 mph: "if the stamina doesn't get to max each time, when it gets to 0% stamina, you still keep
+  moving"): on the outer ring she built up a pace each 0.6 s and came down a pace a second, so she went past any limit.
+  After her winded hold she is to WALK until her breath is back, but with the stick at its edge she was soon sprinting
+  again, still marked winded; the hold starts only as she BECOMES winded, so at 0% again she ran on at her tired 65%
+  speed (8.8 mph). Letting her stamina refill first cleared the mark, which is why it only came when it was not back
+  to full. Now over a limit she only comes down from where she was. MEASURED (`sim_sprint.ts` part 4, and in the built
+  game): the stick held at its edge through the hold and after it: as pushed, 13.5 mph while winded and 5.2 s faster than
+  a walk at 0%; now a walk (2.5 mph) until her breath is back, and at 0% she is bent over again.
+  (3) HER BREATHING CATCHES UP WHILE SHE RUNS (his doc: "a roughly 20-second sprint feels fast, but breathing catches up
+  after movement stops... at exhaustion... around 35 breaths/min instead of the desired 40-50"): her EFFORT, the
+  builder's lag behind her work that her breathing and heart read (Char_B/src/actor/vitals.ts `STAMINA.riseS` 30 s),
+  climbs on the GAME'S OWN TIME CONSTANT, `VITALS_TUNING.effort.riseSeconds` 4 (heroineVitals.ts `leadEffort`: before
+  the builder's step moves it by its own 30 s, it is put where that step lands it on the game's curve; the builder is
+  not edited), and a SPRINT counts as 0.9 of her hardest (`speedToIntensity`; at 1 she sat at the builder's ceiling of
+  50 from 20 s on). Falling kept at the builder's 90 s (his doc: "Keep 90 initially... Do not accelerate recovery just
+  to accelerate exertion"). MEASURED with the game's own pace and vitals (`Game/scripts/sim_sprint.ts`, which says how to
+  run it; `before` for the old curve), a full sprint from rest to empty, breaths a minute (heart):
+    before   5 s 15.5 (85) · 10 s 16.6 (100) · 15 s 18.5 (112) · 20 s 21.3 (123) · empty 36.8 (151) · stop+10 28.7 · +30 19.1
+    now      5 s 23.9 (136) · 10 s 37.9 (160) · 15 s 44.1 (167) · 20 s 47.6 (170) · empty 50 (173)  · stop+10 41.5 · +30 24.9
+    his      5 s 23-28 · 10 s 32-38 · 15 s 38-44 · 20 s 42-48 · empty 40-50
+  The same in the BUILT game, John in the prologue, timed by the game's own clock: 23.9 / 37.8 / 44.0 / 47.5 / 50 at
+  empty (42 s), 41.5 and 24.9 at stop+10 and +30, 13 mph at 1.8 s.
+  Unchanged: her speeds, her stamina (empty at 42 s: from 35% left she slows, 13.5 -> 8.8 mph at empty), 13 mph 1.7 s
+  from standing (his doc's target is 3.5-5 s; not changed, he asked for it quicker on 2026-11-21, "driving a semi").
+  CHANGED BY IT: coming down from 50 on the same 90 s, she stands WINDED to its 20 s most (was about 12 s) and walks only
+  until 30 s after empty (was 16). Her breath sounds play breath by breath from her chest's own cycle, so they keep to
+  the rate. Test pages: `gdm.vitalsTuning` (live), `gdm.elapsed` (the game's own clock).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

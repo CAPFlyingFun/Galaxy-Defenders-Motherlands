@@ -319,6 +319,44 @@
   color: var(--gold);
   pointer-events: none;
 }
+/* THE TOP PACE (Joshua's handoff, 2026-11-23): WALK / JOG / RUN / SPRINT in a row just over the MOVE stick; the one
+   chosen lit gold, the one she is at ringed teal (it says what the word over the stick said, which is hidden now). 200
+   px wide, each choice a quarter of it. Its own control: movable and sizable in Edit controls ("Top pace"); until then
+   hud.ts `followStick` keeps it over the stick wherever the stick is. This is only its place before that first look. */
+/* (the word over the stick: hidden, wherever Edit controls has put the stick) */
+.gd-walk-stick .gd-pace { display: none; }
+.gd-hud > .gd-pace-cap[hidden] { display: none; }
+.gd-hud > .gd-pace-cap {
+  position: absolute;
+  left: calc(var(--safe-left) + var(--edge));
+  bottom: calc(var(--safe-bottom) + var(--edge) + 6px + 200px + 4px);
+  width: 200px;
+  display: flex;
+  gap: 3px;
+  touch-action: none;
+}
+.gd-pace-cap-option {
+  flex: 1;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--navy);
+  color: var(--text);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  touch-action: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.gd-pace-cap-option.is-on { border-color: var(--gold); background: rgba(255, 213, 107, 0.85); color: #1a1406; }
+/* (the pace she is at now: a teal ring, and its word in teal unless it is the gold one) */
+.gd-pace-cap-option.is-now { box-shadow: 0 0 0 2px var(--teal); }
+.gd-pace-cap-option.is-now:not(.is-on) { color: var(--teal); }
+/* (winded: she can only walk, whatever is chosen) */
+.gd-pace-cap.is-winded .gd-pace-cap-option { opacity: 0.45; }
 /* ---- Her vitals card: the top left corner, the FPS line under it (Joshua's layout, 2026-11-18) ------------- */
 .gd-hud > .gd-top-slot {
   position: absolute;

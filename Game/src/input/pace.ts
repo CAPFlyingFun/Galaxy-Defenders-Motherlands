@@ -141,6 +141,14 @@ export class Pace {
    */
   levelMost = 4;
   speedMost = Infinity;
+  /**
+   * THE PLAYER'S TOP PACE (Joshua's handoff, 2026-11-23: "a four-option maximum-speed selector coexists with the
+   * existing dynamic ring joystick. At 100% deflection, movement is limited to the selected pace"): 1 walk, 2 jog, 3
+   * run, 4 sprint (no limit). The rings work as ever below it; the stick pushed to its edge builds up to it and no
+   * further. Lowered while she goes faster, she eases down a pace a second (`tiredDownSeconds`) and her real speed
+   * follows as it always does (`slowDown`): no jump. Set by the game each frame (main.ts, `gdm.paceCap`).
+   */
+  ceiling = 4;
 
   /** The name of the pace she is at (the nearest one), or '' standing. */
   get name(): string {
@@ -200,14 +208,20 @@ export class Pace {
     } else {
       // any push at all walks her at once
       if (this.level < 1) this.level = 1;
+      const was = this.level;
       if (this.ring === 1) this.level = Math.max(1, this.level - dt / t.downSeconds);
       else if (this.ring === 3) this.level += dt / t.slowUpSeconds;
       else if (this.ring === 4) this.level += dt / t.fastUpSeconds;
       // (ring 2 holds)
 
-      // what her stamina allows: everything until it is empty; winded (after the hold), only a walk
-      const most = Math.min(this.winded ? 1 : 4, this.levelMost);
-      if (this.level > most) this.level = Math.max(most, this.level - dt / t.tiredDownSeconds);
+      // what her stamina allows: everything until it is empty; winded (after the hold), only a walk; and never past the
+      // player's top pace
+      const most = Math.min(this.winded ? 1 : 4, this.levelMost, Math.max(1, Math.min(4, this.ceiling)));
+      // (over it she eases down from where she WAS, a pace each `tiredDownSeconds`, never building up meanwhile: before,
+      //  on the outer ring she built up quicker, a pace each 0.6 s, than she came down, a pace a second, so the limit
+      //  crept up and she went past it: found measuring the top pace, `scripts/sim_sprint.ts`; it was so for the walk
+      //  only after being winded too)
+      if (this.level > most) this.level = Math.max(most, Math.min(this.level, was) - dt / t.tiredDownSeconds);
     }
 
     // her real speed follows the pace smoothly: nobody is at a sprint the instant she decides to be

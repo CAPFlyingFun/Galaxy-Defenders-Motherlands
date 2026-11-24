@@ -149,6 +149,11 @@ function tapButton(button: HTMLElement, tap: () => void): void {
   });
 }
 
+/** The top pace's four choices, slowest first (input/pace.ts PACES). */
+const PACE_CAP_NAMES = ['WALK', 'JOG', 'RUN', 'SPRINT'] as const;
+/** The gap between the top pace row and the MOVE stick's top, px. */
+const PACE_CAP_ABOVE = 4;
+
 /** The bellies every outfit is pictured at for Settings (public/thumbs/; the one nearest hers is shown). */
 const THUMB_BELLIES = [10, 50, 80, 120, 150] as const;
 
@@ -158,6 +163,12 @@ export class Hud {
   private readonly stickKnob: HTMLElement;
   private readonly stickRings: HTMLElement[];
   private readonly paceLabel: HTMLElement;
+  /** The top pace's row over the MOVE stick, and its four choices (WALK, JOG, RUN, SPRINT). */
+  private readonly paceCapRow: HTMLElement;
+  private readonly paceCapOptions: HTMLElement[];
+  /** When the row next looks where the stick is (ms), and where it put itself last ("left,top"). */
+  private paceCapCheckAt = 0;
+  private paceCapAt = '';
   /** What the stick last showed, so the page is only touched when it changes. */
   private shownPace = '';
   private shownRing = -1;
@@ -254,8 +265,27 @@ export class Hud {
       ring.style.margin = `${-across / 2}px 0 0 ${-across / 2}px`;
       return ring;
     });
-    // Her pace in words, over the stick: WALK, JOG, RUN or SPRINT.
+    // Her pace in words, over the stick: WALK, JOG, RUN or SPRINT. (Kept for the Visual body and old layouts, but
+    // hidden since v0.2.164: the TOP PACE row below sits where it was and shows her pace itself.)
     this.paceLabel = element('span', 'gd-pace', this.stick);
+    // THE TOP PACE (Joshua's handoff, 2026-11-23: "Keep the existing five-ring dynamic joystick; add a tappable
+    // maximum-pace selector (Walk / Jog / Run / Sprint)"): a row of four just over the stick, the one chosen lit GOLD;
+    // the pace she is at now ringed in teal (`setPace`), as the word over the stick used to say it. The stick pushed to
+    // its edge builds up to the chosen one and no further (input/pace.ts `ceiling`); the rings work as ever below it.
+    // A control of its own (Edit controls: "Top pace"), so a MOVE stick made smaller there does not shrink it; until it
+    // is moved there itself it FOLLOWS THE STICK, wherever the stick is put (`followStick`). (First it sat higher, over
+    // the word: with all her vitals shown it landed on the WEEK chip and the FPS line, pictured at 932 x 430.)
+    this.paceCapRow = element('div', 'gd-pace-cap', this.root);
+    this.paceCapOptions = PACE_CAP_NAMES.map((name, i) => {
+      const option = element('button', 'gd-pace-cap-option', this.paceCapRow, name);
+      option.type = 'button';
+      tapButton(option, () => {
+        this.setPaceCap(i + 1);
+        options.onGraphicsChange('paceCap', i + 1);
+      });
+      return option;
+    });
+    this.setPaceCap(options.graphics.paceCap);
     this.stickKnob = element('div', 'gd-stick-knob', this.stick);
     this.wireStick(this.stick, this.stickKnob, (x, y) => {
       controls.stickX = x;
@@ -832,11 +862,49 @@ export class Hud {
    * ring begins at is lit; ring 0, the centre, lights none).
    */
   setPace(name: string, ring: number): void {
-    if (name !== this.shownPace) { this.shownPace = name; this.paceLabel.textContent = name; }
+    if (name !== this.shownPace) {
+      this.shownPace = name;
+      this.paceLabel.textContent = name;
+      // (the pace she is at, ringed in the top pace row; winded, the whole row dimmed: she can only walk)
+      const now = PACE_CAP_NAMES.findIndex((n) => n === name.toUpperCase());
+      this.paceCapOptions.forEach((option, k) => option.classList.toggle('is-now', k === now));
+      this.paceCapRow.classList.toggle('is-winded', name.toUpperCase() === 'WINDED');
+    }
+    this.followStick();
     if (ring !== this.shownRing) {
       this.shownRing = ring;
       this.stickRings.forEach((circle, k) => circle.classList.toggle('is-on', k === ring - 1));
     }
+  }
+
+  /**
+   * THE TOP PACE ROW FOLLOWS THE STICK: just over the MOVE stick's top, centred on it, wherever the stick is and however
+   * big (Edit controls), unless the row has been placed there itself (a pinned control keeps its own place). Looked at
+   * four times a second (reading where the stick is costs the page a little), and moved only when the stick has.
+   */
+  private followStick(): void {
+    const now = performance.now();
+    if (now < this.paceCapCheckAt) return;
+    this.paceCapCheckAt = now + 250;
+    const row = this.paceCapRow;
+    if (row.dataset.gdmPinned === '1') return;
+    const stick = this.stick.getBoundingClientRect(), root = this.root.getBoundingClientRect();
+    if (stick.width === 0) { row.hidden = true; return; }
+    row.hidden = false;
+    const width = row.offsetWidth || 200, height = row.offsetHeight || 26;
+    const left = Math.max(4, stick.left - root.left + (stick.width - width) / 2);
+    const top = stick.top - root.top - height - PACE_CAP_ABOVE;
+    const key = `${Math.round(left)},${Math.round(top)}`;
+    if (key === this.paceCapAt) return;
+    this.paceCapAt = key;
+    row.style.left = `${Math.round(left)}px`;
+    row.style.top = `${Math.round(top)}px`;
+    row.style.bottom = 'auto';
+  }
+
+  /** Light the top pace chosen (1 walk .. 4 sprint) in the row over the MOVE stick. */
+  setPaceCap(cap: number): void {
+    this.paceCapOptions.forEach((option, k) => option.classList.toggle('is-on', k === cap - 1));
   }
 
   /** Where a card (her vitals) can be put: the top left corner (the FPS line goes under it). */

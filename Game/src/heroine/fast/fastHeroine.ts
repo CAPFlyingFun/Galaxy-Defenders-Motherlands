@@ -160,6 +160,12 @@ const HIPS_TURN_MOST = 60 * DEG, UPPER_LEGS_TURN_MOST = 42 * DEG, FEET_TURN_MOST
 const BELLY_EVERY = 0.1;
 /** How far her fingers are curled round the guns' grips, percent (the builder's FINGERS slider). */
 const GRIP_CURL = 55;
+/**
+ * A FLASHLIGHT held out ahead (the prologue, `holdLight`): this much more bend in that elbow than a gun's aim (aimArms.ts
+ * AIM.elbowBend 22): about 72 degrees in all (pictured at 57: from the side it still read as a gun held out), his hand
+ * about three quarters of an arm out in front of his shoulder. GAME TUNING.
+ */
+const LIGHT_ELBOW_EXTRA = 50 * DEG;
 /** A quiet breath at rest, for when the game gives no vitals (its `breath` is rewritten each frame). */
 const REST_BREATH = { breath: 0, breathLitres: 0.5, breathsPerMinute: 14, stomachMl: 0 };
 /**
@@ -1513,6 +1519,9 @@ if (uHideHead > 0.5) {
   const hipsTipped = new THREE.Vector3(), tipQ = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0), leanAxis = new THREE.Vector3();
   const smooth = (t: number): number => t * t * (3 - 2 * t);
   let target: THREE.Vector3 | null = null;
+  // THE FLASHLIGHT IN HIS RIGHT HAND (the prologue; `holdLight`): the prop, where it is pointed (world), null for none
+  let lightProp: THREE.Object3D | null = null;
+  let lightTarget: THREE.Vector3 | null = null;
   let bellyWanted = body.belly, bellyWait = 0;
   let updateMs = 0, lastUpdateAt = performance.now();
   let disposed = false;
@@ -1651,6 +1660,21 @@ if (uHideHead > 0.5) {
     aimAt(point: THREE.Vector3 | null): void {
       if (!point) { target = null; return; }
       (target ??= new THREE.Vector3()).copy(point);
+    },
+    // THE FLASHLIGHT (the prologue, world/prologue/flashlightProp.ts): held in his right hand in a gun's own seat (its
+    // grip where a gun's is), until it is let go (null). Asked again every frame, it does nothing new.
+    holdLight(prop: THREE.Object3D | null): void {
+      if (prop === lightProp && (!prop || prop.parent === arms.right.hand)) return;
+      lightProp?.removeFromParent();
+      lightProp = prop;
+      if (!prop) return;
+      prop.matrixAutoUpdate = false;
+      prop.matrix.copy(seat.right);
+      arms.right.hand.add(prop);
+    },
+    lightAt(point: THREE.Vector3 | null): void {
+      if (!point) { lightTarget = null; return; }
+      (lightTarget ??= new THREE.Vector3()).copy(point);
     },
     // (a hand that has put its gun down has nothing to fire)
     fire(hand: Hand): void { if (gunIn[hand]) aim.fire(hand); },
@@ -2209,17 +2233,25 @@ if (uHideHead > 0.5) {
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).
       // (her shoulders face `shouldersYaw`: her arms point from there, as far to each side as arms go)
       // (each arm aims only with its gun in its hand, and not while it reaches for something)
+      // A FLASHLIGHT IN HIS RIGHT HAND (the prologue, `holdLight`): with no gun in that hand, his right arm points it
+      // where it is asked to (`lightAt`), as an arm points a gun, its elbow more bent (a light is held nearer than a gun
+      // is aimed); with no gun in either hand his upper body does not turn for it (only his arm does). Not while he is
+      // down on his belly or all fours, where his arms are on the ground: the light still shines from its lens.
+      const lightHeld = lightProp !== null && lightTarget !== null && !gunIn.right;
+      const gunsUp = gunIn.left || gunIn.right;
+      const aimPoint = lightHeld && !gunsUp ? lightTarget : target;
       aim.armWeight.left = gunIn.left ? 1 - reach.weight(0) : 0;
-      aim.armWeight.right = gunIn.right ? 1 - reach.weight(1) : 0;
-      aim.advance(frame.dt, target !== null);
+      aim.armWeight.right = gunIn.right ? 1 - reach.weight(1) : lightHeld ? (1 - reach.weight(1)) * upright : 0;
+      aim.elbowExtra.right = lightHeld ? LIGHT_ELBOW_EXTRA : 0;
+      aim.advance(frame.dt, aimPoint !== null);
       root.updateMatrixWorld(true);
       if (aim.weight > 0) {
         aim.facing = bellyYaw + backTurn;
         // (down on her belly or all fours, her body faces the way it lies: only her arms aim, her upper body does not
         //  turn toward the target, as her other turns are off while she is down. On all fours in first person, looking
         //  past straight down, that turn fought the camera: aimArms.ts `apply`)
-        aim.torsoShare = upright;
-        aim.apply(target);
+        aim.torsoShare = target !== null ? upright : 0;
+        aim.apply(aimPoint);
       }
 
       // Her joints within their real ranges (jointGuard.ts), then her arms kept clear of her belly and her breasts

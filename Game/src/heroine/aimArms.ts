@@ -131,6 +131,11 @@ export class ArmAim {
    * belly or all fours, where her body faces the way it lies; her arms still aim). See `apply`.
    */
   torsoShare = 1;
+  /**
+   * More bend in each elbow than a gun's (radians, added to AIM.elbowBend): a light held out ahead is held nearer than
+   * a gun is aimed (the prologue's flashlight, fast/fastHeroine.ts `holdLight`). 0 for a gun.
+   */
+  readonly elbowExtra = { left: 0, right: 0 };
   private readonly kick = { left: 0, right: 0 };
   private readonly worldTurn = new THREE.Quaternion();
   /** Where she last aimed: kept so the arms come DOWN from where they were, not from nowhere. */
@@ -181,12 +186,12 @@ export class ArmAim {
 
     // ---- 2. each arm ----
     // (`torso` is measured from her own facing; the arms work in the bones' space, so her facing is added back)
-    if (this.armWeight.left > 0) this.aimArm(this.bones.left, t, this.facing + torso, this.kick.left, w * this.armWeight.left);
-    if (this.armWeight.right > 0) this.aimArm(this.bones.right, t, this.facing + torso, this.kick.right, w * this.armWeight.right);
+    if (this.armWeight.left > 0) this.aimArm(this.bones.left, t, this.facing + torso, this.kick.left, w * this.armWeight.left, this.elbowExtra.left);
+    if (this.armWeight.right > 0) this.aimArm(this.bones.right, t, this.facing + torso, this.kick.right, w * this.armWeight.right, this.elbowExtra.right);
   }
 
   /** `torso`: the way her turned chest faces, radians about the upright axis in the bones' space. */
-  private aimArm(arm: ArmBones, target: THREE.Vector3, torso: number, kick: number, w: number): void {
+  private aimArm(arm: ArmBones, target: THREE.Vector3, torso: number, kick: number, w: number, extraBend = 0): void {
     // The line from her shoulder to the target, held inside what an arm can do: measured as a bearing (round from
     // where her turned chest faces) and a pitch (up from level), each clamped, then made back into a direction.
     arm.upper.getWorldPosition(a);
@@ -199,7 +204,7 @@ export class ArmAim {
     // Her elbow sits off that line, below it and to the outside: `pole` is that direction, square to the line.
     // ("outside" is along her own left-right axis, which is the X axis turned by her facing)
     pole.set(arm.side * 0.55 * Math.cos(this.facing), -1, -arm.side * 0.55 * Math.sin(this.facing)).addScaledVector(aimLine, -pole.dot(aimLine)).normalize();
-    const bend = (AIM.elbowBend + AIM.recoilBend * kick) / 2;
+    const bend = (AIM.elbowBend + extraBend + AIM.recoilBend * kick) / 2;
 
     // Upper arm: from the shoulder, along the line but dipped toward the elbow's side.
     arm.fore.getWorldPosition(b);

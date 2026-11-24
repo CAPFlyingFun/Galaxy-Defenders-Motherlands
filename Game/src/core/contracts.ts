@@ -181,6 +181,13 @@ export interface HeroineBody {
   setWalk(speed: number): void;
   /** A world point her guns point at; null lowers them to rest. */
   aimAt(target: THREE.Vector3 | null): void;
+  /**
+   * A FLASHLIGHT in the right hand (the prologue; world/prologue/flashlightProp.ts): the prop is held in a gun's seat
+   * (its own space as a gun's: +Z ahead, its grip at the origin); null lets it go. Optional.
+   */
+  holdLight?(prop: THREE.Object3D | null): void;
+  /** Where that flashlight is pointed, a world point (the right arm points it while no gun is in that hand). Optional. */
+  lightAt?(point: THREE.Vector3 | null): void;
   /** One shot from one hand: the recoil kick. */
   fire(hand: Hand): void;
   /** Where a shot leaves a gun, in world space. */

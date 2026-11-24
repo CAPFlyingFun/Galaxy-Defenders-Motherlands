@@ -42,6 +42,7 @@ const TAP_SLOP = 6;
 /** The controls that can be moved: a name for the save, how to find it on the page, and what to call it. */
 const CONTROLS = [
   { id: 'move', selector: '.gd-walk-stick', label: 'MOVE stick' },
+  { id: 'paceCap', selector: '.gd-pace-cap', label: 'Top pace (WALK..SPRINT)' },
   { id: 'camera', selector: '.gd-look-stick', label: 'CAMERA stick' },
   { id: 'fire', selector: '.gd-fire', label: 'FIRE' },
   { id: 'view', selector: '.gd-view', label: 'View switch' },

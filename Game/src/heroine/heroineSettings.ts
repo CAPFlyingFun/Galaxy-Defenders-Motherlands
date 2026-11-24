@@ -82,6 +82,12 @@ export interface HeroineSettings {
    */
   lookSensitivity: number;
   moveSensitivity: number;
+  /**
+   * THE TOP PACE (Joshua's handoff, 2026-11-23: "a tappable maximum-pace selector (Walk / Jog / Run / Sprint)"; the
+   * WALK / JOG / RUN / SPRINT row over the MOVE stick, hud.ts): the fastest the stick builds up to, 1 walk .. 4 sprint
+   * (input/pace.ts `ceiling`). Both characters go by it. Remembered; takes hold at once. `?pace_cap=` for a test.
+   */
+  paceCap: number;
   zoomThird: number;
   /** The weapon table's height, metres (Joshua, 2026-11-17: "how can you adjust the table height"): TABLE_RANGE. */
   tableHeight: number;
@@ -256,6 +262,7 @@ export const SETTING_KEYS = Object.freeze({
   eyeHigher: 'gdm.eyeHigher',
   lookSensitivity: 'gdm.lookSensitivity',
   moveSensitivity: 'gdm.moveSensitivity',
+  paceCap: 'gdm.paceCap',
   zoomThird: 'gdm.zoomThird',
   tableHeight: 'gdm.tableHeight',
   // (a new name for it, 2026-11-18: everyone starts in MANUAL once, whatever they had chosen: Joshua, "Start manual")
@@ -345,6 +352,8 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     eyeHigher: asNumber(address.get('eye_up') ?? read(SETTING_KEYS.eyeHigher), EYE_HEIGHT_RANGE.least, EYE_HEIGHT_RANGE.most) ?? 0,
     lookSensitivity: asNumber(read(SETTING_KEYS.lookSensitivity), SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most) ?? SENSITIVITY_START.look,
     moveSensitivity: asNumber(read(SETTING_KEYS.moveSensitivity), SENSITIVITY_RANGE.least, SENSITIVITY_RANGE.most) ?? SENSITIVITY_START.move,
+    // (a sprint unless a lower top pace was chosen: as the game has always been)
+    paceCap: Math.round(asNumber(address.get('pace_cap') ?? read(SETTING_KEYS.paceCap), 1, 4) ?? 4),
     // (down to the closest zoom, 0.8 m since 2026-11-21: a saved zoom closer than -0.1 was thrown away for the start)
     zoomThird: asNumber(read(SETTING_KEYS.zoomThird), -0.2, 1) ?? ZOOM_START_DEFAULT,
     tableHeight: asNumber(read(SETTING_KEYS.tableHeight), TABLE_RANGE.least, TABLE_RANGE.most) ?? TABLE_RANGE.start,

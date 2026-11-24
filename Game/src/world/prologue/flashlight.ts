@@ -14,9 +14,17 @@
 //                 counted from the start never does.)
 //   NO SHADOWS from it. (My first try started the beam at his eyes AND cast shadows: his own head shadowed everything
 //                 it lit, and the passage stayed black. BE's casts none, which is also one less picture to draw a frame.)
-//   FIRST PERSON: from the CAMERA, along where it looks (BE: `position.copy(camera.position)`, target 16 ahead).
-//   THIRD PERSON: from HIS HEAD, along where the camera looks (BE points it along her facing from her head; here he
-//                 faces where the camera looks anyway, MANUAL, and the player's look is what the light should follow).
+//   FROM THE LENS OF THE LIGHT IN HIS HAND (Joshua's handoff, 2026-11-23: "The actual spotlight should originate at the
+//                 flashlight lens, not at the camera or character head. Aim it toward the camera/look target so
+//                 first-person exploration remains intuitive"; flashlightProp.ts, FastHeroine `holdLight`): the beam
+//                 starts at the lens and points at the spot HIS EYES LOOK AT (the rock where the line from his eyes
+//                 meets it, at most AIM_AHEAD on), and his right arm points the lamp at that same spot. First person
+//                 his eyes are the camera, so the spot under the crosshair is lit, as before; third person it is
+//                 where he looks (not the camera: from the side views the camera looks across him).
+//                 (v0.2.153-163: from the camera in first person and his head in third, Beyond Extinction's way.)
+//   A LENS IN THE ROCK: his hand can reach into a wall; a light inside the rock lights nothing in the passage (no rock
+//                 face faces it). So the beam starts no further out along the line from his eyes to the lens than the
+//                 rock lets it, a few centimetres short of it.
 //   BE'S BEAM:    a warm white (0xfff4de), a cone of pi/7 with a soft edge (penumbra 0.35), and a gentle fall-off
 //                 (decay 1, not the physical 2), so it carries down the passage. And BE's tone mapping (ACES filmic,
 //                 exposure 1.15: main.ts, the prologue only), which keeps a bright beam from going flat white.
@@ -43,8 +51,12 @@ const NEAR_FULL = 25;
 const DIM_MOST = 0.05;
 /** How quickly it follows (seconds, about two thirds of the way). */
 const DIM_SECONDS = 0.18;
-/** How far ahead the beam is aimed (metres, along where the camera looks: BE's 16 units, in metres). */
+/** How far ahead the beam is aimed at most (metres, along where he looks: BE's 16 units, in metres), and at least (so
+ *  rock right in front of him does not swing his arm in to his chest). */
 const AIM_AHEAD = 16;
+const AIM_NEAREST = 1.5;
+/** A lens inside the rock: the beam starts this far short of the rock, metres, on the line from his eyes to the lens. */
+const LENS_CLEAR = 0.05;
 /** The spill's strength, and how far it reaches (metres). It hangs behind him and above, toward the camera, so his
  *  back is not black in third person. */
 const SPILL = 1.6;
@@ -60,6 +72,9 @@ export class Flashlight {
   private flickerTime = 0;
   private flickerLit = false;
   private readonly dir = new THREE.Vector3();
+  private readonly toLens = new THREE.Vector3();
+  /** Where he looks (world): the spot the beam points at and his arm points the lamp at (`aimAt`). */
+  readonly spot = new THREE.Vector3();
   /** How much of its strength it has now, for the rock's nearness (1 far, less close; eased). */
   private nearness = 1;
 
@@ -92,27 +107,47 @@ export class Flashlight {
     this.flickerLit = startLit;
   }
 
+  /** Lit this moment (on, or lit in a flicker): the lens on the prop glows while it is. */
+  get lit(): boolean { return this.beam.intensity > 0; }
+
   /**
-   * Once a frame, after the camera is placed. FIRST PERSON (`firstPerson`): from the camera, along its look. THIRD
-   * PERSON: from just above his eyes (`eye`), along the camera's look. `look` is the camera's direction. `rockAt` says
-   * how far a line from a point goes before it meets rock (tunnel.ts `rayLength`).
+   * THE SPOT HE LOOKS AT (`spot`): along `look` (the way his eyes look) from `eye`, where it meets the rock, between
+   * AIM_NEAREST and AIM_AHEAD on. The game gives it to his arm (`lightAt`) before his body is posed, and to `update`.
    */
-  update(dt: number, firstPerson: boolean, eye: THREE.Vector3, camera: THREE.Vector3, look: THREE.Vector3, rockAt: (from: THREE.Vector3, dir: THREE.Vector3, most: number) => number): void {
+  aimAt(eye: THREE.Vector3, look: THREE.Vector3, rockAt: (from: THREE.Vector3, dir: THREE.Vector3, most: number) => number): THREE.Vector3 {
+    this.dir.copy(look).normalize();
+    const far = Math.max(AIM_NEAREST, Math.min(AIM_AHEAD, rockAt(eye, this.dir, AIM_AHEAD)));
+    return this.spot.copy(eye).addScaledVector(this.dir, far);
+  }
+
+  /**
+   * Once a frame, after the camera is placed and he is posed: the beam from the LENS (`lens`, world) toward the spot
+   * he looks at (`aimAt`, worked out this frame from `eye` and `look`). `look` is the way his eyes look (the camera's
+   * way in first person). `rockAt` says how far a line from a point goes before it meets rock (tunnel.ts `rayLength`).
+   */
+  update(dt: number, lens: THREE.Vector3, eye: THREE.Vector3, look: THREE.Vector3, rockAt: (from: THREE.Vector3, dir: THREE.Vector3, most: number) => number): void {
     // the flicker: each moment passed swaps it; when they are all past it is as the player set it
     if (this.flickerAt.length) {
       this.flickerTime += dt;
       while (this.flickerAt.length && this.flickerTime >= this.flickerAt[0]) { this.flickerAt.shift(); this.flickerLit = !this.flickerLit; }
       this.show(this.flickerAt.length ? this.flickerLit : this.on);
     } else this.show(this.on);
-    this.dir.copy(look).normalize();
-    if (firstPerson) this.beam.position.copy(camera);
-    else this.beam.position.set(eye.x, eye.y + 0.1, eye.z);
-    this.beam.target.position.copy(this.beam.position).addScaledVector(this.dir, AIM_AHEAD);
+    this.aimAt(eye, look, rockAt);
+    // (from the lens; or, with the lens in the rock, from just short of the rock on the line from his eyes to the lens)
+    this.toLens.copy(lens).sub(eye);
+    const reach = this.toLens.length();
+    if (reach > 1e-4) {
+      this.toLens.multiplyScalar(1 / reach);
+      const free = rockAt(eye, this.toLens, reach);
+      this.beam.position.copy(eye).addScaledVector(this.toLens, free < reach ? Math.max(0, free - LENS_CLEAR) : reach);
+    } else this.beam.position.copy(eye);
+    this.beam.target.position.copy(this.spot);
     this.beam.target.updateMatrixWorld();
+    this.dir.copy(this.spot).sub(this.beam.position).normalize();
     // (dimmer close to the rock, eased)
     const want = Math.max(DIM_MOST, Math.min(1, rockAt(this.beam.position, this.dir, NEAR_FULL) / NEAR_FULL));
     this.nearness += (want - this.nearness) * (1 - Math.exp(-dt / DIM_SECONDS));
-    this.spill.position.set(eye.x - this.dir.x * 0.9, eye.y + 0.35, eye.z - this.dir.z * 0.9);
+    this.spill.position.set(eye.x - look.x * 0.9, eye.y + 0.35, eye.z - look.z * 0.9);
   }
 
   private show(lit: boolean): void {

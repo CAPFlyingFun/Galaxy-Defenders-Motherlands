@@ -31,7 +31,7 @@ import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
 import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
-import { HeroineVitals } from './vitals/heroineVitals';
+import { HeroineVitals, VITALS_TUNING } from './vitals/heroineVitals';
 import { VitalsPanel } from './vitals/vitalsPanel';
 import { loadHeroineSettings, outfitLook, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
 import type { IntakeAction } from './ui/hud';
@@ -67,6 +67,7 @@ import { BreathSound, loadBreathVoice } from './audio/breathSound';
 // THE PROLOGUE (v0.2.153; Joshua's opening demo, Draft 1): its code is fetched only when it is the map (types here)
 import type { Tunnel } from './world/prologue/tunnel';
 import type { Flashlight } from './world/prologue/flashlight';
+import type { FlashlightProp } from './world/prologue/flashlightProp';
 import type { CaveSounds } from './world/prologue/caveSounds';
 import type { StoryDirector } from './story/storyDirector';
 import type { GroundArrows } from './world/prologue/groundArrows';
@@ -447,6 +448,8 @@ async function start(): Promise<void> {
   // story (the overlay is made here, before the game's controls, so every control is drawn over it) come with it.
   let tunnel: Tunnel | null = null;
   let flashlight: Flashlight | null = null;
+  /** THE FLASHLIGHT HE HOLDS (Joshua's handoff, 2026-11-23): the lamp in his right hand, whose lens the beam leaves. */
+  let flashProp: FlashlightProp | null = null;
   let caveSounds: CaveSounds | null = null;
   let story: StoryDirector | null = null;
   /** THE WAY TO THE OBJECTIVE (Joshua, 2026-11-22: "ground arrows or something... a little compass 🧭 or mini map"): arrows
@@ -459,9 +462,9 @@ async function start(): Promise<void> {
   let waypointWas: { x: number; z: number } | null = null, waypointS: number | null = null;
   if (prologue) {
     meter.step('tunnel', 'Beneath the island: the passage…');
-    const [{ Tunnel }, { Flashlight }, { CaveSounds }, { StoryDirector }, { GroundArrows }, { MiniMap }] = await Promise.all([
+    const [{ Tunnel }, { Flashlight }, { CaveSounds }, { StoryDirector }, { GroundArrows }, { MiniMap }, { createFlashlightProp }] = await Promise.all([
       import('./world/prologue/tunnel'), import('./world/prologue/flashlight'), import('./world/prologue/caveSounds'), import('./story/storyDirector'),
-      import('./world/prologue/groundArrows'), import('./ui/miniMap'),
+      import('./world/prologue/groundArrows'), import('./ui/miniMap'), import('./world/prologue/flashlightProp'),
     ]);
     tunnel = new Tunnel();
     scene.add(tunnel.group);
@@ -473,6 +476,7 @@ async function start(): Promise<void> {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     flashlight = new Flashlight(scene);
+    flashProp = createFlashlightProp();
     caveSounds = new CaveSounds(sound);
     story = new StoryDirector(uiHost, caveSounds);
     // (black from the very first picture: the scene opens in the dark)
@@ -1054,6 +1058,8 @@ async function start(): Promise<void> {
   let windedWeight = 0;
   /** (the prologue: where the camera looks, his eyes, and the shake's offset; kept for each frame) */
   const storyLook = new THREE.Vector3(), storyEye = new THREE.Vector3(), shakeBy = new THREE.Vector3();
+  // (the prologue's flashlight: where his eyes are and look, and its lens, world)
+  const lightEye = new THREE.Vector3(), lightTurn = new THREE.Quaternion(), lightLook = new THREE.Vector3(), lensAt = new THREE.Vector3();
   const busyView = { on: false, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0, setYaw: 0, setPitch: 0, idle: 0, fromYaw: 0, fromPitch: 0, dragging: false, returnSeconds: 1.5 };
   // (her guns' bursts, src/world/burstFire.ts, are in her kit: `burst`)
 
@@ -1610,7 +1616,7 @@ async function start(): Promise<void> {
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
-      else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity') { /* live: read every frame */ }
+      else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity' || key === 'paceCap') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
       else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();
@@ -1754,8 +1760,10 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, groundArrows, miniMap,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
+      // (the game's own clock, seconds of play: for test pages that time things in game time, not the browser's)
+      get elapsed() { return elapsed; },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
       // (each one's brain: what it is doing and what it has done, for the test pages)
@@ -1763,6 +1771,8 @@ async function start(): Promise<void> {
       kitOf: (name: 'blaze' | 'john') => (name === 'john' ? john : blaze)?.kit ?? null,
       // (her breathing, heard: whether the sound is running, and what each breather has played)
       breathing: () => ({ sound: sound.context?.state ?? 'none', who: [...breaths].map(([c, b]) => ({ name: c.name, ...b.stats() })) }),
+      // (her vitals' tuning, for test pages to try numbers live: e.g. gdm.vitalsTuning.effort.riseSeconds = 4)
+      vitalsTuning: VITALS_TUNING,
       // (for the test scripts: change her outfit as Settings does, and whether a change is running)
       changeOutfit: (key: string) => { graphics.outfit = key; saveSetting('outfit', key); return changeOutfit(); },
       outfitChanging: () => outfitChanging };
@@ -2072,6 +2082,8 @@ async function start(): Promise<void> {
     const carrying = pregnantNow() ? Math.max(0, Math.min(1, ((heroine.bellyNow?.() ?? 100) - PREGNANCY_ARC.firstBump) / (PREGNANCY_ARC.fullTermBump - PREGNANCY_ARC.firstBump))) : 0;
     // THE WEAPON TABLE'S ACTION, while one runs: it walks her to the table and turns her to it, and the stick waits.
     pace.carrying = carrying;
+    // (THE TOP PACE chosen over the MOVE stick: the stick builds up to it and no further, whoever is played)
+    pace.ceiling = graphics.paceCap;
     tableAsk.yaw = turn.base;
     tableUse.update(dt, motion.x, motion.z, tableAsk);
     grabAsk.yaw = turn.base;
@@ -2487,13 +2499,28 @@ async function start(): Promise<void> {
     //  his steps, the camera and the flashlight's beam)
     if (tunnel) prologueProgress = tunnel.progressAt(motion.x, motion.z);
     rig.update(dt, heroine);
-    // THE PROLOGUE, once the camera is placed: the flashlight along where the camera looks (from the camera in first
-    // person, from his head in third: Beyond Extinction's lab flashlight), the gap's light, the drips, the story's
-    // beats, and the stone's shake on the camera
+    // THE PROLOGUE, once the camera is placed: the flashlight IN HIS RIGHT HAND (Joshua's handoff, 2026-11-23), its beam
+    // from its lens to the spot his eyes look at (first person his eyes are the camera), his arm pointing it there; the
+    // gap's light, the drips, the story's beats, and the stone's shake on the camera
     if (tunnel && flashlight && caveSounds && story) {
       rig.camera.getWorldDirection(storyLook);
       heroine.eye(storyEye);
-      flashlight.update(dt, rig.mode === 'first', storyEye, rig.camera.position, storyLook, (from, dir, most) => tunnel.rayLength(from, dir, most));
+      // (where his eyes look: his head's own way; without a head camera, from his eyes along the camera's look)
+      if (heroine.eyeView) { heroine.eyeView(lightEye, lightTurn); lightLook.set(0, 0, -1).applyQuaternion(lightTurn); }
+      else { lightEye.copy(storyEye); lightLook.copy(storyLook); }
+      const rockAt = (from: THREE.Vector3, dir: THREE.Vector3, most: number) => tunnel.rayLength(from, dir, most);
+      if (flashProp) {
+        // (held in his right hand: asked every frame, so a body made again takes it up again)
+        heroine.holdLight?.(flashProp.object);
+        if (flashProp.object.parent) {
+          flashProp.object.updateWorldMatrix(true, false);
+          lensAt.copy(flashProp.lens).applyMatrix4(flashProp.object.matrixWorld);
+        } else lensAt.copy(storyEye);
+        // (his arm points it at the spot his eyes look at: posed there from the next frame, as his guns are)
+        heroine.lightAt?.(flashlight.aimAt(lightEye, lightLook, rockAt));
+      } else lensAt.copy(storyEye);
+      flashlight.update(dt, lensAt, lightEye, lightLook, rockAt);
+      flashProp?.setLit(flashlight.lit);
       tunnel.update(dt);
       caveSounds.update(dt);
       story.update(dt, motion.x, motion.z, rig.camera.position, storyLook);

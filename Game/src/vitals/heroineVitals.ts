@@ -27,7 +27,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { ACTIVITY, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { ACTIVITY, STAMINA, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { ABDOMEN_PLACE, RECTUM, STOMACH } from '@charb/actor/abdominalOrgans';
 import { BLADDER } from '@charb/actor/pelvicOrgans';
 import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
@@ -61,10 +61,33 @@ export const VITALS_TUNING = {
     [1.1, ACTIVITY.walk],
     [2.64, ACTIVITY.jog],
     [4.18, ACTIVITY.run],
-    [6.05, ACTIVITY.sprint],
+    // (a SPRINT is 0.9 of her hardest, not the builder's 1: Joshua's handoff of 2026-11-23 asks for 38-44 breaths a
+    //  minute 15 s into a sprint and 42-48 at 20 s; at 1, with her effort now climbing in seconds (`effort` below), she
+    //  was at the builder's ceiling of 50 from 20 s on. Her heart tops out near 173 instead of 182. Her stamina is the
+    //  game's own rate by pace, so this does not change how long a sprint lasts.)
+    [6.05, 0.9],
   ] as ReadonlyArray<readonly [speed: number, intensity: number]>,
   /** Firing both guns is work too: this much is added to her intensity while she shoots. */
   firingIntensity: 0.1,
+  /**
+   * HOW QUICKLY HER BODY CATCHES UP WITH WHAT SHE DOES (Joshua's handoff, 2026-11-23: "a roughly 20-second sprint feels
+   * fast, but breathing catches up after movement stops. At exhaustion the display can be around 35 breaths/min instead
+   * of the desired 40-50. Recovery currently feels acceptable"). Her EFFORT is the builder's: her body's lag behind the
+   * work she does, which her breathing and her heart both read (Char_B/src/actor/vitals.ts `STAMINA.riseS` 30 s to climb
+   * most of the way, 63%, and `fallS` 90 s to come back down). The builder is never edited here, so the game sets its own
+   * time constants on top (seconds, 63% of the way; null keeps the builder's): before the builder's step moves her effort
+   * by its own 30 or 90 s, the game puts it where that step will land it on the game's curve (`step`, 1).
+   * RISE 4 s (his doc's starting point was 5-6 s: a time constant is not the time to the top, and the builder's
+   * breathing climbs steeply only near her hardest, so 4 s, with a sprint at 0.9, is what lands his targets). FALL kept
+   * at the builder's 90 s (his doc: "Keep 90 initially... Do not accelerate recovery just to accelerate exertion").
+   * MEASURED with the game's own pace and vitals, a full sprint from rest to empty (`scripts/sim_sprint.ts`):
+   *                  5 s   10 s   15 s   20 s   at 0%   stop+10 s   stop+30 s   (breaths a minute)
+   *   before         15.5  16.6   18.5   21.3   36.8    28.7        19.1        heart 85 / 151 at 5 s / 0%
+   *   now            23.9  37.9   44.1   47.6   50      41.5        24.9        heart 136 / 173
+   *   his targets    23-28 32-38  38-44  42-48  40-50
+   * So she comes down from a higher peak on the same 90 s: bent over WINDED up to its 20 s most (was about 12 s).
+   */
+  effort: { riseSeconds: 4 as number | null, fallSeconds: null as number | null },
   /**
    * Her digestion against the clock: how many hours pass for her stomach in one real second. 1/240 means one
    * minute of play is a quarter of an hour for her gut, so a ten-minute mission is two and a half hours: long
@@ -434,6 +457,28 @@ export class HeroineVitals {
     this.pregnancy = pregnancyShare(weeks);
   }
 
+  /**
+   * HER EFFORT ON THE GAME'S OWN CURVE (VITALS_TUNING.effort). The builder's step moves her effort toward the work she
+   * does by a share k of the way (k = 1 - e^(-dt / its 30 or 90 s)). To land it where the game's time constant would
+   * have it this frame (`target`), it is first set to the one place from which that share lands there:
+   *   target = before + (work - before) * k   so   before = (target - work * k) / (1 - k).
+   * That place is always between where it was and the target, on the same side of the work, so the builder's step takes
+   * the same direction (rising or falling) the game meant. Nothing else of the builder's model is touched.
+   */
+  private leadEffort(dt: number, work: number): void {
+    const { riseSeconds, fallSeconds } = VITALS_TUNING.effort;
+    const e = this.vitals.effort;
+    if (!Number.isFinite(e) || work === e) return;
+    const rising = work > e;
+    const ours = rising ? riseSeconds : fallSeconds;
+    if (ours === null) return;
+    const h = clamp(dt, 0, 0.5);   // (the builder's step holds a frame to half a second too)
+    const theirs = rising ? STAMINA.riseS : STAMINA.fallS;
+    const target = e + (work - e) * (1 - Math.exp(-h / ours));
+    const k = 1 - Math.exp(-h / theirs);
+    this.vitals.effort = (target - work * k) / (1 - k);
+  }
+
   /** Move her vitals on by `dt` seconds of play. */
   step(dt: number, input: VitalsInput): void {
     if (dt <= 0) return;
@@ -442,6 +487,7 @@ export class HeroineVitals {
     // 1. Her breath and heart: the builder's model, told how hard she is working.
     const intensity = clamp(intensityAtSpeed(input.speed) + (input.firing ? tuning.firingIntensity : 0), 0, 1);
     const stamina = this.vitals.energy;
+    this.leadEffort(dt, intensity);
     this.now = stepVitals(this.vitals, dt, intensity, this.body);
     // Her stamina: the game's own rate for her pace (VITALS_TUNING.stamina), not the builder's. What the builder's
     // step did to it is put back, and the game's change is made instead. (Her breath reads it the next frame.)

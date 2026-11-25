@@ -1456,6 +1456,39 @@ use the game's single copy of three.js.
   view any more (they rose to the middle of it each stride); sprinting they come up at the front of each pump, as they
   would. HANDS CLEAR OF HER at every pace, empty or guns in hand, at 10, 150 and 200 % and on John: 1-10 cm, none in her.
   Pictured: side strips at a jog and a sprint, before and after; first person the same.
+- v0.2.173: HER BREATHING BY PACE, AND HER STAMINA BY HER BREATHING (Joshua, 2026-11-25, after playing v0.2.172:
+  "Before the breathing rate accelerated too slow, now it feels too fast"; planned with him step by step). Idle to a full
+  sprint is still 1.7 s (13 mph). (1) BREATHING BY PACE (his: "each speed can have the average max breathing rate per
+  category... I don't want it at max breathing rate until around 45-50% stamina is remaining... however long it takes
+  from 100-45% stamina remaining should be the time from normal to max"; heroineVitals.ts `VITALS_TUNING.breathByPace`,
+  `breathTopAt`, HeroineVitals `breathByPace`): each pace has its own TOP, walk 20, jog 32 (his), run 40, sprint 48
+  breaths a minute (rest 12-20; light exercise 20-30, his own earlier research; an untrained person's all-out is about
+  49, the builder's ceiling 50). Her breathing comes from her EFFORT, the builder's hidden lag behind the work she does
+  (his question, "how does the breath rate increase... if there is no drainage until a certain point": effort climbs
+  while she moves, from her first step, and falls over the builder's 90 s when she stops; her heart, sweat and
+  temperature read it too); it CLIMBS STEADILY from her resting rate to the pace's top, timed so 55 % of a full bar is
+  spent by the top (a sprint 28 s, a run 37 s, a jog 66 s; a walk 30 s), and is HELD at the top to empty (the effort
+  that breathes it worked out each frame from the builder's own `vitalsFor`). The top is THE PACE SHE IS AT
+  (`VitalsInput.pace`, her Pace.level, from main.ts for both characters), not her tired speed (a sprint at 20 %
+  stamina is 8.8 mph and still a sprint). Firing adds 4 to her top. Walking now breathes 20, her heart about 128 (was
+  16 and 103). (2) STAMINA BY BREATHING (his: "tie stamina drain to the bpm, so it actually doesn't start draining until
+  the bpm passes the max for walking"; drain "8.5%"; refill "4.25% (half of drain)"; standing at least as fast as
+  walking, "Yes"; fear, pain and thirst counted, "Yes"; `VITALS_TUNING.staminaByBreath`): faster than a walk she drains
+  8.5 % OF HER BREATHING as % of her bar a second (32 breaths: 2.72 % a second) once it is over 26 (`line`, a walk's top
+  with room for firing or fear); under it nothing. At a walk or standing she refills 4.25 % of it (48 breaths: 2.04 % a
+  second), her breathing counted as no lower than a walk's 20 (0.85 % a second), so the refill is quickest just after
+  she stops. Fear, pain and thirst count through their extra breaths (their old drain boost not used again);
+  pregnancy, the exercise upgrade and firing as before. The old stamina by pace (`stamina.byPace`) is used with
+  `staminaByBreath` null. MEASURED (`scripts/sim_stamina_breath.ts`, new; `scripts/sim_sprint.ts`, which now runs each
+  pace held from rest), from full:
+    jog     drains from 45 s · top 32 at 66 s (48 %) · 2.70 %/s · empty at 84 s (was 120)
+    run     drains from 17 s · top 40 at 37 s (47 %) · 3.38 %/s · empty at 50 s (was 75)
+    sprint  drains from 11 s · top 48 at 28 s (46 %) · 4.06 %/s · empty at 39 s (was 42)
+    sprint breathing 5 s 19.0 · 10 s 25.3 · 15 s 31.6 · 20 s 38.0 · 48 from 28 s to empty (v0.2.164: 23.9 / 37.9 /
+    44.1 / 47.6 / 50; the builder's own: 15.5 / 16.6 / 18.5 / 21.3 / 36.8)
+    from empty, standing: full in 92 s after a sprint, 102 after a run, 109 after a jog (was 30 s); walking 84-109 s
+    (was 60 s); from 50 % at rest 59 s, standing or walking.
+  Winded as before: bent over 21.5 s after a sprint, then a walk until her breath is back (32 s after empty).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

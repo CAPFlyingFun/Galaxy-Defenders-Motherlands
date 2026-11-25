@@ -2098,7 +2098,7 @@ async function start(): Promise<void> {
     // 9. THEIR VITALS: what they just did moves them on (walking, firing, the danger); their body breathes by them
     s.wetFor = s.waterDepthNow > 0.02 ? 0 : s.wetFor + dt;
     const wet = s.wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (s.wetFor - WET_HOLD) / WET_DRY);
-    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, carrying: k.pace.carrying, waterDepth: s.waterDepthNow, wet });
+    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, carrying: k.pace.carrying, pace: k.pace.level, waterDepth: s.waterDepthNow, wet });
     body.setVitals?.(c.vitals.reading);
     s.limits = c.vitals.reading;
   };
@@ -2758,7 +2758,7 @@ async function start(): Promise<void> {
     // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
     wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
     const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
-    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, waterDepth: waterDepthNow, wet });
+    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, pace: pace.level, waterDepth: waterDepthNow, wet });
     const reading = vitals.reading;
     // THE ONE NOT BEING PLAYED: what they were doing carries on, and their brain runs them (Step 1 and 2)
     {

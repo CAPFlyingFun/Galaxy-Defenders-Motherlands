@@ -24,6 +24,17 @@ const FRAME = 1 / 60;
 const PACE_WALK = new Pace().paceSpeed(0);
 const MPH = 2.23694;
 const before = process.argv.includes('before');
+// (`old`: her breathing's climb as in v0.2.164-172, an effort time constant, not by pace)
+if (process.argv.includes('old') || before) (VITALS_TUNING as unknown as { breathByPace: unknown }).breathByPace = null;
+// (`rise=N`: try another rise time for her effort, in seconds, to compare)
+const riseArg = process.argv.find((a) => a.startsWith('rise='));
+if (riseArg) (VITALS_TUNING as unknown as { effort: { riseSeconds: number | null } }).effort.riseSeconds = Number(riseArg.slice(5));
+// (`sprint=N`: try another share of her hardest for a sprint)
+const sprintArg = process.argv.find((a) => a.startsWith('sprint='));
+if (sprintArg) {
+  const table = (VITALS_TUNING as unknown as { speedToIntensity: [number, number][] }).speedToIntensity;
+  table[4] = [table[4][0], Number(sprintArg.slice(7))];
+}
 if (before) {
   // (the builder's own: its 30 s rise, and a sprint as her hardest)
   const tuning = VITALS_TUNING as unknown as { effort: { riseSeconds: number | null }; speedToIntensity: [number, number][] };
@@ -42,7 +53,7 @@ function fresh(): { pace: Pace; vitals: HeroineVitals } {
 /** One frame, as main.ts does it: her pace from the push and what her body allows, then her vitals from her speed. */
 function frame(h: { pace: Pace; vitals: HeroineVitals }, push: number): void {
   h.pace.step(FRAME, push, h.vitals.reading);
-  h.vitals.step(FRAME, { speed: h.pace.speed, firing: false, carrying: 0 });
+  h.vitals.step(FRAME, { speed: h.pace.speed, firing: false, carrying: 0, pace: h.pace.level });
 }
 
 function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
@@ -73,6 +84,27 @@ function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
     for (const m of [5, 10, 20, 30]) if (Math.abs(after - m) < FRAME / 2) console.log(line(`stop+${m} s`, h));
   }
   console.log(`13 mph after ${at13.toFixed(1)} s; winded: bent over ${bentFor.toFixed(1)} s, then walking only until ${walkOnly.toFixed(1)} s after empty`);
+}
+
+// ---- 1b. Each pace held from rest (the top pace set to it, the stick at its edge): breaths a minute every 10 s, when
+// her stamina is at 45 %, and how long it took (Joshua, 2026-11-25: each pace's top breathing reached by 45 % stamina)
+{
+  console.log('\n=== Each pace held from rest: breaths a minute (stamina) every 10 s, and at 45 % stamina ===');
+  for (const [cap, name] of [[1, 'WALK'], [2, 'JOG'], [3, 'RUN'], [4, 'SPRINT']] as const) {
+    const h = fresh();
+    h.pace.ceiling = cap;
+    let t = 0, at45 = -1;
+    const cells: string[] = [];
+    while (t < 90) {
+      frame(h, 1);
+      t += FRAME;
+      const r = h.vitals.reading;
+      if (at45 < 0 && r.stamina <= 0.45) { at45 = t; cells.push(`45% @${t.toFixed(0)} s: ${r.breathsPerMinute.toFixed(1)}`); }
+      if (Math.abs(t / 10 - Math.round(t / 10)) < FRAME / 20 && Math.round(t) % 10 === 0)
+        cells.push(`${Math.round(t)} s ${r.breathsPerMinute.toFixed(1)} (${(r.stamina * 100).toFixed(0)}%, ${r.heartRate.toFixed(0)})`);
+    }
+    console.log(`${name.padEnd(7)} ${cells.join(' · ')}`);
+  }
 }
 
 // ---- 2. The top pace: a full push under each ceiling -------------------------------------------------------------------

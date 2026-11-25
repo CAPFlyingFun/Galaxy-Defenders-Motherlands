@@ -1432,6 +1432,30 @@ use the game's single copy of three.js.
   150 and 200 %: all 75 touched and clean (palm 2.5 mm into to 7.5 mm off her skin, 1-4 mm at 150 and 200 %; no arm bone
   in her); the only touch left is the heel of her hand by her skin and, her right hand across to her front, her upper
   arm against the side of her breast (pictured: it lies along her side).
+- v0.2.172: HER ARMS BY HER SPEED, AND NEVER QUITE THE SAME TWICE (Joshua, 2026-11-24: "the hands should look random and
+  not so forward all the time when walking to sprinting. You can research how positioning for walking to sprinting").
+  WHY: v0.2.171's arms kept the builder's swing, the same size forward as back, with the elbow held bent: every running
+  pace was the same arm (front +23 cm, back -10 cm from her hips, the hand ahead of her hips 62-64 % of the time, as high
+  as +34 cm), and each stride a copy of the last (its front reach the same to 0.3 mm). THE RESEARCH: walking, the arm hangs
+  nearly straight and swings as a pendulum, more the faster she goes, and the two arms keep loose time (left and right
+  match only 0.39-0.63 at a slow walk, 0.94-0.97 fast); running, the elbow near 90 degrees, DRIVEN BACK, the hands low by
+  the waist, toward her middle but never across it, the elbow opening as the arm goes back; sprinting, "hip to cheek", the
+  front elbow 60-90 degrees inside, the back one 90-120, the hand passing her hip. NOW (strideShape.ts `ARM_ROWS`, by her
+  speed, blended): stand 0 .. walk 1.1 .. 1.9 .. jog 2.64 .. run 4.18 .. sprint 6.05 m/s; for each the swing forward and
+  back about her shoulder (a walk 10 / 20 degrees, a sprint 40 / 56), the elbow at the front and the back of the swing
+  (a walk 24 / 8, a jog 86 / 66, a sprint 110 / 64), how far out from her side in front and behind, and how much each arm
+  wanders. EACH ARM WANDERS ITS OWN WAY (`ArmVariety`, stepped in bodyMotion.ts): its swing's size (+-22 %), the swing's
+  middle (+-5 degrees), its elbow (+-10) and how far out it hangs (0 to 4 MORE, never in: an arm wandering in put her hand
+  1 mm into her hip at a 200 % belly with a gun), each gliding to a new aim every 0.6-1.3 s; one arm (chosen per body)
+  swings 6 % more for good, as people do. All of it at a walk, 0.9 jogging, down to 0.6 sprinting (fast arms keep better
+  time). The swing is a smooth middle + size x sin, not two halves. MEASURED (the lab, Mary, hand from her hips):
+  walk front +20 / back -15, ahead 45 % -> +12 / -27, ahead 22-26 %; jog +23 / -10, 62 %, top +33 -> +20 / -14, 51 %,
+  top +20; run +23 / -10, 64 % -> +19 / -22, about 52 %; sprint +23 / -10, 63 %, top +34 -> +19 / -32, about 52 %,
+  top +37 (her hand up toward her chin, as a sprinter's); a stride's front reach now differs stride to stride by 1.3-2.4
+  cm walking and 0.3-0.9 cm running (was 0-0.3 mm). FIRST PERSON (the start view): jogging, her hands barely come into
+  view any more (they rose to the middle of it each stride); sprinting they come up at the front of each pump, as they
+  would. HANDS CLEAR OF HER at every pace, empty or guns in hand, at 10, 150 and 200 % and on John: 1-10 cm, none in her.
+  Pictured: side strips at a jog and a sprint, before and after; first person the same.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -33,7 +33,7 @@ import { HumanRig } from '@charb/view/HumanRig';
 import { measureHuman } from '@charb/actor/humanSkeleton';
 import { poseHuman } from '@charb/actor/humanPose';
 import { walkWeight, weighWalk } from '@charb/actor/walkWeight';
-import { shapeAt, strideMetres, writeArms, writeLegs, type StrideShape } from './strideShape';
+import { ArmVariety, shapeAt, strideMetres, writeArms, writeLegs, type StrideShape } from './strideShape';
 import type { BindJoint, HumanGait, HumanMeasure, JointTurn, MutableJointTurn } from '@charb/actor/humanRig';
 import {
   BELLY_MOTION, BELLY_SWING, THUMB_TO_PALM, breastBobWeight, fingerBend, restingBellySpring, sizeTiltDeg,
@@ -242,7 +242,12 @@ export class BodyMotion {
    * HER STRIDE NOW (strideShape.ts): its length, the share of it each foot is down (the rest is flight), how high the
    * knee lifts. Follows her speed every frame; her feet's planting goes by it (footGround.ts).
    */
-  readonly shape: StrideShape = { stride: 1.18, share: 0.56, lift: 0.06, back: 0, narrow: 0 };
+  readonly shape: StrideShape = {
+    stride: 1.18, share: 0.56, lift: 0.06, back: 0, narrow: 0,
+    swingFront: 0, swingBack: 0, elbowFront: 0, elbowBack: 0, flareFront: 0, flareBack: 0, variety: 0,
+  };
+  /** Each arm's own wandering from stride to stride (strideShape.ts `ArmVariety`): this body's own. */
+  private readonly armVariety = new ArmVariety();
   /** The belly her strides were measured at (a bigger belly steps shorter: they are measured again when it changes). */
   private measuredBelly = -1;
 
@@ -401,6 +406,8 @@ export class BodyMotion {
       // HER STRIDE BY HER SPEED (Joshua, 2026-11-20: "the faster you run, the longer the stride length";
       // strideShape.ts): the game writes her legs, so the stride is the one her legs take at this speed.
       shapeAt(speed, carry, this.shape);
+      // (each arm's own wandering, on with the clock)
+      this.armVariety.step(dt);
       const stride = strideMetres(this.shape, measure, this.unitsPerMetre);
       const turned = this.stridePhase + distance / stride;
       this.stridePhase = turned - Math.floor(turned);
@@ -417,8 +424,9 @@ export class BodyMotion {
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
         // (her legs her own: the stride at her speed, over the builder's fixed walk or run legs)
         writeLegs(this.walkTurns, measure, bind, phase, this.shape, carry, this.unitsPerMetre);
-        // (and her arms: the builder's swing, her elbows bent about the axis this body's elbows really bend about)
-        writeArms(this.walkTurns, measure, bind, phase, this.shape, stance);
+        // (and her arms: their swing at her speed, each its own way this stride, her elbows bent about the axis this
+        //  body's elbows really bend about: strideShape.ts. The same at a walk or a run, so nothing jumps between them)
+        writeArms(this.walkTurns, measure, bind, phase, this.shape, this.armVariety);
         // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
         const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * this.bobSwayShare * walkEase(speed));
         this.rig.apply(weighWalk(measure, steps, weight, this.weighedTurns));
@@ -496,7 +504,10 @@ export class BodyMotion {
     this.rig.apply(poseHuman(measure, bind, gait, this.standTurns));
     const stand = read([0, 0, 0, 0]), now = [0, 0, 0, 0];
 
-    const tableShape: StrideShape = { stride: 0, share: 0, lift: 0, back: 0, narrow: 0 };
+    const tableShape: StrideShape = {
+      stride: 0, share: 0, lift: 0, back: 0, narrow: 0,
+      swingFront: 0, swingBack: 0, elbowFront: 0, elbowBack: 0, flareFront: 0, flareBack: 0, variety: 0,
+    };
     const table = (stance: 'walk' | 'run', speed: number): StrideTable => {
       const N = STRIDE_SAMPLES;
       const along: [Float32Array, Float32Array] = [new Float32Array(N), new Float32Array(N)];

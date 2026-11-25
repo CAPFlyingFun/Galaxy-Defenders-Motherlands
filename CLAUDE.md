@@ -1470,8 +1470,13 @@ use the game's single copy of three.js.
   spent by the top (a sprint 28 s, a run 37 s, a jog 66 s; a walk 30 s), and is HELD at the top to empty (the effort
   that breathes it worked out each frame from the builder's own `vitalsFor`). The top is THE PACE SHE IS AT
   (`VitalsInput.pace`, her Pace.level, from main.ts for both characters), not her tired speed (a sprint at 20 %
-  stamina is 8.8 mph and still a sprint). Firing adds 4 to her top. Walking now breathes 20, her heart about 128 (was
-  16 and 103). (2) STAMINA BY BREATHING (his: "tie stamina drain to the bpm, so it actually doesn't start draining until
+  stamina is 8.8 mph and still a sprint). Firing adds 4 to her top. HER HEART BY HER BREATHING (his: "A HR of 128
+  seems too fast for a walk"; `VITALS_TUNING.heartByBreath`, HeroineVitals `heartByBreath`): the builder's heart reads
+  her effort straight from resting to her peak, so a walk's 20 breaths put it at 128 (a walk is usually 90-120); now it
+  has its own top per pace, reached as her breathing reaches the pace's (20 -> 105, 32 -> 145, 40 -> 160, 48 -> 170,
+  read above her own rest, so pregnancy's +12 holds), plus the builder's drift near empty, never past her peak (206 -
+  0.88 x age); fear, pain, thirst and adrenaline add theirs after. MEASURED: walk 105; jog 145-149; run 160-164; sprint
+  99 / 123 / 144 / 157 at 5 / 10 / 15 / 20 s, 174 at empty; 132 thirty seconds after stopping. (2) STAMINA BY BREATHING (his: "tie stamina drain to the bpm, so it actually doesn't start draining until
   the bpm passes the max for walking"; drain "8.5%"; refill "4.25% (half of drain)"; standing at least as fast as
   walking, "Yes"; fear, pain and thirst counted, "Yes"; `VITALS_TUNING.staminaByBreath`): faster than a walk she drains
   8.5 % OF HER BREATHING as % of her bar a second (32 breaths: 2.72 % a second) once it is over 26 (`line`, a walk's top

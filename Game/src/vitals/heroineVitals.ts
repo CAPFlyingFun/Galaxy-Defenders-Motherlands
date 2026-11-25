@@ -27,7 +27,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { ACTIVITY, STAMINA, beatOf, breathOf, pregnancyShare, restingVitals, stepVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { ACTIVITY, STAMINA, beatOf, breathOf, peakHeart, pregnancyShare, restingVitals, stepVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { ABDOMEN_PLACE, RECTUM, STOMACH } from '@charb/actor/abdominalOrgans';
 import { BLADDER } from '@charb/actor/pelvicOrgans';
 import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
@@ -97,6 +97,20 @@ export const VITALS_TUNING = {
     /** Within this many breaths a minute over her top she is held at it; further over, she comes down on 90 s. */
     holdWithin: 1,
   } as { tops: ReadonlyArray<readonly [number, number]>; spentAtTop: number; refillPaceSeconds: number; firing: number; holdWithin: number } | null,
+  /**
+   * HER HEART BY HER BREATHING (Joshua, 2026-11-25: "A HR of 128 seems too fast for a walk"). The builder's heart reads
+   * her effort in a straight line from resting to her peak, so with her breathing by pace (`breathByPace`) a walk's 20
+   * breaths put her heart at 128 (a walk is usually 90-120). Now her heart has its OWN top for each pace, reached as her
+   * breathing reaches the pace's: `points`, [breaths a minute, beats a minute] for a woman resting at `restBreaths` and
+   * `restBeats` (walk 20 -> 105, jog 32 -> 145, run 40 -> 160, sprint 48 -> 170), blended between and read ABOVE HER
+   * OWN REST (late in a pregnancy she rests at 16 and 82); so it climbs, holds and comes down with her breathing. The
+   * builder's drift (up to 12 beats as she works on with little stamina left) is added, never past her peak (206 - 0.88
+   * x her age); fear, pain, thirst and adrenaline add their own beats after, as before. null: the builder's heart.
+   */
+  heartByBreath: {
+    restBreaths: 14, restBeats: 70,
+    points: [[20, 105], [32, 145], [40, 160], [48, 170]] as ReadonlyArray<readonly [breaths: number, beats: number]>,
+  } as null | { restBreaths: number; restBeats: number; points: ReadonlyArray<readonly [number, number]> },
   /**
    * HER STAMINA BY HER BREATHING (Joshua, 2026-11-25: "tie stamina drain to the bpm, so it actually doesn't start
    * draining until the bpm passes the max for walking"; "the stamina drain is 10% of the bpm", then "What would 8.5%
@@ -617,6 +631,30 @@ export class HeroineVitals {
     return want;
   }
 
+  /**
+   * HER HEART BY HER BREATHING (VITALS_TUNING.heartByBreath): her heart rate from how far her breathing is over her own
+   * resting rate, by the table's points read above rest, plus the builder's drift, never past her peak. Her heartbeat
+   * (the pulse her body shows) is moved on by the difference from what the builder's step gave, so it beats at the rate
+   * shown.
+   */
+  private heartByBreath(dt: number): void {
+    const hb = VITALS_TUNING.heartByBreath!;
+    const rest = vitalsFor(0, 1, this.body);
+    const above = Math.max(0, this.now.breathsPerMinute - rest.breathsPerMinute);
+    // (the table above rest: breaths over 14, beats over 70; past its last point, on along the last step)
+    let x0 = 0, y0 = 0, beatsAbove = 0;
+    for (let i = 0; i < hb.points.length; i++) {
+      const x = hb.points[i][0] - hb.restBreaths, y = hb.points[i][1] - hb.restBeats;
+      if (above <= x || i === hb.points.length - 1) { beatsAbove = y0 + ((y - y0) * (above - x0)) / Math.max(1e-6, x - x0); break; }
+      x0 = x; y0 = y;
+    }
+    const peak = Math.max(rest.beatsPerMinute + 20, peakHeart(this.body.age));
+    const want = Math.min(peak, rest.beatsPerMinute + Math.max(0, beatsAbove) + (this.vitals.drift ?? 0));
+    const h = clamp(dt, 0, 0.5);
+    this.vitals.pulse = ((((this.vitals.pulse + (h * (want - this.now.beatsPerMinute)) / 60) % 1) + 1) % 1);
+    this.now = { ...this.now, beatsPerMinute: want, beat: beatOf(this.vitals.pulse) };
+  }
+
   /** Move her vitals on by `dt` seconds of play. */
   step(dt: number, input: VitalsInput): void {
     if (dt <= 0) return;
@@ -628,6 +666,7 @@ export class HeroineVitals {
     if (tuning.breathByPace) intensity = this.breathByPace(dt, input);
     else this.leadEffort(dt, intensity);
     this.now = stepVitals(this.vitals, dt, intensity, this.body);
+    if (tuning.heartByBreath) this.heartByBreath(dt);
     // Her stamina: the game's own rate for her pace (VITALS_TUNING.stamina), not the builder's. What the builder's
     // step did to it is put back, and the game's change is made instead. (Her breath reads it the next frame.)
     // Thirst, pain and fear (VITALS_TUNING.stress): how strong each is now.

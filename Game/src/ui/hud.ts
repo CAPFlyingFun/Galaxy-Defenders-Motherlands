@@ -667,7 +667,7 @@ export class Hud {
 
     // ---- Settings: the camera (Joshua, 2026-11-17: "adjust the default zoom for 3rd person as well as FOV for both")
     // A slider for each, its value written beside it; each takes hold at once and is remembered on this device.
-    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'lookSensitivity' | 'moveSensitivity' | 'zoomThird' | 'tableHeight' | 'skinShine' | 'soundVolume' | 'breathVolume'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
+    const sliderRow = <K extends 'fovThird' | 'fovFirst' | 'eyeForward' | 'eyeHigher' | 'lookSensitivity' | 'moveSensitivity' | 'zoomThird' | 'tableHeight' | 'skinShine' | 'soundVolume' | 'breathVolume' | 'trainFitness' | 'trainEndurance' | 'trainRecovery' | 'trainStrength'>(label: string, key: K, least: number, most: number, step: number, show: (v: number) => string): void => {
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, label);
       const value = element('b', '', line, show(options.graphics[key]));
@@ -811,6 +811,12 @@ export class Hud {
       });
     }
     element('small', 'gd-note', settings, 'Clear saved files: everything the game keeps on this phone (its code, outfits, the builder\'s files, the island) is let go and the game starts again, downloading it all. Your settings are kept.');
+    // TRAINING, TO TEST (Joshua approved the four upgrades, 2026-11-25): both characters, until they are earned
+    sliderRow('Fitness', 'trainFitness', 0, 100, 1, (v) => `${v}`);
+    sliderRow('Endurance', 'trainEndurance', 0, 100, 5, (v) => `${v}% · ${100 + v / 2} pts`);
+    sliderRow('Recovery', 'trainRecovery', 0, 100, 5, (v) => `${v}% · +${(v * 0.3).toFixed(0)}%`);
+    sliderRow('Strength', 'trainStrength', 0, 100, 5, (v) => `${v}% · hills −${(v * 0.15).toFixed(0)}%`);
+    element('small', 'gd-note', settings, 'Training, for both until it is earned: Fitness (cardio, starts at 20) makes every pace easier, so she lasts longer and breathes and beats slower; at 60 a jog never empties. Endurance: a bigger stamina pool (up to 150 points). Recovery: stamina back faster (up to 30%). Strength: hills and loads up to 15% easier.');
     // GROUND COLOURS (v0.2.166; for Joshua to tune the island's palette on his phone and send the numbers): each kind of
     // ground's base and accent colour as the phone's own colour picker, live on the island; Reset puts back the
     // approved palette (world/island/groundPaint.ts GROUND_COLOURS).

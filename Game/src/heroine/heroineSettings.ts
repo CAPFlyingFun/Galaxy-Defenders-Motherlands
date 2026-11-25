@@ -201,6 +201,16 @@ export interface HeroineSettings {
   /** HER BODY'S CLOCK: game hours per real hour for her stomach and gut (Joshua, 2026-11-19, to test). Takes hold at once. */
   bodyClock: number;
   /**
+   * TRAINING, TO TEST (Joshua approved the four upgrades, 2026-11-25; vitals/heroineVitals.ts VITALS_TUNING.training),
+   * 0-100 each, for both of them until they are earned: FITNESS (cardio; both start at 20), ENDURANCE (her stamina pool,
+   * 100 -> 150 points), RECOVERY (her refill, up to 30% faster), STRENGTH (hills and loads, up to 15% easier). Take hold
+   * at once.
+   */
+  trainFitness: number;
+  trainEndurance: number;
+  trainRecovery: number;
+  trainStrength: number;
+  /**
    * SOUND (Joshua, 2026-11-21: her breathing, the game's first sound): the MASTER volume and her BREATHING's own,
    * percent (0 = off). Both take hold at once (audio/sound.ts, audio/breathSound.ts).
    */
@@ -346,6 +356,10 @@ export const SETTING_KEYS = Object.freeze({
   faceLocks: 'gdm.faceLocks',
   skinShine: 'gdm.skinShine',
   bodyClock: 'gdm.bodyClock',
+  trainFitness: 'gdm.trainFitness',
+  trainEndurance: 'gdm.trainEndurance',
+  trainRecovery: 'gdm.trainRecovery',
+  trainStrength: 'gdm.trainStrength',
   soundVolume: 'gdm.soundVolume',
   breathVolume: 'gdm.breathVolume',
   vitalsStyle: 'gdm.vitalsStyle',
@@ -449,6 +463,11 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
     // (15: what the game has run at; Joshua's real-life plan is 6)
     bodyClock: asNumber(address.get('clock') ?? read(SETTING_KEYS.bodyClock), 1, 60) ?? 15,
+    // (fitness 20 to start, Joshua's pick; the upgrades none; `?fitness=` and the others for test pages)
+    trainFitness: asNumber(address.get('fitness') ?? read(SETTING_KEYS.trainFitness), 0, 100) ?? 20,
+    trainEndurance: asNumber(address.get('endurance') ?? read(SETTING_KEYS.trainEndurance), 0, 100) ?? 0,
+    trainRecovery: asNumber(address.get('recovery') ?? read(SETTING_KEYS.trainRecovery), 0, 100) ?? 0,
+    trainStrength: asNumber(address.get('strength') ?? read(SETTING_KEYS.trainStrength), 0, 100) ?? 0,
     // (`?sound=0` starts the game silent, for test pages)
     soundVolume: asNumber(address.get('sound') ?? read(SETTING_KEYS.soundVolume), 0, 100) ?? SOUND_START.master,
     breathVolume: asNumber(address.get('breath') ?? read(SETTING_KEYS.breathVolume), 0, 100) ?? SOUND_START.breath,

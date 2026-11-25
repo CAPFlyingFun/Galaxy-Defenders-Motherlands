@@ -13,34 +13,16 @@
 // RUN IT (from Game/; esbuild comes with Vite, `@charb` is the builder's folder as in vite.config.ts):
 //   node_modules/.bin/esbuild scripts/sim_sprint.ts --bundle --platform=node --format=esm \
 //     --alias:@charb=../Char_B/src --outfile=/tmp/sim_sprint.mjs && node /tmp/sim_sprint.mjs
-// To compare with the builder's own effort curve (a 30 s rise, a sprint counted as 1): add `before`.
+// (v0.2.174: the whole new physiology, every pace, energy, John, pregnancy and the upgrades, is in sim_physiology.ts.)
 // ============================================================================
 
 import { Pace } from '../src/input/pace';
-import { HeroineVitals, VITALS_TUNING } from '../src/vitals/heroineVitals';
+import { HeroineVitals } from '../src/vitals/heroineVitals';
 
 const FRAME = 1 / 60;
 /** A walk's top speed, m/s (input/pace.ts PACES[0]). */
 const PACE_WALK = new Pace().paceSpeed(0);
 const MPH = 2.23694;
-const before = process.argv.includes('before');
-// (`old`: her breathing's climb as in v0.2.164-172, an effort time constant, not by pace)
-if (process.argv.includes('old') || before) (VITALS_TUNING as unknown as { breathByPace: unknown }).breathByPace = null;
-// (`rise=N`: try another rise time for her effort, in seconds, to compare)
-const riseArg = process.argv.find((a) => a.startsWith('rise='));
-if (riseArg) (VITALS_TUNING as unknown as { effort: { riseSeconds: number | null } }).effort.riseSeconds = Number(riseArg.slice(5));
-// (`sprint=N`: try another share of her hardest for a sprint)
-const sprintArg = process.argv.find((a) => a.startsWith('sprint='));
-if (sprintArg) {
-  const table = (VITALS_TUNING as unknown as { speedToIntensity: [number, number][] }).speedToIntensity;
-  table[4] = [table[4][0], Number(sprintArg.slice(7))];
-}
-if (before) {
-  // (the builder's own: its 30 s rise, and a sprint as her hardest)
-  const tuning = VITALS_TUNING as unknown as { effort: { riseSeconds: number | null }; speedToIntensity: [number, number][] };
-  tuning.effort.riseSeconds = null;
-  tuning.speedToIntensity[4] = [tuning.speedToIntensity[4][0], 1];
-}
 
 /** A fresh, rested heroine (age 30, not pregnant), settled at rest for 20 s first. */
 function fresh(): { pace: Pace; vitals: HeroineVitals } {
@@ -53,7 +35,7 @@ function fresh(): { pace: Pace; vitals: HeroineVitals } {
 /** One frame, as main.ts does it: her pace from the push and what her body allows, then her vitals from her speed. */
 function frame(h: { pace: Pace; vitals: HeroineVitals }, push: number): void {
   h.pace.step(FRAME, push, h.vitals.reading);
-  h.vitals.step(FRAME, { speed: h.pace.speed, firing: false, carrying: 0, pace: h.pace.level });
+  h.vitals.step(FRAME, { speed: h.pace.speed, firing: false });
 }
 
 function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
@@ -64,7 +46,7 @@ function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
 
 // ---- 1. A full sprint from rest to empty, then let go ----------------------------------------------------------------
 {
-  console.log(`=== A full sprint to empty (${before ? 'BEFORE: the builder\'s 30 s rise, sprint 1' : 'NOW'}) ===`);
+  console.log('=== A full sprint to empty ===');
   const h = fresh();
   let t = 0, at13 = -1, emptyAt = -1, bentFor = 0, walkOnly = 0;
   const marks = new Set([0, 5, 10, 15, 20]);
@@ -86,8 +68,8 @@ function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
   console.log(`13 mph after ${at13.toFixed(1)} s; winded: bent over ${bentFor.toFixed(1)} s, then walking only until ${walkOnly.toFixed(1)} s after empty`);
 }
 
-// ---- 1b. Each pace held from rest (the top pace set to it, the stick at its edge): breaths a minute every 10 s, when
-// her stamina is at 45 %, and how long it took (Joshua, 2026-11-25: each pace's top breathing reached by 45 % stamina)
+// ---- 1b. Each pace held from rest (the top pace set to it, the stick at its edge): breaths a minute every 10 s, and
+// when her stamina is at 45 % (Joshua, 2026-11-25: each pace's top breathing reached by about half her pool)
 {
   console.log('\n=== Each pace held from rest: breaths a minute (stamina) every 10 s, and at 45 % stamina ===');
   for (const [cap, name] of [[1, 'WALK'], [2, 'JOG'], [3, 'RUN'], [4, 'SPRINT']] as const) {
@@ -137,22 +119,35 @@ function line(tag: string, h: { pace: Pace; vitals: HeroineVitals }): string {
 
 // ---- 4. Pushing on while winded (Joshua, 2026-11-24, his screenshot: 0% stamina, still running at 8.8 mph): --------
 // a sprint to empty, the stick let go while she stands bent over, then pushed straight back to its edge while she is
-// still winded (her stamina nowhere near full). She must only walk until her breath is back; and if she ever comes to
-// empty again, she must stop and stand winded again.
+// still winded (her stamina nowhere near full). Since v0.2.174 her paces come back one by one (jog at 20% of her pool,
+// run 30%, sprint 40%); if she ever comes to empty again, she must stop and stand winded again.
 {
-  console.log('\n=== Winded, then the stick straight back to its edge (her stamina not back to full) ===');
+  console.log('\n=== A jog to empty, winded, then the stick straight back to its edge, top pace SPRINT ===');
+  // (a JOG to empty: its winded hold is short, so she is still low when she can move; after a sprint the 20 s hold
+  //  refills her past 40% before she can)
   const h = fresh();
+  h.pace.ceiling = 2;
   while (h.vitals.reading.stamina > 0.001) frame(h, 1);
+  frame(h, 0);   // (her pace reads the empty bar on the next frame: the hold starts)
   while (h.pace.holdLeft > 0) frame(h, 0);
-  let fastest = 0, emptyMoving = 0, holds = 0, wasHeld = false;
+  h.pace.ceiling = 4;
+  // (her stamina's share of her pool the first time she goes faster than a walk, a jog and a run; and how often she
+  //  is dropped from a pace she had back to a slower one without going empty: there must be none, no flicking)
+  const firstOver = [-1, -1, -1];
+  let emptyMoving = 0, holds = 0, wasHeld = false, drops = 0, lastRegained = h.pace.regained;
+  const speeds = [new Pace().paceSpeed(0), new Pace().paceSpeed(1), new Pace().paceSpeed(2)];
   for (let i = 0; i < 60 / FRAME; i++) {
     frame(h, 1);
     const held = h.pace.holdLeft > 0;
     if (held && !wasHeld) holds++;
     wasHeld = held;
-    if (h.pace.winded && !held) fastest = Math.max(fastest, h.pace.speed);
+    const share = h.vitals.reading.stamina / h.vitals.reading.staminaPool;
+    for (let k = 0; k < 3; k++) if (firstOver[k] < 0 && h.pace.speed > speeds[k] + 0.1) firstOver[k] = share;
+    if (!held && h.pace.regained < lastRegained && h.pace.regained > 1) drops++;
+    lastRegained = h.pace.regained;
     if (h.vitals.reading.stamina <= 0.001 && h.pace.speed > PACE_WALK + 0.05) emptyMoving += FRAME;
   }
-  console.log(`while winded at most ${(fastest * MPH).toFixed(1)} mph (a walk is ${(PACE_WALK * MPH).toFixed(1)}); ` +
-    `seconds faster than a walk at 0% stamina: ${emptyMoving.toFixed(1)}; bent over again ${holds} time(s) in 60 s`);
+  const pct = (v: number) => (v < 0 ? 'never' : `${(v * 100).toFixed(0)}%`);
+  console.log(`first faster than a walk at ${pct(firstOver[0])} of her pool, than a jog at ${pct(firstOver[1])}, than a run at ${pct(firstOver[2])}; ` +
+    `dropped back without emptying: ${drops}; seconds faster than a walk at 0% stamina: ${emptyMoving.toFixed(1)}; bent over again ${holds} time(s) in 60 s`);
 }

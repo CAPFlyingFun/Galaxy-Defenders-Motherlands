@@ -604,7 +604,7 @@ use the game's single copy of three.js.
   (38.6°C), one line in the list (under it on the gauges card, or it is 50 px wider); her pace's name is NOT on the card
   (it is over the MOVE stick; WINDED has its chip). The list's rows are a FIXED width (his screenshots: it grew with
   SPRINT/WINDED and 100.4°F ran into its name). Everything but the beating heart is written 10 times a second.
-  THE NEW STATS (`heroineVitals.ts` VITALS_TUNING): ENERGY, her tiredness over the day on her body clock: drains moving
+  THE NEW STATS (`heroineVitals.ts` VITALS_TUNING; ENERGY, ADRENALINE's effect on stamina and the body clock's part CHANGED in v0.2.174, see it): ENERGY, her tiredness over the day on her body clock: drains moving
   (awake 16 h, plus effort squared a bar per 8 h, 30% faster late in a pregnancy), back STANDING STILL (empty to full
   in 3 h; his pick until beds and sleep); under half it caps how far her stamina refills (to 50% at empty) and lowers
   her mood. ADRENALINE: follows her fear and a fight (fired in the last 3 s: 35%) up in 1 s, jumps on a hit, fades
@@ -1456,44 +1456,59 @@ use the game's single copy of three.js.
   view any more (they rose to the middle of it each stride); sprinting they come up at the front of each pump, as they
   would. HANDS CLEAR OF HER at every pace, empty or guns in hand, at 10, 150 and 200 % and on John: 1-10 cm, none in her.
   Pictured: side strips at a jog and a sprint, before and after; first person the same.
-- v0.2.173: HER BREATHING BY PACE, AND HER STAMINA BY HER BREATHING (Joshua, 2026-11-25, after playing v0.2.172:
-  "Before the breathing rate accelerated too slow, now it feels too fast"; planned with him step by step). Idle to a full
-  sprint is still 1.7 s (13 mph). (1) BREATHING BY PACE (his: "each speed can have the average max breathing rate per
-  category... I don't want it at max breathing rate until around 45-50% stamina is remaining... however long it takes
-  from 100-45% stamina remaining should be the time from normal to max"; heroineVitals.ts `VITALS_TUNING.breathByPace`,
-  `breathTopAt`, HeroineVitals `breathByPace`): each pace has its own TOP, walk 20, jog 32 (his), run 40, sprint 48
-  breaths a minute (rest 12-20; light exercise 20-30, his own earlier research; an untrained person's all-out is about
-  49, the builder's ceiling 50). Her breathing comes from her EFFORT, the builder's hidden lag behind the work she does
-  (his question, "how does the breath rate increase... if there is no drainage until a certain point": effort climbs
-  while she moves, from her first step, and falls over the builder's 90 s when she stops; her heart, sweat and
-  temperature read it too); it CLIMBS STEADILY from her resting rate to the pace's top, timed so 55 % of a full bar is
-  spent by the top (a sprint 28 s, a run 37 s, a jog 66 s; a walk 30 s), and is HELD at the top to empty (the effort
-  that breathes it worked out each frame from the builder's own `vitalsFor`). The top is THE PACE SHE IS AT
-  (`VitalsInput.pace`, her Pace.level, from main.ts for both characters), not her tired speed (a sprint at 20 %
-  stamina is 8.8 mph and still a sprint). Firing adds 4 to her top. HER HEART BY HER BREATHING (his: "A HR of 128
-  seems too fast for a walk"; `VITALS_TUNING.heartByBreath`, HeroineVitals `heartByBreath`): the builder's heart reads
-  her effort straight from resting to her peak, so a walk's 20 breaths put it at 128 (a walk is usually 90-120); now it
-  has its own top per pace, reached as her breathing reaches the pace's (20 -> 105, 32 -> 145, 40 -> 160, 48 -> 170,
-  read above her own rest, so pregnancy's +12 holds), plus the builder's drift near empty, never past her peak (206 -
-  0.88 x age); fear, pain, thirst and adrenaline add theirs after. MEASURED: walk 105; jog 145-149; run 160-164; sprint
-  99 / 123 / 144 / 157 at 5 / 10 / 15 / 20 s, 174 at empty; 132 thirty seconds after stopping. (2) STAMINA BY BREATHING (his: "tie stamina drain to the bpm, so it actually doesn't start draining until
-  the bpm passes the max for walking"; drain "8.5%"; refill "4.25% (half of drain)"; standing at least as fast as
-  walking, "Yes"; fear, pain and thirst counted, "Yes"; `VITALS_TUNING.staminaByBreath`): faster than a walk she drains
-  8.5 % OF HER BREATHING as % of her bar a second (32 breaths: 2.72 % a second) once it is over 26 (`line`, a walk's top
-  with room for firing or fear); under it nothing. At a walk or standing she refills 4.25 % of it (48 breaths: 2.04 % a
-  second), her breathing counted as no lower than a walk's 20 (0.85 % a second), so the refill is quickest just after
-  she stops. Fear, pain and thirst count through their extra breaths (their old drain boost not used again);
-  pregnancy, the exercise upgrade and firing as before. The old stamina by pace (`stamina.byPace`) is used with
-  `staminaByBreath` null. MEASURED (`scripts/sim_stamina_breath.ts`, new; `scripts/sim_sprint.ts`, which now runs each
-  pace held from rest), from full:
-    jog     drains from 45 s · top 32 at 66 s (48 %) · 2.70 %/s · empty at 84 s (was 120)
-    run     drains from 17 s · top 40 at 37 s (47 %) · 3.38 %/s · empty at 50 s (was 75)
-    sprint  drains from 11 s · top 48 at 28 s (46 %) · 4.06 %/s · empty at 39 s (was 42)
-    sprint breathing 5 s 19.0 · 10 s 25.3 · 15 s 31.6 · 20 s 38.0 · 48 from 28 s to empty (v0.2.164: 23.9 / 37.9 /
-    44.1 / 47.6 / 50; the builder's own: 15.5 / 16.6 / 18.5 / 21.3 / 36.8)
-    from empty, standing: full in 92 s after a sprint, 102 after a run, 109 after a jog (was 30 s); walking 84-109 s
-    (was 60 s); from 50 % at rest 59 s, standing or walking.
-  Winded as before: bent over 21.5 s after a sprint, then a walk until her breath is back (32 s after empty).
+- v0.2.174: THE PHYSIOLOGY REBUILT, WORKLOAD -> EFFORT -> STAMINA (Joshua, 2026-11-25; v0.2.173, breathing by pace and
+  stamina by breathing, was never pushed and is replaced). He compared main with it ("Only thing changed should have been
+  the stamina drain and recovery"), had ChatGPT review both (main's quick breathing more realistic, a 84 s jog far too
+  short, breathing a poor measure of fatigue), sent his "Interconnected Physiology" brief, and the design was worked out
+  in a doc, "GDM Physiology Design Review" (claude.ai artifact 2hzuzfVJ9AdnbX5eXg9tAb: current vs his vs ChatGPT's vs
+  recommended, every number simulated, a prototype in /tmp). HIS NINE DECISIONS: (1) the stamina pool = base x energy,
+  a straight line, NO floor; (2) at starting fitness a jog lasts 8 min, a run 2, a sprint 40 s; (3) John: equal starting
+  endurance, his own physiology; (4) energy in real minutes; (5) after empty, jog back at 20% of her pool, run 30%,
+  sprint 40%; (6) fear no longer drains stamina, adrenaline +10% capacity instead of +50% refill; (7) per-character
+  LUNGS go in the builder (a prompt for its agent); (8) fitness 20 for both; (9) four upgrades.
+  THE CHAIN (vitals/heroineVitals.ts, VITALS_TUNING's first entries; nothing reads back up it):
+  WORKLOAD from her speed (`workBySpeed`: walk 0.3, jog 0.6, run 0.8, sprint 1), firing (+0.1), the SLOPE (`hill`, the
+  ACSM metabolic equations: walking up x(1 + 12 grade), running up x(1 + 4.2 grade), downhill x(1 + 2 grade) >= 0.75;
+  the slope measured from the ground's height as she moves, main.ts passes `ground`, the town is level) and a LOAD
+  (her pregnancy's +12 kg at term, a pack later) / CAPACITY ((0.95 + 0.25 fitness) x thirst 12% x pain 25% x pregnancy
+  20% x adrenaline +10% x heat over 38.5 C) = RELATIVE EFFORT -> STAMINA (`staminaByEffort`, points a second of a
+  100-point pool: rest +2.2, walk +1.1, 0 at 0.55, jog -0.21, run -0.83, sprint -2.5, -5 at 1.3) / EXERTION, two copies
+  chasing the effort (breathing 95% in 1 s per mph, his rule; heart 2 s per mph; down 63% in 37 s and 135 s at starting
+  fitness, fitter quicker; held up by 0.6 x the pool spent, the builder's winded rule) -> BREATHING: the builder's own
+  vitalsFor (her LUNGS) asked at the effort that breathes `breathFresh` for its default lungs (walk 19, jog 26, run 33,
+  sprint 43: the low ends of his ranges; `feltForExertion`, worked out once), and the builder's tiredness at 0.48 of
+  full by half the pool spent (`tiredBreath`: sprint 43 -> 50, run 33 -> 38, jog 26 -> 30) / HEART: her heart-rate
+  reserve share (`heartReserve`: walk 103, jog 145, run 163, sprint 173 for Mary) + drift up to 8 near empty; her own
+  rest and peak (`body`: a woman 70 and the builder's 206 - 0.88 x age; a man 65 and Tanaka's 208 - 0.7 x age). Each
+  condition counts ONCE (before, thirst, pain, fear and pregnancy multiplied the drain: 2.15x). The builder's
+  stepVitals is no longer called: the game moves her breath and heartbeat cycles itself (`breathe`).
+  ENERGY in real minutes: moving -(0.1 + 2.2 x workload^2) % a minute (walk 0.3, jog 0.9, run 1.5, sprint 2.3);
+  still for 60 s, +1 a minute (seated +2: no seats yet; half hungry or thirsty). Her pool is her base x her energy: at 0
+  only a walk (input/pace.ts, no winded bend). SPEED: stamina takes nothing off her speed any more ("not like a spinning
+  top"); hunger and thirst still do. PACE (input/pace.ts `resumeAt`, `regained`): at empty she is bent over as before
+  (until her breathing is 28, 5-20 s), then her paces come back at 20/30/40% of her pool, and a pace once back STAYS
+  back until she empties again (first tried without: a jog unlocked at 20% drained her straight under it and flicked
+  back to a walk). After a sprint the bend's 20 s already refills her past 40%: the thresholds matter after a jog.
+  TRAINING (HeroineVitals `fitness`, `endurance`, `recovery`, `strength`, VITALS_TUNING.training): Settings -> TEST TOOLS,
+  four sliders for both until they are earned (`gdm.trainFitness` 20, the others 0; `?fitness=` etc.): Endurance pool
+  100 -> 150, Recovery refill +30%, Strength hills and loads -15%. How fitness is earned and lost: not decided yet.
+  THE CARD (vitals/vitalsPanel.ts `pool`): stamina in three parts, bright what she has, faint what she can get back,
+  dark what is out of reach until she rests (her energy): a 3 px bar under its row in the list, the faint ring under
+  the bright one on the gauges (pictured at 932 x 430, energy 60%, stamina 32%). 💪 Effort now shows her relative
+  effort (over 100% uphill or hurt). Readout: `work W/C = R · slope%`, `pool · fit`.
+  MEASURED (scripts/sim_physiology.ts, new; sim_sprint.ts updated; sim_stamina_breath.ts gone), Mary, starting fitness,
+  full energy, flat: sprint empty 41 s, breathing 30 / 40 / 49 at 5 / 10 / 20 s, 50 from 21 s (half the pool), heart
+  123 / 152 / 168, 176 at empty, 150 a minute after, 118 after two, full again in 45 s; run 2:01, breathing top 38 at
+  1:02 (51%), heart 135 a minute after; jog 8:19 (her water and food falling slow her a little), top 30, bent over
+  6.5 s, jog back 8.5 s after empty, run 12.8, sprint 17. Energy 75/50/30/10%: sprint 31/21/13/5 s, run 1:31/1:01/37 s/
+  13 s; 0%: a walk only. John: the same times, his heart 147 jogging, 173 sprinting. Full term (week 40, her slower
+  paces): jog 5:26, run 1:31, sprint 35 s (was 1:32, 0:58, 0:27). Hills: walking up 10% empties in 4:15, jogging up 5%
+  2:47, down 5% never, a 10 kg pack 3:13. Fitness 0/20/40/60/100: sprint 35/41/49/59/89 s, run 1:25/2:01/2:21/2:46/
+  4:01, a jog never empties from 40. A whole sprint costs 1.5% energy, a jog to empty 7.4%. In the BUILT game (town,
+  sprint by the stick): 30 / 42 / 48 / 50 breaths at 5 / 10 / 15 / 20 s, heart 126 / 155 / 167 / 171; on the island
+  her slope read (-2.6% walking inland) and her effort followed; no errors.
+  NOT YET: John's own LUNGS (the builder's agent is asked for per-character lung and heart settings in its vitals;
+  until then every body breathes with the default lungs, and John's breathing equals Mary's); earning fitness.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

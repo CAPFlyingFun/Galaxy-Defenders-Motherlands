@@ -24,9 +24,9 @@ document.getElementById('card')!.appendChild(panel.element);
 const PACES = [
   { name: 'Stand', speed: 0 },
   { name: 'Walk', speed: 1.1 },
-  { name: 'Jog', speed: 2.4 },
-  { name: 'Run', speed: 3.8 },
-  { name: 'Sprint', speed: 5.5 },
+  { name: 'Jog', speed: 2.64 },
+  { name: 'Run', speed: 4.18 },
+  { name: 'Sprint', speed: 6.05 },
 ];
 let speed = 0;
 let firing = false;
@@ -106,8 +106,9 @@ function frame(now: number): void {
     `time played    ${minutes}:${seconds}`,
     `heart rate     ${r.heartRate.toFixed(0)} beats/min`,
     `breathing      ${r.breathsPerMinute.toFixed(0)} breaths/min, ${r.breathLitres.toFixed(2)} L each`,
-    `effort felt    ${percent(r.effort)}`,
-    `stamina        ${percent(r.stamina)}`,
+    `effort         ${percent(r.effort)} (workload ${r.workload.toFixed(2)} / capacity ${r.capacity.toFixed(2)})`,
+    `exertion       ${percent(r.exertion)}`,
+    `stamina        ${percent(r.stamina)} of ${percent(r.staminaPool)} (energy ${percent(r.energy)})`,
     `health         ${r.health.toFixed(0)}`,
     `food           ${percent(r.food)}`,
     `water          ${percent(r.water)}`,

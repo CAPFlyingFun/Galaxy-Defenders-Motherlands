@@ -17,9 +17,13 @@
 //                                adds, how long she stays winded...)
 //   Char_B/src/actor/gut.ts      what she has eaten and drunk moving through
 //                                her stomach, and her hunger and thirst
-// This file does NOT copy any of those numbers. It runs the builder's own two
-// models and adds only what a GAME needs on top (each marked GAME TUNING):
-//   - how her speed and her shooting turn into "how hard she is working"
+// This file does NOT copy any of those numbers. It runs the builder's own
+// breathing (her lungs) and gut, and adds what a GAME needs on top (each marked
+// GAME TUNING):
+//   - SINCE v0.2.174 the chain from what she does to how she tires (Joshua's
+//     decisions of 2026-11-25, VITALS_TUNING's first entry): her workload, her
+//     capacity, her relative effort, her stamina and her energy, and the
+//     exertion her breathing and heart follow
 //   - how fast her digestion runs compared with the clock (a mission lasts
 //     minutes; a meal takes hours)
 //   - sweat, health, and what being tired, hungry or thirsty does to her
@@ -27,7 +31,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { ACTIVITY, STAMINA, beatOf, breathOf, peakHeart, pregnancyShare, restingVitals, stepVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { PREGNANT_BREATH, STAMINA, beatOf, breathOf, peakHeart, pregnancyShare, restingVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { ABDOMEN_PLACE, RECTUM, STOMACH } from '@charb/actor/abdominalOrgans';
 import { BLADDER } from '@charb/actor/pelvicOrgans';
 import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
@@ -52,100 +56,98 @@ export function waterBarOf(balanceMl: number): number {
 /** Everything about the game's side of her vitals that is a choice, not a measurement. All GAME TUNING. */
 export const VITALS_TUNING = {
   /**
-   * How hard she is working (0 rest .. 1 her hardest) at each ground speed, metres a second. Between two rows the
-   * value is blended. The intensities are the builder's own names (walk 0.3, jog 0.55, run 0.8, sprint 1); the
-   * speeds are ordinary ones for a woman on foot, eased down a little for a heavy belly.
+   * THE MODEL, v0.2.174 (Joshua's decisions of 2026-11-25, worked out in the "GDM Physiology Design Review" doc with
+   * ChatGPT's help). One chain, worked out in this order every frame, nothing reading back up it:
+   *   her speed, the slope and what she carries  -> her WORKLOAD (what her body is doing; the same for anyone)
+   *   her fitness, thirst, pain, pregnancy, heat, adrenaline -> her CAPACITY (how much she can do)
+   *   RELATIVE EFFORT = workload / capacity -> her STAMINA's rate; it is what the Effort stat shows
+   *   her EXERTION (her body catching up with that effort, and coming back down after) -> her BREATHING and HEART
+   *   the stamina she has spent -> quicker breathing (one way only: her breathing never drives her stamina)
+   *   her ENERGY -> how big her stamina pool is; her workload spends energy, rest gives it back
+   *
+   * WORKLOAD by her ground speed, metres a second: a share of what a fresh heroine at starting fitness does at her
+   * hardest, blended between rows (on past the last along its slope). The rows are the paces (input/pace.ts PACES: a
+   * walk 2.5 mph, jog 5.9, run 9.4, sprint 13.5) at the builder's own names for them (walk 0.3, jog 0.55 -> 0.6, run
+   * 0.8, sprint 1). Her slower paces late in a pregnancy are slower speeds, so they are less work; her pregnancy is
+   * counted in its weight and her capacity instead.
    */
-  speedToIntensity: [
-    [0, ACTIVITY.rest],
-    [1.1, ACTIVITY.walk],
-    [2.64, ACTIVITY.jog],
-    [4.18, ACTIVITY.run],
-    // (a SPRINT is 0.9 of her hardest, not the builder's 1: Joshua's handoff of 2026-11-23 asks for 38-44 breaths a
-    //  minute 15 s into a sprint and 42-48 at 20 s; at 1, with her effort now climbing in seconds (`effort` below), she
-    //  was at the builder's ceiling of 50 from 20 s on. Her heart tops out near 173 instead of 182. Her stamina is the
-    //  game's own rate by pace, so this does not change how long a sprint lasts.)
-    [6.05, 0.9],
-  ] as ReadonlyArray<readonly [speed: number, intensity: number]>,
-  /** Firing both guns is work too: this much is added to her intensity while she shoots. */
-  firingIntensity: 0.1,
+  workBySpeed: [[0, 0], [1.1, 0.3], [2.64, 0.6], [4.18, 0.8], [6.05, 1]] as ReadonlyArray<readonly [speed: number, work: number]>,
+  /** Firing both guns is work too: this much is added while she shoots. */
+  firingWork: 0.1,
   /**
-   * HER BREATHING BY PACE (Joshua, 2026-11-25, after v0.2.164's climb "feels too fast" and the builder's own "too slow":
-   * "we have a speed selector now, so each speed can have the average max breathing rate per category... I don't want
-   * it at max breathing rate until around 45-50% stamina is remaining... so however long it takes from 100-45% stamina
-   * remaining should be the time from normal to max"). Each pace has its own TOP (`tops`, breaths a minute, blended
-   * between paces by her speed; at her later paces' slower speeds as far along as she is, as her stamina is), and her
-   * breathing CLIMBS STEADILY from her resting rate to it over the time that pace takes to spend `spentAtTop` of a full
-   * stamina bar (the live drain: her pregnancy, thirst, pain, fear, firing and the exercise upgrade all count, so a
-   * pace that tires her sooner gets her breathing harder sooner). A pace that REFILLS her (a walk) has no stamina to
-   * spend: it climbs over `refillPaceSeconds`. At her top she is HELD there (the builder would breathe her quicker still
-   * as her stamina runs out); above a pace's top (she slowed or stopped) she comes down on the builder's own 90 s, as
-   * before. Her heart follows the same effort.
-   * THE TOPS: a resting adult breathes 12-20 a minute; at an all-out effort an untrained person reaches about 49, an
-   * athlete about 63 (Med Sci Sports Exerc 1983, "Exercise respiratory pattern in elite cyclists and sedentary
-   * subjects"); her ceiling is the builder's 50. So a walk 20, a jog 32 (Joshua's), a run 40, a sprint 48. The rest row's 0 means
-   * her own resting rate (14, 16 late in a pregnancy). Firing adds `firing` to whatever her top is.
-   * THE CLIMB, not pregnant, with her stamina by her breathing (`staminaByBreath`): a walk 30 s (it refills), a jog
-   * 66 s, a run 37 s, a sprint 28 s (worked out so 55 % of her bar is spent by the top); by pace (`staminaByBreath`
-   * null) 0.55 of each pace's seconds to empty. `breathByPace` null: the climb before (`effort` below, v0.2.164).
+   * HILLS, from the ACSM metabolic equations (walking oxygen use = 0.1 x speed + 1.8 x speed x grade + 3.5, running 0.2
+   * x speed + 0.9 x speed x grade + 3.5, speed in metres a minute; https://pacompendium.com/unite-conversions): uphill a
+   * walk costs 1 + `walkUp` x the grade times as much, a run (from `runFrom` m/s, 5 mph) 1 + `runUp` x the grade;
+   * downhill 1 + `down` x the grade (it is below 0 there), never under `least`. The grade is rise over distance (5% is
+   * 0.05). So a walk up a 10% slope is about a jog's work, and a jog up 5% is about a run's.
    */
-  breathByPace: {
-    tops: [[0, 0], [1.1, 20], [2.64, 32], [4.18, 40], [6.05, 48]] as ReadonlyArray<readonly [speed: number, breathsPerMinute: number]>,
-    spentAtTop: 0.55,
-    refillPaceSeconds: 30,
-    firing: 4,
-    /** Within this many breaths a minute over her top she is held at it; further over, she comes down on 90 s. */
-    holdWithin: 1,
-  } as { tops: ReadonlyArray<readonly [number, number]>; spentAtTop: number; refillPaceSeconds: number; firing: number; holdWithin: number } | null,
+  hill: { walkUp: 12, runUp: 4.2, down: 2, least: 0.75, runFrom: 2.24 },
+  /** Her pregnancy's weight at full term, kilograms, carried as a load: workload x (her body + the load) / her body. */
+  pregnantKg: 12,
   /**
-   * HER HEART BY HER BREATHING (Joshua, 2026-11-25: "A HR of 128 seems too fast for a walk"). The builder's heart reads
-   * her effort in a straight line from resting to her peak, so with her breathing by pace (`breathByPace`) a walk's 20
-   * breaths put her heart at 128 (a walk is usually 90-120). Now her heart has its OWN top for each pace, reached as her
-   * breathing reaches the pace's: `points`, [breaths a minute, beats a minute] for a woman resting at `restBreaths` and
-   * `restBeats` (walk 20 -> 105, jog 32 -> 145, run 40 -> 160, sprint 48 -> 170), blended between and read ABOVE HER
-   * OWN REST (late in a pregnancy she rests at 16 and 82); so it climbs, holds and comes down with her breathing. The
-   * builder's drift (up to 12 beats as she works on with little stamina left) is added, never past her peak (206 - 0.88
-   * x her age); fear, pain, thirst and adrenaline add their own beats after, as before. null: the builder's heart.
+   * CAPACITY (1 = a fresh heroine at starting fitness): (`fitnessLeast` + `fitnessGain` x her fitness) x (1 - `thirst` x
+   * her thirst) x (1 - `pain` x her pain) x (1 - `pregnancy` x her pregnancy) x (1 + `adrenaline` x her adrenaline),
+   * and `heatPerDegree` off for each degree of her body over `heatFrom` C. Each condition is counted HERE and nowhere
+   * else (before, thirst, pain, fear and pregnancy each multiplied her stamina's drain: together 2.15 times).
    */
-  heartByBreath: {
-    restBreaths: 14, restBeats: 70,
-    points: [[20, 105], [32, 145], [40, 160], [48, 170]] as ReadonlyArray<readonly [breaths: number, beats: number]>,
-  } as null | { restBreaths: number; restBeats: number; points: ReadonlyArray<readonly [number, number]> },
+  capacity: { fitnessLeast: 0.95, fitnessGain: 0.25, thirst: 0.12, pain: 0.25, pregnancy: 0.2, adrenaline: 0.1, heatFrom: 38.5, heatPerDegree: 0.1 },
   /**
-   * HER STAMINA BY HER BREATHING (Joshua, 2026-11-25: "tie stamina drain to the bpm, so it actually doesn't start
-   * draining until the bpm passes the max for walking"; "the stamina drain is 10% of the bpm", then "What would 8.5%
-   * be?"; "for regeneration... 3% linked to her breathing rate", then "Let's do 4.25% (half of drain)"; standing at least
-   * as fast as walking: "Yes"). Going FASTER THAN A WALK she drains `drainPercent` % OF HER BREATHING as % of a full bar
-   * a second (8.5 % of 32 breaths a minute: 2.72 % a second), once her breathing (fear, pain and thirst's extra breaths
-   * counted) is over `line`, the most a walk breathes with room to spare; under it she neither drains nor refills.
-   * At a walk or standing she refills `refillPercent` % of her breathing the same way (4.25 % of 48: 2.04 % a second):
-   * quickest just after she stops, slower as she calms, but her breathing counted as no lower than a walk's top
-   * (`breathByPace.tops`, 20: 0.85 % a second), so standing never refills slower than walking. Pregnancy, the exercise
-   * upgrade and firing still count as before. Her breathing itself climbs by her EFFORT (`breathByPace`), the builder's
-   * lag behind the work she does: stamina only reads it. null: her stamina by pace as before (`stamina` below).
+   * HER STAMINA BY HER RELATIVE EFFORT, points a second of a 100-point pool (+ refills, - drains), blended between rows,
+   * on past the last along its slope. At starting fitness on flat ground: standing +2.2 (full in 45 s) and walking
+   * +1.1 (91 s), Joshua's; none at 0.55; a jog -0.21 (7:56 from full), a run -0.83 (2:00), a sprint -2.5 (40 s), his
+   * pick of the three; harder still (a sprint uphill, hurt) -5 at 1.3. A hill, a load, low fitness, thirst, pain and
+   * her pregnancy all move her along this one curve.
    */
-  staminaByBreath: { line: 26, drainPercent: 8.5, refillPercent: 4.25 } as null | { line: number; drainPercent: number; refillPercent: number },
+  staminaByEffort: [[0, 2.2], [0.3, 1.1], [0.55, 0], [0.6, -0.21], [0.8, -0.83], [1, -2.5], [1.3, -5]] as ReadonlyArray<readonly [effort: number, perSecond: number]>,
+  /** Her stamina pool, points, before her energy and the Endurance upgrade (the curve above is for 100). */
+  staminaPoints: 100,
   /**
-   * HOW QUICKLY HER BODY CATCHES UP WITH WHAT SHE DOES (Joshua's handoff, 2026-11-23: "a roughly 20-second sprint feels
-   * fast, but breathing catches up after movement stops. At exhaustion the display can be around 35 breaths/min instead
-   * of the desired 40-50. Recovery currently feels acceptable"). Her EFFORT is the builder's: her body's lag behind the
-   * work she does, which her breathing and her heart both read (Char_B/src/actor/vitals.ts `STAMINA.riseS` 30 s to climb
-   * most of the way, 63%, and `fallS` 90 s to come back down). The builder is never edited here, so the game sets its own
-   * time constants on top (seconds, 63% of the way; null keeps the builder's): before the builder's step moves her effort
-   * by its own 30 or 90 s, the game puts it where that step will land it on the game's curve (`step`, 1).
-   * RISE 4 s (his doc's starting point was 5-6 s: a time constant is not the time to the top, and the builder's
-   * breathing climbs steeply only near her hardest, so 4 s, with a sprint at 0.9, is what lands his targets). FALL kept
-   * at the builder's 90 s (his doc: "Keep 90 initially... Do not accelerate recovery just to accelerate exertion").
-   * MEASURED with the game's own pace and vitals, a full sprint from rest to empty (`scripts/sim_sprint.ts`):
-   *                  5 s   10 s   15 s   20 s   at 0%   stop+10 s   stop+30 s   (breaths a minute)
-   *   before         15.5  16.6   18.5   21.3   36.8    28.7        19.1        heart 85 / 151 at 5 s / 0%
-   *   now            23.9  37.9   44.1   47.6   50      41.5        24.9        heart 136 / 173
-   *   his targets    23-28 32-38  38-44  42-48  40-50
-   * So she comes down from a higher peak on the same 90 s: bent over WINDED up to its 20 s most (was about 12 s).
+   * HER EXERTION: her body catching up with her relative effort, and coming back down after it (what her breathing and
+   * heart read). UP: 95% of the way in `breathUpPerMph` seconds for each mph of her speed (Joshua: "one second per mph":
+   * a sprint 13.5 s), her heart in `heartUpPerMph` (2 s per mph, between v0.2.172's 136 beats 5 s into a sprint and the
+   * shelved v0.2.173's 99), never quicker than `quickest` seconds (95%). It chases from wherever it is, so going from a
+   * jog to a sprint does not start over. DOWN: 63% of the way in `breathDown` seconds and her heart in `heartDown`, each
+   * [no fitness, full fitness] (at starting fitness 37 s and 135 s: real recovery data has a woman's heart about 28 beats
+   * lower a minute after hard work, 51 after two). While her pool is refilling she stays at least `winded` x the share
+   * of it she has spent (the builder's own STAMINA.winded), so she calms as she gets her wind back. At most `most`.
    */
-  // (Since v0.2.173 her breathing CLIMBS by `breathByPace` above; `riseSeconds` is used only with it null. The fall is
-  //  still this one's: the builder's 90 s.)
-  effort: { riseSeconds: 4 as number | null, fallSeconds: null as number | null },
+  exertion: { breathUpPerMph: 1, heartUpPerMph: 2, quickest: 1.5, breathDown: [40, 25] as readonly [number, number], heartDown: [150, 75] as readonly [number, number], winded: 0.6, most: 1.15 },
+  /**
+   * HER BREATHING, fresh, by her exertion, breaths a minute: the low ends of Joshua's ranges (a walk 19-25, jog 26-31,
+   * run 32-42, sprint 43-50). The builder's own breathing (vitalsFor: the air she needs a minute over a breath's size,
+   * by her lungs) is asked at the effort that breathes these for its default lungs (`feltForExertion`), so a body with
+   * other lungs (John, once the builder has lung settings) breathes its own way at the same exertion.
+   */
+  breathFresh: [[0, 14], [0.3, 19], [0.6, 26], [0.8, 33], [1, 43], [1.15, 47]] as ReadonlyArray<readonly [exertion: number, breathsPerMinute: number]>,
+  /**
+   * TIRED, SHE BREATHES QUICKER: the builder's own tiredness (shallower, quicker breaths: STAMINA.shallowMost,
+   * quickMost) at `share` of its full strength once `fullAt` of her pool is spent, less before. That is the high end of
+   * Joshua's ranges by about half her pool (his "top by about 45-50%"): a sprint 43 -> 50, a run 33 -> 38, a jog 26 -> 30.
+   */
+  tiredBreath: { share: 0.48, fullAt: 0.5 },
+  /**
+   * HER HEART by her exertion: the share of her heart-rate reserve (her rest to her peak) she uses, which tracks the
+   * share of her oxygen-uptake reserve (Swain and Leutholtz 1997; https://jssm.org/jssm-05-662.xml%3EFulltext). Mary:
+   * a walk 103, jog 145, run 163, sprint 173 (Joshua's targets). As she tires it DRIFTS up (cardiac drift), up to
+   * `driftMost` beats with her pool empty, following over `driftSeconds`.
+   */
+  heartReserve: [[0, 0], [0.3, 0.3], [0.6, 0.68], [0.8, 0.845], [1, 0.936], [1.15, 1]] as ReadonlyArray<readonly [exertion: number, share: number]>,
+  heartDrift: { driftMost: 8, driftSeconds: 30 },
+  /**
+   * TRAINING AND UPGRADES (Joshua approved all four, 2026-11-25), each 0 .. 1, per character (HeroineVitals `fitness`,
+   * `endurance`, `recovery`, `strength`; Settings -> TEST TOOLS sets them until they are earned). FITNESS (cardio,
+   * shown 0-100; both start at `startFitness`, 20) is her capacity above. ENDURANCE: her pool up to `enduranceMore`
+   * more (100 -> 150). RECOVERY: her refill x (1 + `recoveryMore` x it). STRENGTH: `strengthEase` x it off the extra
+   * work hills and loads add.
+   */
+  training: { startFitness: 0.2, enduranceMore: 0.5, recoveryMore: 0.3, strengthEase: 0.15 },
+  /**
+   * HER OWN BODY (Joshua: "Equal starting endurance, individual physiology"): her weight, kg (a load is read against
+   * it), and her heart at rest and at her peak. A woman's peak 206 - 0.88 x her age (the builder's, Gulati 2010); a
+   * man's 208 - 0.7 x his age (Tanaka 2001). HER LUNGS are the builder's (Joshua: "Implement in CCBS"): until its vitals
+   * take a body's own lungs, every body breathes with its default ones.
+   */
+  body: { womanKg: 60, manKg: 80, womanRestHeart: 70, manRestHeart: 65, manPeakAt: 208, manPeakPerYear: 0.7 },
   /**
    * Her digestion against the clock: how many hours pass for her stomach in one real second. 1/240 means one
    * minute of play is a quarter of an hour for her gut, so a ten-minute mission is two and a half hours: long
@@ -178,48 +180,23 @@ export const VITALS_TUNING = {
   /** She starts a mission having eaten and drunk: this much food and water (mL) is in her at the start. */
   startMeal: [450, 400] as readonly [foodMl: number, waterMl: number],
   /**
-   * HER STAMINA, BY PACE (Joshua, 2026-11-17: "anything but walking drains stamina at a specific rate... walking
-   * actually gains stamina back but slowly, and faster if not moving"). A fixed rate for each pace, from the moment
-   * she is at it: seconds from full to empty (a pace that drains) or from empty to full (one that refills). Between
-   * two paces the rate is in between. These are for a heroine who is NOT pregnant; see `pregnant` just below.
-   * (The builder's model, used before, built up over half a minute and barely drained below a hard run: too slow.)
-   * Her breath and heart still come from the builder's model, which reads this stamina, so she is winded as it runs low.
-   */
-  stamina: {
-    /** [speed m/s (the paces in input/pace.ts), seconds, +1 refills / -1 drains] */
-    byPace: [[0, 30, +1], [1.1, 60, +1], [2.64, 120, -1], [4.18, 75, -1], [6.05, 35, -1]] as ReadonlyArray<readonly [number, number, number]>,
-    /**
-     * The paces' speeds at FULL TERM (input/pace.ts PACES_FULL_TERM): as she gets further along her paces are slower,
-     * so each row's SPEED moves to these (VitalsInput.carrying), and a slow full-term sprint still counts as a sprint.
-     * The seconds stay as above; her pregnancy tires her through `pregnant` below, as before (Joshua: "keep what was
-     * there").
-     */
-    speedsFullTerm: [0, 0.894, 1.72, 2.41, 3.44] as ReadonlyArray<number>,
-    /** Firing drains a little too: this many seconds of firing alone would empty her. */
-    firingSeconds: 240,
-  },
-  /**
-   * PREGNANT, SHE TIRES SOONER (real numbers: oxygen use rises 20 to 33% by term, a weight-bearing effort costs more,
-   * and her oxygen reserve is smaller in the third trimester). At full effect (from week 36; growing from week 8, the
-   * builder's own pregnancy curve) her stamina drains this much faster and refills this much slower.
-   */
-  pregnant: { drainFaster: 0.3, refillSlower: 0.2 },
-  /**
    * WHAT ELSE RAISES HER HEART AND BREATHING (Joshua, 2026-11-17: "what other real life stuff affects the heart rate and
    * breathing?"). Three, each 0..1, each adding to her heart rate (beats a minute) and her breathing (breaths a minute)
-   * at full strength, and making her stamina drain faster (a share more) at full strength:
+   * at full strength:
    *   THIRST   her water bar running low. Real: heart rate up 3 to 5 beats a minute for every 1% of body weight lost
    *            as water; a badly dehydrated 4% is about +18, and the same work feels harder.
    *   PAIN     her health below `painFrom` (an injury): real pain makes breathing faster and SHALLOWER, and lifts the heart.
    *   FEAR     danger (a dome section hurt or breached; a hit on her; later, enemies close): adrenaline. It rises within
    *            a couple of seconds and fades over `fearFallSeconds` once the danger passes (real: fast breathing from
    *            fear passes once the fear is gone).
+   * Since v0.2.174 thirst and pain lower her CAPACITY (`capacity` above), so the same pace is harder work; FEAR no longer
+   * touches her stamina at all (Joshua: it punished her for fleeing exactly when she needed to).
    * GAME TUNING (the sizes for pain and fear are the game's choice: real ones vary a great deal from person to person).
    */
   stress: {
-    thirst: { heart: 18, breaths: 3, drain: 0.25 },
-    pain: { heart: 15, breaths: 6, drain: 0.1, shallower: 0.25 },
-    fear: { heart: 30, breaths: 8, drain: 0.2 },
+    thirst: { heart: 18, breaths: 3 },
+    pain: { heart: 15, breaths: 6, shallower: 0.25 },
+    fear: { heart: 30, breaths: 8 },
     painFrom: 90,
     /** Her fear follows the danger quickly (it is what she feels), and fades a little slower once the danger has passed. */
     fearRiseSeconds: 0.5,
@@ -238,11 +215,6 @@ export const VITALS_TUNING = {
     /** A hit on her frightens her this much at once (a share of full fear for each point of health lost, at most 1). */
     fearPerHealthLost: 0.04,
   },
-  /**
-   * THE EXERCISE UPGRADE, later (Joshua: "how fast her stamina drains, which could be an upgrade later by exercising"):
-   * every drain is multiplied by this. 1 is the table above; fitter, it comes down.
-   */
-  staminaDrain: 1,
   /** Her belly grows by this many percent points of the builder's belly slider when her stomach is full (and by none when empty). */
   bellyWhenFull: 4,
   health: {
@@ -263,32 +235,32 @@ export const VITALS_TUNING = {
     needsFloor: 30,
   },
   /**
-   * How fast she can move, as a share of her full speed: 1 when fresh. Tiredness, hunger and thirst each take a
-   * share off, and she is never slower than `slowest`.
+   * How fast she can move, as a share of her full speed: 1 when fresh. Hunger and thirst each take a share off, and she
+   * is never slower than `slowest`. (Since v0.2.174 her stamina takes nothing off: Joshua, "I do not want movement speed
+   * to gradually decrease simply because stamina is draining... not like a spinning top": she keeps her pace to empty.)
    */
-  speed: { tiredFrom: 0.35, tiredCost: 0.35, hungerCost: 0.1, thirstCost: 0.15, slowest: 0.45 },
+  speed: { hungerCost: 0.1, thirstCost: 0.15, slowest: 0.45 },
   /**
-   * HER ENERGY, HER TIREDNESS OVER THE DAY (Joshua, 2026-11-21: "adding new stats like energy/effort, adrenaline";
-   * "standing still not moving is fine for now to bring the energy back up"). Not her stamina (her wind, seconds to
-   * empty and to refill): this goes over hours of her body's clock (gutHoursPerSecond, so the Body clock setting moves
-   * it too). Moving, it drains: an ordinary day empties it in `awakeHours`, and work adds a full bar every `hardHours`
-   * at her hardest (by her effort SQUARED: a walk costs little on top, a hard run a lot), and late in a pregnancy it
-   * drains `pregnantMore` faster. Standing still (no walking, no
-   * firing) it comes back, empty to full in `restHours`, until there are beds and sleep. Under `lowFrom` it costs her:
-   * her stamina can fill only to `staminaMostAtEmpty` of its bar at empty energy, and her mood drops.
-   * At the 15x clock (checked by simulation): 20 real minutes of walking costs about a third of it, 3 minutes of running
-   * a tenth; standing still fills it from empty in 12 minutes.
+   * HER ENERGY, HER READINESS OVER THE DAY (Joshua, 2026-11-21: "adding new stats like energy/effort, adrenaline"),
+   * IN REAL MINUTES since v0.2.174 (his decision; it was on her body's clock): moving costs (`moveBase` + `moveWork` x
+   * her workload squared) % a minute (a walk 0.3, jog 0.9, run 1.5, sprint 2.3: a whole sprint 1.5%, an 8-minute jog 7%);
+   * standing still it comes back `restPerMinute` % a minute once she has been still `restAfter` seconds (sitting
+   * `seatedPerMinute`), at `unfedRest` of that while she is hungry or thirsty; sleep, later, fills it.
+   * IT IS HER STAMINA POOL (Joshua: "Your direct linear formula, no floor"): her pool is her base x her energy, so at
+   * half her energy she has half her points to spend, and at 0 only a walk (input/pace.ts) until she has rested. Under
+   * `lowFrom` it lowers her mood too.
    */
-  energy: { awakeHours: 16, hardHours: 8, pregnantMore: 0.3, restHours: 3, lowFrom: 0.5, staminaMostAtEmpty: 0.5 },
+  energy: { moveBase: 0.1, moveWork: 2.2, restAfter: 60, restPerMinute: 1, seatedPerMinute: 2, unfedRest: 0.5, lowFrom: 0.5 },
   /**
    * ADRENALINE (Joshua, 2026-11-21): fear is the spark, adrenaline what it does to her body. It follows the worst of her
    * fear and a fight (she has fired in the last `fightSeconds`, at `fromFight`) up within `riseSeconds`, jumps on a hit
    * (`perHealthLost` a point), and fades over `fallSeconds` (95%) once they pass: fear can drop in seconds while it is
-   * still up. While it is up: her heart and breathing are lifted (`heart`, `breaths` at full), her stamina refills
-   * `staminaBack` faster, her pain is dulled by `dullsPain`. As it fades she CRASHES: a full fade costs `crashEnergy` of
-   * her energy. GAME TUNING (real adrenaline lasts minutes; how strongly it acts varies a great deal).
+   * still up. While it is up: her heart and breathing are lifted (`heart`, `breaths` at full), her capacity is up to
+   * `capacity.adrenaline` higher (10%: since v0.2.174, Joshua's pick, in place of refilling her stamina half again as
+   * fast), her pain is dulled by `dullsPain`. As it fades she CRASHES: a full fade costs `crashEnergy` of her energy.
+   * GAME TUNING (real adrenaline lasts minutes; how strongly it acts varies a great deal).
    */
-  adrenaline: { riseSeconds: 1, fallSeconds: 90, fightSeconds: 3, fromFight: 0.35, perHealthLost: 0.03, heart: 12, breaths: 2, staminaBack: 0.5, dullsPain: 0.6, crashEnergy: 0.12 },
+  adrenaline: { riseSeconds: 1, fallSeconds: 90, fightSeconds: 3, fromFight: 0.35, perHealthLost: 0.03, heart: 12, breaths: 2, dullsPain: 0.6, crashEnergy: 0.12 },
   /**
    * HER MOOD (Joshua, 2026-11-21: "fear/mood"), 0 miserable .. 1 great, from her needs, the way a Sims mood works: full
    * marks less a share for each thing wearing on her at its worst (hunger, thirst, needing the bathroom past half,
@@ -322,18 +294,29 @@ export interface VitalsInput {
   readonly firing: boolean;
   /** how much danger she is in, 0 calm .. 1 terrifying (a breach, enemies close): it frightens her. Left out: none. */
   readonly threat?: number;
-  /** how far along she is by her belly, 0 (first visible) .. 1 (full term): her paces' speeds (speedsFullTerm). Left out: 0. */
-  readonly carrying?: number;
   /**
-   * the pace she is going at (input/pace.ts `Pace.level`: 0 standing, 1 a walk .. 4 a sprint, in between while she
-   * changes): her breathing's top is that pace's, even while tiredness slows her legs (a sprint at 20 % stamina is still
-   * a sprint, at 8.8 mph). Left out: her speed decides.
+   * where she stands this frame and the ground's height there, metres: the slope she climbs is worked out from it
+   * (VITALS_TUNING.hill). Left out (the flat town): level ground.
    */
-  readonly pace?: number;
+  readonly ground?: { readonly x: number; readonly z: number; readonly y: number };
+  /** what she carries besides her own body, kg (a pack, later). Left out: nothing. */
+  readonly loadKg?: number;
+  /** is she sitting (energy comes back faster)? Left out: no. */
+  readonly seated?: boolean;
   /** how deep the water is at her feet, metres (0 dry land): it cools her. Left out: 0. */
   readonly waterDepth?: number;
   /** how wet her skin is, 0 dry .. 1 soaked (fresh from the water): it cools her. Left out: 0. */
   readonly wet?: number;
+}
+
+/**
+ * HER OWN BODY for her vitals: the builder's (her age, how many weeks pregnant) and the game's (VITALS_TUNING.body):
+ * a man (his heart and weight), her weight and her heart at rest if not the usual ones.
+ */
+export interface HeroineBody extends VitalsBody {
+  readonly male?: boolean;
+  readonly bodyKg?: number;
+  readonly restHeart?: number;
 }
 
 /** One reading of her vitals, for the display and for her body. */
@@ -353,10 +336,23 @@ export interface VitalsReading {
   readonly breathInShare: number;
   /** her heart's squeeze this instant, 0 .. 1 */
   readonly beat: number;
-  /** stamina: the energy she has left, 0 empty .. 1 fresh */
+  /** her stamina, a share of her whole pool (her base, with the Endurance upgrade): 0 empty .. 1 full */
   readonly stamina: number;
-  /** how hard her body feels it is working, 0 .. 1 (winded stays high after she stops) */
+  /**
+   * how much of that pool she can have now, the same share (her energy: Joshua's straight line): the stamina bar's
+   * last part, past this, is out of reach until she has rested
+   */
+  readonly staminaPool: number;
+  /** her RELATIVE EFFORT: her workload over her capacity, 0 at rest .. 1 a fresh sprint (more uphill or hurt) */
   readonly effort: number;
+  /** her exertion, 0 .. 1.15: her body catching up with her effort, and still up after she stops (her breathing reads it) */
+  readonly exertion: number;
+  /** her workload (a share of a fresh sprint's), her capacity (1 = fresh at starting fitness), the slope (rise / distance) */
+  readonly workload: number;
+  readonly capacity: number;
+  readonly grade: number;
+  /** her fitness, 0 .. 1 (shown as 0-100) */
+  readonly fitness: number;
   /** health, 0 .. 100 */
   readonly health: number;
   /** food and water as "how full", 1 = fed / watered, 0 = starving / parched (the reverse of hunger and thirst) */
@@ -400,6 +396,7 @@ export interface VitalsReading {
   readonly thirst: number;
 }
 
+
 /** The bathroom bar and her urge, from what is in her bladder and rectum (the builder's thresholds). */
 /**
  * HOW LONG A BATHROOM VISIT TAKES, seconds (Joshua, 2026-11-22: food 12 s, water 5 s; it was 10 s for either: "someone
@@ -420,109 +417,104 @@ export function bathroomOf(bladderMl: number, rectumMl: number, squeeze = 0): { 
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
-/** Her working intensity at a ground speed (see VITALS_TUNING.speedToIntensity). */
-export function intensityAtSpeed(speed: number): number {
-  const table = VITALS_TUNING.speedToIntensity;
-  if (speed <= table[0][0]) return table[0][1];
-  for (let i = 1; i < table.length; i++) {
-    const [s1, i1] = table[i];
-    if (speed <= s1) {
-      const [s0, i0] = table[i - 1];
-      return i0 + ((speed - s0) / (s1 - s0)) * (i1 - i0);
-    }
-  }
-  return table[table.length - 1][1];
+/** A table's value at `x`, blended between its rows; past either end it carries on along the end rows' slope. */
+function along(table: ReadonlyArray<readonly [number, number]>, x: number): number {
+  const n = table.length;
+  // (the two rows `x` lies between, or the first two / last two when it is past an end)
+  let i = 1;
+  while (i < n - 1 && x > table[i][0]) i++;
+  const [x0, y0] = table[i - 1], [x1, y1] = table[i];
+  return y0 + ((x - x0) / Math.max(1e-9, x1 - x0)) * (y1 - y0);
+}
+
+/** Her workload at a ground speed on flat ground, carrying nothing (VITALS_TUNING.workBySpeed). Never below 0. */
+export function workAtSpeed(speed: number): number {
+  return Math.max(0, along(VITALS_TUNING.workBySpeed, Math.max(0, speed)));
+}
+
+/** How much more work a slope makes at a speed (VITALS_TUNING.hill): 1 on the flat. */
+export function hillFactor(grade: number, speed: number): number {
+  const h = VITALS_TUNING.hill;
+  if (grade >= 0) return 1 + (speed >= h.runFrom ? h.runUp : h.walkUp) * grade;
+  return Math.max(h.least, 1 + h.down * grade);
+}
+
+/** Her stamina's change at a relative effort, points a second of a 100-point pool (VITALS_TUNING.staminaByEffort). */
+export function staminaAtEffort(effort: number): number {
+  return along(VITALS_TUNING.staminaByEffort, Math.max(0, effort));
 }
 
 /**
- * HER TOP BREATHING AT A SPEED (VITALS_TUNING.breathByPace.tops), breaths a minute: blended between the paces, the rest
- * row being her own resting rate (`restRate`); each pace's speed moved as far toward its full-term speed as she is along
- * (`carrying`, as her stamina's paces are), so a slow sprint late in a pregnancy still breathes like a sprint.
+ * THE EFFORT THE BUILDER'S BREATHING TAKES to breathe her fresh rate at an exertion (VITALS_TUNING.breathFresh), for
+ * its default lungs: worked out once by halving (its breathing rises with the effort it is asked), every 0.025 of
+ * exertion, then read between. Asked of a body with other lungs, the same effort gives the same share of its air and
+ * the same share of its breath's size, so it breathes its own rate.
  */
-export function breathTopAt(speed: number, carrying: number | null, restRate: number, pace: number | null = null): number {
-  const T = VITALS_TUNING, tops = T.breathByPace?.tops ?? [];
-  if (tops.length === 0) return restRate;
-  const c = carrying === null ? 0 : Math.max(0, Math.min(1, carrying));
-  const speedOf = (i: number): number => tops[i][0] + ((T.stamina.speedsFullTerm[i] ?? tops[i][0]) - tops[i][0]) * c;
-  const topOf = (i: number): number => (i === 0 ? restRate : tops[i][1]);
-  // BY HER PACE (the rows are the paces in order: rest, walk, jog, run, sprint), while she is really going at it: at
-  // least half its speed (tired at empty a sprint is 65 % of one; held up against a wall she is not sprinting)
-  if (pace !== null && pace > 0) {
-    const l = Math.max(0, Math.min(tops.length - 1, pace)), lo = Math.floor(l), hi = Math.min(tops.length - 1, lo + 1), f = l - lo;
-    const paceSpeed = speedOf(lo) + (speedOf(hi) - speedOf(lo)) * f;
-    if (speed >= 0.5 * paceSpeed) return topOf(lo) + (topOf(hi) - topOf(lo)) * f;
-  }
-  // BY HER SPEED: blended between the two paces it lies between
-  if (speed <= speedOf(0)) return topOf(0);
-  for (let i = 1; i < tops.length; i++) {
-    if (speed <= speedOf(i)) {
-      const t = (speed - speedOf(i - 1)) / Math.max(1e-6, speedOf(i) - speedOf(i - 1));
-      return topOf(i - 1) + t * (topOf(i) - topOf(i - 1));
+let feltTable: number[] | null = null;
+const FELT_STEP = 0.025;
+export function feltForExertion(exertion: number): number {
+  if (!feltTable) {
+    feltTable = [];
+    for (let x = 0; x <= VITALS_TUNING.exertion.most + 1e-9; x += FELT_STEP) {
+      const want = along(VITALS_TUNING.breathFresh, x);
+      let low = 0, high = 1;
+      if (vitalsFor(1, 1).breathsPerMinute <= want) low = 1;
+      else for (let k = 0; k < 24; k++) { const mid = (low + high) / 2; if (vitalsFor(mid, 1).breathsPerMinute < want) low = mid; else high = mid; }
+      feltTable.push(low === 1 ? 1 : (low + high) / 2);
     }
   }
-  return topOf(tops.length - 1);
+  const at = clamp(exertion, 0, VITALS_TUNING.exertion.most) / FELT_STEP;
+  const i = Math.min(feltTable.length - 2, Math.floor(at)), f = at - i;
+  return feltTable[i] + (feltTable[i + 1] - feltTable[i]) * f;
 }
 
-/** A little over walking speed still counts as walking (her speed eases up to a pace and wavers about it). */
-const WALK_LEEWAY = 1.05;
-
-/** Is she going faster than a walk (her walk as far along as she is, `carrying`)? */
-export function fasterThanWalk(speed: number, carrying: number | null): boolean {
-  const T = VITALS_TUNING, c = carrying === null ? 0 : Math.max(0, Math.min(1, carrying));
-  const walk = T.stamina.byPace[1][0] + (T.stamina.speedsFullTerm[1] - T.stamina.byPace[1][0]) * c;
-  return speed > walk * WALK_LEEWAY;
+/** A body's peak heart rate (VITALS_TUNING.body): a woman's by the builder's own formula, a man's by Tanaka's. */
+export function peakHeartOf(body: HeroineBody): number {
+  const b = VITALS_TUNING.body, age = clamp(body.age ?? 28, 12, 90);
+  return body.male ? b.manPeakAt - b.manPeakPerYear * age : peakHeart(age);
 }
 
-/**
- * How fast her stamina changes at a ground speed, a share of a full bar each second (+ refilling, - draining).
- * @param pregnancy  0 not pregnant .. 1 late pregnancy (VITALS_TUNING.pregnant)
- * @param drain      the exercise upgrade's multiplier on every drain (1 = as tuned)
- */
-export function staminaRate(speed: number, firing: boolean, pregnancy: number, drain = 1, carrying: number | null = null): number {
-  const T = VITALS_TUNING;
-  // (each pace's speed as far along as she is: the same seconds, at her slower paces)
-  const c = carrying === null ? 0 : Math.max(0, Math.min(1, carrying));
-  const table: ReadonlyArray<readonly [number, number, number]> = c > 0
-    ? T.stamina.byPace.map((row, i) => [row[0] + (T.stamina.speedsFullTerm[i] - row[0]) * c, row[1], row[2]] as const)
-    : T.stamina.byPace;
-  const rateOf = (row: readonly [number, number, number]): number => row[2] / row[1];
-  // (the rate at this speed: between the two paces it lies between, or the last one past a sprint)
-  let rate = rateOf(table[table.length - 1]);
-  if (speed <= table[0][0]) rate = rateOf(table[0]);
-  else if (speed > table[1][0] * WALK_LEEWAY && speed <= table[2][0]) {
-    // ANYTHING FASTER THAN A WALK DRAINS, at the jog's rate at least (Joshua's table: walking refills, a jog and up
-    // drain). Blended from the walk's refill to the jog's drain, a tired "jog" just over walking speed still refilled
-    // a little: her stamina never reached empty, and she never stopped winded (Joshua, 2026-11-18).
-    rate = rateOf(table[2]);
-  } else for (let i = 1; i < table.length; i++) {
-    if (speed <= table[i][0]) { const t = (speed - table[i - 1][0]) / (table[i][0] - table[i - 1][0]); rate = rateOf(table[i - 1]) + t * (rateOf(table[i]) - rateOf(table[i - 1])); break; }
-  }
-  if (firing) rate -= 1 / T.stamina.firingSeconds;
-  return rate < 0 ? rate * drain * (1 + T.pregnant.drainFaster * pregnancy) : rate / (1 + T.pregnant.refillSlower * pregnancy);
-}
+const MPH = 2.23694;
 
 /** The heroine's vitals. Make one per heroine, `step` it every frame, and read `reading`. */
 export class HeroineVitals {
-  /** The builder's own states: her breath and heart, and her gut. */
+  /** The builder's own states: where her breath and heartbeat are in their cycles, a breath's size, her heart's drift. */
   private vitals: Vitals = restingVitals();
   /**
-   * How fast her stamina drains against the builder's model, for THIS heroine (it starts at the game's tuning).
-   * Exercise will lower it later: fitter, she tires more slowly.
+   * HER TRAINING (VITALS_TUNING.training), 0 .. 1 each: her fitness (cardio; she starts at 20 of 100), and the three
+   * upgrades, Endurance (her pool), Recovery (her refill) and Strength (hills and loads). Set by Settings -> TEST TOOLS
+   * until they are earned.
    */
-  staminaDrain: number = VITALS_TUNING.staminaDrain;
+  fitness: number = VITALS_TUNING.training.startFitness;
+  endurance = 0;
+  recovery = 0;
+  strength = 0;
   /** Her fear now, 0..1 (VITALS_TUNING.stress): rises toward the danger she is in, fades after it. */
   private fear = 0;
   /** What thirst, pain and fear add to her heart (beats a minute) and breathing (breaths a minute) now: they lag behind. */
   private extraBeats = 0;
   private extraBreaths = 0;
-  /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): it makes her tire sooner. */
+  /** How far along her pregnancy is, 0 (not pregnant) to 1 (week 36 on): its weight and her smaller capacity. */
   private pregnancy: number;
   private gut: GutState = restingGut();
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
   private needs: GutNeeds;
-  /** Her energy over the day (VITALS_TUNING.energy), 0..1. (Not `vitals.energy`: that is the builder's name for her stamina.) */
+  /** Her energy over the day (VITALS_TUNING.energy), 0..1. (Not `vitals.energy`: that is the builder's name for stamina.) */
   private dayEnergy = 1;
+  /** Her stamina, points (0 .. her pool: her base x her energy). */
+  private staminaPoints: number;
+  /** Her exertion, for her breathing and for her heart (VITALS_TUNING.exertion): each on its own timing. */
+  private exertBreath = 0;
+  private exertHeart = 0;
+  /** Her workload, capacity and relative effort this step, and the slope under her (smoothed), for the reading. */
+  private workload = 0;
+  private capacity = 1;
+  private effort = 0;
+  private grade = 0;
+  private lastGround: { x: number; z: number; y: number } | null = null;
+  /** Seconds she has been still (her energy starts coming back after VITALS_TUNING.energy.restAfter). */
+  private stillFor = 0;
   /** Her adrenaline, 0..1, and the seconds left of "in a fight" since she last fired. */
   private adrenaline = 0;
   private fightLeft = 0;
@@ -536,12 +528,14 @@ export class HeroineVitals {
   private bathroomRate = 0;
 
   /**
-   * `body`: her age in years and how many weeks pregnant she is (the builder's vitals add pregnancy's faster
-   * heart, deeper breaths and lower staying power from these). Left out, the builder's own defaults are used.
+   * `body`: her age in years and how many weeks pregnant she is (the builder's vitals add pregnancy's faster heart and
+   * deeper breaths from these), and the game's own (HeroineBody: a man, his weight, his heart at rest). Left out, the
+   * builder's own defaults and a woman's.
    */
-  constructor(private body: VitalsBody = {}) {
+  constructor(private body: HeroineBody = {}) {
     this.pregnancy = pregnancyShare(body.weeks);
-    this.now = stepVitals(this.vitals, 0, 0, this.body);
+    this.staminaPoints = this.poolPoints();
+    this.now = this.breathe(0, 0);
     const [foodMl, waterMl] = VITALS_TUNING.startMeal;
     this.gut = gutEat(this.gut, foodMl, waterMl);
     this.needs = this.gameNeeds();
@@ -557,209 +551,161 @@ export class HeroineVitals {
     this.pregnancy = pregnancyShare(weeks);
   }
 
-  /**
-   * HER EFFORT ON THE GAME'S OWN CURVE (VITALS_TUNING.effort). The builder's step moves her effort toward the work she
-   * does by a share k of the way (k = 1 - e^(-dt / its 30 or 90 s)). To land it where the game's time constant would
-   * have it this frame (`target`), it is first set to the one place from which that share lands there:
-   *   target = before + (work - before) * k   so   before = (target - work * k) / (1 - k).
-   * That place is always between where it was and the target, on the same side of the work, so the builder's step takes
-   * the same direction (rising or falling) the game meant. Nothing else of the builder's model is touched.
-   */
-  private leadEffort(dt: number, work: number): void {
-    const { riseSeconds, fallSeconds } = VITALS_TUNING.effort;
-    const e = this.vitals.effort;
-    if (!Number.isFinite(e) || work === e) return;
-    const rising = work > e;
-    const ours = rising ? riseSeconds : fallSeconds;
-    if (ours === null) return;
-    const h = clamp(dt, 0, 0.5);   // (the builder's step holds a frame to half a second too)
-    const theirs = rising ? STAMINA.riseS : STAMINA.fallS;
-    const target = e + (work - e) * (1 - Math.exp(-h / ours));
-    const k = 1 - Math.exp(-h / theirs);
-    this.vitals.effort = (target - work * k) / (1 - k);
+  /** Her whole stamina pool, points: her base with the Endurance upgrade (VITALS_TUNING.training). */
+  private basePoints(): number {
+    return VITALS_TUNING.staminaPoints * (1 + VITALS_TUNING.training.enduranceMore * clamp(this.endurance, 0, 1));
+  }
+
+  /** The part of it she can have now, points: her base x her energy (Joshua's straight line, no floor). */
+  private poolPoints(): number {
+    return this.basePoints() * this.dayEnergy;
   }
 
   /**
-   * HER BREATHING BY PACE (VITALS_TUNING.breathByPace): where her breathing is to be this frame, and the effort that
-   * breathes it, handed to the builder's step as both her effort and what she is doing (so its own lag moves nothing).
-   * Climbing: up from where it is toward her pace's top, at (top - resting rate) / the pace's climb seconds a second.
-   * At her top: held there, the effort eased as her stamina runs out (the builder breathes her quicker for the same
-   * effort with less left). Over her top by more than `holdWithin`: down on the builder's own 90 s toward the effort
-   * that breathes her top. Her spent stamina still keeps her breathing up after she stops (the builder's WINDED floor,
-   * `STAMINA.winded`), as before. Returns the intensity to give the builder's step.
+   * THE SLOPE UNDER HER (VITALS_TUNING.hill): the ground's rise over the distance she has moved, smoothed over about
+   * half a second; a jump (a swap, a reload of the map) starts it again. Level when the game gives no ground.
    */
-  private breathByPace(dt: number, input: VitalsInput): number {
-    const bp = VITALS_TUNING.breathByPace!;
-    const energy = this.vitals.energy, floor = STAMINA.winded * (1 - energy);
-    // (her breathing for an effort now, with the stamina she has; and the effort that gives a breathing rate)
-    const rateAt = (e: number): number => vitalsFor(Math.max(e, floor), energy, this.body).breathsPerMinute;
-    const effortFor = (rate: number): number => {
-      if (rateAt(0) >= rate) return 0;
-      if (rateAt(1) <= rate) return 1;
-      let low = 0, high = 1;
-      for (let i = 0; i < 22; i++) { const mid = (low + high) / 2; if (rateAt(mid) < rate) low = mid; else high = mid; }
-      return (low + high) / 2;
+  private measureGrade(dt: number, ground: VitalsInput['ground']): void {
+    if (!ground || !Number.isFinite(ground.y)) { this.grade += (0 - this.grade) * (1 - Math.exp(-dt / 0.5)); this.lastGround = null; return; }
+    const last = this.lastGround;
+    if (!last) { this.lastGround = { ...ground }; return; }
+    const moved = Math.hypot(ground.x - last.x, ground.z - last.z);
+    if (moved > 5) { this.lastGround = { ...ground }; this.grade = 0; return; }
+    if (moved < 0.05) return;   // (too little to tell a slope by: kept until she has gone a little further)
+    const slope = clamp((ground.y - last.y) / moved, -0.6, 0.6);
+    this.grade += (slope - this.grade) * (1 - Math.exp(-dt / 0.5));
+    this.lastGround = { ...ground };
+  }
+
+  /**
+   * HER BREATH AND HEART THIS STEP, from her exertion and the stamina she has spent (`spent`, a share of her pool):
+   * her breathing the builder's (vitalsFor, her lungs), asked at the effort that breathes her fresh rate
+   * (`feltForExertion`) and at the tiredness that makes it quicker (VITALS_TUNING.tiredBreath); her heart from her
+   * heart-rate reserve (VITALS_TUNING.heartReserve), her rest, her peak and its drift. Fear, pain, thirst and adrenaline
+   * are added after (`step`). Moves her breath and heartbeat on by `dt` at these rates.
+   */
+  private breathe(dt: number, spent: number, extraBreaths = 0, extraBeats = 0, shallow = 1): VitalsNow {
+    const T = VITALS_TUNING, X = T.exertion, h = clamp(dt, 0, 0.5);
+    const feltBreath = Math.max(this.exertBreath, X.winded * spent);
+    const feltHeart = Math.max(this.exertHeart, X.winded * spent);
+    const tired = clamp(spent / T.tiredBreath.fullAt, 0, 1);
+    const air = vitalsFor(feltForExertion(feltBreath), 1 - T.tiredBreath.share * tired, this.body);
+    // her heart: her rest (and pregnancy's), her peak, the share of the reserve between, and its drift as she tires
+    const rest = (this.body.restHeart ?? (this.body.male ? T.body.manRestHeart : T.body.womanRestHeart)) + PREGNANT_BREATH.heart * this.pregnancy;
+    const peak = Math.max(rest + 20, peakHeartOf(this.body));
+    const driftWant = T.heartDrift.driftMost * spent * clamp(this.exertHeart / 0.5, 0, 1);
+    this.vitals.drift += (driftWant - this.vitals.drift) * (1 - Math.exp(-h / T.heartDrift.driftSeconds));
+    const beatsWork = Math.min(peak, rest + (peak - rest) * clamp(along(T.heartReserve, feltHeart), 0, 1) + this.vitals.drift);
+    // (fear on top of a sprint never past the most a heart of her age can beat: about 220 less her age)
+    const beats = Math.min(beatsWork + extraBeats, Math.max(beatsWork, 220 - (this.body.age ?? 28)));
+    const breaths = air.breathsPerMinute + extraBreaths;
+    // a breath's size follows smoothly; her breath and her pulse go on
+    this.vitals.tidalL += (air.tidalL * shallow - this.vitals.tidalL) * (1 - Math.exp(-h / STAMINA.depthS));
+    this.vitals.cycle = (this.vitals.cycle + (h * breaths) / 60) % 1;
+    this.vitals.pulse = (this.vitals.pulse + (h * beats) / 60) % 1;
+    const breath = breathOf(this.vitals.cycle, air.inShare);
+    return {
+      breathsPerMinute: breaths, beatsPerMinute: beats, tidalL: this.vitals.tidalL, breathL: this.vitals.tidalL * breath, breath,
+      beat: beatOf(this.vitals.pulse), inShare: air.inShare, effort: this.effort, energy: this.staminaPoints / Math.max(1e-9, this.basePoints()), felt: feltBreath,
     };
-    const restRate = vitalsFor(0, 1, this.body).breathsPerMinute;
-    const top = breathTopAt(input.speed, input.carrying ?? null, restRate, input.pace ?? null) + (input.firing ? bp.firing : 0);
-    const now = this.now.breathsPerMinute;
-    if (now > top + bp.holdWithin) {
-      // over this pace's top: down on the builder's own lag toward the effort that breathes it
-      const want = effortFor(top);
-      this.leadEffort(dt, want);
-      return want;
-    }
-    // climbing (or held at the top): the climb's seconds are how long this pace takes to spend `spentAtTop` of a full
-    // bar at her drain now; a pace that refills her takes `refillPaceSeconds`
-    const st = VITALS_TUNING.stress, sb = VITALS_TUNING.staminaByBreath;
-    let seconds: number;
-    if (sb) {
-      // (her stamina by her breathing: her breathing climbs in a straight line from resting to the top, and drains
-      //  `drainPercent` x her breathing only over the line, so by the top it has spent
-      //  k x T x (share of the climb over the line) x (the line and the top's middle); T is set so that is spentAtTop)
-      const k = (sb.drainPercent / 100 / 100) * this.staminaDrain * (1 + VITALS_TUNING.pregnant.drainFaster * this.pregnancy);
-      const over = top > sb.line && fasterThanWalk(input.speed, input.carrying ?? null) ? (top - sb.line) / Math.max(1e-6, top - restRate) : 0;
-      seconds = over > 0 ? bp.spentAtTop / (k * over * ((top + sb.line) / 2)) : bp.refillPaceSeconds;   // (k: a share of the bar)
-    } else {
-      const drainMore = 1 + st.thirst.drain * this.needs.thirst + st.pain.drain * this.pain + st.fear.drain * this.fear;
-      const rate = staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore, input.carrying ?? null);
-      seconds = rate < 0 ? bp.spentAtTop / -rate : bp.refillPaceSeconds;
-    }
-    const perSecond = Math.max(0, top - restRate) / Math.max(1, seconds);
-    const want = effortFor(Math.min(top, now + perSecond * clamp(dt, 0, 0.5)));
-    this.vitals.effort = want;
-    return want;
-  }
-
-  /**
-   * HER HEART BY HER BREATHING (VITALS_TUNING.heartByBreath): her heart rate from how far her breathing is over her own
-   * resting rate, by the table's points read above rest, plus the builder's drift, never past her peak. Her heartbeat
-   * (the pulse her body shows) is moved on by the difference from what the builder's step gave, so it beats at the rate
-   * shown.
-   */
-  private heartByBreath(dt: number): void {
-    const hb = VITALS_TUNING.heartByBreath!;
-    const rest = vitalsFor(0, 1, this.body);
-    const above = Math.max(0, this.now.breathsPerMinute - rest.breathsPerMinute);
-    // (the table above rest: breaths over 14, beats over 70; past its last point, on along the last step)
-    let x0 = 0, y0 = 0, beatsAbove = 0;
-    for (let i = 0; i < hb.points.length; i++) {
-      const x = hb.points[i][0] - hb.restBreaths, y = hb.points[i][1] - hb.restBeats;
-      if (above <= x || i === hb.points.length - 1) { beatsAbove = y0 + ((y - y0) * (above - x0)) / Math.max(1e-6, x - x0); break; }
-      x0 = x; y0 = y;
-    }
-    const peak = Math.max(rest.beatsPerMinute + 20, peakHeart(this.body.age));
-    const want = Math.min(peak, rest.beatsPerMinute + Math.max(0, beatsAbove) + (this.vitals.drift ?? 0));
-    const h = clamp(dt, 0, 0.5);
-    this.vitals.pulse = ((((this.vitals.pulse + (h * (want - this.now.beatsPerMinute)) / 60) % 1) + 1) % 1);
-    this.now = { ...this.now, beatsPerMinute: want, beat: beatOf(this.vitals.pulse) };
   }
 
   /** Move her vitals on by `dt` seconds of play. */
   step(dt: number, input: VitalsInput): void {
     if (dt <= 0) return;
-    const tuning = VITALS_TUNING;
+    const tuning = VITALS_TUNING, X = tuning.exertion, st = tuning.stress, ad = tuning.adrenaline, en = tuning.energy;
 
-    // 1. Her breath and heart: the builder's model, told how hard she is working.
-    let intensity = clamp(intensityAtSpeed(input.speed) + (input.firing ? tuning.firingIntensity : 0), 0, 1);
-    const stamina = this.vitals.energy;
-    if (tuning.breathByPace) intensity = this.breathByPace(dt, input);
-    else this.leadEffort(dt, intensity);
-    this.now = stepVitals(this.vitals, dt, intensity, this.body);
-    if (tuning.heartByBreath) this.heartByBreath(dt);
-    // Her stamina: the game's own rate for her pace (VITALS_TUNING.stamina), not the builder's. What the builder's
-    // step did to it is put back, and the game's change is made instead. (Her breath reads it the next frame.)
-    // Thirst, pain and fear (VITALS_TUNING.stress): how strong each is now.
-    const st = tuning.stress;
+    // 1. WHAT SHE FEELS: fear follows the danger; adrenaline the worst of fear and a fight (fading, she crashes: her
+    //    energy pays); pain from her health, dulled while her adrenaline is up; thirst from her water
     const threat = clamp(input.threat ?? 0, 0, 1);
     this.fear += (threat - this.fear) * (1 - Math.exp(-dt / (threat > this.fear ? st.fearRiseSeconds : st.fearFallSeconds)));
-    // ADRENALINE (VITALS_TUNING.adrenaline): up toward the worst of her fear and a fight, quickly; down slowly. As it
-    // comes down she crashes: her energy pays for it.
-    const ad = tuning.adrenaline;
     this.fightLeft = input.firing ? ad.fightSeconds : Math.max(0, this.fightLeft - dt);
     const adWant = Math.max(this.fear, this.fightLeft > 0 ? ad.fromFight : 0);
     const adWas = this.adrenaline;
     this.adrenaline += (adWant - this.adrenaline) * (1 - Math.exp((-3 * dt) / (adWant > this.adrenaline ? ad.riseSeconds : ad.fallSeconds)));
     if (this.adrenaline < adWas) this.dayEnergy = Math.max(0, this.dayEnergy - (adWas - this.adrenaline) * ad.crashEnergy);
-    // (her pain, dulled while her adrenaline is up)
     const thirst = this.needs.thirst, fear = this.fear;
     const pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1) * (1 - ad.dullsPain * this.adrenaline);
     this.pain = pain;
-    // ...they make her stamina drain faster
-    const drainMore = 1 + st.thirst.drain * thirst + st.pain.drain * pain + st.fear.drain * fear;
-    let rate: number;
-    const sb = tuning.staminaByBreath;
-    if (sb) {
-      // HER STAMINA BY HER BREATHING (VITALS_TUNING.staminaByBreath): her breathing now, the extra breaths of fear, pain
-      // and thirst counted (their own drain is in them, so `drainMore` is not used again)
-      const breaths = this.now.breathsPerMinute + this.extraBreaths;
-      if (fasterThanWalk(input.speed, input.carrying ?? null)) {
-        rate = breaths > sb.line ? -(sb.drainPercent / 100 / 100) * breaths * this.staminaDrain * (1 + tuning.pregnant.drainFaster * this.pregnancy) : 0;
-      } else {
-        // (at a walk or standing: her breathing counted as no lower than a walk's top, so standing refills as walking)
-        const walkTop = tuning.breathByPace?.tops[1]?.[1] ?? 0;
-        rate = ((sb.refillPercent / 100 / 100) * Math.max(breaths, walkTop)) / (1 + tuning.pregnant.refillSlower * this.pregnancy);
-      }
-      if (input.firing) rate -= 1 / tuning.stamina.firingSeconds;
-    } else rate = staminaRate(input.speed, input.firing, this.pregnancy, this.staminaDrain * drainMore, input.carrying ?? null);
-    if (rate > 0) rate *= 1 + ad.staminaBack * this.adrenaline;   // (adrenaline: her wind comes back faster)
-    // HER ENERGY (VITALS_TUNING.energy): low, her stamina cannot fill all the way
-    const en = tuning.energy;
-    const staminaMost = this.dayEnergy >= en.lowFrom ? 1 : en.staminaMostAtEmpty + (1 - en.staminaMostAtEmpty) * (this.dayEnergy / en.lowFrom);
-    // (refilling stops at that most; stamina already above it is not taken away, it just drains as usual)
-    this.vitals.energy = clamp(rate > 0 ? Math.min(stamina + rate * dt, Math.max(staminaMost, stamina)) : stamina + rate * dt, 0, 1);
-    // ...and lift her heart and her breathing on top of what the work does. Her breath and her heartbeat are moved on
-    // by the extra too, so what she shows (the heart on her card, her chest rising) goes at the rate the card says.
-    // (each follows where the stress puts it at its own pace: her heart first, her breathing later; calming down
-    //  slower, and slower still from the very top. "95% of the way in S seconds" is a time constant of S / 3.)
-    const follow = (now: number, want: number, riseSeconds: number, most: number): number => {
+
+    // 2. HER WORKLOAD (VITALS_TUNING.workBySpeed, hill, pregnantKg): her speed's work, firing's, then the slope and what
+    //    she carries; Strength takes a share off the extra a slope or a load adds
+    this.measureGrade(dt, input.ground);
+    const kg = this.body.bodyKg ?? (this.body.male ? tuning.body.manKg : tuning.body.womanKg);
+    const flat = workAtSpeed(input.speed) + (input.firing ? tuning.firingWork : 0);
+    const harder = hillFactor(this.grade, input.speed) * ((kg + Math.max(0, input.loadKg ?? 0) + tuning.pregnantKg * this.pregnancy) / kg);
+    const ease = harder > 1 ? 1 - tuning.training.strengthEase * clamp(this.strength, 0, 1) : 1;
+    this.workload = flat * (1 + (harder - 1) * ease);
+
+    // 3. HER CAPACITY (VITALS_TUNING.capacity): her fitness, less what thirst, pain, her pregnancy and heat take, more
+    //    while her adrenaline is up
+    const cap = tuning.capacity;
+    this.capacity = (cap.fitnessLeast + cap.fitnessGain * clamp(this.fitness, 0, 1)) * (1 - cap.thirst * thirst) * (1 - cap.pain * pain)
+      * (1 - cap.pregnancy * this.pregnancy) * (1 + cap.adrenaline * this.adrenaline)
+      * Math.max(0.5, 1 - cap.heatPerDegree * Math.max(0, this.temperature - cap.heatFrom));
+
+    // 4. HER RELATIVE EFFORT, and her STAMINA by it (VITALS_TUNING.staminaByEffort), within her pool (her energy)
+    this.effort = this.workload / Math.max(0.05, this.capacity);
+    let rate = staminaAtEffort(this.effort) * (tuning.staminaPoints / 100);
+    if (rate > 0) rate *= 1 + tuning.training.recoveryMore * clamp(this.recovery, 0, 1);
+    const pool = this.poolPoints();
+    this.staminaPoints = clamp(this.staminaPoints + rate * dt, 0, pool);
+    // (the share of her pool she has spent: none when she has no pool to spend)
+    const spent = pool > 0.5 ? 1 - this.staminaPoints / pool : 0;
+
+    // 5. HER EXERTION (VITALS_TUNING.exertion): up at Joshua's "one second per mph" (her heart at two), down slower,
+    //    fitter quicker; never restarted, it chases from wherever it is
+    const want = clamp(this.effort, 0, X.most), mph = input.speed * MPH, fit = clamp(this.fitness, 0, 1);
+    const upBreath = Math.max(X.quickest, X.breathUpPerMph * mph) / 3, upHeart = Math.max(X.quickest, X.heartUpPerMph * mph) / 3;
+    const downBreath = X.breathDown[0] + (X.breathDown[1] - X.breathDown[0]) * fit;
+    const downHeart = X.heartDown[0] + (X.heartDown[1] - X.heartDown[0]) * fit;
+    this.exertBreath += (want - this.exertBreath) * (1 - Math.exp(-dt / (want > this.exertBreath ? upBreath : downBreath)));
+    this.exertHeart += (want - this.exertHeart) * (1 - Math.exp(-dt / (want > this.exertHeart ? upHeart : downHeart)));
+
+    // 6. WHAT ELSE LIFTS HER HEART AND BREATHING (thirst, pain, fear, adrenaline), each following where it puts them
+    //    at its own pace: her heart first, her breathing later; calming down slower, and slower still from the very
+    //    top ("95% of the way in S seconds" is a time constant of S / 3)
+    const follow = (now: number, wanted: number, riseSeconds: number, most: number): number => {
       const high = clamp(now / most, 0, 1);
-      const seconds = want >= now ? riseSeconds : riseSeconds * st.calmTimes * (1 + (st.calmTimesWhenHigh - 1) * high);
-      return now + (want - now) * (1 - Math.exp((-3 * dt) / seconds));
+      const seconds = wanted >= now ? riseSeconds : riseSeconds * st.calmTimes * (1 + (st.calmTimesWhenHigh - 1) * high);
+      return now + (wanted - now) * (1 - Math.exp((-3 * dt) / seconds));
     };
     const adr = this.adrenaline;
     this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear + ad.heart * adr, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart + ad.heart);
     this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear + ad.breaths * adr, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths + ad.breaths);
-    // (never past the most a heart of her age can beat: about 220 less her age, 192 at 28. Fear on top of a sprint
-    //  would otherwise show a number no real heart reaches.)
-    const moreBeats = Math.min(this.now.beatsPerMinute + this.extraBeats, 220 - (this.body.age ?? 28)) - this.now.beatsPerMinute;
-    const moreBreaths = this.extraBreaths;
-    if (Math.abs(moreBeats) > 0.01 || moreBreaths > 0.01) {
-      const h = clamp(dt, 0, 0.5);
-      this.vitals.pulse = (this.vitals.pulse + (h * moreBeats) / 60) % 1;
-      this.vitals.cycle = (this.vitals.cycle + (h * moreBreaths) / 60) % 1;
-      const shallow = 1 - st.pain.shallower * pain;
-      this.now = {
-        ...this.now,
-        beatsPerMinute: this.now.beatsPerMinute + moreBeats,
-        breathsPerMinute: this.now.breathsPerMinute + moreBreaths,
-        tidalL: this.now.tidalL * shallow,
-        breathL: this.now.breathL * shallow,
-        beat: beatOf(this.vitals.pulse),
-        breath: breathOf(this.vitals.cycle, this.now.inShare),
-      };
-    }
 
-    // 2. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
+    // 7. HER BREATH AND HEART (`breathe`): her breathing and heart from her exertion and what she has spent, the extra on
+    //    top, her breath shallower in pain
+    this.now = this.breathe(dt, spent, this.extraBreaths, this.extraBeats, 1 - st.pain.shallower * pain);
+
+    // 8. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
+    const work = clamp(this.workload, 0, 1);
     const hours = dt * this.gutHoursPerSecond;
     this.gut = stepGut(this.gut, hours);
     const [sweatRest, sweatHard] = tuning.sweatMlPerHour;
-    this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * this.now.felt) * hours;
+    this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * work) * hours;
     this.needs = this.gameNeeds();
 
-    // 2b. HER ENERGY over the day: drains moving (more working hard, more late in a pregnancy), comes back standing still.
-    const still = input.speed < 0.1 && !input.firing;
-    if (still) this.dayEnergy += hours / en.restHours;
-    else this.dayEnergy -= hours * (1 / en.awakeHours + (this.now.felt * this.now.felt) / en.hardHours) * (1 + en.pregnantMore * this.pregnancy);
+    // 9. HER ENERGY (VITALS_TUNING.energy), in real minutes: moving spends it by her workload squared; still for a minute,
+    //    it comes back (sitting faster, half as fast hungry or thirsty)
+    const active = input.speed >= 0.1 || input.firing;
+    this.stillFor = active ? 0 : this.stillFor + dt;
+    if (active) this.dayEnergy -= ((en.moveBase + en.moveWork * this.workload * this.workload) / 100 / 60) * dt;
+    else if (this.stillFor >= en.restAfter) {
+      const unfed = this.needs.hunger > 0 || this.needs.thirst > 0 ? en.unfedRest : 1;
+      this.dayEnergy += (((input.seated ? en.seatedPerMinute : en.restPerMinute) * unfed) / 100 / 60) * dt;
+    }
     this.dayEnergy = clamp(this.dayEnergy, 0, 1);
+    // (her pool shrinks with it: stamina over the new pool is trimmed as it goes, a little at a time)
+    this.staminaPoints = Math.min(this.staminaPoints, this.poolPoints());
 
-    // 2c. HER BODY TEMPERATURE: warmed by work, cooled by wet skin and water
+    // 10. HER BODY TEMPERATURE: warmed by work, cooled by wet skin and water
     const tt = tuning.temperature;
-    const tempWant = tt.rest + (tt.hardest - tt.rest) * this.now.felt - tt.wet * clamp(input.wet ?? 0, 0, 1)
+    const tempWant = tt.rest + (tt.hardest - tt.rest) * work - tt.wet * clamp(input.wet ?? 0, 0, 1)
       - tt.water * clamp((input.waterDepth ?? 0) / tt.waterFullAt, 0, 1);
     this.temperature += (tempWant - this.temperature) * (1 - Math.exp((-3 * dt) / (tempWant > this.temperature ? tt.riseSeconds : tt.fallSeconds)));
 
-    // 2d. THE BATHROOM: how fast it is filling (for its ETA)
+    // 11. THE BATHROOM: how fast it is filling (for its ETA)
     const fillNow = this.bathroomNow().fill;
     if (this.lastBathroom >= 0) {
       // (she has just gone, or a test has set her bladder: a jump, not filling. Start again from here.)
@@ -771,16 +717,16 @@ export class HeroineVitals {
     }
     this.lastBathroom = fillNow;
 
-    // 2e. HER MOOD: full marks less what wears on her (VITALS_TUNING.mood)
+    // 12. HER MOOD: full marks less what wears on her (VITALS_TUNING.mood)
     const md = tuning.mood;
     const tired = clamp((en.lowFrom - this.dayEnergy) / en.lowFrom, 0, 1);
-    const winded = clamp((0.2 - this.vitals.energy) / 0.2, 0, 1);
+    const winded = clamp((spent - 0.8) / 0.2, 0, 1);
     const pressing = clamp((fillNow - 0.5) / 0.5, 0, 1);
     const moodWant = clamp(1 - md.hunger * this.needs.hunger - md.thirst * this.needs.thirst - md.bathroom * pressing
       - md.pain * pain - md.fear * fear - md.tired * tired - md.winded * winded, 0, 1);
     this.mood += (moodWant - this.mood) * (1 - Math.exp((-3 * dt) / md.seconds));
 
-    // 3. Her health: it mends while she is fed and watered, and wears away while she is starving or parched.
+    // 13. Her health: it mends while she is fed and watered, and wears away while she is starving or parched.
     const h = tuning.health;
     const worstNeed = Math.max(this.needs.hunger, this.needs.thirst);
     // (how far past `badOver` each need is, 0..1; thirst counts in full, hunger as `hungerShare` of it)
@@ -898,9 +844,9 @@ export class HeroineVitals {
     const stomachMl = this.gut.stomachFoodMl + this.gut.stomachWaterMl;
     const stomach = clamp((stomachMl - STOMACH.emptyMl) / (STOMACH.fullMl - STOMACH.emptyMl), 0, 1);
     const s = tuning.speed;
-    const tired = clamp((s.tiredFrom - this.vitals.energy) / s.tiredFrom, 0, 1); // 0 until her energy is under `tiredFrom`
-    const speedShare = clamp(1 - tired * s.tiredCost - this.needs.hunger * s.hungerCost - this.needs.thirst * s.thirstCost, s.slowest, 1);
+    const speedShare = clamp(1 - this.needs.hunger * s.hungerCost - this.needs.thirst * s.thirstCost, s.slowest, 1);
     const bath = this.bathroomNow();
+    const base = Math.max(1e-9, this.basePoints());
     return {
       heartRate: this.now.beatsPerMinute,
       breathsPerMinute: this.now.breathsPerMinute,
@@ -909,8 +855,14 @@ export class HeroineVitals {
       breathCycle: this.vitals.cycle,
       breathInShare: this.now.inShare,
       beat: this.now.beat,
-      stamina: this.vitals.energy,   // (her own, after the game's extra drain)
-      effort: this.now.felt,
+      stamina: this.staminaPoints / base,
+      staminaPool: this.poolPoints() / base,
+      effort: this.effort,
+      exertion: this.now.felt,
+      workload: this.workload,
+      capacity: this.capacity,
+      grade: this.grade,
+      fitness: clamp(this.fitness, 0, 1),
       health: this.health,
       food: foodBarOf(this.gut.stomachFoodMl),
       water: waterBarOf(this.gut.waterMl + this.gut.stomachWaterMl),

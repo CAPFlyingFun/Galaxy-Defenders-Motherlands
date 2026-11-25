@@ -79,6 +79,12 @@ interface StatView {
   readonly alert: boolean;
   /** so urgent it swaps into the big four */
   readonly urgent: boolean;
+  /**
+   * THE STAMINA BAR'S MIDDLE PART (Joshua's three-part bar, 2026-11-25): how much of the whole she can have now (her
+   * energy), 0..1. Drawn as three: her stamina (bright), what she can get back (faint), what is out of reach until she
+   * rests (left dark). Only stamina has it.
+   */
+  readonly pool?: number;
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -109,7 +115,7 @@ function viewOf(key: VitalsStat, r: VitalsReading, units: VitalsUnits): StatView
     case 'food':
       return { emoji: '🍽️', share: r.food, colour: '#ff9a3c', gauge: percentOf(r.food), number: `${percentOf(r.food)}%`, name: 'food', alert: r.hunger > 0, urgent: false };
     case 'stamina':
-      return { emoji: '⚡️', share: r.stamina, colour: '#ffd23f', gauge: percentOf(r.stamina), number: `${percentOf(r.stamina)}%`, name: 'stamina', alert: r.stamina < 0.15, urgent: false };
+      return { emoji: '⚡️', share: r.stamina, pool: r.staminaPool, colour: '#ffd23f', gauge: percentOf(r.stamina), number: `${percentOf(r.stamina)}%`, name: 'stamina', alert: r.stamina < 0.15 * r.staminaPool, urgent: false };
     case 'energy':
       return { emoji: '🔋', share: r.energy, colour: r.energy < 0.25 ? '#ff5a5a' : '#7bd88f', gauge: percentOf(r.energy), number: `${percentOf(r.energy)}%`, name: 'energy', alert: r.energy < 0.25, urgent: r.energy < 0.15 };
     case 'bathroom': {
@@ -143,7 +149,8 @@ function viewOf(key: VitalsStat, r: VitalsReading, units: VitalsUnits): StatView
       return { emoji: '🌡️', share, colour: tempColour(c), gauge, number, name, alert: out, urgent: out };
     }
     case 'effort':
-      return { emoji: '💪', share: r.effort, colour: '#ffb27a', gauge: percentOf(r.effort), number: `${percentOf(r.effort)}%`, name: 'effort', alert: false, urgent: false };
+      // (her RELATIVE EFFORT since v0.2.174: her workload over her capacity; past 100% uphill or hurt)
+      return { emoji: '💪', share: r.effort, colour: '#ffb27a', gauge: `${Math.round(r.effort * 100)}`, number: `${Math.round(r.effort * 100)}%`, name: 'effort', alert: r.effort > 1, urgent: false };
   }
 }
 
@@ -191,7 +198,11 @@ const STYLE = `
 .gd-vitals-list { display: grid; grid-template-columns: repeat(2, auto); column-gap: 10px; }
 /* (FIXED widths, Joshua's screenshots 2026-11-21: the card grew and shrank with "SPRINT" or "WINDED" and "100.4°F" ran
     into its name. Now every row is the same width whatever it says; anything longer is cut with "...".) */
-.gd-vitals-row { display: grid; grid-template-columns: 18px 40px 98px; align-items: center; line-height: 16px; white-space: nowrap; }
+.gd-vitals-row { position: relative; display: grid; grid-template-columns: 18px 40px 98px; align-items: center; line-height: 16px; white-space: nowrap; }
+/* THE STAMINA BAR (Joshua's three parts): under its row, the dark track out of reach until she rests, the faint part
+   she can get back, the bright part she has */
+.gd-vitals-pool { position: absolute; left: 20px; right: 2px; bottom: -2px; height: 3px; border-radius: 1.5px; background: #ffffff1c; overflow: hidden; }
+.gd-vitals-pool span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 1px; }
 .gd-vitals-row i { overflow: hidden; text-overflow: ellipsis; }
 .gd-vitals-row b { font-weight: 600; font-size: 12px; text-align: right; padding-right: 5px; font-variant-numeric: tabular-nums; }
 .gd-vitals-row i { font-style: normal; color: #9aa6b8; letter-spacing: .02em; }
@@ -211,6 +222,8 @@ type ChipKey = 'week' | 'kick' | 'winded' | 'pain' | 'hungry' | 'thirsty';
 /** One gauge on the card: its shape (round or hexagon), its ring, and the emoji and number in its middle. */
 interface GaugeSlot {
   readonly ring: SVGElement;
+  /** the faint ring under it: the part of the whole she can get back (stamina's middle part; hidden for the others) */
+  readonly poolRing: SVGElement;
   readonly mid: HTMLElement;
   readonly emoji: HTMLElement;
   readonly value: HTMLElement;
@@ -219,6 +232,10 @@ interface GaugeSlot {
 /** One row of the list: its emoji, number and name. */
 interface ListRow {
   readonly row: HTMLElement;
+  /** stamina's three-part bar under its row (hidden for the others): the track, what she can get back, what she has */
+  readonly pool: HTMLElement;
+  readonly poolCan: HTMLElement;
+  readonly poolHas: HTMLElement;
   readonly emoji: HTMLElement;
   readonly number: HTMLElement;
   readonly name: HTMLElement;
@@ -335,6 +352,14 @@ export class VitalsPanel {
       back.setAttribute('fill', '#1a2029');
       back.setAttribute('stroke', '#ffffff24');
       svg.appendChild(back);
+      // (stamina's middle part: the faint ring she can get back, under the bright one she has)
+      const poolRing = shape();
+      poolRing.setAttribute('fill', 'none');
+      poolRing.setAttribute('stroke-linejoin', 'round');
+      poolRing.setAttribute('pathLength', '100');
+      poolRing.setAttribute('stroke-opacity', '0.3');
+      poolRing.style.display = 'none';
+      svg.appendChild(poolRing);
       const ring = shape();
       ring.setAttribute('fill', 'none');
       ring.setAttribute('stroke-linejoin', 'round');
@@ -348,9 +373,9 @@ export class VitalsPanel {
       emoji.style.fontSize = `${emojiPx}px`;
       const value = make('span', '', mid);
       value.style.fontSize = `${numberPx}px`;
-      this.slots.push({ ring, mid, emoji, value });
+      this.slots.push({ ring, poolRing, mid, emoji, value });
       // (the hexagons are ALL only: BASICS keeps the four round ones)
-      if (!round) this.allOnly.push(back, ring, mid);
+      if (!round) this.allOnly.push(back, poolRing, ring, mid);
     }
 
     // ---- LAYOUT B, THE LIST -------------------------------------------------------------------------------------
@@ -361,7 +386,11 @@ export class VitalsPanel {
     this.allOnly.push(columnB);
     const row = (parent: HTMLElement, emoji = ''): ListRow => {
       const line = make('div', 'gd-vitals-row', parent);
-      return { row: line, emoji: make('span', '', line, emoji), number: make('b', '', line), name: make('i', '', line) };
+      const parts = { row: line, emoji: make('span', '', line, emoji), number: make('b', '', line), name: make('i', '', line) };
+      const pool = make('div', 'gd-vitals-pool', line);
+      pool.hidden = true;
+      const poolCan = make('span', '', pool), poolHas = make('span', '', pool);
+      return { ...parts, pool, poolCan, poolHas };
     };
     this.lRate = row(columnA);
     this.hearts.push(make('span', 'gd-vitals-heart', this.lRate.emoji, '❤️'));
@@ -470,6 +499,16 @@ export class VitalsPanel {
           slot.ring.classList.toggle('is-alert', v === 'true');
           slot.mid.classList.toggle('is-alert', v === 'true');
         });
+        // (stamina's middle part: the faint ring as far as she can get back; the rest of the ring stays dark)
+        this.set(`g${i}.pool`, view.pool === undefined ? '' : `${(clamp01(view.pool) * 100).toFixed(1)} ${view.colour}`, (v) => {
+          if (!v) { slot.poolRing.style.display = 'none'; return; }
+          const [share, colour] = v.split(' ');
+          slot.poolRing.style.display = '';
+          slot.poolRing.setAttribute('stroke', colour);
+          slot.poolRing.setAttribute('stroke-dasharray', `${share} 100`);
+          slot.poolRing.setAttribute('stroke-linecap', Number(share) > 1 && i < BIG ? 'round' : 'butt');
+          slot.poolRing.style.visibility = Number(share) > 0.2 ? '' : 'hidden';
+        });
       });
     } else {
       this.set('l.rate', rate, (v) => (this.lRate.number.textContent = v));
@@ -484,6 +523,14 @@ export class VitalsPanel {
         this.set(`l${i}.colour`, view.colour, (v) => (row.number.style.color = v));
         this.set(`l${i}.name`, view.name, (v) => (row.name.textContent = v));
         this.set(`l${i}.alert`, String(view.alert), (v) => row.row.classList.toggle('is-alert', v === 'true'));
+        // (stamina's three-part bar under its row)
+        this.set(`l${i}.pool`, view.pool === undefined ? '' : `${(clamp01(view.pool) * 100).toFixed(1)} ${(clamp01(view.share) * 100).toFixed(1)} ${view.colour}`, (v) => {
+          row.pool.hidden = !v;
+          if (!v) return;
+          const [can, has, colour] = v.split(' ');
+          row.poolCan.style.width = `${can}%`; row.poolCan.style.background = colour; row.poolCan.style.opacity = '0.35';
+          row.poolHas.style.width = `${has}%`; row.poolHas.style.background = colour;
+        });
       });
     }
 

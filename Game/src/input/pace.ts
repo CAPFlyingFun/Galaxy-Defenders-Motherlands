@@ -21,9 +21,11 @@
 // So a full push from standing walks at once, then jogs, runs and sprints;
 // easing the stick back to the middle ring keeps whatever pace she reached.
 //
-// HER BODY HAS A SAY (src/vitals/heroineVitals.ts): with little stamina left
-// she cannot hold a sprint, then cannot hold a run; and tiredness, hunger and
-// thirst take a share off her speed at every pace.
+// HER BODY HAS A SAY (src/vitals/heroineVitals.ts): she keeps her pace right
+// down to empty stamina (no slow fade: Joshua, 2026-11-25); then she stands
+// winded, and gets her paces back one by one as her stamina comes back (jog at
+// 20% of her pool, run at 30%, sprint at 40%). Hunger and thirst take a share
+// off her speed at every pace.
 // ============================================================================
 
 /** The four paces and their ground speeds, metres a second (the same speeds her vitals call a walk, jog, run, sprint). */
@@ -69,18 +71,17 @@ export const PACE_TUNING = {
    * threat add breaths on top, and could keep her bent over all through a fight); then she straightens up over
    * `windedRiseSeconds` (his: "the same 1.5s for consistency", the camera's return). Measured with the game's vitals:
    * a sprint to empty breathes 37 a minute and is down to 28 in 11 s, a run (41) in 15 s.
-   * After that she can only walk until her BREATHING is back down to `windedUntilBreaths` a minute (Joshua: "I would
-   * raise based on the breathing rate"). 25 is the top of the range a fit adult's breathing is back to a few minutes
-   * after hard exercise (15-25 a minute; light exercise is 20-30, resting 12-20: Fitnessenger's breathing-rate table,
-   * from Joshua's research), AND her stamina is back to at least `windedUntil` (so she cannot run straight out again; a
-   * body that gives no breathing rate goes by this alone).
+   * AFTER THAT, HER PACES COME BACK ONE BY ONE (Joshua, 2026-11-25: "Resuming after exhaustion: Jog 20%, run 30%, sprint
+   * 40%"): only a walk until her stamina is back to `resumeAt[0]` of her pool (her base x her energy), a jog until
+   * `resumeAt[1]`, a run until `resumeAt[2]`; from there everything (so a few points back never flick her from a sprint
+   * to a walk and back). With no pool at all (her energy at 0: his straight line, no floor) she can only walk until she
+   * has rested.
    */
   windedBreathsUp: 28,
   windedLeast: 5,
   windedMost: 20,
   windedRiseSeconds: 1.5,
-  windedUntilBreaths: 25,
-  windedUntil: 0.15,
+  resumeAt: [0.2, 0.3, 0.4] as readonly [jog: number, run: number, sprint: number],
   /** How quickly her real speed follows the pace she is set to, metres a second each second (speeding up, slowing down). */
   speedUp: 6,
   slowDown: 9,
@@ -88,9 +89,11 @@ export const PACE_TUNING = {
 
 /** What her body allows right now (from her vitals). */
 export interface PaceLimits {
-  /** her stamina, 0 empty .. 1 fresh */
+  /** her stamina, 0 empty .. 1 fresh (a share of her whole pool) */
   readonly stamina: number;
-  /** the share of her full speed she can manage, 0..1 (tiredness, hunger and thirst) */
+  /** how much of her whole pool she can have now, the same share (her energy); left out, all of it */
+  readonly staminaPool?: number;
+  /** the share of her full speed she can manage, 0..1 (hunger and thirst) */
   readonly speedShare: number;
   /** her breaths a minute, if the game knows them (she has her breath back when it is low again) */
   readonly breathsPerMinute?: number;
@@ -122,8 +125,10 @@ export class Pace {
    * goes from PACES to PACES_FULL_TERM by this. Set by the game each frame (src/main.ts).
    */
   carrying = 0;
-  /** Out of stamina: true from empty until her breath is back (walking only, after the hold). */
+  /** Out of stamina: true from empty until 40% of her pool is back (after the hold her paces come back one by one). */
   winded = false;
+  /** Winded: the fastest pace she has back so far (1 a walk .. 4 a sprint: PACE_TUNING.resumeAt). */
+  regained = 4;
   /** Seconds left of the winded hold: above 0 while she is bent over or straightening up (she cannot move at all). While
    * bent over it is the rise still to come plus a moment; straightening up, the seconds left of it. */
   holdLeft = 0;
@@ -180,14 +185,22 @@ export class Pace {
     const t = PACE_TUNING;
     this.ring = ringOf(push);
 
-    // OUT OF STAMINA: the hold first (the stick does nothing), then walking only until she has her breath back
+    // OUT OF STAMINA: the hold first (the stick does nothing), then her paces back one by one as her stamina comes back
+    // (`resumeAt`, shares of her pool). It comes only while she is going somewhere: standing still with an empty pool
+    // (her energy at 0) she is not winded, only unable to go faster than a walk.
     const breaths = limits.breathsPerMinute;
-    if (!this.winded && limits.stamina <= 0.001) {
-      this.winded = true; this.windedFor = 0; this.riseLeft = -1; this.holdLeft = t.windedRiseSeconds + 1;
+    const pool = Math.max(0, Math.min(1, limits.staminaPool ?? 1));
+    const back = pool > 0.001 ? limits.stamina / pool : 0;
+    // (empty again on a pace she had got back counts too; walking on an empty pool does not)
+    const emptied = limits.stamina <= 0.001 && pool > 0.001 && this.level >= 1 && this.holdLeft <= 0;
+    if (emptied && (!this.winded || this.regained > 1)) {
+      this.winded = true; this.regained = 1; this.windedFor = 0; this.riseLeft = -1; this.holdLeft = t.windedRiseSeconds + 1;
       this.windedFrom = Math.max(t.windedBreathsUp + 1, breaths ?? 0); this.windedCalm = 0;
     }
-    const breathBack = (breaths === undefined || breaths <= t.windedUntilBreaths) && limits.stamina >= t.windedUntil;
-    if (this.winded && this.holdLeft <= 0 && breathBack) this.winded = false;
+    // (a pace once back STAYS back until she is empty again: going at it drains her under its mark at once, and she must
+    //  not flick back to a walk every time: Joshua, "avoid repeatedly switching... every time a tiny amount regenerates")
+    if (this.winded) this.regained = Math.max(this.regained, back >= t.resumeAt[2] ? 4 : back >= t.resumeAt[1] ? 3 : back >= t.resumeAt[0] ? 2 : 1);
+    if (this.winded && this.holdLeft <= 0 && this.regained >= 4) this.winded = false;
     if (this.holdLeft > 0) {
       // BENT OVER until her breathing is down (at least windedLeast, at most windedMost seconds), then STRAIGHTENING UP
       this.windedFor += dt;
@@ -214,9 +227,10 @@ export class Pace {
       else if (this.ring === 4) this.level += dt / t.fastUpSeconds;
       // (ring 2 holds)
 
-      // what her stamina allows: everything until it is empty; winded (after the hold), only a walk; and never past the
-      // player's top pace
-      const most = Math.min(this.winded ? 1 : 4, this.levelMost, Math.max(1, Math.min(4, this.ceiling)));
+      // what her stamina allows: everything until it is empty; winded (after the hold), the paces she has the stamina
+      // back for (`resumeAt`); no pool at all, a walk; and never past the player's top pace
+      const allowed = pool <= 0.001 ? 1 : this.winded ? this.regained : 4;
+      const most = Math.min(allowed, this.levelMost, Math.max(1, Math.min(4, this.ceiling)));
       // (over it she eases down from where she WAS, a pace each `tiredDownSeconds`, never building up meanwhile: before,
       //  on the outer ring she built up quicker, a pace each 0.6 s, than she came down, a pace a second, so the limit
       //  crept up and she went past it: found measuring the top pace, `scripts/sim_sprint.ts`; it was so for the walk

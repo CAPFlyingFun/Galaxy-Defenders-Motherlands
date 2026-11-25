@@ -92,6 +92,12 @@ import type { PrologueWorld } from './story/chapters/johnPrologue';
 const SIDE_WALK_MOST = 1.0;
 const SIDE_WALK_MOST_FULL_TERM = 0.8;
 const SIDE_EFFORT = 1.25;
+/**
+ * JOHN'S OWN BODY for his vitals (Joshua, 2026-11-25: "Equal starting endurance, individual physiology"): 32, a man's
+ * heart (65 at rest, peak 208 - 0.7 x his age) and weight (vitals/heroineVitals.ts VITALS_TUNING.body). His lungs come
+ * with the builder's lung settings (asked of its agent); his endurance starts the same as hers.
+ */
+const JOHN_BODY = { age: 32, weeks: 0, male: true } as const;
 import { CAMERA_STYLES, CAMERA_STYLE_NAMES, type CameraStyle } from './camera/cameraRig';
 
 /** What either real heroine can say about her own cost (the stand-in cannot): read by the debug readout. */
@@ -999,7 +1005,16 @@ async function start(): Promise<void> {
   // (her pace is in her kit: `pace`)
   // (THE PROLOGUE: the first one made is John, with his own vitals, never pregnant; he is in MANUAL, nothing to fight)
   if (prologue) graphics.autoFire = 'off';
-  let vitals = prologue ? new HeroineVitals({ age: 30, weeks: 0 }) : new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 });
+  /**
+   * THEIR TRAINING (Joshua approved the four upgrades, 2026-11-25): fitness and Endurance, Recovery, Strength, 0-100, from
+   * Settings -> TEST TOOLS for both of them until they are earned (vitals/heroineVitals.ts VITALS_TUNING.training).
+   */
+  const trainVitals = (v: HeroineVitals): HeroineVitals => {
+    v.fitness = graphics.trainFitness / 100; v.endurance = graphics.trainEndurance / 100;
+    v.recovery = graphics.trainRecovery / 100; v.strength = graphics.trainStrength / 100;
+    return v;
+  };
+  let vitals = trainVitals(prologue ? new HeroineVitals(JOHN_BODY) : new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 }));
   const firstOne: Character = { name: prologue ? 'John' : 'Blaze', body: bodyNow, vitals, kit: blazeKit, cam: null, autoFire: graphics.autoFire === 'on' ? 'on' : 'off', brain: null, port: null, needs: null, combat: null };
   if (prologue) john = firstOne; else blaze = firstOne;
   playing = firstOne;
@@ -1027,7 +1042,7 @@ async function start(): Promise<void> {
       const kit = makeKit(standIn(() => john?.body ?? body), x, z, turn.base);
       // (he starts in MANUAL whatever hers is: standing by in AUTO he would draw and fire the moment the game opens;
       //  swapped to, AUTO is set for him, and kept)
-      john = { name: 'John', body, vitals: new HeroineVitals({ age: 30, weeks: 0 }), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
+      john = { name: 'John', body, vitals: trainVitals(new HeroineVitals(JOHN_BODY)), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
       markStart('John made');
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));
@@ -1700,6 +1715,7 @@ async function start(): Promise<void> {
       else if (key === 'autoFire') { if (playing) playing.autoFire = graphics.autoFire === 'on' ? 'on' : 'off'; applyView(); }
       else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
       else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
+      else if (key === 'trainFitness' || key === 'trainEndurance' || key === 'trainRecovery' || key === 'trainStrength') { for (const c of [blaze, john]) if (c) trainVitals(c.vitals); }
       // (sound: the master at once; her breathing's own is read every frame, `playBreaths`)
       else if (key === 'soundVolume') sound.setVolume(graphics.soundVolume / 100);
       else if (key === 'breathVolume') { /* live: read every frame */ }
@@ -2098,7 +2114,7 @@ async function start(): Promise<void> {
     // 9. THEIR VITALS: what they just did moves them on (walking, firing, the danger); their body breathes by them
     s.wetFor = s.waterDepthNow > 0.02 ? 0 : s.wetFor + dt;
     const wet = s.wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (s.wetFor - WET_HOLD) / WET_DRY);
-    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, carrying: k.pace.carrying, pace: k.pace.level, waterDepth: s.waterDepthNow, wet });
+    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, ground: island ? { x: m.x, z: m.z, y: island.groundAt(m.x, m.z) } : undefined, waterDepth: s.waterDepthNow, wet });
     body.setVitals?.(c.vitals.reading);
     s.limits = c.vitals.reading;
   };
@@ -2758,7 +2774,7 @@ async function start(): Promise<void> {
     // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
     wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
     const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
-    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, carrying, pace: pace.level, waterDepth: waterDepthNow, wet });
+    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, ground: island ? { x: motion.x, z: motion.z, y: island.groundAt(motion.x, motion.z) } : undefined, waterDepth: waterDepthNow, wet });
     const reading = vitals.reading;
     // THE ONE NOT BEING PLAYED: what they were doing carries on, and their brain runs them (Step 1 and 2)
     {
@@ -2860,6 +2876,12 @@ async function start(): Promise<void> {
         // (her stomach, food + water, and her bladder: Settings -> FOOD & DRINK)
         const inside = vitals.contents;
         lines.push(`gut ${Math.round(inside.foodMl)}+${Math.round(inside.waterMl)} · bladder ${Math.round(inside.bladderMl)}`);
+        // (v0.2.174's chain: her workload over her capacity is her effort; the slope under her; her pool, her energy)
+        {
+          const v = vitals.reading;
+          lines.push(`work ${v.workload.toFixed(2)}/${v.capacity.toFixed(2)} = ${v.effort.toFixed(2)} · ${Math.round(v.grade * 100)}%`);
+          lines.push(`pool ${Math.round(v.staminaPool * 100)} · fit ${Math.round(v.fitness * 100)}`);
+        }
         // (the island's forest: trees drawn, in how many draws)
         // (the island's grid, ground and rivers as chosen in Settings -> WORLD: v0.2.166)
         if (island) lines.push(`isle ${island.grid}x${island.grid} · ${graphics.ground === 'textures' ? 'tex' : 'colours'} · rivers ${graphics.rivers}`);

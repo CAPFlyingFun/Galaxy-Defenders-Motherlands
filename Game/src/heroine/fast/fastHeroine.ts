@@ -51,7 +51,7 @@ import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist, type CrabMove } from './footGround';
 import { ArmClear, fitBelly, fitBellyBump, fitBreasts, fitRibs, type Egg } from './armClear';
 import { JointGuard, type JointExcess } from './jointGuard';
-import { HandReach } from './handReach';
+import { HandReach, REACH } from './handReach';
 import { FingerTouch } from './fingerTouch';
 import { LowerBody } from './lowerBody';
 import { BellyTouch, type KickMood } from './bellyTouch';
@@ -1213,6 +1213,8 @@ if (uHideHead > 0.5) {
   const bellyHand: BellyTouch = new BellyTouch({
     // (how far a hand reaches: its upper arm and forearm, nearly straight)
     armLength: (hand) => { const a = hand === 0 ? arms.left : arms.right; return (a.upper.getWorldPosition(v1).distanceTo(a.fore.getWorldPosition(v2)) + v2.distanceTo(a.hand.getWorldPosition(v1))) * 0.95; },
+    // (the farthest her hand bone gets from her shoulder: her arm as straight as her reach lets it go, handReach.ts)
+    armReach: (hand) => { const a = hand === 0 ? arms.left : arms.right; return (a.upper.getWorldPosition(v1).distanceTo(a.fore.getWorldPosition(v2)) + v2.distanceTo(a.hand.getWorldPosition(v1))) * REACH.most; },
     restToWorld: (point, out, direction) => armClear.restToWorld(point, out, direction),
     insideBelly: (point, grow) => armClear.insideBelly(point, grow),
     shoulder: (hand, out) => out.setFromMatrixPosition(hand === 0 ? arms.left.upper.matrixWorld : arms.right.upper.matrixWorld),

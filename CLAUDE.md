@@ -1422,11 +1422,16 @@ use the game's single copy of three.js.
   very bottom of her belly, or out of both hands' reach is touched at the NEAREST clean spot (before: out of reach was
   not touched at all); on her side her fingers point forward round her belly, elbow back; and a hand on her belly keeps
   its elbow out of her ribs and sides (an egg from her belly's middle to under her arms; bars, clips and the door left
-  as they were). The 25 test spots at 100 / 150 / 200 %: 24 / 19 / 21 clean (palm within -6..+8 mm of her skin, no arm
-  bone in her); every spot on her side from her belly's middle up is clean at all three. The rest are low: on her front
-  a palm pressed 0.7-1.4 cm into her belly (as such spots did before, when her hand could reach them); at 200 % the low
-  side spots, moved under her belly, a palm pressed 1.1-1.3 cm and one wrist in her hip; at 100 % one palm 2.5 cm off.
-  Left for now.
+  as they were).
+  ONLY WHERE HER ARM REALLY REACHES (Joshua, same evening: "fix the remaining hands in the skin then push once good";
+  bellyTouch.ts `poseFor`, `reachSpare` 1.5 cm, the body's `armReach`): a spot counted as in reach if her shoulder was no
+  further from it than her arm and 10 cm; low on her front her arm then fell 2.5-4.7 cm short of her hand's pose, and as
+  the line from her shoulder to there runs through her belly, her palm stopped 1-2 cm INSIDE it (it had done so before
+  too). Now the pose her hand would be given there is worked out and her hand bone must be within her arm's reach of her
+  shoulder (straight as handReach.ts lets it go, REACH.most), else the nearest spot that is. THE 25 TEST SPOTS at 100,
+  150 and 200 %: all 75 touched and clean (palm 2.5 mm into to 7.5 mm off her skin, 1-4 mm at 150 and 200 %; no arm bone
+  in her); the only touch left is the heel of her hand by her skin and, her right hand across to her front, her upper
+  arm against the side of her breast (pictured: it lies along her side).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

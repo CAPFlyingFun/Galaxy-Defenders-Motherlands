@@ -45,6 +45,15 @@
 // from her front at every height; past it her palm stood 1.5-6 cm off her and
 // her wrist was inside her hip low down, or her palm was pressed into her up
 // high; and right under a 200 % belly her palm sank about a centimetre.
+// AND ONLY WHERE HER ARM REALLY REACHES (Joshua, 2026-11-24: "fix the
+// remaining hands in the skin"): a spot was taken as within reach if her
+// shoulder was no further from it than her arm and a hand's length; low on her
+// front her arm then fell 2.5-4.7 cm short of the pose her hand was given, and
+// the line from her shoulder to there runs through her belly, so her palm
+// stopped 1-2 cm INSIDE it. Now the pose her hand would be given is worked out
+// (`poseFor`, her palm on the spot as `place` lays it) and a spot is within
+// reach only if her hand bone gets there with her arm no straighter than it
+// goes (`armReach`), less `reachSpare`.
 // ON HER SIDE HER FINGERS POINT FORWARD round her belly, her elbow back
 // (`sideFrom`, `sideFull`): with her fingers down the line from her shoulder,
 // her forearm ran down her side, through her ribs and waist where they stand
@@ -106,7 +115,12 @@ export const BELLY_TOUCH = {
   restSeconds: 1.5,
   /** Her arm's way to the spot must stay this far out of her belly, metres (else that hand does not cross over). */
   crossClear: 0.02,
-  /** A spot is within a hand's reach if no further from its shoulder than its arm and this much more (wrist to palm), metres. */
+  /**
+   * A spot is within a hand's reach if the pose its hand would be given there (`poseFor`) is no further from its
+   * shoulder than its arm reaches, less this much to spare, metres (her breath and her walk move her shoulder a little).
+   */
+  reachSpare: 0.015,
+  /** Holding her belly up as she runs: a spot is tried if no further from her shoulder than her arm and this much, metres. */
   handReach: 0.1,
   /** Her hand comes in to the spot from this far in front of it, metres. */
   approach: 0.12,
@@ -152,6 +166,8 @@ export interface BellyTouchBody {
   insideBelly(point: THREE.Vector3, grow: number): boolean;
   /** How far a hand reaches from its shoulder to its hand bone, metres (nearly straight). */
   armLength(hand: 0 | 1): number;
+  /** The farthest its hand bone gets from its shoulder, metres (her arm as straight as handReach.ts lets it go). */
+  armReach(hand: 0 | 1): number;
   /** A hand's shoulder, world. */
   shoulder(hand: 0 | 1, out: THREE.Vector3): THREE.Vector3;
   /** Whether a hand is free now (no gun, no job, nothing the game is doing with it: a hand on her belly counts as free). */
@@ -191,6 +207,7 @@ export interface BellyTouchBody {
 const spotWorld = new THREE.Vector3(), outWorld = new THREE.Vector3(), shoulderAt = new THREE.Vector3(), otherShoulder = new THREE.Vector3();
 const leftWay = new THREE.Vector3(), fingers = new THREE.Vector3(), palmTo = new THREE.Vector3(), step = new THREE.Vector3();
 const centre = new THREE.Vector3(), restPoint = new THREE.Vector3(), target = new THREE.Vector3(), around = new THREE.Vector3();
+const at2 = new THREE.Vector3(), palm2 = new THREE.Vector3(), handAt = new THREE.Vector3(), reachPose = new THREE.Matrix4();
 
 /** A random number between two. */
 const between = (least: number, most: number): number => least + Math.random() * (most - least);
@@ -525,9 +542,11 @@ export class BellyTouch {
       .sort((p, q) => (p === nearer ? -1 : 0) - (q === nearer ? -1 : 0));
     for (const hand of order) {
       b.shoulder(hand, shoulderAt);
-      // (a spot it cannot reach without her leaning in: not this hand. The hand bone stops short of the palm's middle,
-      //  so it need not reach the spot itself: a hand's length less)
-      if (shoulderAt.distanceTo(spotWorld) > b.armLength(hand) + BELLY_TOUCH.handReach) continue;
+      // (a spot it cannot reach without her leaning in: not this hand. Measured on the pose its hand would be given
+      //  there: its hand bone within her arm's reach of her shoulder, `reachSpare` to spare)
+      this.poseFor(hand, 'kick', spotWorld, outWorld, reachPose);
+      handAt.setFromMatrixPosition(reachPose);
+      if (handAt.distanceTo(shoulderAt) > b.armReach(hand) - BELLY_TOUCH.reachSpare) continue;
       // (CROSSING OVER to her other side, the straight way from its shoulder to that point must stay out of her belly, or
       //  it would go through her; on its own side her elbow keeps her arm clear: armClear.ts)
       if (hand === nearer) return hand;
@@ -541,6 +560,43 @@ export class BellyTouch {
     return -1;
   }
 
+  /**
+   * THE POSE A HAND WOULD BE GIVEN for its palm on a spot (world: the spot on her skin and the way out of it there), as
+   * `place` lays it before her skin there is measured: for the reach test (`pickHand`). Into `out`.
+   */
+  private poseFor(hand: 0 | 1, kind: 'kick' | 'pair' | 'support', spot: THREE.Vector3, outWay: THREE.Vector3, out: THREE.Matrix4): THREE.Matrix4 {
+    this.fingersFor(hand, kind, spot, outWay, fingers);
+    return this.body.flatPose(hand, at2.copy(spot).addScaledVector(outWay, BELLY_TOUCH.gap), palm2.copy(outWay).negate(), fingers, out);
+  }
+
+  /** The way a hand's fingers lie on a spot (world), into `out` (along her skin there). */
+  private fingersFor(hand: 0 | 1, kind: 'kick' | 'pair' | 'support', spot: THREE.Vector3, outWay: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    const b = this.body;
+    b.left(leftWay);
+    if (kind === 'support') {
+      // HOLDING HER BELLY UP: her fingers forward and in toward her other side (her left hand's to her right), under her
+      // belly, her forearm along its low curve
+      b.forward(out).multiplyScalar(BELLY_TOUCH.supportForward).addScaledVector(leftWay, hand === 0 ? -1 : 1);
+    } else {
+      // HER FINGERS carry on the line of her forearm, from her shoulder to the spot, turned a little in toward her middle
+      // (her left hand's to her right): her wrist hardly bends, wherever on her belly the spot is
+      b.shoulder(hand, shoulderAt);
+      out.copy(spot).sub(shoulderAt).normalize().addScaledVector(leftWay, hand === 0 ? -0.35 : 0.35).normalize();
+      // ON HER SIDE, FORWARD ROUND HER BELLY (see the top of this file): toward her front along her skin there, a little
+      // down, by as much as the spot faces her side
+      const side = Math.abs(outWay.dot(leftWay));
+      const turn = Math.max(0, Math.min(1, (side - BELLY_TOUCH.sideFrom) / (BELLY_TOUCH.sideFull - BELLY_TOUCH.sideFrom)));
+      if (turn > 0) {
+        b.forward(around);
+        around.addScaledVector(outWay, -around.dot(outWay)).normalize();
+        around.y -= 0.3;
+        around.normalize();
+        out.lerp(around, turn * turn * (3 - 2 * turn));
+      }
+    }
+    return out.addScaledVector(outWay, -out.dot(outWay)).normalize();
+  }
+
   /** Where this hand's bone goes now: its palm flat on its spot, 2 mm off her skin. */
   private place(on: HandOn): THREE.Matrix4 {
     const b = this.body, hand = on.hand;
@@ -549,29 +605,7 @@ export class BellyTouch {
     palmTo.copy(outWorld).negate();
     // (her skin there now: the spot, pushed out by the kick's bump)
     spotWorld.addScaledVector(outWorld, on.push);
-    b.left(leftWay);
-    if (on.kind === 'support') {
-      // HOLDING HER BELLY UP: her fingers forward and in toward her other side (her left hand's to her right), under her
-      // belly, her forearm along its low curve
-      b.forward(fingers).multiplyScalar(BELLY_TOUCH.supportForward).addScaledVector(leftWay, hand === 0 ? -1 : 1);
-    } else {
-      // HER FINGERS carry on the line of her forearm, from her shoulder to the spot, turned a little in toward her middle
-      // (her left hand's to her right): her wrist hardly bends, wherever on her belly the spot is
-      b.shoulder(hand, shoulderAt);
-      fingers.copy(spotWorld).sub(shoulderAt).normalize().addScaledVector(leftWay, hand === 0 ? -0.35 : 0.35).normalize();
-      // ON HER SIDE, FORWARD ROUND HER BELLY (see the top of this file): toward her front along her skin there, a little
-      // down, by as much as the spot faces her side
-      const side = Math.abs(outWorld.dot(leftWay));
-      const turn = Math.max(0, Math.min(1, (side - BELLY_TOUCH.sideFrom) / (BELLY_TOUCH.sideFull - BELLY_TOUCH.sideFrom)));
-      if (turn > 0) {
-        b.forward(around);
-        around.addScaledVector(outWorld, -around.dot(outWorld)).normalize();
-        around.y -= 0.3;
-        around.normalize();
-        fingers.lerp(around, turn * turn * (3 - 2 * turn));
-      }
-    }
-    fingers.addScaledVector(outWorld, -fingers.dot(outWorld)).normalize();
+    this.fingersFor(hand, on.kind, spotWorld, outWorld, fingers);
     // (her skin's own patch there, measured once a touch as her hand sets off: the spot onto it, its real facing for her
     //  palm, its real curve; then all of it again from those)
     if (on.curve < 0) {

@@ -113,18 +113,27 @@ export const VITALS_TUNING = {
    */
   exertion: { breathUpPerMph: 1, heartUpPerMph: 2, quickest: 1.5, breathDown: [40, 25] as readonly [number, number], heartDown: [150, 75] as readonly [number, number], winded: 0.6, most: 1.15 },
   /**
-   * HER BREATHING, fresh, by her exertion, breaths a minute: the low ends of Joshua's ranges (a walk 19-25, jog 26-31,
-   * run 32-42, sprint 43-50). The builder's own breathing (vitalsFor: the air she needs a minute over a breath's size,
-   * by her lungs) is asked at the effort that breathes these for its default lungs (`feltForExertion`), so a body with
-   * other lungs (John, once the builder has lung settings) breathes its own way at the same exertion.
+   * HER BREATHING, JOSHUA'S PLAN B (v0.2.175, 2026-11-25: "a reverse BrPM based on stamina remaining... when you get to
+   * 50% stamina, you are 50% of the way to 50 BrPM, at 10% stamina remaining, you are 90% to max BrPM, and at 0%
+   * stamina, you will be at 50"; of the two ways to start it, his "I'd go with B"). Two numbers for each exertion,
+   * breaths a minute:
+   *   START (`breathStart`): what her breathing jumps to in the first seconds of a pace, as her exertion catches up
+   *     (above: one second per mph): a walk 19, jog 25, run 28, sprint 30 (what v0.2.174 reached 5 s in).
+   *   TOP (`breathTop`): what it reaches when her pool is EMPTY: a jog 30, run 38, sprint 50 (v0.2.174's tops).
+   * Between them a STRAIGHT LINE BY THE SHARE OF HER POOL SHE HAS SPENT: half her stamina left, half way from her start
+   * to her top; 10% left, 90% of the way; empty, at her top. A walk refills her, so it stays at its start. Stopping, she
+   * comes back down that line as her stamina refills, and her top lets go of the pace she ran at her exertion's own pace
+   * down (`breathe`, `exertTop`): a sprint to half and then a jog settles onto the jog's own line.
+   * The builder's own breathing (vitalsFor: the air she needs a minute over a breath's size, by her lungs) is asked at
+   * the effort that breathes these for its default lungs (`feltForBreaths`), her start fresh and her top at
+   * `breathTopTired` of the builder's tiredness (its quicker, shallower breaths: without it its lungs top out at 47), so
+   * a body with other lungs (John, once the builder has lung settings) breathes its own way at the same exertion.
+   * (Before, v0.2.174: her fresh rate, 43 sprinting, quickened by tiredness to her top once HALF her pool was spent, and
+   * held there for the second half.)
    */
-  breathFresh: [[0, 14], [0.3, 19], [0.6, 26], [0.8, 33], [1, 43], [1.15, 47]] as ReadonlyArray<readonly [exertion: number, breathsPerMinute: number]>,
-  /**
-   * TIRED, SHE BREATHES QUICKER: the builder's own tiredness (shallower, quicker breaths: STAMINA.shallowMost,
-   * quickMost) at `share` of its full strength once `fullAt` of her pool is spent, less before. That is the high end of
-   * Joshua's ranges by about half her pool (his "top by about 45-50%"): a sprint 43 -> 50, a run 33 -> 38, a jog 26 -> 30.
-   */
-  tiredBreath: { share: 0.48, fullAt: 0.5 },
+  breathStart: [[0, 14], [0.3, 19], [0.6, 25], [0.8, 28], [1, 30], [1.15, 32]] as ReadonlyArray<readonly [exertion: number, breathsPerMinute: number]>,
+  breathTop: [[0, 14], [0.3, 19], [0.6, 30], [0.8, 38], [1, 50], [1.15, 50]] as ReadonlyArray<readonly [exertion: number, breathsPerMinute: number]>,
+  breathTopTired: 0.48,
   /**
    * HER HEART by her exertion: the share of her heart-rate reserve (her rest to her peak) she uses, which tracks the
    * share of her oxygen-uptake reserve (Swain and Leutholtz 1997; https://jssm.org/jssm-05-662.xml%3EFulltext). Mary:
@@ -445,27 +454,35 @@ export function staminaAtEffort(effort: number): number {
 }
 
 /**
- * THE EFFORT THE BUILDER'S BREATHING TAKES to breathe her fresh rate at an exertion (VITALS_TUNING.breathFresh), for
- * its default lungs: worked out once by halving (its breathing rises with the effort it is asked), every 0.025 of
- * exertion, then read between. Asked of a body with other lungs, the same effort gives the same share of its air and
- * the same share of its breath's size, so it breathes its own rate.
+ * THE EFFORT THE BUILDER'S BREATHING TAKES to breathe her START or her TOP at an exertion (VITALS_TUNING.breathStart,
+ * breathTop), for its default lungs: worked out once by halving (its breathing rises with the effort it is asked),
+ * every 0.025 of exertion, then read between. Her start is asked fresh, her top at `breathTopTired` of the builder's
+ * tiredness (`feltEnergy`). Asked of a body with other lungs, the same effort gives the same share of its air and the
+ * same share of its breath's size, so it breathes its own rate.
  */
-let feltTable: number[] | null = null;
+const feltTables: { start?: number[]; top?: number[] } = {};
 const FELT_STEP = 0.025;
-export function feltForExertion(exertion: number): number {
-  if (!feltTable) {
-    feltTable = [];
+/** The builder's energy (1 fresh .. 0 spent) her start and her top are asked at. */
+export function feltEnergy(which: 'start' | 'top'): number {
+  return which === 'start' ? 1 : 1 - VITALS_TUNING.breathTopTired;
+}
+export function feltForBreaths(which: 'start' | 'top', exertion: number): number {
+  let table = feltTables[which];
+  if (!table) {
+    table = [];
+    const wants = which === 'start' ? VITALS_TUNING.breathStart : VITALS_TUNING.breathTop, energy = feltEnergy(which);
     for (let x = 0; x <= VITALS_TUNING.exertion.most + 1e-9; x += FELT_STEP) {
-      const want = along(VITALS_TUNING.breathFresh, x);
+      const want = along(wants, x);
       let low = 0, high = 1;
-      if (vitalsFor(1, 1).breathsPerMinute <= want) low = 1;
-      else for (let k = 0; k < 24; k++) { const mid = (low + high) / 2; if (vitalsFor(mid, 1).breathsPerMinute < want) low = mid; else high = mid; }
-      feltTable.push(low === 1 ? 1 : (low + high) / 2);
+      if (vitalsFor(1, energy).breathsPerMinute <= want) low = 1;
+      else for (let k = 0; k < 24; k++) { const mid = (low + high) / 2; if (vitalsFor(mid, energy).breathsPerMinute < want) low = mid; else high = mid; }
+      table.push(low === 1 ? 1 : (low + high) / 2);
     }
+    feltTables[which] = table;
   }
   const at = clamp(exertion, 0, VITALS_TUNING.exertion.most) / FELT_STEP;
-  const i = Math.min(feltTable.length - 2, Math.floor(at)), f = at - i;
-  return feltTable[i] + (feltTable[i + 1] - feltTable[i]) * f;
+  const i = Math.min(table.length - 2, Math.floor(at)), f = at - i;
+  return table[i] + (table[i + 1] - table[i]) * f;
 }
 
 /** A body's peak heart rate (VITALS_TUNING.body): a woman's by the builder's own formula, a man's by Tanaka's. */
@@ -507,6 +524,11 @@ export class HeroineVitals {
   /** Her exertion, for her breathing and for her heart (VITALS_TUNING.exertion): each on its own timing. */
   private exertBreath = 0;
   private exertHeart = 0;
+  /**
+   * The exertion her breathing's TOP is read at (VITALS_TUNING.breathTop): up with her breathing's exertion at once,
+   * down after it at its own pace down, so stopping she does not drop from a sprint's top to a stand's in a moment.
+   */
+  private exertTop = 0;
   /** Her workload, capacity and relative effort this step, and the slope under her (smoothed), for the reading. */
   private workload = 0;
   private capacity = 1;
@@ -579,17 +601,24 @@ export class HeroineVitals {
 
   /**
    * HER BREATH AND HEART THIS STEP, from her exertion and the stamina she has spent (`spent`, a share of her pool):
-   * her breathing the builder's (vitalsFor, her lungs), asked at the effort that breathes her fresh rate
-   * (`feltForExertion`) and at the tiredness that makes it quicker (VITALS_TUNING.tiredBreath); her heart from her
-   * heart-rate reserve (VITALS_TUNING.heartReserve), her rest, her peak and its drift. Fear, pain, thirst and adrenaline
-   * are added after (`step`). Moves her breath and heartbeat on by `dt` at these rates.
+   * her breathing Joshua's plan B (VITALS_TUNING.breathStart, breathTop): the builder's breathing (vitalsFor, her
+   * lungs) at her START for her exertion now and at her TOP for `exertTop`, and the straight line between them by what
+   * she has spent (her breath's rate, its size and its in-share alike); her heart from her heart-rate reserve
+   * (VITALS_TUNING.heartReserve), her rest, her peak and its drift. Fear, pain, thirst and adrenaline are added after
+   * (`step`). Moves her breath and heartbeat on by `dt` at these rates.
    */
   private breathe(dt: number, spent: number, extraBreaths = 0, extraBeats = 0, shallow = 1): VitalsNow {
     const T = VITALS_TUNING, X = T.exertion, h = clamp(dt, 0, 0.5);
-    const feltBreath = Math.max(this.exertBreath, X.winded * spent);
     const feltHeart = Math.max(this.exertHeart, X.winded * spent);
-    const tired = clamp(spent / T.tiredBreath.fullAt, 0, 1);
-    const air = vitalsFor(feltForExertion(feltBreath), 1 - T.tiredBreath.share * tired, this.body);
+    // her breathing: her start, and the share of the way to her top that the stamina she has spent takes her
+    const start = vitalsFor(feltForBreaths('start', this.exertBreath), feltEnergy('start'), this.body);
+    const top = vitalsFor(feltForBreaths('top', this.exertTop), feltEnergy('top'), this.body);
+    const way = clamp(spent, 0, 1);
+    const air = {
+      breathsPerMinute: start.breathsPerMinute + Math.max(0, top.breathsPerMinute - start.breathsPerMinute) * way,
+      tidalL: start.tidalL + (top.tidalL - start.tidalL) * way,
+      inShare: start.inShare + (top.inShare - start.inShare) * way,
+    };
     // her heart: her rest (and pregnancy's), her peak, the share of the reserve between, and its drift as she tires
     const rest = (this.body.restHeart ?? (this.body.male ? T.body.manRestHeart : T.body.womanRestHeart)) + PREGNANT_BREATH.heart * this.pregnancy;
     const peak = Math.max(rest + 20, peakHeartOf(this.body));
@@ -606,7 +635,7 @@ export class HeroineVitals {
     const breath = breathOf(this.vitals.cycle, air.inShare);
     return {
       breathsPerMinute: breaths, beatsPerMinute: beats, tidalL: this.vitals.tidalL, breathL: this.vitals.tidalL * breath, breath,
-      beat: beatOf(this.vitals.pulse), inShare: air.inShare, effort: this.effort, energy: this.staminaPoints / Math.max(1e-9, this.basePoints()), felt: feltBreath,
+      beat: beatOf(this.vitals.pulse), inShare: air.inShare, effort: this.effort, energy: this.staminaPoints / Math.max(1e-9, this.basePoints()), felt: this.exertBreath,
     };
   }
 
@@ -661,6 +690,7 @@ export class HeroineVitals {
     const downHeart = X.heartDown[0] + (X.heartDown[1] - X.heartDown[0]) * fit;
     this.exertBreath += (want - this.exertBreath) * (1 - Math.exp(-dt / (want > this.exertBreath ? upBreath : downBreath)));
     this.exertHeart += (want - this.exertHeart) * (1 - Math.exp(-dt / (want > this.exertHeart ? upHeart : downHeart)));
+    this.exertTop = this.exertBreath >= this.exertTop ? this.exertBreath : this.exertTop + (this.exertBreath - this.exertTop) * (1 - Math.exp(-dt / downBreath));
 
     // 6. WHAT ELSE LIFTS HER HEART AND BREATHING (thirst, pain, fear, adrenaline), each following where it puts them
     //    at its own pace: her heart first, her breathing later; calming down slower, and slower still from the very

@@ -1474,10 +1474,10 @@ use the game's single copy of three.js.
   20% x adrenaline +10% x heat over 38.5 C) = RELATIVE EFFORT -> STAMINA (`staminaByEffort`, points a second of a
   100-point pool: rest +2.2, walk +1.1, 0 at 0.55, jog -0.21, run -0.83, sprint -2.5, -5 at 1.3) / EXERTION, two copies
   chasing the effort (breathing 95% in 1 s per mph, his rule; heart 2 s per mph; down 63% in 37 s and 135 s at starting
-  fitness, fitter quicker; held up by 0.6 x the pool spent, the builder's winded rule) -> BREATHING: the builder's own
-  vitalsFor (her LUNGS) asked at the effort that breathes `breathFresh` for its default lungs (walk 19, jog 26, run 33,
-  sprint 43: the low ends of his ranges; `feltForExertion`, worked out once), and the builder's tiredness at 0.48 of
-  full by half the pool spent (`tiredBreath`: sprint 43 -> 50, run 33 -> 38, jog 26 -> 30) / HEART: her heart-rate
+  fitness, fitter quicker; held up by 0.6 x the pool spent, the builder's winded rule) -> BREATHING (CHANGED in v0.2.175,
+  plan B, see it): the builder's own vitalsFor (her LUNGS) asked at the effort that breathes `breathFresh` for its
+  default lungs (walk 19, jog 26, run 33, sprint 43), and the builder's tiredness at 0.48 of full by half the pool spent
+  (`tiredBreath`: sprint 43 -> 50, run 33 -> 38, jog 26 -> 30) / HEART: her heart-rate
   reserve share (`heartReserve`: walk 103, jog 145, run 163, sprint 173 for Mary) + drift up to 8 near empty; her own
   rest and peak (`body`: a woman 70 and the builder's 206 - 0.88 x age; a man 65 and Tanaka's 208 - 0.7 x age). Each
   condition counts ONCE (before, thirst, pain, fear and pregnancy multiplied the drain: 2.15x). The builder's
@@ -1492,10 +1492,9 @@ use the game's single copy of three.js.
   TRAINING (HeroineVitals `fitness`, `endurance`, `recovery`, `strength`, VITALS_TUNING.training): Settings -> TEST TOOLS,
   four sliders for both until they are earned (`gdm.trainFitness` 20, the others 0; `?fitness=` etc.): Endurance pool
   100 -> 150, Recovery refill +30%, Strength hills and loads -15%. How fitness is earned and lost: not decided yet.
-  THE CARD (vitals/vitalsPanel.ts `pool`): stamina in three parts, bright what she has, faint what she can get back,
-  dark what is out of reach until she rests (her energy): a 3 px bar under its row in the list, the faint ring under
-  the bright one on the gauges (pictured at 932 x 430, energy 60%, stamina 32%). 💪 Effort now shows her relative
-  effort (over 100% uphill or hurt). Readout: `work W/C = R · slope%`, `pool · fit`.
+  THE CARD: stamina in three parts (a 3 px bar under its row in the list, a faint second ring on the gauges; TAKEN
+  OUT in v0.2.175, Joshua: "I didn't ask for it"). 💪 Effort now shows her relative effort (over 100% uphill or hurt;
+  Joshua, v0.2.175: "effort is good"). Readout: `work W/C = R · slope%`, `pool · fit`.
   MEASURED (scripts/sim_physiology.ts, new; sim_sprint.ts updated; sim_stamina_breath.ts gone), Mary, starting fitness,
   full energy, flat: sprint empty 41 s, breathing 30 / 40 / 49 at 5 / 10 / 20 s, 50 from 21 s (half the pool), heart
   123 / 152 / 168, 176 at empty, 150 a minute after, 118 after two, full again in 45 s; run 2:01, breathing top 38 at
@@ -1509,6 +1508,28 @@ use the game's single copy of three.js.
   her slope read (-2.6% walking inland) and her effort followed; no errors.
   NOT YET: John's own LUNGS (the builder's agent is asked for per-character lung and heart settings in its vitals;
   until then every body breathes with the default lungs, and John's breathing equals Mary's); earning fitness.
+- v0.2.175: HER BREATHING CLIMBS WITH THE STAMINA SHE SPENDS (PLAN B), AND THE STAMINA BAR TAKEN OUT (Joshua,
+  2026-11-25, of v0.2.174: "remove the bar from the text fields… I didn't ask for it", "the gauge style already had a
+  circular gauge so no need for two of them"; "How about a reverse BrPM based on stamina remaining?... when you get to
+  50% stamina, you are 50% of the way to 50 BrPM, at 10% stamina remaining, you are 90% to max BrPM, and at 0% stamina,
+  you will be at 50"; shown A (from rest) and B (from a quick jump) against v0.2.174, "I'd go with B"; "effort is
+  good"). (1) THE CARD (vitals/vitalsPanel.ts): v0.2.172's again, the three-part bar and the second ring gone; kept:
+  stamina pulses under 15% of her pool, 💪 effort as her relative effort (over 100% sprinting uphill or firing, thirsty,
+  hurt or pregnant: on purpose). (2) HER BREATHING (heroineVitals.ts VITALS_TUNING `breathStart`, `breathTop`,
+  `breathTopTired`; `feltForBreaths`, `exertTop`, `breathe`): a START her exertion reaches in the first seconds of a
+  pace (one second per mph, as before): walk 19, jog 25, run 28, sprint 30; a TOP at an EMPTY pool: jog 30, run 38,
+  sprint 50; between them a STRAIGHT LINE by the share of her pool spent (half left, half way; 10% left, 90%; empty,
+  the top). A walk refills her, so it stays 19. Stopping, she comes back down the line as stamina refills, and her top
+  lets go of the pace she ran at her exertion's pace down (`exertTop`), so a sprint to half then a jog ends on the
+  jog's line. Both ends are the builder's vitalsFor (her lungs) at the effort that breathes them for its default lungs,
+  her start fresh, her top at 0.48 of its tiredness (without it its lungs top out at 47): a body with other lungs will
+  breathe its own way. Her heart, stamina, paces and energy are unchanged.
+  MEASURED (sim_physiology.ts, sim_sprint.ts), Mary, starting fitness, full energy, flat, breaths a minute, v0.2.174 ->
+  now: SPRINT 5 s 30 -> 27, 10 s 40 -> 32, 20 s 49 -> 39, 30 s 50 -> 44, 50 at empty (41 s) in both (was from 21 s);
+  by her bar 75% 42 -> 33, 50% 50 -> 40, 25% 50 -> 45, 10% 50 -> 48. RUN 10 s 33 -> 28, at half (1:00) 38 -> 33, 38 at
+  empty (2:01). JOG 30 s 26 -> 25, at half (4 min) 30 -> 27, 30 at empty (8:19). Standing after a sprint to empty:
+  +10 s 37 -> 44, +30 s 25 -> 28, +60 s 17 -> 17. Bent over (until her breathing is 28): after a jog 6.5 -> 9.5 s, a run
+  16.6 -> 21.5 s, a sprint 21.5 (its most) in both; her paces come back at the same times.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

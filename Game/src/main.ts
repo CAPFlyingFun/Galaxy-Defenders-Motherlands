@@ -1171,10 +1171,21 @@ async function start(): Promise<void> {
   // (Joshua, 2026-11-18: one setting for BOTH views, so she can be watched working on her own in either, or played)
   const aimedByHand = (): boolean => graphics.autoFire === 'off';
   /**
-   * Her facing held to the camera's way now: third person MANUAL, backing up, nothing else running. (At a walk it was
-   * held to side-step too, until Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her".)
+   * Her facing held to the camera's way now: third person MANUAL, backing up, nothing else running, and only while she
+   * aims (FIRE held, and the shoulder camera's MANUAL_AIM_HOLD after it) or in a SIDE view. (At a walk it was held to
+   * side-step too, until Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her".)
+   * THE BODY A TANK, THE CAMERA ITS TURRET (Joshua, 2026-11-24: "allow the joystick direction to move relative to the
+   * players camera so if the camera is facing North but has the joystick facing backwards, the player will face South
+   * (180°), but if the player keeps holding the stick down, and pans the camera to face East, the player will be moving
+   * West... treat the body like a tank, the camera like the turret, but the body if joystick is released, will rotate
+   * (head first) back towards the camera direction"): otherwise, in third person, she no longer backs up: the stick
+   * pulled back turns her round to go toward the camera, read against the camera every frame (`runningFree`); let go,
+   * her head turns to where the camera looks and her body follows it (bodyTurn.ts), as it always did. Aiming she still
+   * backs up facing her aim, and the side views, which turn with her, keep it too (pulled back there she would turn,
+   * and the camera round to her other side with her).
    */
-  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && backingUp();
+  const walkSides = (): boolean => rig.mode === 'third' && aimedByHand() && !busyNow() && backingUp()
+    && (controls.fireHeld || sinceFire < MANUAL_AIM_HOLD || rig.style === 'sideLeft' || rig.style === 'sideRight');
   /**
    * The stick pulled back (more back than to either side). BACKING UP she keeps facing the camera's way at ANY pace
    * (Joshua, 2026-11-19: "facing South (camera was facing North) to go backwards... it did for a moment but then
@@ -2393,7 +2404,8 @@ async function start(): Promise<void> {
     // (aimed by hand: she looks where the camera looks, in either view)
     // (...except RUNNING in third person MANUAL, Joshua 2026-11-19: she looks the way she runs, so her body turns right
     //  round when the stick sends her back toward the camera. Looking where the camera looks, her head could turn only
-    //  90 degrees from her body, and her body stopped side-on.)
+    //  90 degrees from her body, and her body stopped side-on. Since 2026-11-24 at ANY pace, a walk too: the body a
+    //  tank, the camera its turret, `walkSides`)
     const runningFree = rig.mode === 'third' && aimedByHand() && !walkSides() && (controls.moveX !== 0 || controls.moveY !== 0) && !busyNow();
     if (aimedByHand() && !runningFree) turnInput.look = rig.yaw;
     else if (runningFree) turnInput.look = null;

@@ -49,7 +49,7 @@ import { bodyFileFor, loadBodyFile } from './bodyFile';
 import { LOOKS } from '../looks';
 import { BodyMotion, walkEase, type StrideTable } from './bodyMotion';
 import { FootGround, type LegTwist, type CrabMove } from './footGround';
-import { ArmClear, fitBelly, fitBreasts, type Egg } from './armClear';
+import { ArmClear, fitBelly, fitBellyBump, fitBreasts, fitRibs, type Egg } from './armClear';
 import { JointGuard, type JointExcess } from './jointGuard';
 import { HandReach } from './handReach';
 import { FingerTouch } from './fingerTouch';
@@ -965,9 +965,18 @@ if (uHideHead > 0.5) {
     const hips = Math.min(inFrame(bone(joints.hipL)).y, inFrame(bone(joints.hipR)).y);
     const underBust = inFrame(backBones[Math.max(0, backBones.length - 2)]).y, lowerSpine = inFrame(backBones[0]).z;
     const shoulders = Math.max(inFrame(bone(joints.shoulderL)).y, inFrame(bone(joints.shoulderR)).y);
+    // (her thigh bones: what her belly's bump is measured in front of, for her thighs: armClear.ts `fitBellyBump`)
+    const isThigh = new Uint8Array(bones.length);
+    for (const j of [joints.hipL, joints.hipR]) isThigh[j] = 1;
     return () => {
       const skinNow = { points: body.points, toFrame: meshToRest, skinIndex: holdIndex, skinWeight: holdWeight, isTrunk };
-      return [fitBelly(skinNow, hips, underBust, lowerSpine), ...fitBreasts(skinNow, underBust - 0.01, shoulders)];
+      const belly = fitBelly(skinNow, hips, underBust, lowerSpine);
+      armClear.setBellyBump(fitBellyBump(skinNow, belly, isThigh, hips));
+      const breasts = fitBreasts(skinNow, underBust - 0.01, shoulders);
+      // (her ribs and sides, from her belly's middle up to under her arms, behind her chest wall: a holding arm's elbow
+      //  keeps out of them. Male bodies' "breasts" are measured the same way: their chest wall is where they begin)
+      armClear.setRibs(fitRibs(skinNow, belly.cy, shoulders - 0.12, Math.min(breasts[0].cz, breasts[1].cz)));
+      return [belly, ...breasts];
     };
   })();
   /** Her belly's and breasts' eggs as last measured (a holstered gun's room is added to these: holsterRoom). */
@@ -1216,6 +1225,13 @@ if (uHideHead > 0.5) {
       spot.set(e.cx + e.rx * d.x, e.cy + e.ry * d.y, e.cz + e.rz * d.z);
       out.set(d.x / e.rx, d.y / e.ry, d.z / e.rz).normalize();
       return true;
+    },
+    // (and back: where a spot is on her belly's egg, as round and up)
+    bellyRoundUp: (spot) => {
+      const e = armClear.eggs[0];
+      if (!e) return null;
+      const x = (spot.x - e.cx) / e.rx, y = (spot.y - e.cy) / e.ry, z = (spot.z - e.cz) / e.rz;
+      return [Math.atan2(x, z), y / Math.max(1e-6, Math.hypot(x, z))];
     },
     // (the place opposite a spot round her belly's middle: turned about the line straight out of its front)
     opposite: (spot, turn, outSpot, outOut) => {
@@ -1843,7 +1859,7 @@ if (uHideHead > 0.5) {
     strideInfo(): { readonly walk: StrideTable; readonly run: StrideTable } | null { return motion.strides; },
     strideNow() { return motion.shape; },
     wristInfo: () => reach.wristInfo,
-    armInfo() { return { eggs: armClear.eggs, moved: armClear.moved, kneeMoved: armClear.kneeMoved }; },
+    armInfo() { return { eggs: armClear.eggs, bump: armClear.bellyBump, ribs: armClear.ribs, moved: armClear.moved, kneeMoved: armClear.kneeMoved }; },
     keepArmsClear(on: boolean): void { armClear.on = on; },
     jointInfo(): JointExcess { joints2.measure(); return { ...joints2.excess }; },
     keepJointsReal(on: boolean): void { joints2.on = on; },
@@ -2331,7 +2347,11 @@ if (uHideHead > 0.5) {
       }
       // (a hand that holds something, or is closing on it, stays on it: her elbow keeps her arm clear instead)
       // (and a hand laid on her belly where the baby kicked stays there: her elbow keeps clear instead)
-      for (const i of [0, 1] as const) armClear.holdHand[i] = (touch.shapes[i] !== null || bellyHand.holds(i)) && reach.weight(i) > 0.5;
+      for (const i of [0, 1] as const) {
+        armClear.holdHand[i] = (touch.shapes[i] !== null || bellyHand.holds(i)) && reach.weight(i) > 0.5;
+        // (a hand on her belly keeps its arm out of her ribs and sides too: armClear.ts `fitRibs`)
+        armClear.ribsHand[i] = bellyHand.holds(i);
+      }
       // (lying down or on all fours her arms are on the ground ahead of her body, not crossing it: nothing to keep clear,
       //  and its upright rules would lift her forearms off the ground)
       if (downS < 0.5) armClear.update(frame.dt);

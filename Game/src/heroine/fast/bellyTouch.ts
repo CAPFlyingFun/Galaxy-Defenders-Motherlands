@@ -32,6 +32,25 @@
 //      in first person, or fires): it eases off and her hands let go;
 //   7. then a short rest (`restSeconds`) before another kick can call a hand.
 //
+// A KICK NO HAND CAN REACH CLEANLY (Joshua, 2026-11-24, a kick "basically just
+// below the underarms... the hands were passing through the side of her body";
+// his pick, "A": "the hand lands at the nearest spot it can reach"): a spot
+// further round her side than `roundMost`, lower under her belly than
+// `upLeast`, or one neither free hand reaches, is moved to the NEAREST spot on
+// her belly that is none of those (`reachable`), and her hand goes there.
+// Before, an unreachable kick was simply not touched. MAPPED, Mary at 100, 150
+// and 200 %, her left hand at 36 spots on her left side, each tested for its
+// palm on her skin and every bone of her arm outside her (a ray from each bone
+// crossing her skin an even number of times): clean up to 75 degrees round
+// from her front at every height; past it her palm stood 1.5-6 cm off her and
+// her wrist was inside her hip low down, or her palm was pressed into her up
+// high; and right under a 200 % belly her palm sank about a centimetre.
+// ON HER SIDE HER FINGERS POINT FORWARD round her belly, her elbow back
+// (`sideFrom`, `sideFull`): with her fingers down the line from her shoulder,
+// her forearm ran down her side, through her ribs and waist where they stand
+// out over her belly's side. And her elbow keeps out of her ribs and sides
+// (armClear.ts `fitRibs`).
+//
 // HOLDING HER BELLY UP AS SHE RUNS (Joshua: "if anything over a jog, one of her
 // hands sits on the underside of the belly to help with moving quickly since
 // moving fast does put a lot of pressure on the belly skin"; from a run, past 30
@@ -92,6 +111,20 @@ export const BELLY_TOUCH = {
   /** Her hand comes in to the spot from this far in front of it, metres. */
   approach: 0.12,
   /**
+   * HOW FAR ROUND HER SIDE A HAND IS LAID, radians from her front (1.3: 75 degrees, a little in front of her side; the
+   * map at the top of this file), and HOW LOW UNDER HER BELLY (`onBelly`'s up: -0.45, about 24 degrees under its
+   * middle): a kick further round or lower is touched at the nearest spot within these.
+   */
+  roundMost: 1.3,
+  upLeast: -0.45,
+  /**
+   * ON HER SIDE HER FINGERS POINT FORWARD, ROUND HER BELLY (see the top of this file): from where her belly faces this
+   * much to her side (the sine of the angle: 0.5, 30 degrees round from her front) they start to turn from the line
+   * of her arm toward her front, and from this much (0.85, 58 degrees) they point there.
+   */
+  sideFrom: 0.5,
+  sideFull: 0.85,
+  /**
    * HOW FAR OFF HER SKIN HER HAND RESTS (Joshua, 2026-11-20: "lock in around 2mm of the belly's live skin"), metres:
    * her palm and every finger (fingerTouch.ts), her palm over the kick's bump while it lasts.
    */
@@ -137,6 +170,8 @@ export interface BellyTouchBody {
   ontoSkin(spot: THREE.Vector3, out: THREE.Vector3): void;
   /** A spot on her belly's egg (as she stood): `round` radians round from her front (+ toward her left), `up` up it. */
   onBelly(round: number, up: number, spot: THREE.Vector3, out: THREE.Vector3): boolean;
+  /** The other way: where a spot (as she stood) is on her belly's egg, as [round, up] (`onBelly`'s); null: no belly. */
+  bellyRoundUp(spot: THREE.Vector3): [number, number] | null;
   /**
    * The place OPPOSITE a spot round her belly's middle (as she stood): turned `turn` radians about the line straight out
    * of her belly's front (PI: right across, top to underbelly, left to right).
@@ -155,7 +190,7 @@ export interface BellyTouchBody {
 
 const spotWorld = new THREE.Vector3(), outWorld = new THREE.Vector3(), shoulderAt = new THREE.Vector3(), otherShoulder = new THREE.Vector3();
 const leftWay = new THREE.Vector3(), fingers = new THREE.Vector3(), palmTo = new THREE.Vector3(), step = new THREE.Vector3();
-const centre = new THREE.Vector3(), restPoint = new THREE.Vector3(), target = new THREE.Vector3();
+const centre = new THREE.Vector3(), restPoint = new THREE.Vector3(), target = new THREE.Vector3(), around = new THREE.Vector3();
 
 /** A random number between two. */
 const between = (least: number, most: number): number => least + Math.random() * (most - least);
@@ -372,7 +407,8 @@ export class BellyTouch {
     const b = this.body;
     const spot = w.spot.clone(), out = w.out.clone();
     b.ontoSkin(spot, out);
-    const hand = this.pickHand(spot, out, this.supportHand ? this.supportHand.hand : -1);
+    // (a spot no hand can reach cleanly: the nearest one that is; see the top of this file)
+    const hand = this.reachable(spot, out, this.supportHand ? this.supportHand.hand : -1);
     if (hand < 0) return;
     const on = new HandOn(hand as 0 | 1, 'kick', b);
     on.spot.copy(spot); on.out.copy(out); on.kick = w.kick;
@@ -445,6 +481,37 @@ export class BellyTouch {
     if (this.supportHand) { this.release(this.supportHand); this.supportHand = null; }
   }
 
+  /**
+   * A HAND THAT CAN REACH THE SPOT CLEANLY, or THE NEAREST SPOT THAT ONE CAN (Joshua's "A"; see the top of this file):
+   * a spot further round than `roundMost` from her front, lower than `upLeast`, or one no free hand reaches, is moved to
+   * the nearest spot on her belly within those that one does (spots round it tried nearest first, about a hand's breadth
+   * apart; `spot` and `out` are changed to it). The hand, or -1 if none reaches anywhere near.
+   */
+  private reachable(spot: THREE.Vector3, out: THREE.Vector3, not: number): number {
+    const b = this.body;
+    const at = b.bellyRoundUp(spot);
+    if (!at) return this.pickHand(spot, out, not);
+    const most = BELLY_TOUCH.roundMost, least = BELLY_TOUCH.upLeast;
+    // (as it is, if it is not too far round or too low and a hand reaches it)
+    if (Math.abs(at[0]) <= most && at[1] >= least) { const hand = this.pickHand(spot, out, not); if (hand >= 0) return hand; }
+    // (the spots round it, nearest first: as she stood, straight-line metres)
+    const was = spot.clone(), tries: { round: number; up: number; far: number }[] = [];
+    const p = new THREE.Vector3(), o = new THREE.Vector3();
+    for (let dr = -1.2; dr <= 1.2001; dr += 0.15) for (let du = -0.6; du <= 1.2001; du += 0.15) {
+      const round = Math.max(-most, Math.min(most, at[0] + dr)), up = Math.max(least, Math.min(1.0, at[1] + du));
+      if (!b.onBelly(round, up, p, o)) continue;
+      tries.push({ round, up, far: p.distanceTo(was) });
+    }
+    tries.sort((x, y) => x.far - y.far);
+    for (const t of tries) {
+      b.onBelly(t.round, t.up, p, o);
+      b.ontoSkin(p, o);
+      const hand = this.pickHand(p, o, not);
+      if (hand >= 0) { spot.copy(p); out.copy(o); return hand; }
+    }
+    return -1;
+  }
+
   /** The free hand to send to a spot: the nearer one, or the far one if its way across her belly is clear. -1: none. */
   private pickHand(spot: THREE.Vector3, out: THREE.Vector3, not: number): number {
     const b = this.body;
@@ -491,7 +558,18 @@ export class BellyTouch {
       // HER FINGERS carry on the line of her forearm, from her shoulder to the spot, turned a little in toward her middle
       // (her left hand's to her right): her wrist hardly bends, wherever on her belly the spot is
       b.shoulder(hand, shoulderAt);
-      fingers.copy(spotWorld).sub(shoulderAt).normalize().addScaledVector(leftWay, hand === 0 ? -0.35 : 0.35);
+      fingers.copy(spotWorld).sub(shoulderAt).normalize().addScaledVector(leftWay, hand === 0 ? -0.35 : 0.35).normalize();
+      // ON HER SIDE, FORWARD ROUND HER BELLY (see the top of this file): toward her front along her skin there, a little
+      // down, by as much as the spot faces her side
+      const side = Math.abs(outWorld.dot(leftWay));
+      const turn = Math.max(0, Math.min(1, (side - BELLY_TOUCH.sideFrom) / (BELLY_TOUCH.sideFull - BELLY_TOUCH.sideFrom)));
+      if (turn > 0) {
+        b.forward(around);
+        around.addScaledVector(outWorld, -around.dot(outWorld)).normalize();
+        around.y -= 0.3;
+        around.normalize();
+        fingers.lerp(around, turn * turn * (3 - 2 * turn));
+      }
     }
     fingers.addScaledVector(outWorld, -fingers.dot(outWorld)).normalize();
     // (her skin's own patch there, measured once a touch as her hand sets off: the spot onto it, its real facing for her

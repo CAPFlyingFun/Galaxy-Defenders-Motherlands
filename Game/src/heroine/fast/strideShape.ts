@@ -29,6 +29,17 @@
 // hip never reaches further than the builder's own run: the stride grows in the
 // AIR, as a real one does (the rig has no heel-to-toe roll or turning pelvis
 // to lengthen the step on the ground).
+//
+// HER ARMS TOO (`writeArms`; Joshua, 2026-11-24: "their hands are passing
+// through their body"): the builder's walk and run swing her arms by its own
+// numbers (the swing, the arms hanging out a little, a runner's elbows up at 72
+// degrees), but it bends an elbow ABOUT Y, which assumes an arm straight out in
+// a T. This body file's arms already hang nearly down, so that turn only TWISTED
+// her forearm about itself (CLAUDE.md, groundPose.ts `arm`): her elbows stayed
+// straight at a run and her hands swung through her hips and thighs (measured:
+// fingertips 5-7 cm in, a fifth of the time, jogging and sprinting). The game
+// writes her arms with the builder's numbers, the elbow bent about X (across her
+// body) as groundPose.ts bends it, so a runner's elbows really are up.
 // ============================================================================
 import type { BindJoint, HumanMeasure, MutableJointTurn } from '@charb/actor/humanRig';
 
@@ -110,6 +121,75 @@ export function writeLegs(
   const spread = Math.min(2, Math.max(0, carry)) * 3.5 * DEG - shape.narrow;
   writeLeg(turns, 9, joints.hipL, joints.kneeL, joints.ankleL, fract(phase - 0.25), shape.share, front, back, kneeBend, left * spread, shape.back);
   writeLeg(turns, 12, joints.hipR, joints.kneeR, joints.ankleR, fract(phase + 0.25), shape.share, front, back, kneeBend, -left * spread, shape.back);
+}
+
+/**
+ * THE BUILDER'S ARM NUMBERS (Char_B humanPose.ts, which keeps them to itself), for `writeArms`, radians:
+ *   swing   how far a whole arm swings fore and aft about the shoulder (walk 18, run 38 degrees);
+ *   elbow   the bend held whatever the arm does (walk 8: an arm hangs; run 72: a runner's arms are up);
+ *   pump    more bend as the arm comes forward, none going back (walk 14, run 18);
+ * and for both: the arms hang a little in front of her (roll 6), out from her sides (flare 17: "17 hangs the arm clear
+ * of the body with the hand beside the thigh"), the hand turned in a little at the wrist (8).
+ */
+const ARM = {
+  walk: { swing: 18 * DEG, elbow: 8 * DEG, pump: 14 * DEG },
+  run: { swing: 38 * DEG, elbow: 72 * DEG, pump: 18 * DEG },
+  roll: 6 * DEG,
+  flare: 17 * DEG,
+  wristIn: 8 * DEG,
+} as const;
+
+/**
+ * WRITE HER ARMS for this moment of the stride into the builder's pose (`turns`, as `poseHuman` filled it: her arms are
+ * turns 3-8, the left then the right, each shoulder, elbow, wrist), over its own: the builder's swing, with her elbows
+ * bent about X so they really bend (see the top of this file). Each arm goes with the OPPOSITE leg, crossing as the legs
+ * cross: the builder's cycle, with the game's share of the stride a foot is down (`shape.share`), so her arms keep time
+ * with the legs the game writes.
+ */
+export function writeArms(
+  turns: MutableJointTurn[], measure: HumanMeasure, bind: readonly BindJoint[], phase: number, shape: StrideShape,
+  stance: 'walk' | 'run',
+): void {
+  const joints = measure.joints;
+  const left = measure.leftSign < 0 ? -1 : 1;
+  // (positive: her LEFT leg thrown forward; the builder's own cycle)
+  const cycle = Math.sin((phase - (shape.share / 2 - 0.25)) * 2 * Math.PI);
+  writeArm(turns, 3, bind, joints.shoulderL, joints.elbowL, joints.wristL, left, -cycle, ARM[stance]);
+  writeArm(turns, 6, bind, joints.shoulderR, joints.elbowR, joints.wristR, -left, cycle, ARM[stance]);
+}
+
+/**
+ * One arm (the builder's writeArm, its elbow about X): lowered from the T to hang out a little from her side, swung
+ * `forward` (-1 back .. +1 forward) about the shoulder, its elbow bent (and the bind's own kink taken out), its hand
+ * turned in a little. `xSign` is the x the arm lies along in the bind (her left arm +, her right -, or the mirror).
+ */
+function writeArm(
+  out: MutableJointTurn[], at: number, bind: readonly BindJoint[], shoulder: number, elbow: number, wrist: number,
+  xSign: number, forward: number, arm: { swing: number; elbow: number; pump: number },
+): void {
+  const s = bind[shoulder], e = bind[elbow], w = bind[wrist];
+  // (how far the bind's upper arm already droops below level, and how far its forearm is kinked back up from it)
+  const droop = Math.atan2(s.y - e.y, Math.abs(e.x - s.x));
+  const kink = droop - Math.atan2(e.y - w.y, Math.abs(w.x - e.x));
+  writeTurnXZ(out[at], shoulder, -(ARM.roll + arm.swing * forward), -xSign * (Math.PI / 2 - ARM.flare - droop));
+  const bend = arm.elbow + arm.pump * Math.max(0, forward);
+  // THE ELBOW: the kink taken out about Z, then bent FORWARD. An arm that already HANGS in the bind (her body file:
+  // more than 45 degrees down) bends about the line across her body (X), as groundPose.ts does; an arm bound straight
+  // out in a T bends about Y, the builder's own way (writeElbow), which is right for such an arm
+  if (droop > Math.PI / 4) writeTurnXZ(out[at + 1], elbow, -bend, -xSign * kink);
+  else writeTurnYZ(out[at + 1], elbow, -xSign * bend, -xSign * kink);
+  writeTurn(out[at + 2], wrist, 0, 0, 1, -xSign * ARM.wristIn);
+}
+
+/** A turn about Y then Z as one axis and angle (the builder's writeElbow). */
+function writeTurnYZ(turn: MutableJointTurn, joint: number, yRadians: number, zRadians: number): void {
+  const sy = Math.sin(yRadians * 0.5), cy = Math.cos(yRadians * 0.5);
+  const sz = Math.sin(zRadians * 0.5), cz = Math.cos(zRadians * 0.5);
+  let qx = sy * sz, qy = sy * cz, qz = cy * sz, qw = cy * cz;
+  if (qw < 0) { qx = -qx; qy = -qy; qz = -qz; qw = -qw; }
+  const sine = Math.hypot(qx, qy, qz);
+  if (sine < 1e-9) { writeTurn(turn, joint, 0, 1, 0, 0); return; }
+  writeTurn(turn, joint, qx / sine, qy / sine, qz / sine, 2 * Math.atan2(sine, qw));
 }
 
 /** The stride, metres, her place in it moves on by (the ground passes a planted foot at exactly this rate). */

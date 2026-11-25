@@ -18,6 +18,15 @@
 //      Running, her hips ride lower and bounce a little, lowest as each foot
 //      carries her and highest between steps, and her standing knee bends to
 //      take it up, as a runner's does.
+//      HER WEIGHT HANDED FROM FOOT TO FOOT SMOOTHLY (Joshua, 2026-11-24: "the
+//      Bob when walking looks exaggerated"): she was set down onto the foot
+//      behind until it left the ground, then onto the foot in front at once, and
+//      the one in front stands far out, so her hips DROPPED 6.5 cm in one frame
+//      every step (measured, 200 %; at 100 % a jolt half that). Now she is
+//      lowered onto the foot coming down already as it reaches for the ground
+//      (`bobLead` of a stride before it lands, `bobAtLanding` of the way there
+//      as it lands: the knee behind bends to let her down, as a real one does
+//      pushing off) and the rest of the way while both feet are down.
 //   3. A PLANTED FOOT STAYS WHERE IT WAS PUT DOWN. The spot on the ground where a
 //      foot lands is remembered, and while that foot is planted its leg reaches
 //      back to that spot each frame (hip, knee, ankle: a "two-bone reach"). Her
@@ -109,6 +118,21 @@ export const FOOT_GROUND = {
   runDrop: 0.07,
   /** RUNNING: her bounce from lowest to highest when all of her Bob shows (her look's Bob and her speed scale it). */
   runBob: 0.025,
+  /**
+   * WALKING, HER WEIGHT HANDED TO THE FOOT COMING DOWN (see 2 above): she starts down onto it this share of a stride
+   * before it lands (0.22: from about the middle of the step she stands on, 0.23 s at a walk, so her hips rise and
+   * fall about evenly, as a walker's do)...
+   */
+  bobLead: 0.22,
+  /** ...and is this share of the way down onto it as it lands; the rest while both feet are down. */
+  bobAtLanding: 0.8,
+  /**
+   * WALKING, HOW MUCH OF HER LEGS' RISE AND FALL SHOWS AT MOST (Joshua, 2026-11-24: "the Bob when walking looks
+   * exaggerated"): her look's Bob is a share of what her legs would lift her by if they never bent (all of it at 200 %:
+   * 7 cm, measured); a walker's knees and hips take up much of that, and her hips rise and fall about 4 cm. Her look's
+   * share is multiplied by this.
+   */
+  walkBobShows: 0.55,
   /** UNEVEN GROUND: a foot's ground is taken as at most this far above or below her root's (a cliff edge is not a step). */
   groundMost: 0.45,
   /** ...a foot is tipped to lie along its slope by at most this much (radians, about 28 degrees)... */
@@ -308,6 +332,14 @@ export class FootGround {
   readonly raised: [number, number] = [0, 0];
   /** Whether each foot is planted this frame (left, right). */
   readonly planted: [boolean, boolean] = [true, true];
+  /**
+   * How far she had to come down to stand on each foot alone when it last took her weight (the foot behind leaving),
+   * metres (left, right; NaN: not yet). A foot still swinging is lifted by its own knee, so where she is going to come
+   * down to for it is taken from its last step (see 2 above).
+   */
+  private readonly carryLift: [number, number] = [NaN, NaN];
+  /** Which foot carries her alone now, walking (-1: both or neither). */
+  private carrying = -1;
   /** How far each foot is held from where her pose has it this frame, metres over the ground (left, right). */
   readonly held: [number, number] = [0, 0];
   /** Which foot is taking a step on the spot (-1: neither), and how far through it (0..1). */
@@ -473,11 +505,41 @@ export class FootGround {
       }
 
       // ---- how far she comes down ----
-      // WALKING: onto the planted foot that is lower (both feet down between steps: the one behind, until the one in
-      // front has come down to it). Her look's Bob shows that share of the rise and fall; the rest she stays down for.
-      const need = Math.min(this.planted[0] ? lift[0] : Infinity, this.planted[1] ? lift[1] : Infinity);
+      // WALKING: onto the foot that carries her, her weight HANDED SMOOTHLY to the next (see 2 above): from `bobLead` of
+      // a stride before the next foot lands she starts down onto it (where she had to be when it last landed), the knee
+      // behind bending to let her; as it lands she is `bobAtLanding` of the way; and while both feet are down, the rest,
+      // so as the foot behind leaves she stands on the one in front. (Before: on the foot behind until it left, then
+      // onto the one in front in one frame.) Her look's Bob shows that share of the rise and fall; the rest she stays
+      // down for.
       const most = strides.walk.needMost * walk;
-      const walking = Number.isFinite(need) ? need + (1 - share) * Math.max(0, most - need) : most;
+      let need = Infinity;
+      const landsOf = (side: number): number => (side === 0 ? 0.25 : 0.75);
+      const landed = (side: number): number => fract(motion.phase - landsOf(side));   // (how long since it landed)
+      if (this.planted[0] && this.planted[1]) {
+        // (both down: the one that landed last is in front; from `bobAtLanding` of the way onto it to all of it)
+        const front = landed(0) <= landed(1) ? 0 : 1, behind = 1 - front;
+        const t = clamp(landed(front) / Math.max(1e-3, down - 0.5), 0, 1), s2 = t * t * (3 - 2 * t);
+        // (from where she was as it landed: `bobAtLanding` of the way down to where she stood on it last step; to
+        //  standing on it now. The foot in front is further out as it lands than when the one behind leaves, so its
+        //  own lift as it lands would set her down further, and then lift her: a jolt)
+        const there = Number.isFinite(this.carryLift[front]) ? this.carryLift[front] : lift[front];
+        const landedAt = lift[behind] + (there - lift[behind]) * tuning.bobAtLanding;
+        need = landedAt + (lift[front] - landedAt) * s2;
+      } else if (this.planted[0] || this.planted[1]) {
+        const on = this.planted[0] ? 0 : 1, next = 1 - on;
+        need = lift[on];
+        // (just taken her weight alone, the foot behind gone: how far down she is for it, kept for its next step)
+        if (this.carrying !== on) { this.carrying = on; this.carryLift[on] = lift[on]; }
+        // (the next foot about to land: she starts down onto it)
+        const coming = fract(landsOf(next) - motion.phase);
+        if (coming < tuning.bobLead && down > 0.5) {
+          const t = 1 - coming / tuning.bobLead, s2 = tuning.bobAtLanding * t * t * (3 - 2 * t);
+          const there = Number.isFinite(this.carryLift[next]) ? this.carryLift[next] : most;
+          need += (there - need) * s2;
+        }
+      }
+      const shows = share * tuning.walkBobShows;
+      const walking = Number.isFinite(need) ? need + (1 - shows) * Math.max(0, most - need) : most;
       if (run <= 0) drop = walking;
       else {
         // RUNNING: her hips ride lower, and bounce: highest between steps, lowest as each foot carries her.

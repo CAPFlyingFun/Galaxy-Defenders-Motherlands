@@ -47,6 +47,12 @@
 // and at the knee are kept off her belly the same way; her knee is swung OUT
 // round the line from her hip to her ankle, so her foot stays exactly where it
 // stands (a planted foot never slides) and her legs simply open a little.
+// ONLY THE BUMP (Joshua, 2026-11-24: "the legs do a little wobble"): her belly's
+// egg reaches back to her spine, so the balls of a thigh met it at every step,
+// at any belly, John's too: her knees were swung out up to 13 cm and back in
+// every stride (measured, Mary at 10 %). Her thighs are kept off only the part
+// of her belly that stands out IN FRONT OF THEM (`fitBellyBump`), and none when
+// it stands out less than `bumpLeast`.
 //
 // It is done after her pose and her aim are on her bones, so it corrects
 // whatever they did: aiming across herself, her arms swinging as she runs, her
@@ -78,7 +84,12 @@ export const ARM_CLEAR = {
    * slowly so a running stride does not snap her knee in and out every step.
    */
   kneeOutSeconds: 0.06,
-  kneeInSeconds: 0.3,
+  kneeInSeconds: 0.8,
+  /**
+   * Her belly must stand out at least this far in front of her thighs for them to be kept off it, metres. A flat
+   * stomach stands about 4.5 cm in front of the tops of her thighs (measured, Mary at 10 %): that is no bump.
+   */
+  bumpLeast: 0.06,
   /** The most her knee is swung round its circle in one go, radians (about 35 degrees). */
   kneeMostTurn: 0.6,
   /** Where her upper arm's two balls sit, from her shoulder (0) to her elbow (1), and her forearm's from elbow to wrist. */
@@ -218,6 +229,64 @@ export function fitBreasts(skin: SkinToMeasure, low: number, high: number): [Egg
   return [egg(0), egg(1)];
 }
 
+/**
+ * HER BELLY'S BUMP IN FRONT OF HER THIGHS, for her thighs only (see the top of this file): her belly's egg, its back
+ * moved forward to the front of her thighs (her skin held by her thigh bones, from her hips down a hand's breadth, as
+ * she stands), as tall and wide as before. Null when her belly stands out less than ARM_CLEAR.bumpLeast in front of
+ * her thighs: nothing for them to meet.
+ * @param thighs  for each bone, 1 if it is a thigh bone; `hips` the height of her hip joints (her frame, metres)
+ */
+export function fitBellyBump(skin: SkinToMeasure, belly: Egg, thighs: Uint8Array, hips: number): Egg | null {
+  const { points, toFrame, skinIndex, skinWeight } = skin;
+  const point = new THREE.Vector3();
+  let thighFront = -Infinity;
+  for (let v = 0; v * 3 < points.length; v++) {
+    let held = 0;
+    for (let c = 0; c < 4; c++) if (thighs[skinIndex[v * 4 + c]]) held += skinWeight[v * 4 + c];
+    if (held < 0.6) continue;
+    point.set(points[v * 3], points[v * 3 + 1], points[v * 3 + 2]).applyMatrix4(toFrame);
+    if (point.y > hips || point.y < hips - 0.12) continue;
+    if (point.z > thighFront) thighFront = point.z;
+  }
+  const front = belly.cz + belly.rz, back = Math.max(belly.cz, Number.isFinite(thighFront) ? thighFront : belly.cz);
+  const depth = front - back;
+  if (depth < ARM_CLEAR.bumpLeast) return null;
+  // (a belly hangs below her hip joints no further than it stands out in front of her thighs: a small one's egg is
+  //  measured very tall, down her thighs, and they met it at every step)
+  const top = belly.cy + belly.ry, bottom = Math.max(belly.cy - belly.ry, hips - depth);
+  return { ...belly, cy: (top + bottom) / 2, ry: (top - bottom) / 2, cz: (front + back) / 2, rz: depth / 2 };
+}
+
+/**
+ * MEASURE HER RIBS AND SIDES from her skin (Joshua, 2026-11-24: a kick high on her side, and her hand "passing through
+ * the side of her body since it wasn't added when we did the belly"): one egg round her trunk between `low` and `high`
+ * (her frame, metres), her chest wall and back (in front of her chest wall is her breasts': their own eggs). It is as
+ * wide as she is at her widest there and kept nearly that wide all the way up (an egg narrows toward its ends, so it is
+ * made taller than the band), so her elbow stays out of her ribs and her waist. Only an arm whose hand holds something
+ * keeps clear of it (`clearByElbow`, and only a hand on her belly: `ribsHand`): a free arm hangs and swings beside her
+ * as the builder poses it.
+ */
+export function fitRibs(skin: SkinToMeasure, low: number, high: number, chestWall: number): Egg {
+  const { points, toFrame, skinIndex, skinWeight, isTrunk } = skin;
+  const point = new THREE.Vector3();
+  const carried = new Float32Array(isTrunk.length);
+  let wide = 0.1, front = -Infinity, back = Infinity;
+  for (let v = 0; v * 3 < points.length; v++) {
+    let trunk = 0;
+    for (let c = 0; c < 4; c++) if (isTrunk[skinIndex[v * 4 + c]]) trunk += skinWeight[v * 4 + c];
+    if (trunk < 0.6) continue;
+    point.set(points[v * 3], points[v * 3 + 1], points[v * 3 + 2]).applyMatrix4(toFrame);
+    if (point.y < low || point.y > high || point.z > chestWall) continue;
+    wide = Math.max(wide, Math.abs(point.x));
+    front = Math.max(front, point.z);
+    back = Math.min(back, point.z);
+    for (let c = 0; c < 4; c++) carried[skinIndex[v * 4 + c]] += skinWeight[v * 4 + c];
+  }
+  if (!Number.isFinite(front)) { front = chestWall; back = chestWall - 0.2; }
+  // (made 1.6 times as tall as the band: at the band's ends it is still 92 % as wide as at its middle)
+  return { cx: 0, cy: (low + high) / 2, cz: (front + back) / 2, rx: wide, ry: ((high - low) / 2) * 1.6, rz: (front - back) / 2, bone: heaviest(carried) };
+}
+
 /** One leg's bones, for keeping the thigh off her belly. */
 export interface LegBonesForClear { readonly hip: THREE.Bone; readonly knee: THREE.Bone; readonly ankle: THREE.Bone }
 
@@ -271,6 +340,26 @@ export class ArmClear {
   readonly holdHand: [boolean, boolean] = [false, false];
   /** Her legs (call once): their thighs are kept off her belly too. */
   setLegs(legs: readonly LegBonesForClear[]): void { this.legs = legs; }
+  /** Her belly's bump in front of her thighs (`fitBellyBump`), what her thighs keep off; null: nothing. */
+  private legObstacle: Obstacle | null = null;
+  setBellyBump(egg: Egg | null): void {
+    this.legObstacle = egg ? { egg, carrier: this.bones[egg.bone], toFit: new THREE.Matrix4(), fromFit: new THREE.Matrix4() } : null;
+  }
+  /** Her belly's bump as her thighs see it (null: none), for a readout and the tests. */
+  get bellyBump(): Egg | null { return this.legObstacle?.egg ?? null; }
+  /** Her ribs and sides (`fitRibs`), kept clear of by an arm whose hand holds something (`clearByElbow`); null: none. */
+  private ribsObstacle: Obstacle | null = null;
+  private readonly withRibs: Obstacle[] = [];
+  /**
+   * Which hands keep their arm out of her ribs (left, right): a hand on her belly (bellyTouch.ts). A hand on a bar, a
+   * clip or the door keeps its elbow where it was: those were tuned without her ribs.
+   */
+  readonly ribsHand: [boolean, boolean] = [false, false];
+  setRibs(egg: Egg | null): void {
+    this.ribsObstacle = egg ? { egg, carrier: this.bones[egg.bone], toFit: new THREE.Matrix4(), fromFit: new THREE.Matrix4() } : null;
+  }
+  /** Her ribs' egg (null: none), for a readout and the tests. */
+  get ribs(): Egg | null { return this.ribsObstacle?.egg ?? null; }
 
   private readonly arms: readonly [ArmBones, ArmBones];
   private obstacles: Obstacle[] = [];
@@ -406,7 +495,20 @@ export class ArmClear {
       wristWas.copy(wristAt);
 
       let touched = false;
-      if (this.holdHand[side]) touched = this.clearByElbow(shoulderAt, upperLength, foreLength);
+      if (this.holdHand[side]) {
+        // (a hand on her belly keeps its arm out of her ribs and sides too, by its elbow: see `fitRibs`)
+        const all = this.obstacles, ribs = this.ribsHand[side] ? this.ribsObstacle : null;
+        if (ribs) {
+          ribs.toFit.copy(ribs.carrier.matrixWorld).invert().premultiply(this.standing[ribs.egg.bone]);
+          ribs.fromFit.copy(ribs.toFit).invert();
+          // (the eggs and her ribs in one list, kept and refilled: nothing made each frame)
+          this.withRibs.length = 0;
+          for (const o of all) this.withRibs.push(o);
+          this.withRibs.push(ribs);
+          this.obstacles = this.withRibs;
+        }
+        try { touched = this.clearByElbow(shoulderAt, upperLength, foreLength); } finally { this.obstacles = all; }
+      }
       else for (let round = 0; round < ARM_CLEAR.rounds; round++) {
         let pushed = false;
         // HER UPPER ARM AND ELBOW move her ELBOW (her shoulder rotates her arm out of the way). A ball part of the
@@ -488,10 +590,12 @@ export class ArmClear {
    */
   private updateLegs(dt: number): void {
     this.kneeMoved[0] = this.kneeMoved[1] = 0;
-    const belly = this.obstacles.slice(0, 1);
-    if (!this.on || belly.length === 0) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
+    const bump = this.legObstacle;
+    if (!this.on || !bump) { this.kneeSwing[0] = this.kneeSwing[1] = 0; return; }
+    bump.toFit.copy(bump.carrier.matrixWorld).invert().premultiply(this.standing[bump.egg.bone]);
+    bump.fromFit.copy(bump.toFit).invert();
     const all = this.obstacles;
-    this.obstacles = belly; // (only her belly: her thighs never reach her breasts)
+    this.obstacles = [bump]; // (only her belly's bump in front of them: her thighs never reach her breasts)
     try {
       this.legs.forEach((leg, side) => {
         leg.hip.getWorldPosition(shoulderAt);   // (the scratch names are the arm's: here hip, knee, ankle)

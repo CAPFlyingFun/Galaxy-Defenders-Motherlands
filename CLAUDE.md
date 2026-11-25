@@ -93,7 +93,8 @@ use the game's single copy of three.js.
   first (quicker than body North, `moveTurn` 7). First person the look is the camera; third person it is her auto-aim
   target. Moving, body North turns to the way she goes (so walking sideways she goes shoulder first), SIDE STEPS IN THIRD
   PERSON TAKEN OUT (Joshua, 2026-11-20: "remove the side step... and just rotate head which will turn her": main.ts
-  `walkSides` now only backing up, which still keeps her facing the camera's way); they are kept holding a door. As they
+  `walkSides` now only backing up, which still keeps her facing the camera's way; SINCE v0.2.171 only while she aims or in
+  a SIDE view: otherwise the body is a tank, the camera its turret, pulled back she turns round); they are kept holding a door. As they
   were (Joshua, 2026-11-18), in third
   person MANUAL AT A WALK she kept facing the way the camera looks and the stick snapped to
   FOUR moves only, nothing between: walk ahead, walk back, and the CRAB STEP left or right (`footGround.ts` 8: the lead
@@ -1381,6 +1382,51 @@ use the game's single copy of three.js.
   she ran at 6.05 m/s (the sprint, his top pace) where the camera looked, turned with it (the view turned 90: she went
   the new way); a push to the side kept it, a pull back ended it, PRONE ended it, run into the sea she stopped at 0.6 m
   deep and it let go; on a stick at his 150 px the drawn rim read a full push and the lane locked; no errors.
+- v0.2.171: HER WALK MEASURED AND FIXED, THE BODY A TANK AND THE CAMERA ITS TURRET, HER HAND ON A KICK HIGH ON HER SIDE
+  (Joshua, 2026-11-24, his screenshot of v0.2.170, planned with him first: "the walking + animation somehow is off and
+  their hands are passing through their body and the Bob when walking looks exaggerated and the legs do a little
+  wobble"; his answers: "It happens to both the same", "Yes, like they both do now, head first, then rest of the body
+  following behind", "Yes, A"). Her walk/arm/feet files had not changed since v0.2.155: all three were there already.
+  MEASURED in the heroine lab (scripts in /tmp, not kept: her hips' height a frame at a time; each hand's wrist, palm,
+  knuckles and fingertips against her own skinned skin, the hand's own flesh counted; her knees sideways; a kick's arm
+  bones tested inside her by a ray's crossings of her skin).
+  (1) HANDS THROUGH HER HIPS (strideShape.ts `writeArms`): the builder's run bends the elbows 72 degrees (and 18 more as
+  an arm comes forward) about Y, which on this body file (arms hanging in the bind) only TWISTED the forearm: her arms
+  swung straight and her fingertips went 5-7 cm into her hips and thighs a fifth of the time, jogging and sprinting. The
+  game writes her walk's and run's arms with the builder's numbers, the elbow bent about X as groundPose.ts does (an arm
+  bound in a T, droop under 45 degrees, keeps the builder's Y). Now: a runner's elbows up and pumping (pictured, Mary and
+  John, side and front); her hands 1.4-5.5 cm clear of her at every pace, guns in hand or holstered, at 10, 150 and 200 % (none in her).
+  (2) THE BOB (footGround.ts 2, `bobLead`, `bobAtLanding`, `walkBobShows`): she was set down on the foot behind until it
+  left the ground, then on the foot in front IN ONE FRAME (the front foot lands far out): her hips dropped 6.5 cm in a
+  frame every step (Mary, 200 %); John's (100 %) a sharp V. Now she starts down onto the coming foot from about the middle
+  of the step she stands on (0.22 of a stride before it lands, the knee behind bending to let her down), 80 % of the way
+  as it lands, the rest while both feet are down (aimed at where she stood on that foot last step, `carryLift`); and a
+  walk shows 0.55 of her look's Bob (her 200 % was all of her straight legs' rise and fall, 7.2 cm). Mary 7.2 cm with a
+  cliff -> 4.3 cm smooth (the most in one 1/60 s frame 0.7 cm), John 2.3 -> 1.5 cm. Running unchanged (1.3-2.1 cm).
+  (3) THE LEG WOBBLE (armClear.ts `fitBellyBump`, `bumpLeast` 0.06, `kneeInSeconds` 0.3 -> 0.8): her thighs were kept off
+  her belly's egg, which reaches back to her spine (and at a small belly is measured 70 cm tall, down her thighs): her
+  knees were swung out up to 13 cm and back every stride at a 10 % belly (4-7 reversals a stride, 10-26 mm of jitter).
+  Now only off the BUMP in front of her thighs (the egg's back moved to her thighs' front, hanging below her hip joints no
+  further than it stands out), none under 6 cm (a flat stomach stands 4.5 cm out): 1.4-6.6 mm of jitter and no knee swing
+  walking or running at 10, 150 and 200 %; John's 1-3 mm.
+  (4) THE BODY A TANK, THE CAMERA ITS TURRET (main.ts `walkSides`): third person, the stick pulled back no longer backs
+  her up: she turns round and goes toward the camera, the stick read against the camera every frame (held back and the
+  camera panned a quarter turn, she goes the other quarter); let go, her head turns to where the camera looks (0.2 s of
+  game time) and her body follows (1.3 s, shoulders, belly, feet in turn), as before. She still backs up while she
+  aims (FIRE, and the shoulder camera's 1.2 s after) and in the SIDE views (they turn with her). Tested in the town and
+  the built game on the island: no errors.
+  (5) A KICK HIGH ON HER SIDE (bellyTouch.ts `reachable`, `roundMost` 1.3, `upLeast` -0.45, `sideFrom`/`sideFull`;
+  armClear.ts `fitRibs`, `ribsHand`): her fingers ran down her side from the line of her arm and her hand sank into her
+  side. MAPPED (36 spots on her left side at 100, 150, 200 %): clean to 75 degrees round from her front at any height;
+  past it her palm stood 1.5-6 cm off with her wrist inside her hip low down. Now (his "A") a kick further round, under the
+  very bottom of her belly, or out of both hands' reach is touched at the NEAREST clean spot (before: out of reach was
+  not touched at all); on her side her fingers point forward round her belly, elbow back; and a hand on her belly keeps
+  its elbow out of her ribs and sides (an egg from her belly's middle to under her arms; bars, clips and the door left
+  as they were). The 25 test spots at 100 / 150 / 200 %: 24 / 19 / 21 clean (palm within -6..+8 mm of her skin, no arm
+  bone in her); every spot on her side from her belly's middle up is clean at all three. The rest are low: on her front
+  a palm pressed 0.7-1.4 cm into her belly (as such spots did before, when her hand could reach them); at 200 % the low
+  side spots, moved under her belly, a palm pressed 1.1-1.3 cm and one wrist in her hip; at 100 % one palm 2.5 cm off.
+  Left for now.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

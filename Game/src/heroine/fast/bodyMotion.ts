@@ -33,7 +33,7 @@ import { HumanRig } from '@charb/view/HumanRig';
 import { measureHuman } from '@charb/actor/humanSkeleton';
 import { poseHuman } from '@charb/actor/humanPose';
 import { walkWeight, weighWalk } from '@charb/actor/walkWeight';
-import { shapeAt, strideMetres, writeLegs, type StrideShape } from './strideShape';
+import { shapeAt, strideMetres, writeArms, writeLegs, type StrideShape } from './strideShape';
 import type { BindJoint, HumanGait, HumanMeasure, JointTurn, MutableJointTurn } from '@charb/actor/humanRig';
 import {
   BELLY_MOTION, BELLY_SWING, THUMB_TO_PALM, breastBobWeight, fingerBend, restingBellySpring, sizeTiltDeg,
@@ -417,6 +417,8 @@ export class BodyMotion {
         const steps = poseHuman(measure, bind, gait, this.walkTurns);
         // (her legs her own: the stride at her speed, over the builder's fixed walk or run legs)
         writeLegs(this.walkTurns, measure, bind, phase, this.shape, carry, this.unitsPerMetre);
+        // (and her arms: the builder's swing, her elbows bent about the axis this body's elbows really bend about)
+        writeArms(this.walkTurns, measure, bind, phase, this.shape, stance);
         // (how far her body moves over the foot she stands on: her look's SWAY, eased off with her speed)
         const weight = walkWeight(phase, stance, (this.settings.walkSway / 100) * this.bobSwayShare * walkEase(speed));
         this.rig.apply(weighWalk(measure, steps, weight, this.weighedTurns));

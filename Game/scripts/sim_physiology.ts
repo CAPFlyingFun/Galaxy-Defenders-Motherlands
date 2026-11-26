@@ -9,7 +9,7 @@
 //   3. Mary and John at the same speeds (his heart; his lungs are the builder's to add)
 //   4. pregnant at full term, her slower paces
 //   5. hills and a pack, and the four upgrades
-//   6. energy: what a sprint, a jog and a rest cost and give back
+//   6. energy: what a sprint, a jog and a rest cost and give back; a waking day and a night's sleep
 // The numbers to expect are the doc's (CLAUDE.md v0.2.174 has them too).
 //
 // RUN IT (from Game/; esbuild comes with Vite, `@charb` is the builder's folder as in vite.config.ts):
@@ -165,17 +165,26 @@ function hold(h: Who, cap: number, most = 1800): number {
 }
 
 // ---- 6. Energy --------------------------------------------------------------------------------------------------------
+// (since 2026-11-26 two parts: SLEEPINESS on game time, at the normal 6x here, and FATIGUE in real minutes)
 {
-  console.log('\n=== 6. Energy (real minutes) ===');
+  console.log('\n=== 6. Energy (sleepiness on game time at 6x, fatigue in real minutes) ===');
+  const parts = (h: Who): string => `energy ${(r(h).energy * 100).toFixed(1)}% (sleepy ${(r(h).sleepiness * 100).toFixed(1)}, tired ${(r(h).fatigue * 100).toFixed(1)})`;
   const h = fresh();
   hold(h, 4);
-  console.log(`a sprint to empty: energy ${(r(h).energy * 100).toFixed(1)}%`);
+  console.log(`a sprint to empty: ${parts(h)}`);
   const j = fresh();
   hold(j, 2);
-  console.log(`a jog to empty: energy ${(r(j).energy * 100).toFixed(1)}%`);
+  console.log(`a jog to empty: ${parts(j)}`);
+  for (let i = 0; i < 300 / FRAME; i++) frame(j, 0);
+  console.log(`  then standing 5 minutes: ${parts(j)} (fatigue back 1% a minute after the first; sleepiness only rises)`);
   const s = fresh(MARY, (v) => v.setEnergy(0.5));
   for (let i = 0; i < 300 / FRAME; i++) frame(s, 0);
-  console.log(`standing 5 minutes from 50%: ${(r(s).energy * 100).toFixed(1)}% (nothing the first minute, then 1% a minute)`);
+  console.log(`standing 5 minutes from 50% (all sleepiness): ${parts(s)} (only sleep brings it back)`);
+  const n = fresh();
+  n.vitals.passTime(16, false);
+  console.log(`16 game hours awake and still: ${parts(n)}`);
+  n.vitals.passTime(8, true);
+  console.log(`  then 8 hours asleep: ${parts(n)}`);
 }
 
 void PACES;

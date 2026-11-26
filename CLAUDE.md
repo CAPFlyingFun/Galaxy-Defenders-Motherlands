@@ -578,7 +578,8 @@ use the game's single copy of three.js.
   bar and belly rise as she eats); Make hungry / Make thirsty (bar to 25%); Bathroom: she squats 5 s (`squatFor`, a point
   just above her floor so lowerBody.ts squats) and her bladder (and rectum) is emptied (`vitals.relieve`), until there is
   a toilet. Body clock (`gdm.bodyClock`): 1x, 6x (Joshua's real-life plan, 1 h = 6 h), 15x (as it was, the default),
-  60x, game hours per real hour for her gut. The full readout's last line: `gut food+water · bladder` in mL. The stomach
+  60x, game hours per real hour for her gut (GONE in v0.2.178: her gut runs on the game clock, Settings -> WORLD -> Game
+  speed). The full readout's last line: `gut food+water · bladder` in mL. The stomach
   holds at most 1.5 L (the builder's STOMACH.mostMl; more is refused); her belly stands out by all of it past 450 mL.
 - THE BATHROOM BAR AND 🚽 (Joshua, 2026-11-19: "add a bathroom stat to watch"; `heroineVitals.ts` `bathroomOf`,
   `vitalsPanel.ts`): a fifth bar on her vitals card, her bladder (of the builder's 600 mL) or rectum (of 300 mL),
@@ -1296,7 +1297,8 @@ use the game's single copy of three.js.
   glowing arcs, faint by day). No pictures: the old sky picture was 2048 x 1024, about 11 MB on the graphics chip and
   0.5 MB to fetch. SETTINGS -> WORLD (all live): Sky (Procedural, the default, or Picture: the old one, fetched only
   when chosen and let go when not, the lights back to the old daylight), Time of day (a slider, 0-24, that follows a
-  running clock), Day cycle (Stopped, the default, or a whole day in 12, 24, 48 or 96 real minutes), Sky event (Clear,
+  running clock), Day cycle (Stopped, the default, or a whole day in 12, 24, 48 or 96 real minutes; REPLACED in
+  v0.2.178 by Game speed, the one game clock), Sky event (Clear,
   Tropical storm, Aurora, Alien bands), Clouds (on/off). main.ts `stepSky` each frame lights the world from it
   (skyLight, keyLight, `keyDirNow`); islandWorld.ts `setSkyMode`, `setEnvironment` (the sky, haze, background, sea);
   ocean.ts `setSky` (its reflected sky: it was a fixed day colour, so the night sea glowed). Readout: `sky 13:15 ·
@@ -1484,7 +1486,8 @@ use the game's single copy of three.js.
   rest and peak (`body`: a woman 70 and the builder's 206 - 0.88 x age; a man 65 and Tanaka's 208 - 0.7 x age). Each
   condition counts ONCE (before, thirst, pain, fear and pregnancy multiplied the drain: 2.15x). The builder's
   stepVitals is no longer called: the game moves her breath and heartbeat cycles itself (`breathe`).
-  ENERGY in real minutes: moving -(0.1 + 2.2 x workload^2) % a minute (walk 0.3, jog 0.9, run 1.5, sprint 2.3);
+  ENERGY in real minutes (SPLIT in v0.2.178: this is now her FATIGUE; her SLEEPINESS runs on the game clock):
+  moving -(0.1 + 2.2 x workload^2) % a minute (walk 0.3, jog 0.9, run 1.5, sprint 2.3);
   still for 60 s, +1 a minute (seated +2: no seats yet; half hungry or thirsty). Her pool is her base x her energy: at 0
   only a walk (input/pace.ts, no winded bend). SPEED: stamina takes nothing off her speed any more ("not like a spinning
   top"); hunger and thirst still do. PACE (input/pace.ts `resumeAt`, `regained`): at empty she is bent over as before
@@ -1590,6 +1593,74 @@ use the game's single copy of three.js.
   A fresh look by the player still frees her head and the view is his. MEASURED in the built game (town, Mary, a sprint
   to empty, no input): bowed at -117 from 0.5 to 8 s; then -81 (the horizon) 8.5-11 s, back to -117, -106 and 14
   aside 13-15.5 s, back, -73 and 46 aside 17.5-19 s, back, and up at 20 s; no errors.
+- v0.2.178: THE GAME CLOCK, ENERGY SPLIT INTO SLEEPINESS AND FATIGUE, AND THE AI MIND RUN HEADLESS (Joshua, 2026-11-26,
+  his brief "Autonomous Character AI and Daily Living", kept outside the repo, and the plan doc made from it, "GDM AI
+  Brain & Home: Audit and Plan", claude.ai artifact 3Up9ujYtT9wvpxibyRymKg; his decisions: "1a – Separate Home map
+  initially... 2c – Adjustable game clock. Keep 6× (4 real hours per game day) as the normal gameplay default, but
+  support 1×, 6×, 15×, 30×, 60×, 120× and faster debug simulation. Allow sleep fast-forward when appropriate. 3a –
+  Energy should account for waking game hours so sleep becomes necessary. However, preserve our recently approved
+  stamina and physiology system... 4a – Use the existing CCBS doze pose temporarily... 5a – Automatic futuristic
+  sliding doors"; "Start with the game clock and headless AI mind simulation... Once those are working reliably,
+  proceed with the procedural house, navigation and autonomous interactions"). NOTHING OF THE MIND IS IN THE GAME YET:
+  this version is the clock, the energy split and the headless simulation that tests the mind.
+  (1) THE GAME CLOCK (`core/gameClock.ts` `GameClock`: day, second of the day, `speed`, `fastForward`, `paused`;
+  `advance(realSeconds)`, `skip`, `rate`, `hoursPerRealSecond`, `text` "Day N · HH:MM", save/load; `CLOCK_SPEEDS` 0, 1,
+  6, 15, 30, 60, 120, 600; `NORMAL_SPEED` 6; `SLEEP_FAST_SPEED` 120 for the sleep fast-forward). ONE clock for the
+  world: the sky's hour is the clock's (main.ts `clock.hour`), Settings -> WORLD -> GAME SPEED (`gdm.gameSpeed`,
+  `?speed=`, live; "6x (normal: a day in 4 h)", "Stopped" ... "600x (test)") replaces Day cycle, and Time of day sets
+  the clock. Her BODY'S SLOW CLOCKS run on it (`HeroineVitals.gameHoursPerSecond`, set each frame from the clock for
+  both characters; was `gutHoursPerSecond` 1/240, the 15x Body clock, GONE): her stomach, bladder, bowels, water and
+  her sleepiness. Her walk, stamina, heart, breathing and effort stay in real seconds. Readout: `Day 1 · 13:15 · 6x`.
+  Test pages: `gdm.clock` (`speed`, `setHour`, `text`), `gdm.sky({ hour, speed })`.
+  (2) ENERGY = 1 - SLEEPINESS - FATIGUE (heroineVitals.ts VITALS_TUNING.energy, `dayEnergy`): SLEEPINESS on the game
+  clock, +4.5% a game hour awake (16 h awake: 72%), -12.5% a game hour asleep x her sleep's quality (8 h: rested);
+  FATIGUE in real minutes, v0.2.174's energy rules exactly (moving 0.1 + 2.2 x workload^2 % a minute; after 60 s still
+  +1 a minute standing, +2 seated, +4 asleep, half if hungry or thirsty; adrenaline's crash). Her stamina pool is her
+  base x her energy, unchanged. A new game starts rested (sleepiness 0), so the start of play is as before. VitalsInput
+  `asleep`, `sleepQuality`; VitalsReading `sleepiness`, `fatigue`, `asleep`; asleep her heart -7 and breathing -2
+  (`sleep`). `setEnergy` (all of it sleepiness), `setSleepiness`, `passTime(gameHours, asleep)`. Asleep, an empty
+  stomach does not wear her health (a night's fast: the stomach empties a meal in a few game hours, and by real
+  seconds a night at 6x would otherwise wear it toward its floor). Readout: `sleepy 38 · tired 4 · zz`. Settings ->
+  FOOD & DRINK -> SLEEP 8 HOURS (until there are beds): both pass 8 game hours asleep where they stand, the clock jumps
+  8 hours. MEASURED (sim_physiology.ts): every stamina and breathing figure of v0.2.176 the same but the JOG TO EMPTY,
+  8:19 -> 7:56 (the 8 game minutes of the day's sleepiness, 3.6%, taken off her pool as she jogs; the sprint 41 s and
+  the run 2:01 unchanged); 16 game hours awake: energy 28%; 8 asleep after: 100%. In the BUILT game (town, both): the
+  clock 6.2 game seconds a second of play, 62 at 60x (saved), the Time of day slider following it, Sleep 8 hours
+  13:17 -> 21:18 with her stomach empty and her bladder full after it; no errors.
+  (3) THE MIND (`src/mind/`, PURE TYPESCRIPT: no three.js, no DOM, no body geometry, so it can run many NPCs and be
+  taken to CCBS and his other games; one `index.ts`): `types.ts` (needs, activities, smart objects and their slots),
+  `profile.ts` (CharacterProfile: needs' levels from his brief -- eat below 30% to 60-75%, drink below 40% to 80-95%,
+  the bathroom from 50% handy and 75% go, rest below 40%, sleep -- habits: waking, bedtime and meal times, MARY_PROFILE
+  and JOHN_PROFILE, their traits FIRST GUESSES for him to set; Mary's STRESS EATING his table exactly: eat below 45-55%,
+  to 75-90%, snacks x2, restless x1.5, sleep quality 0.8; John none), `traits.ts` (his ten), `emotions.ts` (his eight
+  feelings, and WORRY: stress less what is from her body's needs, what a stress eater eats over), `memory.ts` (what
+  they did, things to avoid after a failure: 10 game minutes, 45 after two; each day's counts; the DECISION LOG, 600
+  lines), `activities.ts` (18: toilet, waitTurn, eatMeal, snack, drink, sleep, nap, rest, washUp, watchScreen, read,
+  lookOutside, wander, exercise, tidy, idle, talk, follow; each scores itself 0..100 from the needs, levels, traits,
+  variety and the walk, and plans its steps: reserve, go, pose, work, do, release), `society.ts` (who is at home, who
+  is played, talk invitations), `mind.ts` (Mind: decides once a second, staggered; COMMITMENT: a need under way is
+  seen through, a pastime gives way only to a need from 55 that beats it by 1.3x + 8, an EMERGENCY -- the bathroom from
+  90%, water under 8%, energy under 10% -- is weighed FIRST whatever its score; control modes manual / autonomous /
+  companion (its pastimes kept within 5 m of the one played, `COMPANION_REACH`) / scripted; save/load).
+  (4) THE HOME, AS DATA (`src/world/home/`): `homeLayout.ts` `generateHome(FISHER_HOME)`: 3 bedrooms, 2 bathrooms (an
+  ensuite and a hall bath), the living room, the entry and the kitchen with dining, a hall; 33 things with their slots
+  (the main bed's west side Mary's and east John's: a guess), sliding doors, a front and a back door to outside; meals
+  60, drinks 40, snacks 30 in stock. `homeRoutes.ts` (the shortest way through the doorways, every two doorways' way
+  worked out once, again when one is blocked: the minds' cost went from 115 to 15 µs a frame), `homeWorld.ts` (the
+  MindWorld: reservations one holder a slot, stock), `mindBridge.ts` (the vitals' reading into the mind's needs).
+  (5) THE HEADLESS SIMULATION (`scripts/sim_household.ts`, how to run it at its top; logs and timelines in
+  /tmp/household/): the real HeroineVitals stepped every 0.25 s, a stand-in body walking the routes at 1.1 m/s, the
+  clock at 6x, 120x while everyone at home sleeps. EIGHT SCENARIOS, 33 CHECKS, ALL PASS: three normal days for both;
+  the pantry run down (3 meals: no more eaten, no walking to an empty fridge, they keep drinking); a bathroom's door
+  blocked (11 trips, all to the other); one toilet and both bursting (John waits, then goes); the player taking Mary
+  (what she held let go at once, she carries on after); John away with worrying news (Mary eats 21% more and snacks
+  9 against 6 over two days, loneliness 100%); John as a companion (within 4 m of her 92% of the time); a mind saved and
+  loaded back the same (20 KB). A NORMAL DAY (Mary): up at 06:15 (once in the night to the toilet, back to bed), 5-6
+  meals and 3-4 snacks, 2-3 drinks, 5-6 toilet visits, 9 kinds of pastime (none over 30% of them), a nap or two in the
+  evening, bed at 22:00, 8.7-9.2 h asleep; John up at 05:45, bed 22:30, 7.6-8.2 h. FOOD: with his eat-below-30% and
+  the builder's MEASURED stomach (half a meal leaves it in 1.5 h) they eat every 3 hours, about 3.8 L of food a day
+  (asked of him). Its COST: 15 µs a mind a frame (0.25 s frames) on the build machine, 62 µs of work a real second; a
+  frame over 1 ms about once in 4,500 (the JavaScript engine's own pauses).
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

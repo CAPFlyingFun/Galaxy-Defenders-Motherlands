@@ -1,0 +1,460 @@
+// ============================================================================
+// sim_household.ts -- JOHN AND MARY LIVING IN THE HOUSE FOR DAYS, WITHOUT DRAWING ANYTHING: the phase-2 test of the mind
+// (src/mind/), the game clock (src/core/gameClock.ts) and the home (src/world/home/), with the game's own vitals
+// (src/vitals/heroineVitals.ts) and a simple stand-in body.
+//
+// Joshua, 2026-11-26: "Start with the game clock and headless AI mind simulation... Test several consecutive simulated
+// days, not just one... Test resource shortages, blocked destinations, occupied objects and interrupted activities...
+// Include decision logging from the beginning."
+//
+// THE STAND-IN BODY (SimBody) does what the game's bodies will: walks the home's routes (homeRoutes.ts, through its
+// doorways) at a walk, 1.1 m/s; takes poses in real time (sitting down or getting up 3 s, lying down or up 4 s); and
+// passes eating, drinking, the bathroom and sleep to the vitals. The game's vitals are stepped as main.ts steps them,
+// four times a real second, their slow clocks on the game clock (6x, and 120x while everyone home is asleep).
+//
+// SCENARIOS (each prints its days and its checks, PASS or FAIL):
+//   1. normal       both at home, three days
+//   2. pantry       the fridge nearly empty and few snacks: two days
+//   3. blocked      bath 2's door blocked all day: one day
+//   4. one toilet   bath 2 blocked and both bursting at once: who waits
+//   5. takeover     the player takes Mary mid-activity for half a game hour, then gives her back
+//   6. john away    John leaves on the expedition; worrying news for Mary; three days (her stress eating)
+//   7. companion    Mary played, John a companion, for two game hours
+//   8. save         a mind saved and loaded back gives the same mind
+// The decision logs of scenario 1 and 6 are written out in full (/tmp/household/).
+//
+// RUN IT (from Game/; esbuild comes with Vite, `@charb` is the builder's folder as in vite.config.ts):
+//   node_modules/.bin/esbuild scripts/sim_household.ts --bundle --platform=node --format=esm \
+//     --alias:@charb=../Char_B/src --outfile=/tmp/sim_household.mjs && node /tmp/sim_household.mjs [scenario...]
+// ============================================================================
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { GameClock } from '../src/core/gameClock';
+import { HeroineVitals, type HeroineBody } from '../src/vitals/heroineVitals';
+import { Mind, Society, MARY_PROFILE, JOHN_PROFILE, type ActorId, type CharacterProfile, type ControlMode, type GameTime, type MindBody, type Motion, type MoveStatus, type Prop, type Vec2 } from '../src/mind';
+import { generateHome } from '../src/world/home/homeLayout';
+import { HomeWorld } from '../src/world/home/homeWorld';
+import { foodMlForBar, needsFromReading, waterMlBetween } from '../src/world/home/mindBridge';
+
+const STEP = 0.25;            // real seconds a frame
+const WALK = 1.1;             // metres a second
+const OUT = '/tmp/household';
+
+// ---- THE STAND-IN BODY ----------------------------------------------------------------------------------------------
+
+class SimBody implements MindBody {
+  pos: Vec2;
+  facing = 0;
+  private settled: Motion = 'stand';
+  private changingTo: Motion | null = null;
+  private changeLeft = 0;
+  private route: Vec2[] = [];
+  private routeTo: Vec2 | null = null;
+  /** this frame's real seconds (set by the loop) and how far the body walked in it */
+  frameDt = STEP;
+  moved = 0;
+  asleep = false;
+  sleepQuality = 1;
+  workload = 0;
+  prop: Prop | null = null;
+  /** total metres walked */
+  walked = 0;
+
+  constructor(readonly id: ActorId, start: Vec2, readonly vitals: HeroineVitals, private readonly world: HomeWorld) {
+    this.pos = { ...start };
+  }
+
+  position(): Vec2 { return this.pos; }
+  motion(): Motion { return this.settled; }
+
+  goTo(to: Vec2, facing: number | null): MoveStatus {
+    if (this.settled !== 'stand') return 'moving';
+    if (!this.routeTo || Math.hypot(this.routeTo.x - to.x, this.routeTo.z - to.z) > 0.01) {
+      const r = this.world.routes.route(this.pos, to);
+      if (!r) return 'blocked';
+      this.route = r.points.slice(1);
+      this.routeTo = to;
+    }
+    let budget = WALK * this.frameDt;
+    while (budget > 0 && this.route.length) {
+      const p = this.route[0], d = Math.hypot(p.x - this.pos.x, p.z - this.pos.z);
+      if (d <= budget) { this.pos = { ...p }; this.route.shift(); budget -= d; this.moved += d; }
+      else {
+        this.facing = Math.atan2(p.x - this.pos.x, p.z - this.pos.z);
+        this.pos = { x: this.pos.x + ((p.x - this.pos.x) / d) * budget, z: this.pos.z + ((p.z - this.pos.z) / d) * budget };
+        this.moved += budget;
+        budget = 0;
+      }
+    }
+    if (!this.route.length) { if (facing !== null) this.facing = facing; this.routeTo = null; return 'arrived'; }
+    return 'moving';
+  }
+
+  stopMoving(): void { this.route = []; this.routeTo = null; }
+
+  pose(motion: Motion, facing: number | null): 'changing' | 'ready' {
+    if (facing !== null && this.settled === 'stand' && !this.changingTo) this.facing = facing;
+    if (this.settled === motion && !this.changingTo) return 'ready';
+    if (this.changingTo !== motion) {
+      this.changingTo = motion;
+      // (getting into or out of a bed takes 4 s, a seat 3 s; between two non-standing poses, through standing)
+      this.changeLeft = motion === 'lie' || motion === 'doze' || this.settled === 'lie' || this.settled === 'doze' ? 4 : 3;
+    }
+    this.changeLeft -= this.frameDt;
+    if (this.changeLeft > 0) return 'changing';
+    this.settled = motion;
+    this.changingTo = null;
+    return 'ready';
+  }
+
+  consume(foodMl: number, waterMl: number): void { this.vitals.consume(foodMl, waterMl); }
+  bathroomVisit(): { seconds: number; bowels: boolean } { return this.vitals.bathroomVisit(); }
+  relieve(bowels: boolean): void { this.vitals.relieve(bowels); }
+  sleep(asleep: boolean, quality: number): void { this.asleep = asleep; this.sleepQuality = quality; }
+  exert(workload: number): void { this.workload = workload; }
+  hold(prop: Prop | null): void { this.prop = prop; }
+  lookAt(): void { /* (nothing to turn in the stand-in) */ }
+  foodMlForBar(bar: number): number { return foodMlForBar(bar); }
+  waterMlForBar(bar: number): number { return waterMlBetween(this.vitals.reading.water, bar); }
+  stomachFoodMl(): number { return this.vitals.contents.foodMl; }
+
+  /** The vitals' step for this frame: walking, or exercise felt as its walking speed; seated, asleep. */
+  stepVitals(dt: number): void {
+    const walkSpeed = this.moved / Math.max(1e-6, dt);
+    // (exercise at a workload: the speed whose work it is, a walk 0.3 at 1.1 m/s to a jog 0.6 at 2.64)
+    const exerciseSpeed = this.workload > 0 ? 1.1 + ((this.workload - 0.3) / 0.3) * (2.64 - 1.1) : 0;
+    this.vitals.step(dt, { speed: Math.max(walkSpeed, exerciseSpeed), firing: false, seated: this.settled !== 'stand', asleep: this.asleep, sleepQuality: this.sleepQuality });
+    this.walked += this.moved;
+    this.moved = 0;
+  }
+}
+
+// ---- A HOUSEHOLD ------------------------------------------------------------------------------------------------------
+
+interface Resident { readonly mind: Mind; readonly body: SimBody; readonly vitals: HeroineVitals }
+
+class Household {
+  readonly clock: GameClock;
+  readonly world = new HomeWorld(generateHome());
+  readonly society = new Society();
+  readonly people = new Map<ActorId, Resident>();
+  /** samples every 15 game minutes, for the timeline file: time, then per person food, water, energy, bathroom, stress, loneliness, activity */
+  readonly samples: string[] = [];
+  private nextSample = 0;
+  /** game seconds of mind time measured, and the real milliseconds the minds took */
+  mindMs = 0;
+  mindTicks = 0;
+  /** the slowest single tick, ms (a frame on which a mind decided) */
+  mindWorst = 0;
+  /** the slowest after the first 2,000 frames (the JavaScript engine warmed up), and how many frames took over 1 ms */
+  mindWorstWarm = 0;
+  mindOver1 = 0;
+  /** a check that no slot is ever held twice (counted each frame) */
+  doubleHolds = 0;
+
+  constructor(startHour = 7, readonly label = '') {
+    this.clock = new GameClock(startHour, 6);
+  }
+
+  add(profile: CharacterProfile, body: HeroineBody, mode: ControlMode = 'autonomous'): Resident {
+    const vitals = new HeroineVitals(body);
+    vitals.setSleepiness(Math.max(0, (this.clock.hour - profile.habits.wake) * 0.045));
+    const sim = new SimBody(profile.id, this.world.layout.spawns[profile.id], vitals, this.world);
+    const mind = new Mind(profile, sim, this.world, this.society, { mode });
+    const r = { mind, body: sim, vitals };
+    this.people.set(profile.id, r);
+    return r;
+  }
+
+  get time(): GameTime { return { day: this.clock.day, hour: this.clock.hour, seconds: this.clock.totalSeconds }; }
+
+  /** One frame of STEP real seconds. */
+  frame(): void {
+    const home = [...this.people.values()].filter((p) => !this.society.isAway(p.mind.id));
+    // (sleep fast-forward: everyone at home asleep, and none of them played)
+    this.clock.fastForward = home.length > 0 && home.every((p) => p.vitals.reading.asleep && p.mind.mode !== 'manual');
+    this.clock.advance(STEP);
+    const t = this.time;
+    for (const p of this.people.values()) {
+      p.vitals.gameHoursPerSecond = this.clock.hoursPerRealSecond;
+      p.body.frameDt = STEP;
+      if (this.society.isAway(p.mind.id)) { p.vitals.step(STEP, { speed: 0.6, firing: false }); continue; }
+      const t0 = performance.now();
+      p.mind.tick(STEP, t, needsFromReading(p.vitals.reading));
+      const took = performance.now() - t0;
+      this.mindMs += took;
+      this.mindTicks++;
+      this.mindWorst = Math.max(this.mindWorst, took);
+      if (took > 1) this.mindOver1++;
+      if (this.mindTicks > 2000) this.mindWorstWarm = Math.max(this.mindWorstWarm, took);
+      p.body.stepVitals(STEP);
+    }
+    // (no slot held by two: the world keeps one holder per slot, so this counts only a broken world)
+    const seen = new Set<string>();
+    for (const key of this.world.held().keys()) { if (seen.has(key)) this.doubleHolds++; seen.add(key); }
+    if (t.seconds >= this.nextSample) { this.nextSample = t.seconds + 900; this.sample(); }
+  }
+
+  /** Runs until the game clock reads `day` at `hour` (or later). */
+  runUntil(day: number, hour: number, each?: () => void): void {
+    const until = (day - 1) * 86400 + hour * 3600;
+    while (this.clock.totalSeconds < until) { this.frame(); each?.(); }
+  }
+
+  private sample(): void {
+    const parts = [`${this.clock.day}`, this.clock.timeText];
+    for (const p of this.people.values()) {
+      const r = p.vitals.reading, f = p.mind.emotions.state;
+      parts.push(p.mind.id, r.food.toFixed(2), r.water.toFixed(2), r.energy.toFixed(2), r.bathroom.toFixed(2), f.stress.toFixed(2), f.loneliness.toFixed(2), this.society.isAway(p.mind.id) ? 'away' : p.mind.activity ?? '-');
+    }
+    this.samples.push(parts.join(','));
+  }
+}
+
+// ---- REPORTING --------------------------------------------------------------------------------------------------------
+
+const results: { scenario: string; check: string; pass: boolean; detail: string }[] = [];
+function check(scenario: string, name: string, pass: boolean, detail: string): void {
+  results.push({ scenario, check: name, pass, detail });
+  console.log(`  ${pass ? 'PASS' : 'FAIL'}  ${name}: ${detail}`);
+}
+
+/** One person's day, as a line. */
+function dayLine(h: Household, id: ActorId, day: number): string {
+  const m = h.people.get(id)!.mind, d = m.memory.day(day);
+  const pastimes = Object.entries(d.pastimes).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ');
+  return `  ${m.profile.name.split(' ')[0].padEnd(5)} day ${day}: meals ${d.meals} (${Math.round(d.foodMl)} mL, big ${d.bigMeals}), snacks ${d.snacks}, drinks ${d.drinks} (${Math.round(d.waterMl)} mL), toilet ${d.bathroom}, sleep ${d.sleepHours.toFixed(1)} h, switches ${d.switches}, emergencies ${d.emergencies}, failures ${d.failures}, idle ${Math.round(d.idleMinutes)} min\n           pastimes: ${pastimes || '-'}`;
+}
+
+/** The lowest each bar went over a run (from the samples), and how long it stayed under a line. */
+/**
+ * Their lowest needs over the run (and fullest bathroom). FOOD AWAKE only: the stomach empties a meal in a few game
+ * hours, so it is near empty by every morning (a night's fast); `hungryAwake` is the longest they went awake with it
+ * under 8%, in game minutes.
+ */
+function lows(h: Household, id: ActorId): { food: number; foodAwake: number; hungryAwake: number; water: number; energy: number; bathroomHigh: number } {
+  let food = 1, foodAwake = 1, water = 1, energy = 1, bathroomHigh = 0, run = 0, hungryAwake = 0;
+  for (const line of h.samples) {
+    const p = line.split(','), i = p.indexOf(id);
+    if (i < 0 || p[i + 7] === 'away') continue;
+    const f = +p[i + 1], asleep = p[i + 7] === 'sleep';
+    food = Math.min(food, f);
+    if (!asleep) foodAwake = Math.min(foodAwake, f);
+    run = !asleep && f < 0.08 ? run + 15 : 0;
+    hungryAwake = Math.max(hungryAwake, run);
+    water = Math.min(water, +p[i + 2]); energy = Math.min(energy, +p[i + 3]); bathroomHigh = Math.max(bathroomHigh, +p[i + 4]);
+  }
+  return { food, foodAwake, hungryAwake, water, energy, bathroomHigh };
+}
+
+/** When each sleep started and ended (from the decision log), "22:41-06:23". */
+function sleeps(m: Mind): string[] {
+  const out: string[] = [];
+  let from: string | null = null;
+  for (const e of m.memory.log) {
+    if (e.activity !== 'sleep') continue;
+    if (e.kind === 'choose' || e.kind === 'emergency' || e.kind === 'switch') from = e.when;
+    else if ((e.kind === 'finish' || e.kind === 'interrupt' || e.kind === 'fail') && from) { out.push(`${from}-${e.when.slice(3)}${e.kind !== 'finish' ? ` (${e.text.split(': ')[1] ?? e.kind})` : ''}`); from = null; }
+  }
+  return out;
+}
+
+/** The first sample on `day` at or after `hour` (the samples are every 15 game minutes, never exactly on the hour). */
+function sampleAt(h: Household, day: number, hour: number): string[] {
+  const line = h.samples.find((l) => { const [d, hm] = l.split(','); const [hh, mm] = hm.split(':').map(Number); return +d === day && hh + mm / 60 >= hour; });
+  return line?.split(',') ?? [];
+}
+
+function writeLog(name: string, h: Household): void {
+  mkdirSync(OUT, { recursive: true });
+  for (const p of h.people.values()) {
+    const lines = p.mind.memory.log.map((e) => `${e.when}  ${e.kind.padEnd(9)} ${e.text}${e.scores ? `   {${Object.entries(e.scores).map(([k, v]) => `${k} ${v}`).join(', ')}}` : ''}`);
+    writeFileSync(`${OUT}/${name}-${p.mind.id}-log.txt`, lines.join('\n') + '\n');
+  }
+  writeFileSync(`${OUT}/${name}-timeline.csv`, h.samples.join('\n') + '\n');
+}
+
+// ---- THE SCENARIOS ---------------------------------------------------------------------------------------------------
+
+const MARY_BODY: HeroineBody = { age: 30, weeks: 0 };
+const JOHN_BODY: HeroineBody = { age: 32, weeks: 0, male: true };
+
+function normal(): Household {
+  console.log('\n=== 1. NORMAL: both at home, three days from 07:00 on day 1 ===');
+  const h = new Household(7);
+  h.add(MARY_PROFILE, MARY_BODY);
+  h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(4, 7);
+  for (const day of [1, 2, 3]) for (const id of ['mary', 'john']) console.log(dayLine(h, id, day));
+  for (const id of ['mary', 'john']) console.log(`  ${id} slept: ${sleeps(h.people.get(id)!.mind).join(' · ')}`);
+  for (const id of ['mary', 'john']) {
+    const m = h.people.get(id)!.mind, low = lows(h, id);
+    const days = [1, 2, 3].map((d) => m.memory.day(d));
+    check('normal', `${id}: eats every day`, days.every((d) => d.meals >= 2), days.map((d) => `${d.meals} meals`).join(', '));
+    check('normal', `${id}: drinks every day`, days.every((d) => d.drinks >= 2 && d.waterMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} mL)`).join(', '));
+    check('normal', `${id}: uses the toilet every day`, days.every((d) => d.bathroom >= 3), days.map((d) => `${d.bathroom}`).join(', '));
+    check('normal', `${id}: sleeps 6-10 h a night`, days.slice(1).every((d) => d.sleepHours >= 6 && d.sleepHours <= 10.5), days.map((d) => `${d.sleepHours.toFixed(1)} h`).join(', '));
+    check('normal', `${id}: needs never neglected`, low.hungryAwake <= 30 && low.water >= 0.08 && low.bathroomHigh < 0.97, `food awake lowest ${pct(low.foodAwake)} (under 8% awake ${low.hungryAwake} min at most; asleep ${pct(low.food)}), water ${pct(low.water)}, energy ${pct(low.energy)}; fullest bathroom ${pct(low.bathroomHigh)}`);
+    check('normal', `${id}: not idle for long`, days.every((d) => d.idleMinutes < 60), days.map((d) => `${Math.round(d.idleMinutes)} min`).join(', '));
+    check('normal', `${id}: few switches`, days.every((d) => d.switches <= 6), days.map((d) => `${d.switches}`).join(', '));
+    const kinds = days.map((d) => Object.keys(d.pastimes).length), most = days.map((d) => { const v = Object.values(d.pastimes); const all = v.reduce((a, b) => a + b, 0); return all ? Math.max(...v) / all : 0; });
+    check('normal', `${id}: varied pastimes`, kinds.every((k) => k >= 4) && most.every((s) => s <= 0.45), kinds.map((k, i) => `${k} kinds, top ${pct(most[i])}`).join('; '));
+  }
+  check('normal', 'never two in one slot', h.doubleHolds === 0, `${h.doubleHolds}`);
+  console.log(`  the minds' cost: ${(h.mindMs / h.mindTicks * 1000).toFixed(1)} µs a mind a frame on average (${h.mindTicks} frames of ${STEP} s), stand-in body included; ${(h.mindMs / h.mindTicks / STEP * 1000).toFixed(0)} µs of a mind's work a real second; the slowest frame ${(h.mindWorst * 1000).toFixed(0)} µs (${(h.mindWorstWarm * 1000).toFixed(0)} once warmed up), ${h.mindOver1} frames over 1 ms`);
+  writeLog('normal', h);
+  return h;
+}
+
+function pantry(): void {
+  console.log('\n=== 2. PANTRY: 3 meals in the fridge and 2 snacks, two days ===');
+  const h = new Household(7);
+  h.world.setStock('fridge-1', 'meals', 3);
+  h.world.setStock('cabinet-1', 'snacks', 2);
+  h.add(MARY_PROFILE, MARY_BODY);
+  h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(3, 7);
+  for (const day of [1, 2]) for (const id of ['mary', 'john']) console.log(dayLine(h, id, day));
+  const meals = ['mary', 'john'].reduce((s, id) => s + h.people.get(id)!.mind.memory.day(1).meals + h.people.get(id)!.mind.memory.day(2).meals, 0);
+  const fails = ['mary', 'john'].reduce((s, id) => s + h.people.get(id)!.mind.memory.day(1).failures + h.people.get(id)!.mind.memory.day(2).failures, 0);
+  check('pantry', 'no more meals eaten than there were', meals <= 3, `${meals} meals eaten`);
+  check('pantry', 'no walking at an empty fridge again and again', fails <= 4, `${fails} failures in two days`);
+  const m = h.people.get('mary')!.mind;
+  check('pantry', 'they go hungry, but keep living', m.memory.day(2).drinks >= 3 && m.memory.day(2).bathroom >= 2, `Mary day 2: ${m.memory.day(2).drinks} drinks, ${m.memory.day(2).bathroom} toilet visits, lowest food ${pct(lows(h, 'mary').food)}`);
+}
+
+function blocked(): void {
+  console.log('\n=== 3. BLOCKED: bath 2\'s door will not open, all day ===');
+  const h = new Household(7);
+  h.world.routes.block('door-bathroom');
+  h.add(MARY_PROFILE, MARY_BODY);
+  h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(2, 7);
+  for (const id of ['mary', 'john']) console.log(dayLine(h, id, 1));
+  const uses = ['mary', 'john'].flatMap((id) => h.people.get(id)!.mind.memory.log.filter((e) => e.kind === 'choose' && e.activity === 'toilet').map((e) => e.text));
+  check('blocked', 'never sent to the blocked bathroom', uses.every((t) => !t.includes('bath 2')), `${uses.length} toilet trips, all to bath 1`);
+  const fails = ['mary', 'john'].reduce((s, id) => s + h.people.get(id)!.mind.memory.day(1).failures, 0);
+  check('blocked', 'no failures from it', fails <= 2, `${fails}`);
+}
+
+function oneToilet(): void {
+  console.log('\n=== 4. ONE TOILET: bath 2 blocked, both bursting at 10:00 ===');
+  const h = new Household(9);
+  h.world.routes.block('door-bathroom');
+  const mary = h.add(MARY_PROFILE, MARY_BODY), john = h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(1, 10);
+  // (93% each: both past the emergency's 90% at once)
+  mary.vitals.setBladder(560); john.vitals.setBladder(560);
+  h.runUntil(1, 10.5);
+  for (const p of [mary, john]) {
+    const lines = p.mind.memory.log.filter((e) => e.at >= 10 * 3600 && e.at < 10.5 * 3600 && (e.activity === 'toilet' || e.activity === 'waitTurn')).map((e) => `${e.when} ${e.kind} ${e.text}`);
+    console.log(`  ${p.mind.id}:\n    ${lines.join('\n    ')}`);
+  }
+  const waited = [mary, john].some((p) => p.mind.memory.log.some((e) => e.activity === 'waitTurn' && e.at >= 36000));
+  const both = [mary, john].every((p) => p.mind.memory.log.some((e) => e.activity === 'toilet' && e.kind === 'finish' && e.at >= 36000));
+  check('one toilet', 'one waited for the other', waited, waited ? 'yes' : 'no wait in the log');
+  check('one toilet', 'both went', both, both ? 'yes' : 'one never went');
+  check('one toilet', 'never two on it', h.doubleHolds === 0, `${h.doubleHolds}`);
+}
+
+function takeover(): void {
+  console.log('\n=== 5. TAKEOVER: the player takes Mary at 12:30 for half a game hour ===');
+  const h = new Household(11);
+  const mary = h.add(MARY_PROFILE, MARY_BODY);
+  h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(1, 12.5);
+  const was = mary.mind.activity, held = [...h.world.held()].filter(([, w]) => w === 'mary').map(([k]) => k);
+  mary.mind.setMode('manual');
+  const after = [...h.world.held()].filter(([, w]) => w === 'mary').map(([k]) => k);
+  h.runUntil(1, 13);
+  mary.mind.setMode('autonomous');
+  h.runUntil(1, 13.2);
+  console.log(`  at 12:30 she was: ${was ?? 'nothing'} (holding ${held.join(', ') || 'nothing'}); after the takeover holding ${after.join(', ') || 'nothing'}; at 13:12 ${mary.mind.activity ?? 'deciding'}: ${mary.mind.thought}`);
+  check('takeover', 'everything she held let go at once', after.length === 0, `${held.length} -> ${after.length}`);
+  check('takeover', 'she carries on by herself after', !!mary.mind.activity, mary.mind.thought);
+}
+
+function johnAway(): Household {
+  console.log('\n=== 6. JOHN AWAY: he leaves on day 1 at 08:00; worrying news for Mary on days 1 and 2 at 20:00 ===');
+  const h = new Household(7);
+  const mary = h.add(MARY_PROFILE, MARY_BODY), john = h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(1, 8);
+  john.mind.setMode('scripted');
+  h.society.setAway('john', true);
+  h.world.release('john');
+  h.runUntil(1, 20);
+  mary.mind.storyEvent({ stress: 0.35, sadness: 0.2 }, 'no word from the expedition');
+  h.runUntil(2, 20);
+  mary.mind.storyEvent({ stress: 0.3, nervousness: 0.3 }, 'the radio signal was lost');
+  h.runUntil(4, 7);
+  for (const day of [1, 2, 3]) console.log(dayLine(h, 'mary', day));
+  console.log(`  her feelings by day (at 21:00): ${[1, 2, 3].map((d) => { const s = sampleAt(h, d, 21); const i = s.indexOf('mary'); return `day ${d} stress ${pct(+s[i + 5])} lonely ${pct(+s[i + 6])}`; }).join(' · ')}`);
+  console.log(`  slept: ${sleeps(mary.mind).join(' · ')}`);
+  return h;
+}
+
+function compareStress(normalRun: Household, awayRun: Household): void {
+  console.log('\n  MARY, NORMAL DAYS AGAINST JOHN-AWAY DAYS (days 2 and 3):');
+  const sum = (h: Household) => {
+    const m = h.people.get('mary')!.mind, d2 = m.memory.day(2), d3 = m.memory.day(3);
+    const meals = m.memory.log.filter((e) => (e.activity === 'eatMeal') && e.kind !== 'finish' && e.kind !== 'interrupt' && e.kind !== 'fail' && e.at >= 86400 && e.at < 3 * 86400);
+    return { meals: d2.meals + d3.meals, food: d2.foodMl + d3.foodMl, big: d2.bigMeals + d3.bigMeals, snacks: d2.snacks + d3.snacks, sleep: d2.sleepHours + d3.sleepHours, wander: (d2.pastimes.wander ?? 0) + (d3.pastimes.wander ?? 0), why: meals.map((e) => e.text.split(': ')[1]).slice(0, 4) };
+  };
+  const a = sum(normalRun), b = sum(awayRun);
+  console.log(`    meals ${a.meals} -> ${b.meals}, food ${Math.round(a.food)} -> ${Math.round(b.food)} mL, big meals ${a.big} -> ${b.big}, snacks ${a.snacks} -> ${b.snacks}, wanders ${a.wander} -> ${b.wander}, sleep ${a.sleep.toFixed(1)} -> ${b.sleep.toFixed(1)} h`);
+  console.log(`    why she ate, stressed: ${b.why.join(' | ')}`);
+  check('john away', 'she eats more when stressed', b.food > a.food * 1.15, `${Math.round(a.food)} -> ${Math.round(b.food)} mL over two days`);
+  check('john away', 'she snacks more', b.snacks >= a.snacks + 1, `${a.snacks} -> ${b.snacks}`);
+  check('john away', 'her loneliness rose', (() => { const s = sampleAt(awayRun, 3, 21); return +s[s.indexOf('mary') + 6] > 0.5; })(), 'day 3 21:00');
+  check('john away', 'John not counted at home', awayRun.people.get('john')!.mind.memory.day(2).meals === 0, `his day 2 meals: ${awayRun.people.get('john')!.mind.memory.day(2).meals}`);
+}
+
+function companion(): void {
+  console.log('\n=== 7. COMPANION: Mary played (walking between rooms), John a companion, 10:00-12:00 ===');
+  const h = new Household(10);
+  const mary = h.add(MARY_PROFILE, MARY_BODY, 'manual'), john = h.add(JOHN_PROFILE, JOHN_BODY, 'companion');
+  // (the player walks Mary from room to room, two game minutes in each)
+  const stops: Vec2[] = ['kitchen', 'hall', 'bedroom', 'living', 'mainBedroom', 'kitchen'].map((r) => h.world.standSpots(r)[0]);
+  let stop = 0, stay = 0, near = 0, samples = 0;
+  h.runUntil(1, 12, () => {
+    if (mary.body.goTo(stops[stop % stops.length], null) === 'arrived') { stay += STEP * 6; if (stay > 120) { stay = 0; stop++; } }
+    const a = mary.body.position(), b = john.body.position();
+    samples++;
+    if (Math.hypot(a.x - b.x, a.z - b.z) < 4) near++;
+  });
+  const choices = john.mind.memory.log.filter((e) => e.kind === 'choose' || e.kind === 'switch' || e.kind === 'emergency').map((e) => e.activity);
+  console.log(`  John's choices: ${[...new Set(choices)].map((a) => `${a} ${choices.filter((c) => c === a).length}`).join(', ')}`);
+  check('companion', 'he stays near her', near / samples > 0.7, `within 4 m ${pct(near / samples)} of the time`);
+}
+
+function saveLoad(): void {
+  console.log('\n=== 8. SAVE: Mary\'s mind saved on day 2 at 12:00 and loaded into a new one ===');
+  const h = new Household(7);
+  const mary = h.add(MARY_PROFILE, MARY_BODY);
+  h.add(JOHN_PROFILE, JOHN_BODY);
+  h.runUntil(2, 12);
+  const json = JSON.stringify(mary.mind.save());
+  const other = new Household(12);
+  const copy = other.add(MARY_PROFILE, MARY_BODY);
+  copy.mind.load(JSON.parse(json));
+  const same = JSON.stringify(copy.mind.save()) === json;
+  check('save', 'a saved mind loads back the same', same, `${(json.length / 1024).toFixed(1)} KB of JSON`);
+}
+
+// ---- RUN -----------------------------------------------------------------------------------------------------------
+
+const pct = (v: number): string => `${Math.round(v * 100)}%`;
+const only = process.argv.slice(2);
+const want = (name: string): boolean => !only.length || only.includes(name);
+const t0 = performance.now();
+let normalRun: Household | null = null;
+if (want('normal') || want('away')) normalRun = normal();
+if (want('pantry')) pantry();
+if (want('blocked')) blocked();
+if (want('toilet')) oneToilet();
+if (want('takeover')) takeover();
+if (want('away') || want('normal')) { const away = johnAway(); writeLog('away', away); if (normalRun) compareStress(normalRun, away); }
+if (want('companion')) companion();
+if (want('save')) saveLoad();
+const failed = results.filter((r) => !r.pass);
+console.log(`\n${results.length - failed.length} of ${results.length} checks passed in ${((performance.now() - t0) / 1000).toFixed(1)} s${failed.length ? `; FAILED: ${failed.map((f) => `${f.scenario}/${f.check}`).join('; ')}` : ''}`);
+console.log(`decision logs and timelines: ${OUT}/`);

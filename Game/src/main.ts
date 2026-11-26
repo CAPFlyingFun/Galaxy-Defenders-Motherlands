@@ -53,7 +53,7 @@ import { WeaponTable } from './world/weaponTable';
 import type { IslandWorld } from './world/island/islandWorld';
 import { PregnancyPlan, weekText } from './heroine/pregnancyPlan';
 import { environmentAt, makeEnvironment, type SkyEvent } from './world/island/proceduralSky';
-import type { SkyCycle } from './heroine/heroineSettings';
+import { GameClock } from './core/gameClock';
 import { GROUND_COLOURS, GROUND_COLOURS_KEY, GROUND_KINDS, groundColoursNow } from './world/island/groundPaint';
 import { TableUse } from './world/tableUse';
 import { HolsterUse } from './world/holsterUse';
@@ -531,9 +531,13 @@ async function start(): Promise<void> {
   const DAY_KEY_DIR = new THREE.Vector3(-4, 10, 6).normalize();
   const KEY_REACH = Math.hypot(4, 10, 6);
   const keyDirNow = DAY_KEY_DIR.clone();
-  // THE PROCEDURAL SKY'S CLOCK AND MOMENT (v0.2.167; world/island/proceduralSky.ts): the hour (Settings -> Time of day,
-  // moved on by Day cycle), a storm's lightning, and the Environment worked out from them each frame
-  let skyHour = graphics.skyHour;
+  // THE ONE GAME CLOCK (2026-11-26, Joshua's decisions 2c and 3a; core/gameClock.ts): the day and the time of day,
+  // starting at Settings -> Time of day and run at Settings -> WORLD -> Game speed (6x normal: a game day in 4 real
+  // hours). The sky shows its hour; her body's slow clocks (her gut, her sleepiness and sleep) run on it, through
+  // `gameHoursPerSecond`, set for both characters every frame. Her walk, stamina, heart and breathing stay in real time.
+  const clock = new GameClock(graphics.skyHour, graphics.gameSpeed);
+  // THE PROCEDURAL SKY'S MOMENT (v0.2.167; world/island/proceduralSky.ts): the clock's hour, a storm's lightning, and
+  // the Environment worked out from them each frame
   const environment = makeEnvironment();
   let lightning = 0, nextLightning = 6, skyHourShown = 0;
   /**
@@ -542,7 +546,7 @@ async function start(): Promise<void> {
    */
   const stepSky = (dt: number, realDt: number): void => {
     if (!island || graphics.sky !== 'procedural') return;
-    if (graphics.skyCycle > 0) skyHour = (skyHour + dt * 24 / (graphics.skyCycle * 60)) % 24;
+    const skyHour = clock.hour;
     // LIGHTNING in a storm: now and then (every 4-14 s), a flash that dies away over a third of a second
     if (graphics.skyEvent === 'storm') {
       nextLightning -= dt;
@@ -559,7 +563,7 @@ async function start(): Promise<void> {
     island.setEnvironment(environment, dt);
     // (the Settings slider follows a running clock, four times a second)
     skyHourShown += realDt;
-    if (graphics.skyCycle > 0 && skyHourShown > 0.25) { skyHourShown = 0; hud.setSkyHour(skyHour); }
+    if (clock.rate > 0 && skyHourShown > 0.25) { skyHourShown = 0; hud.setSkyHour(skyHour); }
   };
   scene.add(skyLight);
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -1323,6 +1327,14 @@ async function start(): Promise<void> {
     if (action === 'needToGo2') { vitals.setRectum(200); return; }
     if (action === 'mustGo') { vitals.setBladder(520); return; }
     if (action === 'tired') { vitals.setEnergy(0.1); return; }
+    // (SLEEP 8 HOURS, until there are beds: both of them sleep through it where they stand, and the clock jumps on 8
+    //  hours; their stomachs empty, bladders fill and sleepiness goes, as a night would)
+    if (action === 'sleep8') {
+      for (const c of [blaze, john]) c?.vitals.passTime(8, true);
+      clock.skip(8 * 3600);
+      hud.setSkyHour(clock.hour);
+      return;
+    }
     if (action === 'bathroom') {
       const visit = startVisit(playing?.kit ?? blazeKit, heroine, vitals);
       bathroomLeft = visit.seconds; bathroomBowels = visit.bowels;
@@ -1333,8 +1345,6 @@ async function start(): Promise<void> {
     eating.water += portion.water;
     eating.seconds = Math.max(eating.seconds, 0) + portion.seconds;
   };
-  vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
-  if (john) john.vitals.gutHoursPerSecond = graphics.bodyClock / 3600;
 
   const domeDebug = (action: DomeDebugAction) => {
     if (action === 'wet') { heroine.soakSkin?.(); wetFor = 0; return; }
@@ -1725,7 +1735,6 @@ async function start(): Promise<void> {
       // (Settings' AUTO is the played one's own, as the button is)
       else if (key === 'autoFire') { if (playing) playing.autoFire = graphics.autoFire === 'on' ? 'on' : 'off'; applyView(); }
       else if (key === 'skinShine') { for (const c of [blaze, john]) c?.body.setSkinShine?.(skinOilyOf(graphics.skinShine)); }
-      else if (key === 'bodyClock') { for (const c of [blaze, john]) if (c) c.vitals.gutHoursPerSecond = graphics.bodyClock / 3600; }
       else if (key === 'trainFitness' || key === 'trainEndurance' || key === 'trainRecovery' || key === 'trainStrength') { for (const c of [blaze, john]) if (c) trainVitals(c.vitals); }
       // (sound: the master at once; her breathing's own is read every frame, `playBreaths`)
       else if (key === 'soundVolume') sound.setVolume(graphics.soundVolume / 100);
@@ -1737,8 +1746,9 @@ async function start(): Promise<void> {
       else if (key === 'ground') island?.setGround(graphics.ground); // (live: groundPaint.ts)
       // (the sky: live. Back to the picture, the lights go back to the island's own daytime light)
       else if (key === 'sky') { island?.setSkyMode(graphics.sky); if (graphics.sky === 'picture') dayLight(); }
-      else if (key === 'skyHour') skyHour = graphics.skyHour;
-      else if (key === 'skyCycle' || key === 'skyEvent' || key === 'clouds') { /* live: read every frame (stepSky) */ }
+      else if (key === 'skyHour') clock.setHour(graphics.skyHour);
+      else if (key === 'gameSpeed') clock.speed = graphics.gameSpeed;
+      else if (key === 'skyEvent' || key === 'clouds') { /* live: read every frame (stepSky) */ }
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
       else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity' || key === 'paceCap') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
@@ -1891,14 +1901,16 @@ async function start(): Promise<void> {
       get elapsed() { return elapsed; },
       // (her belly a story step, as a quest would: gdm.stepBelly(1), gdm.stepBelly(-1))
       stepBelly,
-      // (the procedural sky for test pages: gdm.sky({ hour: 19, event: 'aurora', cycle: 0, clouds: 'on' }); the moment now)
-      sky(patch: { hour?: number; event?: SkyEvent; cycle?: SkyCycle; clouds?: 'on' | 'off' } = {}) {
-        if (patch.hour !== undefined) skyHour = graphics.skyHour = patch.hour;
+      // (the procedural sky for test pages: gdm.sky({ hour: 19, event: 'aurora', speed: 0, clouds: 'on' }); the moment now)
+      sky(patch: { hour?: number; event?: SkyEvent; speed?: number; clouds?: 'on' | 'off' } = {}) {
+        if (patch.hour !== undefined) clock.setHour(graphics.skyHour = patch.hour);
         if (patch.event) graphics.skyEvent = patch.event;
-        if (patch.cycle !== undefined) graphics.skyCycle = patch.cycle;
+        if (patch.speed !== undefined) clock.speed = graphics.gameSpeed = patch.speed;
         if (patch.clouds) graphics.clouds = patch.clouds;
-        return { hour: skyHour, event: graphics.skyEvent, night: environment.night, key: environment.keyIntensity };
+        return { hour: clock.hour, event: graphics.skyEvent, night: environment.night, key: environment.keyIntensity };
       },
+      // (the game clock: gdm.clock.speed = 600, gdm.clock.setHour(22), gdm.clock.text)
+      get clock() { return clock; },
       get tableUse() { return tableUse; }, get grabUse() { return grabUse; }, get holsterUse() { return holsterUse; },
       get beltReload() { return beltReload; }, get doorUse() { return doorUse; },
       // (each one's brain: what it is doing and what it has done, for the test pages)
@@ -2183,6 +2195,10 @@ async function start(): Promise<void> {
     const realDt = (now - last) / 1000;
     last = now;
     elapsed += dt;
+    // THE GAME CLOCK moves on by this frame's real seconds at its speed, and both characters' slow clocks with it
+    // (their gut, sleepiness and sleep: game hours per real second; 0 while it is stopped)
+    clock.advance(dt);
+    for (const c of [blaze, john]) if (c) c.vitals.gameHoursPerSecond = clock.hoursPerRealSecond;
     info.dt = dt;
     info.elapsed = elapsed;
 
@@ -2910,12 +2926,14 @@ async function start(): Promise<void> {
           const v = vitals.reading;
           lines.push(`work ${v.workload.toFixed(2)}/${v.capacity.toFixed(2)} = ${v.effort.toFixed(2)} · ${Math.round(v.grade * 100)}%`);
           lines.push(`pool ${Math.round(v.staminaPool * 100)} · fit ${Math.round(v.fitness * 100)}`);
+          // (her energy's two parts, 2026-11-26: sleepiness on game time, fatigue in real minutes; zz asleep)
+          lines.push(`sleepy ${Math.round(v.sleepiness * 100)} · tired ${Math.round(v.fatigue * 100)}${v.asleep ? ' · zz' : ''}`);
         }
         // (the island's forest: trees drawn, in how many draws)
         // (the island's grid, ground and rivers as chosen in Settings -> WORLD: v0.2.166)
         if (island) lines.push(`isle ${island.grid}x${island.grid} · ${graphics.ground === 'textures' ? 'tex' : 'colours'} · rivers ${graphics.rivers}`);
-        // (the procedural sky's hour and event: v0.2.167)
-        if (island && graphics.sky === 'procedural') lines.push(`sky ${String(Math.floor(skyHour)).padStart(2, '0')}:${String(Math.floor((skyHour % 1) * 60)).padStart(2, '0')} · ${graphics.skyEvent}${graphics.skyCycle ? ` · day ${graphics.skyCycle} min` : ''}`);
+        // (the game clock, its speed (FF while everyone sleeps) and the procedural sky's event: v0.2.167, 2026-11-26)
+        lines.push(`${clock.text} · ${clock.fastForward ? 'FF ' : ''}${clock.rate}x${island && graphics.sky === 'procedural' ? ` · ${graphics.skyEvent}` : ''}`);
         const forest = island?.treeCounts();
         if (forest) lines.push(`trees ${forest.trees} · ${forest.draws} draws`);
         // (graphics memory asked for, an ESTIMATE: core/gpuTally.ts; and where the last start stopped, if the phone

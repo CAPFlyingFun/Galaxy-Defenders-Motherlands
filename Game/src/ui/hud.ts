@@ -27,7 +27,7 @@ import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import { GROUND_COLOURS, GROUND_KINDS, groundColoursNow, type GroundKind } from '../world/island/groundPaint';
-import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, SKY_CHOICES, SKY_CYCLE_CHOICES, SKY_EVENT_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, SKY_CHOICES, GAME_SPEED_CHOICES, SKY_EVENT_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -38,7 +38,7 @@ import { clearAndStartFresh } from '../core/freshStart';
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
 /** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
-export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'needToGo2' | 'mustGo' | 'bathroom' | 'tired';
+export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'needToGo2' | 'mustGo' | 'bathroom' | 'tired' | 'sleep8';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -584,7 +584,7 @@ export class Hud {
     // textures/memory. It can be as a separate option in settings"; world/island/proceduralSky.ts)
     choiceRow('Sky', 'sky', SKY_CHOICES, 'Procedural: the sky drawn by code with a time of day: sun, moon and stars, clouds, sunrise and sunset, and the sky events below; the light, the haze and the sea follow it. Nothing to download. Picture: the daytime sky picture as before. Changes at once.');
     {
-      // (its own slider here, the time of day; it follows the clock while a day cycle runs: `setSkyHour`)
+      // (its own slider here, the time of day: the game clock's hour; it follows the clock as it runs: `setSkyHour`)
       const line = element('label', 'gd-choice gd-slider', settings);
       element('span', '', line, 'Time of day');
       const value = element('b', '', line, clockText(options.graphics.skyHour));
@@ -600,8 +600,8 @@ export class Hud {
       this.skyHourSlider = slider;
       this.skyHourValue = value;
     }
-    element('small', 'gd-note', settings, 'The procedural sky\'s hour: 13:15 is the island\'s light as it has always been; the sun rises about 6:00 and sets about 18:00. Changes at once.');
-    choiceRow('Day cycle', 'skyCycle', SKY_CYCLE_CHOICES, 'Stopped: the time of day stays where the slider is. Otherwise the clock runs and a whole day takes that long.');
+    element('small', 'gd-note', settings, 'The game clock\'s hour: the sky shows it, and her body\'s day runs on it. 13:15 is the island\'s light as it has always been; the sun rises about 6:00 and sets about 18:00. Changes at once.');
+    choiceRow('Game speed', 'gameSpeed', GAME_SPEED_CHOICES, 'How fast the game clock runs: game time for each real second. The sky, her stomach and bladder, her sleepiness and sleep follow it; her walk, stamina, heart and breathing stay in real time. 6x is normal play (a game day in 4 hours). Stopped holds the time still. Changes at once.');
     choiceRow('Sky event', 'skyEvent', SKY_EVENT_CHOICES, 'Clear; a tropical storm (slate clouds, dim light, haze, lightning); an aurora (curtains of light, as it gets dark); or alien bands across the sky (faint by day, bright by night). Changes at once.');
     choiceRow('Clouds', 'clouds', [['On', 'on'], ['Off', 'off']], 'A few soft clouds drifting (a storm always has them). Off is a little lighter for the phone. Changes at once.');
     choiceRow('Island grid', 'islandGrid', ISLAND_GRID_CHOICES, 'How many tiles the 56 km island is cut into: the nine round you are loaded in full. Smaller tiles load and build quicker but cover less. To compare on your phone; 16 x 16 is the default. Changing it reloads the game.');
@@ -783,9 +783,8 @@ export class Hud {
     intakeRow([['Make hungry', 'hungry'], ['Make thirsty', 'thirsty'], ['Bathroom', 'bathroom']]);
     // (to test THE BATHROOM BAR and the 🚽 button: her bladder to the urge, 350 mL, or a strong urge, 520 mL)
     intakeRow([['Need to go', 'needToGo'], ['Need to go #2', 'needToGo2'], ['Must go now', 'mustGo']]);
-    intakeRow([['Make tired', 'tired']]);
-    element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 10 s and her bladder is emptied (until there is a toilet). From 85% full the 🚽 counts down; at 0:00 she goes wherever she is. Make tired: her energy to 10% (standing still brings it back). The full readout shows her stomach and bladder.');
-    choiceRow('Body clock', 'bodyClock', [['1x (real time)', 1], ['6x (1 h = 6 h)', 6], ['15x (as it was)', 15], ['60x (fast test)', 60]], 'How fast her stomach empties and her bladder fills: game hours for each real hour.');
+    intakeRow([['Make tired', 'tired'], ['Sleep 8 hours', 'sleep8']]);
+    element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 10 s and her bladder is emptied (until there is a toilet). From 85% full the 🚽 counts down; at 0:00 she goes wherever she is. Make tired: her energy to 10% (only sleep brings it back now). Sleep 8 hours: both of them sleep and the clock jumps 8 hours (until there are beds). The full readout shows her stomach, bladder, sleepiness and fatigue.');
     element('h2', 'gd-settings-part', settings, 'TEST TOOLS');
     const tools = element('div', 'gd-debug-row', settings);
     const tool = (label: string, action: DomeDebugAction) => tapButton(element('button', 'gd-button', tools, label), () => options.onDomeDebug(action));

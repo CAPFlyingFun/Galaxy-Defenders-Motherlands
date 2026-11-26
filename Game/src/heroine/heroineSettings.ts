@@ -19,6 +19,7 @@
 //   ?sharp=1 | 2                       ?body=light | full           ?look=blazeSuit | blaze
 // ============================================================================
 import { SKY_TODAY_HOUR, type SkyEvent } from '../world/island/proceduralSky';
+import { CLOCK_SPEEDS, NORMAL_SPEED } from '../core/gameClock';
 import { wearsLightSkin } from '@charb/sarahlab/skinChoice';
 import { TARGET_FPS, type TargetFps } from './fast/autoDetail';
 import { nearestDetail, type Detail } from './fast/detailLevels';
@@ -56,11 +57,15 @@ export const SKY_CHOICES: readonly (readonly [string, SkyChoice])[] = [['Procedu
 export const SKY_EVENT_CHOICES: readonly (readonly [string, SkyEvent])[] = [
   ['Clear', 'clear'], ['Tropical storm', 'storm'], ['Aurora (at night)', 'aurora'], ['Alien bands', 'bands'],
 ];
-/** Settings -> WORLD -> Day cycle: real minutes a whole game day takes (0: the clock stands still). */
-export type SkyCycle = 0 | 12 | 24 | 48 | 96;
-export const SKY_CYCLE_CHOICES: readonly (readonly [string, SkyCycle])[] = [
-  ['Stopped', 0], ['A day in 12 min', 12], ['A day in 24 min', 24], ['A day in 48 min', 48], ['A day in 96 min', 96],
-];
+/**
+ * Settings -> WORLD -> Game speed (2026-11-26, Joshua's decision 2c): game seconds for each real second, the ONE clock
+ * the sky, her digestion, her sleepiness and the minds' days run on (core/gameClock.ts). 6x is normal play, a game day in
+ * 4 real hours; Stopped holds the time of day and her body's slow clocks still (for pictures and tests); 600x is for
+ * testing. It replaced the sky's Day cycle and FOOD & DRINK's Body clock.
+ */
+export const GAME_SPEED_CHOICES: readonly (readonly [string, number])[] = CLOCK_SPEEDS.map((v) => [
+  v === 0 ? 'Stopped' : v === NORMAL_SPEED ? `${v}x (normal: a day in ${24 / v} h)` : v === 600 ? `${v}x (test)` : `${v}x`, v,
+] as const);
 function asIslandGrid(v: string | null): IslandGrid | null {
   const n = Number(v);
   return n === 8 || n === 16 || n === 32 || n === 64 ? n : null;
@@ -163,12 +168,13 @@ export interface HeroineSettings {
   /**
    * THE SKY (v0.2.167; Joshua, 2026-11-24: "let's create a procedural sky as it gives up more options and saves
    * textures/memory. It can be as a separate option in settings"): `sky` Procedural (the default) or Picture; `skyHour`
-   * the time of day, 0-24 (13:15 is the island's light as it has always been); `skyCycle` real minutes a game day takes
-   * (0: stopped); `skyEvent` clear, a tropical storm, an aurora at night or alien bands; `clouds` on or off. All live.
+   * the time of day the game starts at, 0-24 (13:15 is the island's light as it has always been: the game clock's hour,
+   * the slider sets it live); `gameSpeed` how fast the game clock runs (GAME_SPEED_CHOICES); `skyEvent` clear, a
+   * tropical storm, an aurora at night or alien bands; `clouds` on or off. All live.
    */
   sky: SkyChoice;
   skyHour: number;
-  skyCycle: SkyCycle;
+  gameSpeed: number;
   skyEvent: SkyEvent;
   clouds: ShadowChoice;
   /**
@@ -198,8 +204,6 @@ export interface HeroineSettings {
   faceLocks: ShadowChoice;
   /** HER SKIN'S SHINE, 0 dry .. 25 natural (Joshua's pick, the default) .. 100 oily (fast/skinShine.ts). Takes hold at once. */
   skinShine: number;
-  /** HER BODY'S CLOCK: game hours per real hour for her stomach and gut (Joshua, 2026-11-19, to test). Takes hold at once. */
-  bodyClock: number;
   /**
    * TRAINING, TO TEST (Joshua approved the four upgrades, 2026-11-25; vitals/heroineVitals.ts VITALS_TUNING.training),
    * 0-100 each, for both of them until they are earned: FITNESS (cardio; both start at 20), ENDURANCE (her stamina pool,
@@ -342,7 +346,7 @@ export const SETTING_KEYS = Object.freeze({
   rivers: 'gdm.rivers',
   sky: 'gdm.sky',
   skyHour: 'gdm.skyHour',
-  skyCycle: 'gdm.skyCycle',
+  gameSpeed: 'gdm.gameSpeed',
   skyEvent: 'gdm.skyEvent',
   clouds: 'gdm.clouds',
   pregnant: 'gdm.pregnant',
@@ -355,7 +359,6 @@ export const SETTING_KEYS = Object.freeze({
   skinTexture: 'gdm.skinDepth',
   faceLocks: 'gdm.faceLocks',
   skinShine: 'gdm.skinShine',
-  bodyClock: 'gdm.bodyClock',
   trainFitness: 'gdm.trainFitness',
   trainEndurance: 'gdm.trainEndurance',
   trainRecovery: 'gdm.trainRecovery',
@@ -448,7 +451,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     rivers: (address.get('rivers') ?? read(SETTING_KEYS.rivers)) === 'on' ? 'on' : 'off',
     sky: (address.get('sky') ?? read(SETTING_KEYS.sky)) === 'picture' ? 'picture' : 'procedural',
     skyHour: asNumber(address.get('hour') ?? read(SETTING_KEYS.skyHour), 0, 24) ?? SKY_TODAY_HOUR,
-    skyCycle: ((v) => (v === 12 || v === 24 || v === 48 || v === 96 ? v : 0))(Number(address.get('cycle') ?? read(SETTING_KEYS.skyCycle))) as SkyCycle,
+    gameSpeed: ((v) => ((CLOCK_SPEEDS as readonly number[]).includes(v) ? v : NORMAL_SPEED))(Number(address.get('speed') ?? read(SETTING_KEYS.gameSpeed) ?? NORMAL_SPEED)),
     skyEvent: ((v) => (v === 'storm' || v === 'aurora' || v === 'bands' ? v : 'clear'))(address.get('event') ?? read(SETTING_KEYS.skyEvent)) as SkyEvent,
     clouds: (address.get('clouds') ?? read(SETTING_KEYS.clouds)) === 'off' ? 'off' : 'on',
     pregnant: ((v) => (v === 'on' || v === 'off' ? v : null))(address.get('pregnant') ?? read(SETTING_KEYS.pregnant)),
@@ -461,8 +464,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     skinTexture: (address.get('skin_texture') ?? read(SETTING_KEYS.skinTexture)) === 'off' ? 'off' : 'on',
     faceLocks: (address.get('face_locks') ?? read(SETTING_KEYS.faceLocks)) === 'on' ? 'on' : 'off',
     skinShine: asNumber(address.get('shine') ?? read(SETTING_KEYS.skinShine), 0, 100) ?? SKIN_SHINE_NATURAL,
-    // (15: what the game has run at; Joshua's real-life plan is 6)
-    bodyClock: asNumber(address.get('clock') ?? read(SETTING_KEYS.bodyClock), 1, 60) ?? 15,
     // (fitness 20 to start, Joshua's pick; the upgrades none; `?fitness=` and the others for test pages)
     trainFitness: asNumber(address.get('fitness') ?? read(SETTING_KEYS.trainFitness), 0, 100) ?? 20,
     trainEndurance: asNumber(address.get('endurance') ?? read(SETTING_KEYS.trainEndurance), 0, 100) ?? 0,

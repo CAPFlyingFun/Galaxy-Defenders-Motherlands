@@ -161,13 +161,13 @@ export const VITALS_TUNING = {
    */
   body: { womanKg: 60, manKg: 80 },
   /**
-   * Her digestion against the clock: how many hours pass for her stomach in one real second. 1/240 means one
-   * minute of play is a quarter of an hour for her gut, so a ten-minute mission is two and a half hours: long
-   * enough to get hungry and thirsty by the end, short enough that a snack between waves matters.
-   * (Checked by simulation, 2026-11-17: at twice this rate, with heavier sweat, she was parched within four
-   * minutes of running and dead of thirst in six. That is a survival game, not this one.)
+   * HER BODY'S SLOW CLOCKS RUN ON GAME TIME (since 2026-11-26, Joshua: "Daily tiredness, digestion, hunger, bathroom
+   * needs and sleep should follow game time"): game hours that pass in one real second, to start with. The game sets
+   * it every frame from its one clock (core/gameClock.ts: `hoursPerRealSecond`), so this is only what a test or a
+   * simulation starts with: the normal 6x, a game day in 4 real hours. (It was 1/240, 15x, until then; checked by
+   * simulation, 2026-11-17: at twice that rate, with heavier sweat, she was parched within four minutes of running.)
    */
-  gutHoursPerSecond: 1 / 240,
+  gameHoursPerSecond: 6 / 3600,
   /** Sweat, millilitres of water an hour (her gut's hours): this much at rest, up to this much at her hardest. */
   sweatMlPerHour: [30, 500] as readonly [rest: number, hardest: number],
   /**
@@ -254,15 +254,25 @@ export const VITALS_TUNING = {
   speed: { hungerCost: 0.1, thirstCost: 0.15, slowest: 0.45 },
   /**
    * HER ENERGY, HER READINESS OVER THE DAY (Joshua, 2026-11-21: "adding new stats like energy/effort, adrenaline"),
-   * IN REAL MINUTES since v0.2.174 (his decision; it was on her body's clock): moving costs (`moveBase` + `moveWork` x
-   * her workload squared) % a minute (a walk 0.3, jog 0.9, run 1.5, sprint 2.3: a whole sprint 1.5%, an 8-minute jog 7%);
-   * standing still it comes back `restPerMinute` % a minute once she has been still `restAfter` seconds (sitting
-   * `seatedPerMinute`), at `unfedRest` of that while she is hungry or thirsty; sleep, later, fills it.
+   * SINCE 2026-11-26 TWO PARTS (his decision 3a on the AI brain plan: "Energy should account for waking game hours so
+   * sleep becomes necessary. However, preserve our recently approved stamina and physiology system"):
+   *   energy = 1 - SLEEPINESS - FATIGUE
+   * SLEEPINESS, ON GAME TIME (the day's tiredness, only sleep takes it away): up `awakePerHour` of full for every game
+   * hour she is awake (4.5%: 16 waking hours make 72%, so by bedtime her energy is down to about a quarter), down
+   * `sleepPerHour` for every game hour asleep (12.5%: a whole day's in under 6 hours), less when she sleeps badly (the
+   * game's `sleepQuality`, the mind's: stress). It never goes past 1.
+   * FATIGUE, IN REAL MINUTES (v0.2.174's energy, his decision 4, unchanged but for its base): moving costs `moveWork` x
+   * her workload squared % a minute (a walk 0.2, jog 0.8, run 1.4, sprint 2.2: a whole sprint 1.5%); still for
+   * `restAfter` seconds it comes back `restPerMinute` % a minute (sitting `seatedPerMinute`, asleep `asleepPerMinute`),
+   * at `unfedRest` of that while she is hungry or thirsty. (v0.2.174's `moveBase` 0.1% a minute, the day's own wear, is
+   * what sleepiness is now.) An adrenaline crash is fatigue too.
    * IT IS HER STAMINA POOL (Joshua: "Your direct linear formula, no floor"): her pool is her base x her energy, so at
    * half her energy she has half her points to spend, and at 0 only a walk (input/pace.ts) until she has rested. Under
    * `lowFrom` it lowers her mood too.
    */
-  energy: { moveBase: 0.1, moveWork: 2.2, restAfter: 60, restPerMinute: 1, seatedPerMinute: 2, unfedRest: 0.5, lowFrom: 0.5 },
+  energy: { awakePerHour: 0.045, sleepPerHour: 0.125, moveWork: 2.2, restAfter: 60, restPerMinute: 1, seatedPerMinute: 2, asleepPerMinute: 4, unfedRest: 0.5, lowFrom: 0.5 },
+  /** ASLEEP her heart and breathing settle below her resting rates (a sleeping adult's are about 10% under), beats and breaths a minute. */
+  sleep: { heart: -7, breaths: -2 },
   /**
    * ADRENALINE (Joshua, 2026-11-21): fear is the spark, adrenaline what it does to her body. It follows the worst of her
    * fear and a fight (she has fired in the last `fightSeconds`, at `fromFight`) up within `riseSeconds`, jumps on a hit
@@ -315,6 +325,10 @@ export interface VitalsInput {
   readonly loadKg?: number;
   /** is she sitting (energy comes back faster)? Left out: no. */
   readonly seated?: boolean;
+  /** is she asleep? Her sleepiness goes down instead of up, her fatigue goes fastest, her heart and breathing settle. Left out: no. */
+  readonly asleep?: boolean;
+  /** how well she sleeps, 0..1 (the mind's: stress costs sleep). Left out: 1. */
+  readonly sleepQuality?: number;
   /** how deep the water is at her feet, metres (0 dry land): it cools her. Left out: 0. */
   readonly waterDepth?: number;
   /** how wet her skin is, 0 dry .. 1 soaked (fresh from the water): it cools her. Left out: 0. */
@@ -407,8 +421,14 @@ export interface VitalsReading {
    * null below 85% or while it is not filling.
    */
   readonly bathroomEta: number | null;
-  /** her energy over the day, 0 exhausted .. 1 rested (VITALS_TUNING.energy) */
+  /** her energy over the day, 0 exhausted .. 1 rested (VITALS_TUNING.energy): 1 less her sleepiness and her fatigue */
   readonly energy: number;
+  /** her sleepiness, 0..1: game hours awake build it, only sleep takes it away (VITALS_TUNING.energy) */
+  readonly sleepiness: number;
+  /** her fatigue, 0..1: real minutes of work build it, rest takes it away (VITALS_TUNING.energy) */
+  readonly fatigue: number;
+  /** asleep (as the game last told her vitals) */
+  readonly asleep: boolean;
   /** her fear, 0 calm .. 1 terrified */
   readonly fear: number;
   /** her adrenaline, 0 .. 1 (VITALS_TUNING.adrenaline) */
@@ -534,8 +554,18 @@ export class HeroineVitals {
   private health: number = VITALS_TUNING.health.most;
   private now: VitalsNow;
   private needs: GutNeeds;
-  /** Her energy over the day (VITALS_TUNING.energy), 0..1. (Not `vitals.energy`: that is the builder's name for stamina.) */
-  private dayEnergy = 1;
+  /**
+   * HER ENERGY'S TWO PARTS (VITALS_TUNING.energy), 0..1 each: her SLEEPINESS (game hours awake; only sleep takes it
+   * away) and her FATIGUE (real minutes of work; rest takes it away). Her energy is 1 less both.
+   */
+  private sleepiness = 0;
+  private fatigue = 0;
+  /** Asleep (the last step's input): for the reading. */
+  private asleep = false;
+  /** Her energy over the day, 0..1: 1 less her sleepiness and her fatigue. (Not `vitals.energy`: the builder's name for stamina.) */
+  private get dayEnergy(): number {
+    return clamp(1 - this.sleepiness - this.fatigue, 0, 1);
+  }
   /** Her stamina, points (0 .. her pool: her base x her energy). */
   private staminaPoints: number;
   /** Her exertion, for her breathing and for her heart (VITALS_TUNING.exertion): each on its own timing. */
@@ -670,7 +700,7 @@ export class HeroineVitals {
     const adWant = Math.max(this.fear, this.fightLeft > 0 ? ad.fromFight : 0);
     const adWas = this.adrenaline;
     this.adrenaline += (adWant - this.adrenaline) * (1 - Math.exp((-3 * dt) / (adWant > this.adrenaline ? ad.riseSeconds : ad.fallSeconds)));
-    if (this.adrenaline < adWas) this.dayEnergy = Math.max(0, this.dayEnergy - (adWas - this.adrenaline) * ad.crashEnergy);
+    if (this.adrenaline < adWas) this.fatigue = Math.min(1, this.fatigue + (adWas - this.adrenaline) * ad.crashEnergy);
     const thirst = this.needs.thirst, fear = this.fear;
     const pain = clamp((st.painFrom - this.health) / st.painFrom, 0, 1) * (1 - ad.dullsPain * this.adrenaline);
     this.pain = pain;
@@ -718,32 +748,39 @@ export class HeroineVitals {
       const seconds = wanted >= now ? riseSeconds : riseSeconds * st.calmTimes * (1 + (st.calmTimesWhenHigh - 1) * high);
       return now + (wanted - now) * (1 - Math.exp((-3 * dt) / seconds));
     };
-    const adr = this.adrenaline;
-    this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear + ad.heart * adr, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart + ad.heart);
-    this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear + ad.breaths * adr, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths + ad.breaths);
+    const adr = this.adrenaline, sl = input.asleep ? tuning.sleep : { heart: 0, breaths: 0 };
+    this.extraBeats = follow(this.extraBeats, st.thirst.heart * thirst + st.pain.heart * pain + st.fear.heart * fear + ad.heart * adr + sl.heart, st.heartRiseSeconds, st.thirst.heart + st.pain.heart + st.fear.heart + ad.heart);
+    this.extraBreaths = follow(this.extraBreaths, st.thirst.breaths * thirst + st.pain.breaths * pain + st.fear.breaths * fear + ad.breaths * adr + sl.breaths, st.breathRiseSeconds, st.thirst.breaths + st.pain.breaths + st.fear.breaths + ad.breaths);
 
     // 7. HER BREATH AND HEART (`breathe`): her breathing and heart from her exertion and what she has spent, the extra on
     //    top, her breath shallower in pain
     this.now = this.breathe(dt, spent, this.extraBreaths, this.extraBeats, 1 - st.pain.shallower * pain);
 
-    // 8. Her gut: the builder's model, with the clock run faster. Sweat takes water out of her as she works.
+    // 8. Her gut: the builder's model, on GAME time (the game's clock). Sweat takes water out of her as she works.
     const work = clamp(this.workload, 0, 1);
-    const hours = dt * this.gutHoursPerSecond;
+    const hours = dt * this.gameHoursPerSecond;
     this.gut = stepGut(this.gut, hours);
     const [sweatRest, sweatHard] = tuning.sweatMlPerHour;
     this.gut.waterMl -= (sweatRest + (sweatHard - sweatRest) * work) * hours;
     this.needs = this.gameNeeds();
 
-    // 9. HER ENERGY (VITALS_TUNING.energy), in real minutes: moving spends it by her workload squared; still for a minute,
-    //    it comes back (sitting faster, half as fast hungry or thirsty)
+    // 9. HER ENERGY (VITALS_TUNING.energy), its two parts:
+    //    SLEEPINESS on game time: up while she is awake, down while she sleeps (less when she sleeps badly);
+    //    FATIGUE in real minutes: moving spends it by her workload squared; still for a minute it comes back (sitting
+    //    faster, asleep fastest, half as fast hungry or thirsty)
+    this.asleep = !!input.asleep;
+    if (input.asleep) this.sleepiness -= en.sleepPerHour * clamp(input.sleepQuality ?? 1, 0, 1) * hours;
+    else this.sleepiness += en.awakePerHour * hours;
+    this.sleepiness = clamp(this.sleepiness, 0, 1);
     const active = input.speed >= 0.1 || input.firing;
     this.stillFor = active ? 0 : this.stillFor + dt;
-    if (active) this.dayEnergy -= ((en.moveBase + en.moveWork * this.workload * this.workload) / 100 / 60) * dt;
+    if (active) this.fatigue += ((en.moveWork * this.workload * this.workload) / 100 / 60) * dt;
     else if (this.stillFor >= en.restAfter) {
       const unfed = this.needs.hunger > 0 || this.needs.thirst > 0 ? en.unfedRest : 1;
-      this.dayEnergy += (((input.seated ? en.seatedPerMinute : en.restPerMinute) * unfed) / 100 / 60) * dt;
+      const perMinute = input.asleep ? en.asleepPerMinute : input.seated ? en.seatedPerMinute : en.restPerMinute;
+      this.fatigue -= ((perMinute * unfed) / 100 / 60) * dt;
     }
-    this.dayEnergy = clamp(this.dayEnergy, 0, 1);
+    this.fatigue = clamp(this.fatigue, 0, 1);
     // (her pool shrinks with it: stamina over the new pool is trimmed as it goes, a little at a time)
     this.staminaPoints = Math.min(this.staminaPoints, this.poolPoints());
 
@@ -779,7 +816,9 @@ export class HeroineVitals {
     const worstNeed = Math.max(this.needs.hunger, this.needs.thirst);
     // (how far past `badOver` each need is, 0..1; thirst counts in full, hunger as `hungerShare` of it)
     const past = (need: number) => clamp((need - h.badOver) / (1 - h.badOver), 0, 1);
-    const wearing = past(this.needs.thirst) + h.hungerShare * past(this.needs.hunger);
+    // (ASLEEP an empty stomach is a night's fast, not starving: the stomach empties a meal in a few game hours, and by
+    //  real seconds a night at 6x would otherwise wear her health toward its floor while she sleeps)
+    const wearing = past(this.needs.thirst) + (this.asleep ? 0 : h.hungerShare) * past(this.needs.hunger);
     if (wearing > 0) {
       // (only down to the floor: if an enemy has already taken her lower, hunger and thirst do not add to it)
       if (this.health > h.needsFloor) this.health = Math.max(h.needsFloor, this.health - h.lossPerSecond * Math.min(1, wearing) * dt);
@@ -788,11 +827,11 @@ export class HeroineVitals {
   }
 
   /**
-   * HER BODY'S CLOCK: hours that pass for her stomach and gut in one real second (VITALS_TUNING.gutHoursPerSecond to
-   * start). Settings -> FOOD & DRINK -> Body clock changes it to test (Joshua, 2026-11-19: "real life 1 hour is 6 hours
-   * in the game" is 6 / 3600).
+   * GAME HOURS IN ONE REAL SECOND: what her body's slow clocks run on (her gut, her sweat's water, her sleepiness and
+   * sleep). The game sets it every frame from its one clock (core/gameClock.ts `hoursPerRealSecond`: 6 / 3600 at the
+   * normal 6x, faster while everyone sleeps, 0 when the clock is stopped); VITALS_TUNING.gameHoursPerSecond to start.
    */
-  gutHoursPerSecond: number = VITALS_TUNING.gutHoursPerSecond;
+  gameHoursPerSecond: number = VITALS_TUNING.gameHoursPerSecond;
 
   /** What is in her now, millilitres: her stomach (food, water), her bladder (for the readout and the tests). */
   get contents(): { readonly foodMl: number; readonly waterMl: number; readonly bladderMl: number } {
@@ -868,8 +907,29 @@ export class HeroineVitals {
     return bathroomOf(this.gut.bladderMl, this.gut.rectumMl, VITALS_TUNING.bladderSqueeze * this.pregnancy);
   }
 
-  /** TEST: her energy set to `share` (0..1) at once (Settings -> FOOD & DRINK -> Make tired). */
-  setEnergy(share: number): void { this.dayEnergy = clamp(share, 0, 1); }
+  /** TEST: her energy set to `share` (0..1) at once (Settings -> FOOD & DRINK -> Make tired): all of it sleepiness, no fatigue. */
+  setEnergy(share: number): void { this.sleepiness = 1 - clamp(share, 0, 1); this.fatigue = 0; }
+  /**
+   * Her sleepiness set to `share` (0..1), her fatigue left as it is: where a new game starts her (rested: 0), or what a
+   * save gives back.
+   */
+  setSleepiness(share: number): void { this.sleepiness = clamp(share, 0, 1); }
+  /**
+   * SLEEP, OR TIME PASSING, ALL AT ONCE (Settings -> FOOD & DRINK -> Sleep 8 hours, until there are beds; later the
+   * clock's skips): `gameHours` pass for every part of her, asleep or awake and still, in steps of a game minute. Her gut,
+   * her water, her sleepiness and her fatigue all move on by the whole of it (her fatigue as real minutes: in a skip the
+   * real time and the game time are the same time).
+   */
+  passTime(gameHours: number, asleep: boolean): void {
+    if (!(gameHours > 0)) return;
+    const keep = this.gameHoursPerSecond;
+    this.gameHoursPerSecond = 1 / 3600;
+    try {
+      for (let left = gameHours * 3600; left > 0; left -= 60) this.step(Math.min(60, left), { speed: 0, firing: false, asleep, seated: asleep });
+    } finally {
+      this.gameHoursPerSecond = keep;
+    }
+  }
 
   /**
    * Her hunger and thirst. Thirst as the builder's gut has it; HUNGER from her food bar (Joshua: hungry below a third of
@@ -923,6 +983,9 @@ export class HeroineVitals {
       bathroomUrge: bath.urge,
       bathroomEta: bath.fill >= 0.999 ? 0 : bath.fill >= tuning.bathroomEta.etaFrom && this.bathroomRate > 1e-6 ? (1 - bath.fill) / this.bathroomRate : null,
       energy: this.dayEnergy,
+      sleepiness: this.sleepiness,
+      fatigue: this.fatigue,
+      asleep: this.asleep,
       fear: this.fear,
       adrenaline: this.adrenaline,
       mood: this.mood,

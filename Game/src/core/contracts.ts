@@ -219,6 +219,9 @@ export interface HeroineBody {
   /** How much of her own look while she sits is on (0..1; heroine/fast/sitPose.ts SIT_LOOK): first person, turning the
    *  view frees her head from it (`freeLook`). */
   sitLook?(): number;
+  /** How far her head is bowed over WINDED as her own (0..1), 0 once the player's look has freed it (`freeLook`):
+   *  first person, turning the view frees it (once: from then on the view is the player's). */
+  windedLook?(): number;
   /**
    * HER STANCE (Joshua, 2026-11-20; heroine/fast/groundPose.ts): standing, crouching, on her belly, or on all fours. She
    * gets there over a second or so (crouching first, then down; up through her crouch).

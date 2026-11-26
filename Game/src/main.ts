@@ -1146,6 +1146,14 @@ async function start(): Promise<void> {
   let gait: Gait = 'stand', gaitResetLeft = 0;
   /** How far she is bent over winded now, 0..1 (set each frame from her pace's winded hold). */
   let windedWeight = 0;
+  /**
+   * WINDED IN FIRST PERSON, A LOOK SHE WAS ALREADY TURNING AS SHE RAN OUT (v0.2.177; Joshua, 2026-11-26: "Winded didn't
+   * make the camera look down like it was supposed to"): steering with the camera stick or a drag as her stamina ran
+   * out freed her bowed head the same moment it began, so she never looked down. That look is CARRIED (`windedCarry`)
+   * and does nothing until it stops (the stick back at its middle, the finger lifted); a look after that frees her
+   * head, as before. `windedWasOn`: whether she was bent over (first person) last frame.
+   */
+  let windedCarry = false, windedWasOn = false;
   /** (the prologue: where the camera looks, his eyes, and the shake's offset; kept for each frame) */
   const storyLook = new THREE.Vector3(), storyEye = new THREE.Vector3(), shakeBy = new THREE.Vector3();
   // (the prologue's flashlight: where his eyes are and look, and its lens, world)
@@ -2205,9 +2213,18 @@ async function start(): Promise<void> {
     const stickLookX = controls.lookStickX * Math.abs(controls.lookStickX) * LOOK_STICK_SPEED * dt;   // (rig.lookScale turns these as it does a drag)
     const stickLookY = controls.lookStickY * Math.abs(controls.lookStickY) * LOOK_STICK_SPEED * dt;
     const lookX = controls.takeLookX() + stickLookX, lookY = controls.takeLookY() - stickLookY;
-    rig.applyLook(lookX, lookY); // stick up looks up
+    // (winded in first person: a look already going on as she bent over is carried, and does nothing, until it stops:
+    //  `windedCarry`; last frame's bend, as this frame's is worked out further on)
+    {
+      const windedOn = windedWeight > 0 && rig.mode === 'first';
+      const turning = lookX !== 0 || lookY !== 0;
+      if (windedOn && !windedWasOn) windedCarry = turning;
+      if (!turning || !windedOn) windedCarry = false;
+      windedWasOn = windedOn;
+    }
+    if (!windedCarry) rig.applyLook(lookX, lookY); // stick up looks up
     // (the player turned the view this frame: a look of hers laid over it gives way: see the belly glance below)
-    const looked = lookX !== 0 || lookY !== 0;
+    const looked = !windedCarry && (lookX !== 0 || lookY !== 0);
     const zoom = controls.takeZoom();
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
@@ -2600,15 +2617,24 @@ async function start(): Promise<void> {
       if (busyView.on) busyView.setPitch = rig.pitch;
     }
     // HER OWN LOOKS GIVE WAY TO THE PLAYER (first person is her head now: fastHeroine.ts `eyeView`): firing stops a look
-    // down at a kick (eased back); turning the view in first person frees her head (a look at a kick, or bowed over
-    // winded) and it goes on from where the view is, so nothing jumps
+    // down at a kick (eased back); turning the view in first person frees her head (a look at a kick, bowed over
+    // winded, or her looks as she sits) and it goes on from where the view is, so nothing jumps. ONCE: from then on the
+    // view is the player's. (Until v0.2.177 a winded bow was taken over again EVERY frame the player turned the view,
+    // the whole time she was bent over: each turn was thrown away for where her head was a frame before. Joshua,
+    // 2026-11-26: "when I manually tried, it was like the camera was fighting something"; "it gets jittery".)
     {
       const w = heroine.bellyLook?.(lookSpot) ?? 0;
       if (w > 0 && controls.fireHeld) heroine.stopBellyLook?.();
       // (sitting down or getting up, her glance over her shoulder or her bow: src/heroine/fast/sitPose.ts SIT_LOOK.
       //  Turned round as she is, the view goes on from her head's way left and right too, not only up and down)
       const sitting = heroine.sitLook?.() ?? 0;
-      if (looked && rig.mode === 'first' && (w > 0 || windedWeight > 0 || sitting > 0)) {
+      // (bowed over winded, until her head is freed: fastHeroine.ts `windedLook`. THE FRAME SHE BENDS OVER: her bend was
+      //  worked out after the look was read, so a look already going on is carried from this frame too, or it freed
+      //  her head the moment it bowed: measured, the camera stick held into winded left the view level)
+      if (windedWeight > 0 && rig.mode === 'first' && !windedWasOn && (lookX !== 0 || lookY !== 0)) windedCarry = true;
+      windedWasOn = windedWasOn || (windedWeight > 0 && rig.mode === 'first');
+      const bowed = windedWeight > 0 ? (heroine.windedLook?.() ?? 0) : 0;
+      if (looked && !windedCarry && rig.mode === 'first' && (w > 0 || bowed > 0 || sitting > 0)) {
         const d = rig.lookDirection;
         if (sitting > 0) rig.yaw = Math.atan2(d.x, d.z);
         rig.pitch = Math.atan2(d.y, d.x * Math.sin(rig.yaw) + d.z * Math.cos(rig.yaw));

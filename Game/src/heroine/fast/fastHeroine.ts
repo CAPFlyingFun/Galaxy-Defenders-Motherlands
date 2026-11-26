@@ -1848,6 +1848,8 @@ if (uHideHead > 0.5) {
     },
     /** How much of her own look while she sits is on (0..1): main.ts frees her head (first person) when the view turns. */
     sitLook: () => (sitLookFree ? 0 : Math.max(sitGlance, sitBow, idle.share)),
+    // (her bow while winded, until the player's look frees it: main.ts takes the view from her head once, then lets go)
+    windedLook: () => (windedLookFree ? 0 : windedS),
     /** How far through sitting she is (0 standing .. 1 seated), and how far back and down it has her, metres: for tests. */
     sitInfo: () => ({ share: sitT / SIT.seconds, back: ground.seatBack, drop: ground.drop }),
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },

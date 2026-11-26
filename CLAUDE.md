@@ -1564,6 +1564,21 @@ use the game's single copy of three.js.
   the same but for M1-M4's hems. IN THE BUILT GAME (town, Mary in M3 and John, 932 x 430): at rest Mary 14.1 a minute
   and 71 (week 12), John 14 and 65, his breaths 0.5 L; John sprinting 26.2 / 31.4 a minute at 5 / 10 s, 2.47 L a
   breath; no errors.
+- v0.2.177: THE WINDED BOW IN FIRST PERSON, AND THE VIEW NO LONGER FIGHTS A DRAG WHILE SHE IS BENT OVER (Joshua,
+  2026-11-26: "Winded didn't make the camera look down like it was supposed to and when I manually tried, it was like
+  the camera was fighting something"; "camera still keeps looking up and almost max down, it gets jittery"). NOT the head
+  kept level while she moves (v0.2.169's `headNoRoll`, his guess: it is off while she is winded). Two faults in main.ts's
+  "HER OWN LOOKS GIVE WAY TO THE PLAYER": (1) a look freed her bowed head and took the view from it EVERY frame the
+  player turned the view, the whole time she was bent over (`windedWeight > 0`), so every drag or camera-stick turn was
+  thrown away for where her head was the frame before: the fight. Now the view is taken from her head ONCE, as her kick
+  and sitting looks always were: fastHeroine.ts `windedLook` (0 once freed), contracts.ts. (2) A look ALREADY GOING ON as
+  she ran out (steering with the camera stick or a finger while sprinting) freed her head the moment it bowed, so she
+  never looked down: `windedCarry` carries that look, which does nothing (the view is not turned) until it stops (the
+  stick back at its middle, the finger lifted); a look after that frees her head as before. The first frame she bends
+  over is carried too (her bend is worked out after the look is read). MEASURED in the built game (town, Mary, first
+  person, the camera stick held at 0.4 into winded): v0.2.176 the view stayed level (0 degrees) all through the hold, her
+  bow freed on its first frame; now it bows to 117 degrees down (her belly, hands on her knees, pictured) and, the stick
+  let go, a drag up moves the view up evenly (-117 -> -97 over 14 steps, the view exactly the drag), nothing thrown back.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -59,7 +59,7 @@ import { smoothBand } from '../liveBand';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { LIE, SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
-import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import { LIE_POSE, STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, lieTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
@@ -600,6 +600,15 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
    */
   type LieSpot = { x: number; y: number; z: number; yaw: number };
   let lieSpot: LieSpot | null = null, lieLast: LieSpot | null = null, lieW = 0;
+  /** Lying, her head's roll to one side (LIE.rollLeast..rollMost): now, where it is going, and when it moves again. */
+  const lieRoll = { now: 0, from: 0, to: 0, t: 1, wait: 0 };
+  /** Her neck's and skull's turns as her pose leaves them, before her looks (laid back over them as she lies). */
+  const lieHeadKeep: THREE.Quaternion[] = [];
+  /** Her lying pose's turns, written each frame she lies (groundPose.ts `lieTurns`). */
+  const lieOut: MutableJointTurn[] = [];
+  /** Her legs' bones, and their turns as her pose leaves them before her feet are set on the floor (see LIE, feet). */
+  const lieLegBones: THREE.Bone[] = [];
+  const lieLegKeep: THREE.Quaternion[] = [];
   const lieHips = new THREE.Vector3(), lieQ = new THREE.Quaternion(), lieTurnQ = new THREE.Quaternion(), lieTipQ = new THREE.Quaternion(), lieFlipQ = new THREE.Quaternion(), lieAt = new THREE.Vector3();
   const Y_UP = new THREE.Vector3(0, 1, 0);
   const sitOut: MutableJointTurn[] = [];
@@ -841,6 +850,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   ];
   /** Her toes: the bone past each ankle (the ball of her foot), found from her bind; kept above the ground too. */
   const toeBones = [joints.ankleL, joints.ankleR].map((ankle) => motion.bind.findIndex((b) => b.parent === ankle)).filter((k) => k >= 0);
+  for (const k of [joints.hipL, joints.kneeL, joints.ankleL, joints.hipR, joints.kneeR, joints.ankleR, ...toeBones]) { lieLegBones.push(bones[k]); lieLegKeep.push(new THREE.Quaternion()); }
 /** The body file's own facing in her fit (a half turn if it was made facing -Z): lying keeps it. */
 const fitFlip = fit.rotation.y;
 const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
@@ -2114,7 +2124,9 @@ if (uHideHead > 0.5) {
       }
       // (lying, her legs straighten out of the sit as she swings them up onto the bed)
       const lieS = smooth(lieW);
-      if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS * (1 - lieS * (1 - LIE.sitKept)));
+      if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS * (1 - lieS));
+      // (lying: her own lying pose, groundPose.ts LIE_POSE, laid over the sit as she lies back)
+      if (lieS > 0) motion.overlay(lieTurns(male ? LIE_POSE.male : LIE_POSE.female, motion.measure, motion.bind, lieOut), lieS);
       // (from the first moment, for her feet's step out, though her hips have not begun to go down)
       ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
       ground.seatSpread[0] = sitNow.apart[0]; ground.seatSpread[1] = sitNow.apart[1];
@@ -2138,8 +2150,13 @@ if (uHideHead > 0.5) {
       //  no longer carry her, so they are let go, to be set down afresh when she stands)
       ground.crouchDrop = STANCE.crouchDrop * motion.legMetres * crouchS;
       // (seated, her hips and legs stay square to the seat: no turning them apart)
+      // (lying back on a bed her feet leave the floor: they are held to their spots less and less as she lies, her legs
+      //  laid back to her pose's own, so the spots are still there when she sits up again. Held lying, they pulled her
+      //  feet down off the bed toward the floor and crossed her legs.)
+      if (lieS > 0) for (let i = 0; i < lieLegBones.length; i++) lieLegKeep[i].copy(lieLegBones[i].quaternion);
       if (downW < 1) ground.update(frame.dt, motion, Math.min(1, WALK_WEIGHT.bob * (motion.walkBob / 100) * walkEase(motion.speed)), moving, facing && downS < 0.5 && sitS <= 0 ? legTwist : null, crab);
       else ground.letGo();
+      if (lieS > 0) for (let i = 0; i < lieLegBones.length; i++) lieLegBones[i].quaternion.slerp(lieLegKeep[i], lieS);
       // CROUCHED, HER BACK LEANS FORWARD (most of it low in her back), about the line across her hips
       if (crouchS > 0 && downS < 1) {
         const lean = STANCE.crouchLean * (Math.PI / 180) * crouchS * (1 - downS);
@@ -2238,7 +2255,8 @@ if (uHideHead > 0.5) {
       // where her feet and her sit had the fit.
       if (lieS > 0 && lieLast) {
         root.updateMatrixWorld(true);
-        lieAt.set(lieLast.x, lieLast.y, lieLast.z);
+        // (the spot is on the top of what she lies on: her hip joints lie her own flesh over it, LIE_POSE)
+        lieAt.set(lieLast.x, lieLast.y + (male ? LIE_POSE.male : LIE_POSE.female).hipsOver, lieLast.z);
         root.worldToLocal(lieAt);
         const turn = Math.atan2(Math.sin(lieLast.yaw - root.rotation.y), Math.cos(lieLast.yaw - root.rotation.y));
         lieTurnQ.setFromAxisAngle(Y_UP, turn * lieS);
@@ -2378,6 +2396,8 @@ if (uHideHead > 0.5) {
       // HEAD_DOWN_MOST of it; WINDED, her head is bowed all the way down (chin to chest: "the max downward angle relative
       // to the torso"). Her head is turned from where her pose has it to there, shared between her neck and her skull.
       {
+        // (lying: her pose's own head kept, to be laid back over her looks below)
+        if (lieS > 0) for (let i = 0; i < neckBones.length; i++) (lieHeadKeep[i] ??= new THREE.Quaternion()).copy(neckBones[i].quaternion);
         measureLean();
         let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
         // (bowed right down, chin to chest; third person, wherever her look round has it: `lookRound`)
@@ -2403,6 +2423,29 @@ if (uHideHead > 0.5) {
         // both views (her body still sways in third person; her head, as anyone's, keeps its aim).
         // (its tip from her head's frame: from her torso's line, or from level running)
         steadyHead(yawNow, rel - torsoLean + headFrameLean, headSide);
+        // HER HEAD LYING (LIE.roll*): her looks and her steady head are for a body standing up; lying they turned her
+        // face to the side of the bed she sat on. So, as she lies back, her head goes back to her pose's own (facing up
+        // along her body) and is rolled a little to one side about her spine, shared between her neck and her skull.
+        if (lieS > 0) {
+          for (let i = 0; i < neckBones.length; i++) neckBones[i].quaternion.slerp(lieHeadKeep[i], lieS);
+          if (lieRoll.t >= 1) {
+            lieRoll.wait -= frame.dt;
+            if (lieRoll.wait <= 0) {
+              // (another roll: the other way or the same, now and then nearly straight up)
+              const size = Math.random() < 0.2 ? randomIn(0, LIE.rollLeast) : randomIn(LIE.rollLeast, LIE.rollMost);
+              lieRoll.from = lieRoll.now; lieRoll.to = (Math.random() < 0.5 ? -1 : 1) * size * DEG; lieRoll.t = 0;
+              lieRoll.wait = randomIn(LIE.holdLeast, LIE.holdMost);
+            }
+          } else {
+            lieRoll.t = Math.min(1, lieRoll.t + frame.dt / LIE.glide);
+            lieRoll.now = lieRoll.from + (lieRoll.to - lieRoll.from) * smooth(lieRoll.t);
+          }
+          root.updateMatrixWorld(true);
+          bone(joints.pelvis).getWorldPosition(leanFrom);
+          spineAxis.copy(neckBone.getWorldPosition(leanTo)).sub(leanFrom).normalize();
+          for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], spineAxis, lieRoll.now * lieS * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+          root.updateMatrixWorld(true);
+        } else { lieRoll.now = 0; lieRoll.t = 1; lieRoll.wait = 0; }
       }
 
       // The aim goes on top of that pose, in the game's own world (her bones are ordinary objects in it).

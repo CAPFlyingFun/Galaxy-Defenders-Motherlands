@@ -16,17 +16,16 @@
 //           behind her, asked each frame so she stays; let go, she bows and gets up as from the toilet.
 //   DOZE    as SIT for now (the sofa nap): her head nodding off is for later.
 //   LIE     A BED is not walked onto: the walk to its spot ends at its EDGE beside where her hips will lie, her back to
-//           it; she sits on the edge, swings round and lies back, her hips on the mattress, her feet to its foot end
-//           (fastHeroine.ts `lieOn`, the LIE numbers in sitPose.ts). Getting up is the same backwards, at the edge.
+//           it; she sits on the edge, swings round and lies back, her hips on the duvet, her feet to its foot end
+//           (fastHeroine.ts `lieOn`, the LIE numbers in sitPose.ts, her lying pose groundPose.ts LIE_POSE). Getting up is the same backwards, at the edge.
 // ============================================================================
 import type { MindBody, MoveStatus, Prop } from '../../mind/world';
 import type { ActorId, Motion, ObjectSlot, SmartObject, Vec2 } from '../../mind/types';
-import { LIE } from '../../heroine/fast/sitPose';
 import type { HeroineVitals } from '../../vitals/heroineVitals';
 import type { HomeLayout } from './homeLayout';
 import type { HomeNav } from './homeNav';
 import type { WalkerWalls } from './homeScene';
-import { MATTRESS_TOP } from './homeScene';
+import { DUVET_FROM_HEAD, DUVET_TOP, MATTRESS_TOP } from './homeScene';
 import { foodMlForBar, waterMlBetween } from './mindBridge';
 
 /** What the game hands this body: its walk, its turning, its sitting and lying, its vitals. main.ts fills it in. */
@@ -71,6 +70,8 @@ interface BedPlan {
   readonly sitYaw: number;
   readonly hips: Vec2;
   readonly feetYaw: number;
+  /** the top of what her hips lie on, over the floor: the duvet (from the bed's foot to its pillows) or the mattress */
+  readonly under: number;
 }
 
 export class HomeMindBody implements MindBody {
@@ -245,10 +246,13 @@ export class HomeMindBody implements MindBody {
     const hips = world(use.x, hipsZ);
     // (her back to the bed: facing out of its side, the bed's own x turned to the world)
     const outX = side * c, outZ = -side * s;
-    return { object: o, edge, sitYaw: Math.atan2(outX, outZ), hips, feetYaw: o.facing };
+    // (the duvet covers the bed from its foot to its pillows, as homeScene.ts draws it)
+    const under = hipsZ >= -o.size.d / 2 + DUVET_FROM_HEAD ? DUVET_TOP : MATTRESS_TOP;
+    return { object: o, edge, sitYaw: Math.atan2(outX, outZ), hips, feetYaw: o.facing, under };
   }
 
   private lieSpot(b: BedPlan): { x: number; y: number; z: number; yaw: number } {
-    return { x: b.hips.x, y: this.hooks.floorY() + MATTRESS_TOP + LIE.hipsOverMattress, z: b.hips.z, yaw: b.feetYaw };
+    // (on the top of what her hips lie on: her body lays her own flesh over it, groundPose.ts LIE_POSE)
+    return { x: b.hips.x, y: this.hooks.floorY() + b.under, z: b.hips.z, yaw: b.feetYaw };
   }
 }

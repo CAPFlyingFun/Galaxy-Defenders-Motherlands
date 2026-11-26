@@ -267,6 +267,67 @@ export function kneelTurns(oneKnee: number, carry: number, measure: HumanMeasure
   out.length = n;
   return out;
 }
+/**
+ * LYING ON HER BACK (v0.2.179; Joshua, 2026-11-26, of the first try, her sit tipped back: "Fix the head lying on the bed
+ * (it's twisted at a weird angle… just needs to roll (tilt left and right some) and the body cutting in the bed"): her
+ * pose for lying, written in her own standing frame and then tipped onto her back with her whole body (fastHeroine.ts
+ * LIE). Until Joshua's own lying pose comes from the pose builder. GAME TUNING, degrees.
+ */
+export interface LiePose {
+  /** her hip joints over the top of what she lies on, metres (the flesh of her seat and back under them) */
+  hipsOver: number;
+  /** her thighs a little forward of her body's line, and her knees a little bent (a body lying relaxed is never locked straight) */
+  hips: number; knee: number;
+  /** her legs a little apart, and rolled out about their length (lying on her back her feet fall outward) */
+  legsOut: number; legsTurnOut: number;
+  /** her feet: toes pointed away from her shins (more pushed her shoes' heels into the bed) */
+  point: number;
+  /** her arms down by her sides (no swing forward: forward is up off the bed), elbows a little bent, wrists turned in */
+  armForward: number; elbow: number; wristIn: number;
+  /** her head on the pillow: chin a little toward her chest, the bend shared from her chest up */
+  chest: number; neck: number;
+}
+/**
+ * Hers and his, MEASURED lying on the Fishers' bed (every point of their skin and gear against the duvet and pillow,
+ * test pages `gdm.liePose`): her back, seat, thighs, calves and heels resting on the duvet within 2 cm, her head on
+ * the pillow, nothing of their skin in it (the backs of their knees a little off it, as a relaxed leg's are); their belt
+ * pouches 2-4 cm into the soft duvet. Hers is a smaller back and seat, and a head lifted further onto the pillow. (Her
+ * sit tipped back, the first try, put his upper back 6 cm and his feet 17 cm into the bed.)
+ */
+export const LIE_POSE: { female: LiePose; male: LiePose } = {
+  female: { hipsOver: 0.14, hips: 2, knee: 3, point: 0, legsOut: 5, legsTurnOut: 14, armForward: 0, elbow: 14, wristIn: 8, chest: 0, neck: 19 },
+  male: { hipsOver: 0.165, hips: 2, knee: 3, point: 0, legsOut: 5, legsTurnOut: 14, armForward: 0, elbow: 14, wristIn: 8, chest: 0, neck: 4 },
+};
+
+/** Her pose lying on her back (LIE_POSE), as turns from her bind pose, written into `out`. */
+export function lieTurns(pose: LiePose, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
+  const LIE_POSE = pose;
+  while (out.length < 17) out.push({ joint: -1, ax: 0, ay: 1, az: 0, radians: 0 });
+  const j = measure.joints;
+  const left = measure.leftSign < 0 ? -1 : 1;
+  let n = 0;
+  const put = (joint: number, ax: number, ay: number, az: number, radians: number): void => {
+    const t = out[n++]; t.joint = joint; t.ax = ax; t.ay = ay; t.az = az; t.radians = radians;
+  };
+  put(j.pelvis, 0, 1, 0, 0);
+  putXZ(put, j.spine, 0, 0);
+  // (a turn about X with a POSITIVE angle bends her forward, chin toward her chest: prone's head goes up by a negative one)
+  putXZ(put, j.chest, LIE_POSE.chest * DEG, 0);
+  putXZ(put, j.neck, LIE_POSE.neck * DEG, 0);
+  for (const side of [0, 1] as const) {
+    const xSign = side === 0 ? left : -left;
+    arm(put, bind, side === 0 ? j.shoulderL : j.shoulderR, side === 0 ? j.elbowL : j.elbowR, side === 0 ? j.wristL : j.wristR, xSign,
+      LIE_POSE.armForward * DEG, LIE_POSE.elbow * DEG, LIE_POSE.wristIn * DEG);
+  }
+  for (const side of [0, 1] as const) {
+    const s = side === 0 ? left : -left;
+    leg(put, side === 0 ? j.hipL : j.hipR, side === 0 ? j.kneeL : j.kneeR, side === 0 ? j.ankleL : j.ankleR, s,
+      LIE_POSE.hips * DEG, LIE_POSE.legsOut * DEG, LIE_POSE.legsTurnOut * DEG, LIE_POSE.knee * DEG, LIE_POSE.point * DEG);
+  }
+  out.length = n;
+  return out;
+}
+
 /** Kneeling: her whole body's forward tip, radians (her lean), and her hips' height (her thigh down to her knee). */
 export function kneelTip(): number { return KNEEL.lean * DEG; }
 export function kneelHips(sizes: BodySizes): number { return foursHips(sizes); }

@@ -198,14 +198,17 @@ export const LIE = Object.freeze({
   holdSit: 4,
   /** sitting up again, she stays seated this long once up on the edge (her bow before she gets up, then up) */
   upAfter: 3,
-  /** her hip joints lie this far over the mattress's top (the flesh of her seat and back under them), metres */
-  hipsOverMattress: 0.1,
   /**
-   * HER HEAD ON THE PILLOW: lying flat her head sank into it, so her back is laid this far short of flat (radians, 12
-   * degrees: her head about 15 cm up, on the pillow), and this much of her sit is kept (its hips bent 90: 0.13 of it
-   * bends them the same 12, so her thighs lie level, her knees a little bent, her hands resting on her thighs).
-   * Until Joshua's own lying pose comes from the pose builder.
+   * Her back laid this far short of flat, radians (0: flat; her head is raised onto the pillow by her own lying pose,
+   * groundPose.ts LIE_POSE, its chin a little toward her chest). (First, 12 degrees with 0.13 of her sit kept: her head
+   * came up onto the pillow, but her legs, laid along her body, sank 17 cm into the bed at her feet.)
    */
-  incline: 12 * Math.PI / 180,
-  sitKept: 0.13,
+  incline: 0,
+  /**
+   * HER HEAD LYING (Joshua, 2026-11-26: "it's twisted at a weird angle… just needs to roll (tilt left and right
+   * some)"): her head as her pose has it, facing up along her body, rolled to one side about her spine, between
+   * `rollLeast` and `rollMost` degrees, left or right at random; every `holdLeast`-`holdMost` seconds it eases over
+   * `glide` seconds to another (now and then nearly straight up), as a sleeper's head shifts.
+   */
+  rollLeast: 6, rollMost: 22, holdLeast: 15, holdMost: 40, glide: 2.5,
 });

@@ -1693,12 +1693,26 @@ use the game's single copy of three.js.
   why, the walk, the three best choices with their scores, their food, water, toilet and energy (💤 asleep).
   (4) LYING DOWN, THE GAME'S OWN POSE (fastHeroine.ts `lieOn`, `lieInfo`, sitPose.ts `LIE`): from beside the bed,
   back to it, she sits on its edge (the sit), then over 2.5 s swings round to lie along it, feet to its foot end,
-  tipped onto her back, her hip joints carried to their spot on the mattress (0.6 m from her pillow, 0.1 m over the
-  mattress's top); up again the same backwards, then the bow and up off the edge. Lying flat her head sank into the
-  pillow: her back is laid 12 degrees short of flat with 0.13 of her sit kept (hips and knees bent 12: thighs level, head
-  about 15 cm up, on the pillow). Mary's side of the main bed the west, John's the east (a guess). Her arms and her
+  tipped onto her back, her hip joints carried to their spot (0.6 m from her pillow); up again the same backwards, then
+  the bow and up off the edge. HER LYING POSE (groundPose.ts `LIE_POSE`, `lieTurns`; Joshua, of the first try, her sit
+  tipped back 12 degrees short of flat: "Fix the head lying on the bed (it's twisted at a weird angle… just needs to roll
+  (tilt left and right some) and the body cutting in the bed"): her own, laid over the sit as she lies back: legs a
+  little apart and rolled out, knees 3 degrees bent, feet not pointed (pointed, her shoes' heels went into the bed),
+  arms by her sides, her head lifted onto the pillow by her neck (Mary 19 degrees, John 4). Her hip joints lie her own
+  flesh over the duvet's top (`hipsOver`: Mary 0.14 m, John 0.165). MEASURED, every point of their skin and gear
+  against the duvet and pillow (/tmp bedtune/bedmeasure scripts; test pages tune `gdm.liePose.female/male` live):
+  first try, his upper back 6 cm and his feet 17 cm into the bed; now back, seat, calves and heels on it within 2 cm,
+  heads on the pillow, no skin in (John's heels 1.4 cm into the soft duvet), belt pouches 2.4 (John) and 3.9 cm (Mary)
+  into it. FOUND ON THE WAY: (a) her head turned to the side of the bed she sat on: her looks and her steady head
+  (`steadyHead`) are for a body standing up, aimed along the way her root faces; lying, her neck and skull go back to
+  her pose's own (face up) and ROLL to one side about her spine, 6-22 degrees left or right at random, now and then
+  near straight up, easing to another every 15-40 s over 2.5 s (sitPose.ts LIE `roll*`); (b) her FEET stayed held to
+  the floor spots she sat on (footGround.ts), pulling them down off the bed and crossing her ankles: lying, her legs go
+  back to her pose's own by how far she lies, the spots kept for sitting up. The duvet now reaches from the bed's foot
+  to the pillows (homeScene.ts `DUVET_FROM_HEAD` 0.5 m; it covered 62 %, a 5.5 cm step under her back); `DUVET_TOP`
+  0.555, `PILLOW_TOP` 0.62. Mary's side of the main bed the west, John's the east (a guess). Her arms' aim and her
   head's looks are off while she lies; first person is not for lying yet. Pictured: sitting down, on the edge, lying
-  back, lying, getting up.
+  back, lying, getting up; both lying from the side, above and by the pillow.
   (5) AN OPEN SIT (fastHeroine.ts `sitFor(seconds, open)`, SIT_LOOK `openGapLeast`/`openGapMost`): the mind's sits
   last as long as it wants (held 2.9 s ahead each frame, `SIT_AHEAD`: just over the bow, so asked to stand she bows and
   is up at once), and while held she glances round every 5-14 s.
@@ -1712,7 +1726,7 @@ use the game's single copy of three.js.
   NOT YET (the pose builder comes next, his idea, 2026-11-26: "copy and import Beyond Extinction's animation/pose
   builder in the game so I can save my own poses and animations and upload to you to save in the game, then you can
   just do animations between different poses"): exercise is standing still, eating and drinking have no hands, dozing
-  on the sofa is a sit, no shower; lying, his ankles cross and his feet stand up.
+  on the sofa is a sit, no shower; they lie on top of the duvet, not under it.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

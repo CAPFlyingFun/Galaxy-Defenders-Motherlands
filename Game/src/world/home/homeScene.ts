@@ -51,6 +51,10 @@ const DOOR_TOP = 2.15, SILL = 0.9, WINDOW_HEAD = 2.15;
 const OUTER_THICK = 0.2, INNER_THICK = 0.12;
 /** A bed's mattress top over the floor, metres (its frame 0.3 high, the mattress 0.2 on it): where she lies. */
 export const MATTRESS_TOP = 0.5;
+/** A bed's duvet (over the foot 62 % of it) and pillows: their tops, metres over the floor (where a body lies on them). */
+export const DUVET_TOP = 0.555, PILLOW_TOP = 0.62;
+/** The duvet reaches from a bed's foot to this far from its head end, metres (to the pillows' front: a body lies on it). */
+export const DUVET_FROM_HEAD = 0.5;
 /** She is a circle this round, seen from above (her body about 0.25 m round, a little to spare). GAME TUNING. */
 export const BODY_RADIUS = 0.3;
 /** A sliding door opens when anyone comes this near its middle, and shuts this long after nobody is. GAME TUNING. */
@@ -430,8 +434,8 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         const duvet: MaterialName = double ? 'duvetMain' : guestBeds++ % 2 === 0 ? 'duvetGuest' : 'duvetGuest2';
         batch.box('graphite', w, MATTRESS_TOP - 0.2, d, 0, (MATTRESS_TOP - 0.2) / 2, 0, frame);
         batch.box('mattress', w - 0.08, 0.2, d - 0.12, 0, MATTRESS_TOP - 0.1, 0.02, frame);
-        batch.box(duvet, w - 0.02, 0.07, d * 0.62, 0, 0.52, d / 2 - d * 0.31 - 0.04, frame);
-        for (const x of double ? [-w / 4, w / 4] : [0]) batch.box('pillow', double ? w / 2 - 0.16 : w - 0.25, 0.12, 0.36, x, 0.56, -d / 2 + 0.3, frame);
+        batch.box(duvet, w - 0.02, 0.07, d - DUVET_FROM_HEAD - 0.04, 0, DUVET_TOP - 0.035, (DUVET_FROM_HEAD - 0.04) / 2, frame);
+        for (const x of double ? [-w / 4, w / 4] : [0]) batch.box('pillow', double ? w / 2 - 0.16 : w - 0.25, 0.12, 0.36, x, PILLOW_TOP - 0.06, -d / 2 + 0.3, frame);
         batch.box('graphite', w + 0.04, 1.05, 0.08, 0, 0.525, -d / 2 - 0.02, frame);
         batch.box('accent', w - 0.1, 0.02, 0.01, 0, 0.98, -d / 2 + 0.025, frame);
         break;

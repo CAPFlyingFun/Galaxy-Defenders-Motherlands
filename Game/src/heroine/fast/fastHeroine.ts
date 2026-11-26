@@ -147,6 +147,14 @@ const WINDED_LOOK = {
   rest: [1.2, 2.5],
   glide: [0.7, 1.0],
 } as const;
+/**
+ * WINDED IN FIRST PERSON, SHE GLANCES ROUND AFTER A WHILE (v0.2.177; Joshua, 2026-11-26: "after 8s, the head randomly
+ * starts looking around like how we have using the toilet for #2"): bowed right down for `from` seconds, then glances,
+ * as her seated idle glances on a long visit do (sitPose.ts SIT_LOOK: `glide` there, held `hold`, `glide` back to her
+ * bow, `gap` before the next), at the spots her third-person look round uses (WINDED_LOOK, picked by how far her breath
+ * has calmed). Seconds. None once she starts to straighten up.
+ */
+const WINDED_FIRST_LOOK = { from: 8, glide: 0.8, hold: [1.2, 2], gap: [0.6, 1.4] } as const;
 /** Moved further than this between two frames, metres, she was put somewhere else (not a step: her stride does not turn). */
 const JUMP_METRES = 1.5;
 /**
@@ -1513,26 +1521,56 @@ if (uHideHead > 0.5) {
     }
     if (L.glide < 1) L.glide = Math.min(1, L.glide + dt / L.glideFor);
     else if ((L.rest -= dt) <= 0) {
-      // the next spot: weighted by her breath, not the one she is on
-      const spots = WINDED_LOOK.spots;
-      let total = 0;
-      const weight = (k: number): number => k === windedLast ? 0 : spots[k].high + (spots[k].calm - spots[k].high) * windedCalm;
-      for (let k = 0; k < spots.length; k++) total += weight(k);
-      let pick = Math.random() * total, k = 0;
-      for (; k < spots.length - 1; k++) { pick -= weight(k); if (pick <= 0) break; }
-      const spot = spots[k];
-      windedLast = k;
-      const sign = 'eitherSide' in spot && spot.eitherSide && Math.random() < 0.5 ? -1 : 1;
-      // (the horizon: level in the world, which from her bent torso is as far up as her lean, within her neck's reach)
-      const tip = Number.isNaN(spot.tip[0]) ? Math.min(HEAD_UP_MOST, torsoLean) : between(spot.tip) * D;
+      const [side, tip] = windedSpot();
       // (from where her head is now, glided there, eased at both ends)
       const e = L.glide * L.glide * (3 - 2 * L.glide);
       L.fromSide = L.fromSide + (L.toSide - L.fromSide) * e; L.fromTip = L.fromTip + (L.toTip - L.fromTip) * e;
-      L.toSide = sign * between(spot.side) * D; L.toTip = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, tip));
+      L.toSide = side; L.toTip = tip;
       L.glide = 0; L.glideFor = between(WINDED_LOOK.glide); L.rest = between(WINDED_LOOK.rest);
     }
     const e = L.glide * L.glide * (3 - 2 * L.glide);
     return [L.fromSide + (L.toSide - L.fromSide) * e, L.fromTip + (L.toTip - L.fromTip) * e];
+  };
+  /**
+   * The next WINDED spot to look at (WINDED_LOOK), from her torso: [side, tip], radians. Picked by chance, weighted
+   * between `high` (her breath still high) and `calm` (calmed) by how far her breath has come down, never the same kind
+   * twice running; held within her neck's reach.
+   */
+  const windedSpot = (): [number, number] => {
+    const spots = WINDED_LOOK.spots, D = Math.PI / 180;
+    let total = 0;
+    const weight = (k: number): number => k === windedLast ? 0 : spots[k].high + (spots[k].calm - spots[k].high) * windedCalm;
+    for (let k = 0; k < spots.length; k++) total += weight(k);
+    let pick = Math.random() * total, k = 0;
+    for (; k < spots.length - 1; k++) { pick -= weight(k); if (pick <= 0) break; }
+    const spot = spots[k];
+    windedLast = k;
+    const sign = 'eitherSide' in spot && spot.eitherSide && Math.random() < 0.5 ? -1 : 1;
+    // (the horizon: level in the world, which from her bent torso is as far up as her lean, within her neck's reach)
+    const tip = Number.isNaN(spot.tip[0]) ? Math.min(HEAD_UP_MOST, torsoLean) : between(spot.tip) * D;
+    return [sign * between(spot.side) * D, Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, tip))];
+  };
+  /**
+   * WINDED IN FIRST PERSON (WINDED_FIRST_LOOK): one frame of her bow and, after `from` seconds, her glances. Returns
+   * where her head is to look now, from her torso: [side, tip], radians. `bowFor` is how long she has been bowed this
+   * time (set back as she stands); a glance in hand finishes as she starts to straighten up, no new one starts.
+   */
+  const bowLook = { bowFor: 0, t: -1, hold: 0, wait: 0, side: 0, tip: 0 };
+  const bowGlance = (dt: number): [number, number] => {
+    const B = bowLook, F = WINDED_FIRST_LOOK;
+    B.bowFor += dt;
+    if (B.t < 0 && B.bowFor >= F.from && windedRising && (B.wait -= dt) <= 0) {
+      [B.side, B.tip] = windedSpot();
+      B.t = 0; B.hold = between(F.hold);
+    }
+    let share = 0;
+    if (B.t >= 0) {
+      B.t += dt;
+      const back = B.t - F.glide - B.hold;
+      share = B.t < F.glide ? smooth(B.t / F.glide) : back < 0 ? 1 : 1 - smooth(Math.min(1, back / F.glide));
+      if (back >= F.glide) { B.t = -1; B.wait = between(F.gap); }
+    }
+    return [B.side * share, -HEAD_DOWN_MOST + (B.tip + HEAD_DOWN_MOST) * share];
   };
   let windedLookNow: [number, number] = [0, 0];
   const windedHands = (): void => {
@@ -1976,7 +2014,7 @@ if (uHideHead > 0.5) {
       const downS = smooth(downW), crouchS = smooth(crouchW);
       windedS = downS > 0 ? 0 : smooth(windedW);
       windedRising = windedW > 0 && windedW >= windedWas - 1e-6;
-      if (windedW <= 0) windedLookFree = false;
+      if (windedW <= 0) { windedLookFree = false; bowLook.bowFor = 0; bowLook.t = -1; bowLook.wait = 0; }
       windedWas = windedW;
       lower.restore(); // (her hips as her pose leaves them, before anything reads her pose: lowerBody.ts)
       reach.advance(frame.dt);
@@ -2228,7 +2266,10 @@ if (uHideHead > 0.5) {
       // WINDED, SHE LOOKS ROUND (third person; `lookRound`): her head glides between her belly, chest, feet, hands, her
       // sides and the horizon, by as much as she is bent over
       const roundNow = windedS > 0 && !firstPerson && !windedLookFree;
+      // (first person, her bow, and after a while her glances: `bowGlance`, WINDED_FIRST_LOOK)
+      const bowNow = windedS > 0 && firstPerson && !windedLookFree;
       if (roundNow) { windedLookNow = lookRound(frame.dt); headSide += wrap(windedLookNow[0] - headSide) * windedS; }
+      else if (bowNow) { windedLookNow = bowGlance(frame.dt); headSide += wrap(windedLookNow[0] - headSide) * windedS; }
       else if (windedW <= 0) windedLook.on = false;
       const headYaw = yawNow + headSide;
       const headTurn = facing || looking > 0 || sitGlance > 0 || idle.share > 0 ? within(wrap(headYaw - (bellyYaw + backTurn)), HEAD_TURN_MOST) * upright : 0;
@@ -2276,7 +2317,7 @@ if (uHideHead > 0.5) {
         measureLean();
         let rel = Math.max(-HEAD_DOWN_MOST, Math.min(HEAD_UP_MOST, headTip + torsoLean));
         // (bowed right down, chin to chest; third person, wherever her look round has it: `lookRound`)
-        if (windedS > 0 && !windedLookFree) rel += ((roundNow ? windedLookNow[1] : -HEAD_DOWN_MOST) - rel) * windedS;
+        if (windedS > 0 && !windedLookFree) rel += ((roundNow || bowNow ? windedLookNow[1] : -HEAD_DOWN_MOST) - rel) * windedS;
         // (sitting: bowed down before she gets up, at the floor by her feet: chin to chest seated upright, and no further
         //  than the floor as she leans forward; lifting as she rises)
         if (sitBow > 0) rel += (Math.max(-HEAD_DOWN_MOST, -SIT_LOOK.bowDown * DEG + torsoLean) - rel) * sitBow;

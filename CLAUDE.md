@@ -1579,6 +1579,14 @@ use the game's single copy of three.js.
   person, the camera stick held at 0.4 into winded): v0.2.176 the view stayed level (0 degrees) all through the hold, her
   bow freed on its first frame; now it bows to 117 degrees down (her belly, hands on her knees, pictured) and, the stick
   let go, a drag up moves the view up evenly (-117 -> -97 over 14 steps, the view exactly the drag), nothing thrown back.
+  (3) AFTER 8 S BOWED SHE GLANCES ROUND (Joshua, same morning: "after 8s, the head randomly starts looking around like
+  how we have using the toilet for #2"; fastHeroine.ts `WINDED_FIRST_LOOK`, `bowGlance`, `windedSpot`): first person,
+  bowed right down for 8 s, then glances as her long toilet visit's idle glances do (0.8 s there, held 1.2-2 s, 0.8 s
+  back to her bow, 0.6-1.4 s before the next), at her third-person look round's spots (WINDED_LOOK: belly, chest, feet,
+  a hand, aside, the horizon, picked by how far her breath has calmed); none starts once she begins to straighten up.
+  A fresh look by the player still frees her head and the view is his. MEASURED in the built game (town, Mary, a sprint
+  to empty, no input): bowed at -117 from 0.5 to 8 s; then -81 (the horizon) 8.5-11 s, back to -117, -106 and 14
+  aside 13-15.5 s, back, -73 and 46 aside 17.5-19 s, back, and up at 20 s; no errors.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

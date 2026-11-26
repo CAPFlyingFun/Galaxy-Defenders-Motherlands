@@ -1559,6 +1559,9 @@ use the game's single copy of three.js.
   belly grows, as the builder's skin line does). The band's code is kept for 'band'. PICTURED (heroine lab, gear hidden,
   10 / 100 / 200 %, three-quarter, side, back): a clean level hem at 10 %, under her bump from 100 %; its edge is only
   as sharp as her picture (a slight step at 100 % on M3's light grey).
+  KEPT (Joshua, 2026-11-26: "leave the painted hems for now… the other agent was having a hard time with it so I
+  stopped it and just did painted"): the builder's painted hem stays on M1-M4; the game's band and the live drape stay
+  parked.
   (4) EVERY OUTFIT RE-BAKED on v0.9.76 (his standing rule): all 29 looks (35-60 s each), skin heights, packed pictures
   (41 min; the lowest 48.6 dB), all 180 thumbnails (36 looks); before and after pictured as two sheets (10 and 150 %):
   the same but for M1-M4's hems. IN THE BUILT GAME (town, Mary in M3 and John, 932 x 430): at rest Mary 14.1 a minute

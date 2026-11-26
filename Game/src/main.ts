@@ -69,6 +69,12 @@ import { Sound } from './audio/sound';
 import { BreathSound, loadBreathVoice } from './audio/breathSound';
 // THE PROLOGUE (v0.2.153; Joshua's opening demo, Draft 1): its code is fetched only when it is the map (types here)
 import type { Tunnel } from './world/prologue/tunnel';
+import type { HomeScene } from './world/home/homeScene';
+import type { Mind } from './mind';
+import { needsFromReading } from './world/home/mindBridge';
+import type { HomeMindBody } from './world/home/homeMindBody';
+/** The home's walls and ceilings, metres (homeScene.ts WALL_HEIGHT; a number here so the module loads only on its map). */
+const HOME_WALL_HEIGHT = 2.7;
 import type { Flashlight } from './world/prologue/flashlight';
 import type { FlashlightProp } from './world/prologue/flashlightProp';
 import type { CaveSounds } from './world/prologue/caveSounds';
@@ -233,7 +239,9 @@ const OUTFIT_CHANGE_KEYS: readonly string[] = ['outfit', 'catsuitNeck', 'suitKni
 /** How wide the portrait cover's still picture of the game is made, pixels (it is shown far smaller). */
 const SNAPSHOT_WIDTH = 480;
 
-const MAX_STEP = 1 / 20; // a frame never counts for more than this many seconds
+// A frame never counts for more than this many seconds. (Test pages: `?step_max=0.25` lets a slow software browser
+// play at a quarter of a second a frame, so a walk across the house takes a minute, not ten.)
+const MAX_STEP = Math.min(0.25, Math.max(1 / 20, Number(new URLSearchParams(location.search).get('step_max')) || 0));
 const TABLE_WALK = 1.1;
 /**
  * BLAZE'S PREGNANCY, from her Character Builder export (Joshua, 2026-11-19): her first visible belly (firstWeekBump,
@@ -359,7 +367,7 @@ async function start(): Promise<void> {
     const meterStep = meter.step.bind(meter);
     meter.step = (key: string, label: string): void => { meterStep(key, label); markStart(label); };
   }
-  meter.step('world', startSettings.map === 'prologue' ? 'Beneath the island…' : 'Building the dome and the city…');
+  meter.step('world', startSettings.map === 'prologue' ? 'Beneath the island…' : startSettings.map === 'home' ? 'Building the Fishers\' home…' : 'Building the dome and the city…');
   /**
    * A SHORT BREAK between loading steps (Joshua, 2026-11-17). The page can only redraw (a turn of the phone, the
    * loading bar) when the game's code stops for a moment; one picture's time, here and there, lets it catch up.
@@ -423,8 +431,12 @@ async function start(): Promise<void> {
   // opening, John alone in a passage beneath the island (world/prologue/, story/). Its own small scene: no island, no
   // town, no Blaze (so no live body), only him. Settings -> WORLD -> Map -> Prologue, or ?map=prologue.
   const prologue = graphics.map === 'prologue';
-  /** The domed town (neither the island nor the prologue): its sky, ground, city and dome are made only for it. */
-  const onTown = !onIsland && !prologue;
+  // THE FISHERS' HOME (v0.2.179; Joshua, 2026-11-26, the AI Brain & Home plan, his 1a: "Separate Home map initially,
+  // then integrate it into the island later"): their house, drawn from the same layout the minds live in
+  // (world/home/homeScene.ts), under the procedural sky. Settings -> WORLD -> Map -> The Fishers' home, or ?map=home.
+  const onHome = graphics.map === 'home';
+  /** The domed town (not the island, the prologue or the home): its sky, ground, city and dome are made only for it. */
+  const onTown = !onIsland && !prologue && !onHome;
   const sky = onTown ? createSky(renderer) : null;
   if (sky) {
     scene.background = sky.background;
@@ -505,6 +517,17 @@ async function start(): Promise<void> {
     miniMap.setShown(false);
     await breathe();
   }
+  let home: HomeScene | null = null;
+  if (onHome) {
+    meter.step('home', 'The Fishers\' home…');
+    const { createHomeScene } = await import('./world/home/homeScene');
+    home = createHomeScene();
+    scene.add(home.group);
+    // (the haze over the lawn's far edge: its colour from the sky's moment each frame, `stepSky`)
+    scene.background = new THREE.Color(0x9fc6df);
+    scene.fog = new THREE.Fog(0x9fc6df, 60, 260);
+    await breathe();
+  }
   /**
    * Where her feet go, metres: 0 on the flat town; on the island the ground, or in a deep river or lake, held up in the
    * water to her shoulders (islandWorld.ts standAt). The last good height if a tile is not in yet.
@@ -519,8 +542,8 @@ async function start(): Promise<void> {
 
   const targets = new SkyTargets();
   scene.add(targets.mesh);
-  // (no sky beneath the island, and nothing to shoot at in the prologue)
-  if (tunnel) targets.mesh.visible = false;
+  // (no sky beneath the island, and nothing to shoot at in the prologue or at home)
+  if (tunnel || home) targets.mesh.visible = false;
   const tracers = new Tracers();
   scene.add(tracers.mesh);
 
@@ -545,7 +568,7 @@ async function start(): Promise<void> {
    * the moment's sky, light, haze and sea are set (the island's own parts by `island.setEnvironment`).
    */
   const stepSky = (dt: number, realDt: number): void => {
-    if (!island || graphics.sky !== 'procedural') return;
+    if (!(island && graphics.sky === 'procedural') && !home) return;
     const skyHour = clock.hour;
     // LIGHTNING in a storm: now and then (every 4-14 s), a flash that dies away over a third of a second
     if (graphics.skyEvent === 'storm') {
@@ -560,7 +583,13 @@ async function start(): Promise<void> {
     keyLight.color.copy(environment.keyColour);
     keyLight.intensity = environment.keyIntensity;
     keyDirNow.copy(environment.keyDir);
-    island.setEnvironment(environment, dt);
+    island?.setEnvironment(environment, dt);
+    // (AT HOME the sky, the haze over the lawn, and the house's own light at night)
+    if (home) {
+      home.setEnvironment(environment, dt);
+      (scene.background as THREE.Color).copy(environment.fog);
+      if (scene.fog) scene.fog.color.copy(environment.fog);
+    }
     // (the Settings slider follows a running clock, four times a second)
     skyHourShown += realDt;
     if (clock.rate > 0 && skyHourShown > 0.25) { skyHourShown = 0; hud.setSkyHour(skyHour); }
@@ -683,6 +712,10 @@ async function start(): Promise<void> {
      *  are not brought back): its heading and tip (radians) and the view it was in; null until they have been played
      *  (then the camera starts looking the way they face). */
     cam: { yaw: number; pitch: number; mode: string } | null;
+    /** THEIR MIND AT HOME (v0.2.179; src/mind/, world/home/homeMindBody.ts): on the home map their needs, routines and
+     *  pastimes are the mind's ('manual' while played, 'autonomous' standing by); its body the game's. null elsewhere. */
+    mind?: Mind | null;
+    mindBody?: HomeMindBody | null;
   }
   let john: Character | null = null, blaze: Character | null = null;
   /** Who is being played now (Blaze until the first swap). */
@@ -773,7 +806,7 @@ async function start(): Promise<void> {
     realShadows = graphics.shadows === 'on';
     renderer.shadowMap.enabled = realShadows;
     keyLight.castShadow = realShadows && !tunnel;
-    shadowFloor.visible = realShadows && !island && !tunnel; // (on the island the ground itself takes her shadow; in the prologue's passage, its rock)
+    shadowFloor.visible = realShadows && !island && !tunnel && !home; // (on the island the ground itself takes her shadow; in the prologue's passage, its rock; at home, its floors)
     heroine.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
     // (and whoever is not being played)
     bystanderBody()?.root.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.castShadow = realShadows; });
@@ -812,7 +845,8 @@ async function start(): Promise<void> {
   // looking out at the city (+Z). Her movement (`PlayerMotion`) and which way each part of her faces (`BodyTurn`,
   // src/input/bodyTurn.ts) are her own, in her kit (`makeKit`, below).
   const startMotion = new PlayerMotion();
-  const START = tunnel ? tunnel.start : island ? { x: 0, z: 0, yaw: island.arrivalFacing } : { x: startMotion.x, z: startMotion.z, yaw: 0 };
+  // (at home: Mary at her own spawn in the living room, homeLayout.ts `residents`)
+  const START = tunnel ? tunnel.start : island ? { x: 0, z: 0, yaw: island.arrivalFacing } : home ? (home.starts.mary ?? { x: 0, z: 0, yaw: 0 }) : { x: startMotion.x, z: startMotion.z, yaw: 0 };
 
   // THE WEAPON TABLE (Joshua, 2026-11-17: "a table you can actually grab to pick up and drop your guns"): beside
   // where she starts, so she can walk up to it, put her guns down on it and take them up again
@@ -823,19 +857,20 @@ async function start(): Promise<void> {
   const table = new WeaponTable(graphics.tableHeight, LOOK_GEAR[tableLook]?.gun);
   // (NOT IN THE PROLOGUE: John is on an expedition, not at the armoury. They are made, as everything that asks after
   //  them expects them, but far off and not added to the scene)
-  const away = tunnel ? 5000 : 0;
+  // (nor at home: the house has its own things)
+  const away = tunnel || home ? 5000 : 0;
   table.place(1.6 + away, 9.85, 0);
-  if (!tunnel) scene.add(table.root);
+  if (!tunnel && !home) scene.add(table.root);
   // THINGS TO TAKE HOLD OF (Joshua's step #4, 2026-11-18): an upright pole and a waist-high rail beside the table, the
   // other side of the street (src/world/grabBars.ts; her fingers: src/heroine/fast/fingerTouch.ts).
   const bars = new GrabBars();
   bars.place('pole', -1.3 + away, 10.1, 0);
   bars.place('rail', -3.0 + away, 10.3, 0);
-  if (!tunnel) scene.add(bars.pole, bars.rail);
+  if (!tunnel && !home) scene.add(bars.pole, bars.rail);
   // THE DOOR (Joshua, 2026-11-18; src/world/door.ts): beside the rail, its pull side (the lever) toward the plaza
   const door = new Door();
   door.place(-5.2 + away, 10.2, Math.PI);
-  if (!tunnel) scene.add(door.root);
+  if (!tunnel && !home) scene.add(door.root);
   // (on the island the table, bars and door stand on the beach beside her, on the sand's own height)
   if (island) {
     table.root.position.y = groundUnder(1.6, 9.85);
@@ -846,6 +881,8 @@ async function start(): Promise<void> {
   }
   /** Where the door puts her back (one object, rewritten). */
   const doorOut = { x: 0, z: 0 };
+  /** Everyone's place on the floor, for the home's sliding doors (one list, refilled each frame). */
+  const homePeople: { x: number; z: number }[] = [];
 
   // ---- EVERYTHING A CHARACTER IS DOING, THEIR OWN (Step 1) -----------------------------------------------------------
   // Joshua, 2026-11-21: "Each character should store the complete state on swap whether crouching, holding on to
@@ -890,6 +927,8 @@ async function start(): Promise<void> {
     readonly state: KitState;
     /** THEIR OWN POP-UP TOILET (src/world/toilet.ts; Joshua, 2026-11-22): it grows in behind them when they go. */
     readonly toilet: PopUpToilet;
+    /** At home, their own walls (they let them through the thing they use: homeScene.ts `walkerWalls`). */
+    readonly homeWalls: import('./world/home/homeScene').WalkerWalls | null;
   }
   const freshState = (): KitState => ({
     stance: 'stand', stanceNoAim: false, bathroomLeft: 0, bathroomBowels: false, mustGoNow: false, tableReloading: false, tableAfterDraw: null,
@@ -899,7 +938,9 @@ async function start(): Promise<void> {
   });
   /** A character's own kit, on their own body (`self`), standing at x, z and facing `yaw`. Their guns start holstered. */
   const makeKit = (self: GameHeroine, x: number, z: number, yaw: number): Kit => {
-    const motion = new PlayerMotion(island ? island.walls : tunnel ? tunnel.walls : walls);
+    // (at home each walker has walls of their own, which let them through the thing they use: a seat, a bed)
+    const homeWalls = home ? home.walkerWalls() : null;
+    const motion = new PlayerMotion(island ? island.walls : tunnel ? tunnel.walls : homeWalls ?? walls);
     motion.x = x; motion.z = z;
     // (a body that can turn its parts apart is handed its turning once, and reads it every frame)
     const turn = new BodyTurn();
@@ -934,6 +975,7 @@ async function start(): Promise<void> {
       wants: { walkTo: null, look: null, aimAt: null, fire: false, shots: 0 },
       state: freshState(),
       toilet,
+      homeWalls,
     };
   };
   // BLAZE'S KIT (her stand-in follows her body through outfit changes: `blaze.body`, or the body just made)
@@ -1043,7 +1085,10 @@ async function start(): Promise<void> {
       const body = await createHeroine(renderer, scene, his, (text) => meter.step(text, text), 'john', true, johnParts());
       // (1.4 m to her RIGHT and a little behind her, facing the same way: her left is where the weapons table stands,
       //  and at first he was put right on it)
-      const x = motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base), z = motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
+      // (at home, at his own spawn: homeLayout.ts `residents`)
+      const hisStart = home?.starts.john;
+      const x = hisStart ? hisStart.x : motion.x - 1.4 * Math.cos(turn.base) - 0.6 * Math.sin(turn.base);
+      const z = hisStart ? hisStart.z : motion.z + 1.4 * Math.sin(turn.base) - 0.6 * Math.cos(turn.base);
       // (his own kit, on his own body: his movement, turning, holsters, belt, his use of the table, bars and door; his
       //  guns start holstered, as hers do)
       const kit = makeKit(standIn(() => john?.body ?? body), x, z, turn.base);
@@ -1193,6 +1238,15 @@ async function start(): Promise<void> {
     rig.keepClear = (from, to) => t.keepClear(from, to);
     rig.faceAtOnce(t.start.yaw);
   }
+  if (home) {
+    // the home: the camera kept off its walls and shut doors (above them it looks in), facing the way she faces
+    const h = home;
+    rig.keepClear = (from, to) => h.keepClear(from, to);
+    // (the follow camera's pivot under the ceilings: 2.2 m, half a metre under them, so she is in the picture when the
+    //  walls bring the camera in close)
+    rig.pivotCeiling = HOME_WALL_HEIGHT - 0.5;
+    rig.faceAtOnce(START.yaw);
+  }
   /**
    * AIMED BY HAND: always in first person; in third person when auto-fire is off (Joshua, 2026-11-18: "so you could
    * also shoot in 3rd person... over the shoulder view and a simple cross hair"). Then the camera is over her
@@ -1304,7 +1358,7 @@ async function start(): Promise<void> {
     const hx = x - ax * back, hz = z - az * back, far = back + TOILET_SIZE.behind;
     const spots = [[hx, hz], [x - ax * far, z - az * far], [hx + lx * TOILET_SIZE.halfWidth, hz + lz * TOILET_SIZE.halfWidth], [hx - lx * TOILET_SIZE.halfWidth, hz - lz * TOILET_SIZE.halfWidth]];
     for (const [px, pz] of spots) { const g = groundUnder(px, pz); if (Number.isFinite(g) && Math.abs(g - floor) > 0.1) return false; }
-    const stops = island ? island.walls : tunnel ? tunnel.walls : walls;
+    const stops = island ? island.walls : tunnel ? tunnel.walls : home ? home.walls : walls;
     if (stops) {
       const out = { x: 0, z: 0 };
       // (from where they stand, back to its tank's back; then from under their hips out to each side)
@@ -1571,6 +1625,8 @@ async function start(): Promise<void> {
     // (their brain has them from now: their needs, and in AUTO their fight; it starts from nothing wanted)
     Object.assign(from.kit.wants, { walkTo: null, look: null, aimAt: null, fire: false });
     from.brain?.setMode('ai');
+    // (at home their mind has them from now, as it has the one standing by)
+    from.mind?.setMode('autonomous');
     // THE ONE NOW PLAYED: the game's names point at their things, and their small values are taken back up
     playing = to;
     bodyNow = to.body;
@@ -1580,6 +1636,9 @@ async function start(): Promise<void> {
     // (their brain lets go at once, stopping whatever it was doing: the player has them)
     to.brain?.setMode('player');
     to.port?.stopFiring();
+    // (at home: their mind lets go, and their body stands up from whatever it was sitting or lying on)
+    to.mind?.setMode('manual');
+    to.mindBody?.release();
     graphics.autoFire = to.autoFire;
     busyView.on = false;
     // THE CAMERA LOOKS WHERE IT DID WHEN THEY WERE LAST PLAYED (Joshua, 2026-11-21: "they need to save and resume their
@@ -1670,6 +1729,44 @@ async function start(): Promise<void> {
     brain.setMode(c === playing ? 'player' : 'ai');
   };
   for (const c of [blaze, john]) if (c) setUpBrain(c);
+
+  // THEIR MINDS AT HOME (v0.2.179; Joshua, 2026-11-26: "Let's prioritize making John and Mary feel alive"): on the home
+  // map each of them has a MIND (src/mind/: their needs, habits, feelings, memory and pastimes; Mary's and John's own
+  // profiles), living in the home's world (its things, who holds what, the larder: world/home/homeWorld.ts) with the
+  // other (a Society: who is home, who is played, invitations to talk), and driving their own body through the game's
+  // walk, sit and lie (world/home/homeMindBody.ts). The one played is 'manual' (the mind does nothing); the one standing
+  // by is 'autonomous'. The old brain (src/npc/) is not run at home.
+  let homeWorld: unknown = null, homeSociety: unknown = null;
+  if (home) {
+    const [{ Mind, Society, MARY_PROFILE, JOHN_PROFILE }, { HomeWorld }, { HomeMindBody }] = await Promise.all([
+      import('./mind'), import('./world/home/homeWorld'), import('./world/home/homeMindBody'),
+    ]);
+    const world = new HomeWorld(home.layout);
+    const society = new Society();
+    const h = home;
+    for (const c of [blaze, john]) {
+      if (!c) continue;
+      const k = c.kit;
+      const profile = c === john ? JOHN_PROFILE : MARY_PROFILE;
+      const walls = k.homeWalls;
+      if (!walls) continue;
+      const mb = new HomeMindBody({
+        id: profile.id, vitals: c.vitals, walls,
+        position: () => ({ x: k.motion.x, z: k.motion.z }),
+        facing: () => k.turn.base,
+        floorY: () => 0,
+        sitFor: (seconds, open) => c.body.sitFor?.(seconds, open),
+        sitShare: () => c.body.sitShare?.() ?? 0,
+        lieOn: (spot) => c.body.lieOn?.(spot),
+        lieShare: () => c.body.lieInfo?.() ?? 0,
+      }, h.layout, h.nav);
+      c.mindBody = mb;
+      c.mind = new Mind(profile, mb, world, society, { mode: c === playing ? 'manual' : 'autonomous' });
+    }
+    homeWorld = world; homeSociety = society;
+  }
+  /** The game clock as a mind reads it. */
+  const clockTime = () => ({ day: clock.day, hour: clock.hour, seconds: clock.totalSeconds });
 
   const hud = new Hud(uiHost, controls, {
     debug,
@@ -1895,7 +1992,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, home, homeWorld, homeSociety, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       // (the game's own clock, seconds of play: for test pages that time things in game time, not the browser's)
       get elapsed() { return elapsed; },
@@ -2035,10 +2132,20 @@ async function start(): Promise<void> {
    */
   const stepStandingBy = (c: Character, dt: number, threat: number): void => {
     const k = c.kit, s = k.state, m = k.motion, body = c.body;
-    // 1. THEIR BRAIN decides: their needs first, then in AUTO their fight; its orders say what it wants (k.wants)
-    c.needs?.tick(dt);
-    c.combat?.tick(dt);
-    c.brain?.tick(dt);
+    // 1. THEIR BRAIN decides: their needs first, then in AUTO their fight; its orders say what it wants (k.wants).
+    //    AT HOME their MIND decides instead (v0.2.179): its body says where to walk and look, and sits or lays them.
+    const mb = c.mindBody ?? null;
+    if (c.mind && mb) {
+      mb.frame(dt);
+      c.mind.tick(dt, clockTime(), needsFromReading(c.vitals.reading));
+      k.wants.walkTo = mb.walkTo ? { x: mb.walkTo.x, z: mb.walkTo.z } : null;
+      k.wants.look = mb.lookYaw;
+      k.wants.aimAt = null; k.wants.fire = false;
+    } else {
+      c.needs?.tick(dt);
+      c.combat?.tick(dt);
+      c.brain?.tick(dt);
+    }
     // 2. WHAT THEY WERE DOING CARRIES ON (each with its own walk and its own hands)
     k.tableAsk.yaw = k.turn.base;
     k.tableUse.update(dt, m.x, m.z, k.tableAsk);
@@ -2087,8 +2194,8 @@ async function start(): Promise<void> {
     ti.move = m.heading;
     ti.look = ask.look ?? (busy ? null : k.wants.look);
     // (sitting on their toilet: square to it, their head alone looking round)
-    ti.hold = k.doorUse.faceYaw() ?? (k.toilet.inUse ? k.toilet.yaw : null);
-    ti.grip = k.toilet.inUse;
+    ti.hold = k.doorUse.faceYaw() ?? (k.toilet.inUse ? k.toilet.yaw : null) ?? mb?.holdYaw ?? null;
+    ti.grip = k.toilet.inUse || (mb?.seated ?? false);
     k.turn.step(dt, ti);
     k.turn.headPitch = 0;
     // 6. AIM AND FIRE (their brain's fire order, in AUTO): in bursts, with their own guns' rounds; each shot a streak
@@ -2137,7 +2244,13 @@ async function start(): Promise<void> {
     // 9. THEIR VITALS: what they just did moves them on (walking, firing, the danger); their body breathes by them
     s.wetFor = s.waterDepthNow > 0.02 ? 0 : s.wetFor + dt;
     const wet = s.wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (s.wetFor - WET_HOLD) / WET_DRY);
-    c.vitals.step(dt, { speed: m.speed, firing: fired, threat, ground: island ? { x: m.x, z: m.z, y: island.groundAt(m.x, m.z) } : undefined, waterDepth: s.waterDepthNow, wet });
+    // (at home, their mind's pose and sleep: seated or lying they rest; asleep, their sleep; exercise felt as the walk
+    //  or jog whose work it is, a walk 0.3 at 1.1 m/s to a jog 0.6 at 2.64)
+    const workSpeed = mb && mb.workload > 0 ? 1.1 + ((mb.workload - 0.3) / 0.3) * (2.64 - 1.1) : 0;
+    c.vitals.step(dt, {
+      speed: Math.max(m.speed, workSpeed), firing: fired, threat, ground: island ? { x: m.x, z: m.z, y: island.groundAt(m.x, m.z) } : undefined, waterDepth: s.waterDepthNow, wet,
+      seated: mb?.seated, asleep: mb?.asleep, sleepQuality: mb?.sleepQuality,
+    });
     body.setVitals?.(c.vitals.reading);
     s.limits = c.vitals.reading;
   };
@@ -2733,6 +2846,12 @@ async function start(): Promise<void> {
     }
     // (the island: its tiles follow her, the sea follows the camera)
     island?.update(dt, motion.x, motion.z, rig.camera);
+    // (AT HOME: its sliding doors open for whoever comes near, the one played and the one standing by)
+    if (home) {
+      homePeople.length = 0;
+      for (const c of [blaze, john]) if (c) homePeople.push({ x: c.kit.motion.x, z: c.kit.motion.z });
+      home.update(dt, homePeople);
+    }
 
     // 4. Aim. First person: along the line of sight. Third person: auto-aim at a sky target.
     targets.update(info);
@@ -2825,6 +2944,9 @@ async function start(): Promise<void> {
     {
       const other = bystander();
       if (other) stepStandingBy(other, dt, threat);
+      // (at home the one played keeps their own mind too, in 'manual': it plans nothing, but their feelings and their
+      //  day's counts go on, and the one standing by finds them where they are to talk to)
+      if (playing?.mind) playing.mind.tick(dt, clockTime(), needsFromReading(playing.vitals.reading));
     }
     if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;
@@ -2843,7 +2965,23 @@ async function start(): Promise<void> {
     // that the camera has moved for this frame; their brain's lines (npc/thoughts.ts), written 10 times a second
     {
       const other = bystander();
-      if (other && other.brain && other.port && graphics.npcThoughts === 'on') {
+      if (other && other.mind && graphics.npcThoughts === 'on') {
+        // AT HOME, THEIR MIND (v0.2.179): the clock, what they are doing and why, where they are going, the next best
+        // choices with their scores, and their needs as the mind reads them
+        other.body.eye(thoughtAt);
+        thoughtAt.y += THOUGHT_ABOVE;
+        const mind = other.mind;
+        thoughtBubble.update(realDt, rig.camera, thoughtAt, () => {
+          const d = mind.debug(), n = d.needs, pc = (v: number): string => `${Math.round(v * 100)}%`;
+          return [
+            `🧠 ${other.name} · ${clock.text}`,
+            `▶ ${mind.thought}`,
+            `🚶 ${d.nav}${d.destination ? ` → ${d.destination}` : ''}`,
+            `⚖️ ${d.scores.slice(0, 3).map((x) => `${x.activity} ${Math.round(x.score)}`).join(' · ')}`,
+            `🍽️ ${pc(n.food)} 💧 ${pc(n.water)} 🚽 ${pc(n.bathroom)} 🔋 ${pc(n.energy)}${n.asleep ? ' 💤' : ''}`,
+          ];
+        });
+      } else if (other && other.brain && other.port && graphics.npcThoughts === 'on') {
         other.body.eye(thoughtAt);
         thoughtAt.y += THOUGHT_ABOVE;
         const h = other.body.hands, k = other.kit;

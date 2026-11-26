@@ -215,7 +215,18 @@ export interface HeroineBody {
    */
   seatFor?(): { top: number; back: number };
   /** Sit down onto the seat behind her (SIT.seconds), stay this many seconds, then get up (SIT.seconds). */
-  sitFor?(seconds: number): void;
+  sitFor?(seconds: number, open?: boolean): void;
+  /**
+   * LYING DOWN ON A BED (v0.2.179, the game's own pose: heroine/fast/fastHeroine.ts LIE): from where she stands at its
+   * side, facing away from it, she sits on its edge, then swings round and lies back, her hip joints at `spot` (world,
+   * metres: on the mattress) and her feet toward `yaw` (the bed's foot end, compass yaw). null: she sits up, then gets
+   * up, where she sat. Asked each frame it is wanted (as it is now).
+   */
+  lieOn?(spot: { x: number; y: number; z: number; yaw: number } | null): void;
+  /** How far lying down she is: 0 not at all (standing or sitting) .. 1 lying. */
+  lieInfo?(): number;
+  /** How far through sitting she is: 0 standing .. 1 seated. */
+  sitShare?(): number;
   /** How much of her own look while she sits is on (0..1; heroine/fast/sitPose.ts SIT_LOOK): first person, turning the
    *  view frees her head from it (`freeLook`). */
   sitLook?(): number;

@@ -1661,6 +1661,58 @@ use the game's single copy of three.js.
   the builder's MEASURED stomach (half a meal leaves it in 1.5 h) they eat every 3 hours, about 3.8 L of food a day
   (asked of him). Its COST: 15 µs a mind a frame (0.25 s frames) on the build machine, 62 µs of work a real second; a
   frame over 1 ms about once in 4,500 (the JavaScript engine's own pauses).
+- v0.2.179: THE FISHERS' HOME AS A MAP, AND THEIR MINDS LIVING IN IT (Joshua, 2026-11-26: "1a – Separate Home map
+  initially"; "5a – Automatic futuristic sliding doors"; "Once those are working reliably, proceed with the procedural
+  house, navigation and autonomous interactions. Let's prioritize making John and Mary feel alive"; then "I want you to
+  do the poses and animations as it's game specific and don't need it in the main CCBS repo"). Settings -> WORLD -> Map
+  -> The Fishers' home (AI brain test) (`?map=home`; the island stays the default).
+  (1) THE HOUSE IN 3D (`world/home/homeScene.ts`, from the layout `generateHome(FISHER_HOME)`, all in code, nothing
+  downloaded): floors and ceilings per room (the ceiling one-sided, seen only from below, faintly lit so it never reads
+  black), walls 2.7 m with window cuts and glass, skirting and a cyan accent strip; SLIDING POCKET DOORS that slide open
+  as anyone comes within 1.8 m (0.45 s) and shut 1 s after (solid until 55 % open), each into the side with more wall;
+  a simple model of each of its 33 things (beds with pillows and duvets, the pop-up toilet's toilet fully grown, a
+  shower, sinks with mirrors, the fridge, stove, counters, the dining table and chairs, a desk, wardrobes, the screen,
+  sofa and armchairs, a mat), every one but the open floor and the windows solid; outside a lawn, the front path and a
+  back patio. The procedural sky and its time of day; an ambient house light that rises as it gets dark. Each
+  material's pieces merged into one: about 85-93 draws and 240-315 K triangles with both of them. The camera kept
+  inside the walls (`keepClear`: every wall treated as reaching the sky) and the follow camera's pivot under the
+  ceiling (cameraRig.ts `pivotCeiling`, the wall's height less 0.5 m).
+  (2) WALKING THE HOUSE (`world/home/homeNav.ts` `HomeNav`): a 0.15 m grid of where a body (0.3 m round) can stand,
+  the shortest way on it (A*, eight ways, no corner cut), pulled straight where it can see ahead, the doors left open
+  in it; the thing walked to is let through (a chair, a bed: the last steps go into it). Each walker has their own walls
+  (`walkerWalls`, `HomeWalls`: the solid things and walls as boxes, a body pushed out of them; the thing they use let
+  through), so the walls stop the one played too.
+  (3) THEIR MINDS, LIVE (main.ts, `Character.mind`, `.mindBody`): on the home map each has a `Mind` (src/mind/, Mary's
+  and John's profiles) in a `HomeWorld` (who holds what, the larder) with a `Society`, and a `HomeMindBody`
+  (`world/home/homeMindBody.ts`) that turns its asks into the game's body: walk there (the nav grid, stuck asks the way
+  again, three tries and it is blocked), face this way, sit (the toilet's sit, `sitFor` held each frame), lie on a bed,
+  how hard they work, asleep. The one STANDING BY is 'autonomous' (its mind instead of the old brain, src/npc/, which
+  is not run at home); the one PLAYED is 'manual' (its mind ticks, so its feelings and day go on, but plans nothing).
+  🔄 swaps them: the one taken over lets go of whatever they held and gets up. Their vitals are told when they sit,
+  sleep and how hard they work. The thought bubble at home shows their mind: who and the clock, what they are doing and
+  why, the walk, the three best choices with their scores, their food, water, toilet and energy (💤 asleep).
+  (4) LYING DOWN, THE GAME'S OWN POSE (fastHeroine.ts `lieOn`, `lieInfo`, sitPose.ts `LIE`): from beside the bed,
+  back to it, she sits on its edge (the sit), then over 2.5 s swings round to lie along it, feet to its foot end,
+  tipped onto her back, her hip joints carried to their spot on the mattress (0.6 m from her pillow, 0.1 m over the
+  mattress's top); up again the same backwards, then the bow and up off the edge. Lying flat her head sank into the
+  pillow: her back is laid 12 degrees short of flat with 0.13 of her sit kept (hips and knees bent 12: thighs level, head
+  about 15 cm up, on the pillow). Mary's side of the main bed the west, John's the east (a guess). Her arms and her
+  head's looks are off while she lies; first person is not for lying yet. Pictured: sitting down, on the edge, lying
+  back, lying, getting up.
+  (5) AN OPEN SIT (fastHeroine.ts `sitFor(seconds, open)`, SIT_LOOK `openGapLeast`/`openGapMost`): the mind's sits
+  last as long as it wants (held 2.9 s ahead each frame, `SIT_AHEAD`: just over the bow, so asked to stand she bows and
+  is up at once), and while held she glances round every 5-14 s.
+  (6) TEST PAGES: `?step_max=0.25` lets a frame count for up to a quarter of a second (MAX_STEP; 1/20 otherwise), so a
+  software test browser at 1 FPS walks the house in a minute, not ten; `gdm.homeWorld`, `gdm.society`.
+  TESTED in the built game at 932 x 430: John on his own exercised, then (his bladder set to 560 mL) walked from the
+  living room through the hall to the hall bath, sat, went, bowed and got up; at 22:24 and sleepy he walked to the main
+  bed, sat on its edge, lay down and slept, and at 06:00 sat up and got up; swapped, Mary did the same toilet trip on
+  her own and John, played, did nothing he was not told; swapped back, John went to talk to her. The household
+  simulation still passes 33 of 33 (day 1, 07:00-24:00 with their water topped up, now needs one drink, not two).
+  NOT YET (the pose builder comes next, his idea, 2026-11-26: "copy and import Beyond Extinction's animation/pose
+  builder in the game so I can save my own poses and animations and upload to you to save in the game, then you can
+  just do animations between different poses"): exercise is standing still, eating and drinking have no hands, dozing
+  on the sofa is a sit, no shower; lying, his ankles cross and his feet stand up.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

@@ -574,7 +574,7 @@ export class Hud {
     };
     // (the map: Joshua, 2026-11-19, the real island for the main game, the town kept as a test map)
     element('h2', 'gd-settings-part', settings, 'WORLD');
-    choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town'], ['Prologue: John beneath the island (story)', 'prologue']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen; the prologue is the story\'s opening (John only, Scene 1 so far). Changing it reloads the game.');
+    choiceRow('Map', 'map', [['Island (Beyond Extinction\'s, true scale)', 'island'], ['Domed town (test)', 'town'], ['Prologue: John beneath the island (story)', 'prologue'], ['The Fishers\' home (AI brain test)', 'home']], 'The island is the main map; the domed town is kept to test in until its place on the island is chosen; the prologue is the story\'s opening (John only, Scene 1 so far); the home is the Fishers\' house, where the AI brain will live (3 bedrooms, 2 bathrooms, sliding doors). Changing it reloads the game.');
     // TEXTURE SIZES (v0.2.148, core/textureSizes.ts): the largest side of a picture on the graphics chip; each step a
     // quarter of the memory of the one above; 4096 only on a computer (a phone is never offered what would close it)
     const sizeChoices = textureSizesOffered().map((s) => [String(s), s] as const);

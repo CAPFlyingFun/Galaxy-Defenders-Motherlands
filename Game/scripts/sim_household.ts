@@ -290,7 +290,8 @@ function normal(): Household {
     const m = h.people.get(id)!.mind, low = lows(h, id);
     const days = [1, 2, 3].map((d) => m.memory.day(d));
     check('normal', `${id}: eats every day`, days.every((d) => d.meals >= 2), days.map((d) => `${d.meals} meals`).join(', '));
-    check('normal', `${id}: drinks every day`, days.every((d) => d.drinks >= 2 && d.waterMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} mL)`).join(', '));
+    // (day 1 is 17 hours, from 07:00 with their water topped up: one big drink is enough there; a whole day, two)
+    check('normal', `${id}: drinks every day`, days.every((d, i) => i === 0 ? d.drinks >= 1 && d.waterMl >= 400 : d.drinks >= 2 && d.waterMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} mL)`).join(', '));
     check('normal', `${id}: uses the toilet every day`, days.every((d) => d.bathroom >= 3), days.map((d) => `${d.bathroom}`).join(', '));
     check('normal', `${id}: sleeps 6-10 h a night`, days.slice(1).every((d) => d.sleepHours >= 6 && d.sleepHours <= 10.5), days.map((d) => `${d.sleepHours.toFixed(1)} h`).join(', '));
     check('normal', `${id}: needs never neglected`, low.hungryAwake <= 30 && low.water >= 0.08 && low.bathroomHigh < 0.97, `food awake lowest ${pct(low.foodAwake)} (under 8% awake ${low.hungryAwake} min at most; asleep ${pct(low.food)}), water ${pct(low.water)}, energy ${pct(low.energy)}; fullest bathroom ${pct(low.bathroomHigh)}`);

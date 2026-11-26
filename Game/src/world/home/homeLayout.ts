@@ -334,7 +334,8 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
           put('armchair', 'Armchair', room.id, ax, az, toScreen, 0.8, 0.8, [seat('seat', ax, az, toScreen)], { tags: ['faces-screen', 'soft'] });
         }
         put('window', 'Front window', room.id, r.x0 + 4.2, r.z0 + 0.05, NORTH, 1.6, 0.1, [front('look', r.x0 + 4.2, r.z0 + 0.05, NORTH, 0.55)]);
-        put('floorSpot', 'Open floor', room.id, r.x1 - 1.6, cz - 0.6, NORTH, 1.6, 1.6, [{ id: 'mat', use: [r.x1 - 1.6, cz - 0.6], facing: WEST, approach: [r.x1 - 1.6, cz + 0.4], motion: 'stand' }], { tags: ['exercise'] });
+        put('floorSpot', 'Open floor', room.id, r.x1 - 1.6, cz - 0.6, NORTH, 1.6, 1.6, [{ id: 'mat', use: [r.x1 - 1.6, cz - 0.6], facing: WEST, approach: [r.x1 - 1.6, cz - 0.6], motion: 'stand' }], { tags: ['exercise'] });
+        // (open floor has nothing to go round, so it is come at from any side: its approach is its own middle)
         spots(room.id, [r.x0 + 5.0, r.z0 + 3.6], [r.x0 + 5.6, r.z0 + 2.2], [r.x0 + 4.6, r.z0 + 1.2]);
         break;
       }

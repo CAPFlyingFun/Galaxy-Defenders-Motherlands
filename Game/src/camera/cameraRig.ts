@@ -175,6 +175,12 @@ export class CameraRig {
    * line between them to just short of the first rock in the way. null on the open maps (the camera goes anywhere).
    */
   keepClear: ((from: THREE.Vector3, to: THREE.Vector3) => void) | null = null;
+  /**
+   * A ROOF OVER HER (v0.2.179, the Fishers' home: its ceilings 2.7 m up), metres over her feet, or null (open sky).
+   * The follow camera's pivot is kept this far up at the most: in a room its walls bring the camera in to a couple of
+   * metres behind her, and from its usual pivot, 3.3 m up and looking level, she was under the bottom of the picture.
+   */
+  pivotCeiling: number | null = null;
   /** (where the camera looks from, for `keepClear`, one vector kept for it) */
   private readonly clearFrom = new THREE.Vector3();
   /**
@@ -355,7 +361,8 @@ export class CameraRig {
     // two angles are the player's alone, so the camera keeps the side of her it was dragged to while she runs.
     const feet = heroine.root.position;
     this.easedLower += (this.lower - this.easedLower) * (1 - Math.exp(-3 * dt));
-    const pivotHeight = Math.max(MIN_CAMERA_HEIGHT + 0.3, PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * Math.max(0, this.easedZoom) - this.easedLower);
+    const openPivot = Math.max(MIN_CAMERA_HEIGHT + 0.3, PIVOT_NEAR + (PIVOT_FAR - PIVOT_NEAR) * Math.max(0, this.easedZoom) - this.easedLower);
+    const pivotHeight = this.pivotCeiling !== null ? Math.min(openPivot, this.pivotCeiling) : openPivot;
     if (this.pivotPlaced) {
       this.pivot.x += (feet.x - this.pivot.x) * ease;
       this.pivot.z += (feet.z - this.pivot.z) * ease;

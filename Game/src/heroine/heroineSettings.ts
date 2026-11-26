@@ -34,7 +34,7 @@ export type ShadowChoice = 'on' | 'off';
  * Which map she is on: the real island (the main game), the domed town (kept to test in until its place is chosen), or
  * the PROLOGUE (v0.2.153: the story's opening, John beneath the island; story/chapters/johnPrologue.ts).
  */
-export type MapChoice = 'island' | 'town' | 'prologue';
+export type MapChoice = 'island' | 'town' | 'prologue' | 'home';
 
 /** Settings -> WORLD -> Landscaping (src/world/island/treeObjects.ts). */
 // (FLORA, 2026-11-24: 'flora', the island's own sci-fi flora: src/world/island/flora/floraPlanting.ts)
@@ -443,7 +443,7 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     outfit: address.get('look') ?? read(SETTING_KEYS.outfit) ?? OUTFIT_CHOICES[0][1],
     catsuitNeck: asCatsuitNeck(address.get('neck') ?? read(SETTING_KEYS.catsuitNeck)),
     // (the island unless the town or the prologue was chosen)
-    map: ((v) => (v === 'town' || v === 'prologue' ? v : 'island'))(address.get('map') ?? read(SETTING_KEYS.map)),
+    map: ((v) => (v === 'town' || v === 'prologue' || v === 'home' ? v : 'island'))(address.get('map') ?? read(SETTING_KEYS.map)),
     // (Hybrid unless another was chosen; v0.2.93's Trees off is kept as Off)
     landscaping: asLandscaping(address.get('land') ?? read(SETTING_KEYS.landscaping) ?? (read('gdm.trees') === 'off' || address.get('trees') === 'off' ? 'off' : null)),
     ground: (address.get('ground') ?? read(SETTING_KEYS.ground)) === 'textures' ? 'textures' : 'colours',

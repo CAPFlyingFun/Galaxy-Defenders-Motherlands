@@ -93,6 +93,9 @@ export const SIT_LOOK = Object.freeze({
   /** SEATED, IDLE GLANCES: only with at least `glancesFrom` seconds seated before her head bows (the 12 s visit, not the
    *  5 s one): one, or two from `twoFrom`; each glides `glide` seconds to a spot, holds a while, glides back. */
   glancesFrom: 5, twoFrom: 8, glide: 0.8, holdLeast: 1.2, holdMost: 2, gapLeast: 0.6, gapMost: 1.4,
+  /** AN OPEN SIT (v0.2.179: the mind's, at home, on a chair, the sofa or a toilet, for as long as it wants): a glance
+   *  now and then for as long as it lasts, `openGapLeast`-`openGapMost` seconds apart. */
+  openGapLeast: 5, openGapMost: 14,
   /** Where she glances: degrees round from the way she faces (+ her left), and up (+) or down (-) from level. */
   spots: [[50, -12], [-50, -12], [70, -25], [-70, -25], [0, -55], [22, 4], [-22, 4]] as ReadonlyArray<readonly [number, number]>,
 });
@@ -178,3 +181,31 @@ export function seatShape(measure: HumanMeasure, bind: readonly BindJoint[], bel
   const anklesY = mid(j.ankleL, j.ankleR, 1), anklesZ = mid(j.ankleL, j.ankleR, 2);
   return { hipsAboveAnkles: (hipsY - anklesY) * metresPerUnit, anklesAhead: (anklesZ - hipsZ) * metresPerUnit };
 }
+
+/**
+ * LYING DOWN ON A BED (v0.2.179; Joshua, 2026-11-26: "I want you to do the poses and animations as it's game specific and
+ * don't need it in the main CCBS repo"): the game's own pose, laid over her sit (fastHeroine.ts `lieOn`). She sits on
+ * the bed's edge as on any seat (SIT), then over `seconds` swings round to lie along it, her legs straightening out of
+ * the sit, tipped back flat (`tip`), her hip joints carried onto the mattress. Getting up is the same backwards: she
+ * sits up onto the edge, then gets up as from any seat. GAME TUNING.
+ */
+export const LIE = Object.freeze({
+  /** lying back (or sitting up again), seconds */
+  seconds: 2.5,
+  /** flat on her back: a quarter turn back about her left */
+  tip: Math.PI / 2,
+  /** while lying, she is kept seated at least this long ahead (over SIT_LOOK.bowBefore: no bow while she lies) */
+  holdSit: 4,
+  /** sitting up again, she stays seated this long once up on the edge (her bow before she gets up, then up) */
+  upAfter: 3,
+  /** her hip joints lie this far over the mattress's top (the flesh of her seat and back under them), metres */
+  hipsOverMattress: 0.1,
+  /**
+   * HER HEAD ON THE PILLOW: lying flat her head sank into it, so her back is laid this far short of flat (radians, 12
+   * degrees: her head about 15 cm up, on the pillow), and this much of her sit is kept (its hips bent 90: 0.13 of it
+   * bends them the same 12, so her thighs lie level, her knees a little bent, her hands resting on her thighs).
+   * Until Joshua's own lying pose comes from the pose builder.
+   */
+  incline: 12 * Math.PI / 180,
+  sitKept: 0.13,
+});

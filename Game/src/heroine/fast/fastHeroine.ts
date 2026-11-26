@@ -58,7 +58,7 @@ import { BellyTouch, type KickMood } from './bellyTouch';
 import { smoothBand } from '../liveBand';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
-import { SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
+import { LIE, SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
 import { STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
@@ -594,6 +594,14 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
    * settled). Getting up runs that back to 0, the same way backwards.
    */
   let sitAsked = false, sitLeft = 0, sitT = 0;
+  /**
+   * LYING DOWN ON A BED (LIE; `lieOn`): where her hip joints lie (world), and the way her feet point; how far lying she
+   * is (0 sitting on the edge .. LIE.seconds lying), and the spot kept while she sits up again after `lieOn(null)`.
+   */
+  type LieSpot = { x: number; y: number; z: number; yaw: number };
+  let lieSpot: LieSpot | null = null, lieLast: LieSpot | null = null, lieW = 0;
+  const lieHips = new THREE.Vector3(), lieQ = new THREE.Quaternion(), lieTurnQ = new THREE.Quaternion(), lieTipQ = new THREE.Quaternion(), lieFlipQ = new THREE.Quaternion(), lieAt = new THREE.Vector3();
+  const Y_UP = new THREE.Vector3(0, 1, 0);
   const sitOut: MutableJointTurn[] = [];
   const sitNow: SitPhase = { legs: 0, lean: 0, apart: [0, 0], lift: [0, 0], ahead: 0 };
   const hipsBefore = new THREE.Vector3(), hipsAfter = new THREE.Vector3(), hipsOther = new THREE.Vector3(), rootTurn = new THREE.Quaternion();
@@ -604,6 +612,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
    * the view); her glance at the seat now (0..1), her head bowed (0..1), her chest's twist (radians); her idle glances.
    */
   let sitSide = 1, sitUpHand: 0 | 1 = 0, sitLookFree = false, sitGlance = 0, sitBow = 0, sitTwist = 0, sitWasDown = false;
+  /** An OPEN sit, held this frame (sitFor(seconds, true): the mind's, as long as it wants): her glances keep coming. */
+  let sitOpenNow = false;
   const sitSeat = new THREE.Vector3();
   const idle = { left: 0, wait: 0, t: -1, hold: 0, side: 0, tip: 0, last: -1, share: 0 };
   const sitJob: [boolean, boolean] = [false, false];
@@ -831,6 +841,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   ];
   /** Her toes: the bone past each ankle (the ball of her foot), found from her bind; kept above the ground too. */
   const toeBones = [joints.ankleL, joints.ankleR].map((ankle) => motion.bind.findIndex((b) => b.parent === ankle)).filter((k) => k >= 0);
+/** The body file's own facing in her fit (a half turn if it was made facing -Z): lying keeps it. */
+const fitFlip = fit.rotation.y;
 const hipsInFit = fit.worldToLocal(bones[joints.hipL].getWorldPosition(new THREE.Vector3()).add(bones[joints.hipR].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5));
   // HER SHOULDER WIDTH (shoulder joint to shoulder joint, as she stands now): her feet stand this far apart, and a crab
   // step goes this far (footGround.ts)
@@ -1873,7 +1885,8 @@ if (uHideHead > 0.5) {
         back: shape.anklesAhead - SIT.tuck - standing.anklesAheadOfHips - standing.hipsAhead,
       };
     },
-    sitFor(seconds: number): void {
+    sitFor(seconds: number, open = false): void {
+      if (open) sitOpenNow = true;
       if (!sitAsked && sitT <= 0) {
         // (a new visit: which shoulder she glances over and which hand helps her up, at random; and where the seat is:
         //  its top, under where her hips will rest)
@@ -1890,6 +1903,13 @@ if (uHideHead > 0.5) {
     windedLook: () => (windedLookFree ? 0 : windedS),
     /** How far through sitting she is (0 standing .. 1 seated), and how far back and down it has her, metres: for tests. */
     sitInfo: () => ({ share: sitT / SIT.seconds, back: ground.seatBack, drop: ground.drop }),
+    sitShare: () => sitT / SIT.seconds,
+    lieOn(spot): void {
+      // (a new lie from standing: she sits on the bed's edge first, the seat worked out as for any seat)
+      if (spot && !lieSpot && lieW <= 0 && !sitAsked && sitT <= 0) heroine.sitFor!(LIE.holdSit);
+      lieSpot = spot ? { ...spot } : null;
+    },
+    lieInfo: () => lieW,
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
     soakSkin(): void { wetness.soak(); },
     bellyNow: () => body.belly,
@@ -2029,6 +2049,16 @@ if (uHideHead > 0.5) {
       // SITTING DOWN AND GETTING UP (sitPose.ts `sitPhase`, Joshua's diagram): the builder's sit laid over her by how
       // far down her hips are; her feet system then lowers her and moves her back onto the seat, her feet stepped
       // apart, drawn back under her knees and slid forward to rest as she settles (footGround.ts `seat`)
+      // LYING DOWN (LIE): asked, she keeps sitting on the bed's edge, and once seated lies back over LIE.seconds; let go,
+      // she sits up first, then gets up as from any seat (the last second of her sit: her bow, then up)
+      if (lieSpot) {
+        lieLast = lieSpot;
+        sitAsked = true; sitLeft = Math.max(sitLeft, LIE.holdSit);
+        if (sitT >= SIT.seconds) lieW = Math.min(1, lieW + frame.dt / LIE.seconds);
+      } else if (lieW > 0) {
+        lieW = Math.max(0, lieW - frame.dt / LIE.seconds);
+        sitAsked = true; sitLeft = Math.max(sitLeft, LIE.upAfter);
+      }
       if (sitAsked) {
         sitT = Math.min(SIT.seconds, sitT + frame.dt);
         if (sitT >= SIT.seconds) { sitLeft -= frame.dt; if (sitLeft <= 0) { sitAsked = false; sitLeft = 0; } }
@@ -2048,6 +2078,7 @@ if (uHideHead > 0.5) {
           const free = sitLeft - SIT_LOOK.bowBefore;
           idle.left = free >= SIT_LOOK.twoFrom ? 2 : free >= SIT_LOOK.glancesFrom ? 1 : 0;
           idle.wait = randomIn(SIT_LOOK.gapLeast, SIT_LOOK.gapMost); idle.t = -1;
+          if (sitOpenNow) { idle.left = 1; idle.wait = randomIn(SIT_LOOK.openGapLeast, SIT_LOOK.openGapMost); }
         }
         sitWasDown = seated;
         idle.share = 0;
@@ -2056,7 +2087,7 @@ if (uHideHead > 0.5) {
           if (idle.t < 0 && idle.left > 0) {
             idle.wait -= dt;
             const hold = randomIn(SIT_LOOK.holdLeast, SIT_LOOK.holdMost);
-            if (idle.wait <= 0 && sitLeft - SIT_LOOK.bowBefore >= length(hold)) {
+            if (idle.wait <= 0 && (sitOpenNow || sitLeft - SIT_LOOK.bowBefore >= length(hold))) {
               // (a spot, not the one she just looked at)
               let k = Math.floor(Math.random() * SIT_LOOK.spots.length);
               if (k === idle.last) k = (k + 1) % SIT_LOOK.spots.length;
@@ -2068,15 +2099,22 @@ if (uHideHead > 0.5) {
             idle.t += dt;
             const back = idle.t - SIT_LOOK.glide - idle.hold;
             idle.share = idle.t < SIT_LOOK.glide ? smooth(idle.t / SIT_LOOK.glide) : back < 0 ? 1 : 1 - smooth(Math.min(1, back / SIT_LOOK.glide));
-            if (back >= SIT_LOOK.glide) { idle.t = -1; idle.left--; idle.wait = randomIn(SIT_LOOK.gapLeast, SIT_LOOK.gapMost); }
+            if (back >= SIT_LOOK.glide) {
+              idle.t = -1; idle.left--; idle.wait = randomIn(SIT_LOOK.gapLeast, SIT_LOOK.gapMost);
+              // (an open sit: another, a while later, for as long as it is held)
+              if (sitOpenNow) { idle.left = 1; idle.wait = randomIn(SIT_LOOK.openGapLeast, SIT_LOOK.openGapMost); }
+            }
           }
         } else idle.t = -1;
         if (sitT <= 0) { sitLookFree = false; sitBow = 0; }
         if (sitLookFree) { sitGlance = 0; sitBow = 0; idle.share = 0; }
+        sitOpenNow = false; // (asked again next frame, if still held)
         // (her chest twists with her glance, the way she looks)
         sitTwist = SIT_LOOK.twist * DEG * sitSide * sitGlance;
       }
-      if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS);
+      // (lying, her legs straighten out of the sit as she swings them up onto the bed)
+      const lieS = smooth(lieW);
+      if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS * (1 - lieS * (1 - LIE.sitKept)));
       // (from the first moment, for her feet's step out, though her hips have not begun to go down)
       ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
       ground.seatSpread[0] = sitNow.apart[0]; ground.seatSpread[1] = sitNow.apart[1];
@@ -2190,12 +2228,38 @@ if (uHideHead > 0.5) {
           if (below > under) under = below;
         }
         if (under > 0) { fit.position.y += under / Math.max(1e-6, root.scale.y); fit.updateMatrixWorld(true); }
-      } else if (fit.rotation.x !== 0) { fit.rotation.x = 0; fit.position.z = 0; }
+      } else if (fit.rotation.x !== 0 && lieS <= 0) { fit.rotation.x = 0; fit.position.z = 0; }
+
+      // LYING ON HER BACK ON A BED (LIE): her whole body, as its pose and the sit leave it, swung round from the way she
+      // sat (her back to the bed) to lie along it, her feet toward its foot end, and tipped back flat, her hip joints
+      // carried from where the sit put them to the spot on the mattress. In her root's own frame: the turn about the
+      // upright, then the tip back about her left, then the body file's own facing (`fitFlip`); the place, the spot
+      // less where her hips stand in the fit (as she stands: by the end her legs are straight again), eased in from
+      // where her feet and her sit had the fit.
+      if (lieS > 0 && lieLast) {
+        root.updateMatrixWorld(true);
+        lieAt.set(lieLast.x, lieLast.y, lieLast.z);
+        root.worldToLocal(lieAt);
+        const turn = Math.atan2(Math.sin(lieLast.yaw - root.rotation.y), Math.cos(lieLast.yaw - root.rotation.y));
+        lieTurnQ.setFromAxisAngle(Y_UP, turn * lieS);
+        lieTipQ.setFromAxisAngle(X_AXIS, -(LIE.tip - LIE.incline) * lieS);
+        lieFlipQ.setFromAxisAngle(Y_UP, fitFlip);
+        lieQ.copy(lieTurnQ).multiply(lieTipQ).multiply(lieFlipQ);
+        lieHips.copy(hipsInFit).multiply(fit.scale).applyQuaternion(lieQ);
+        lieAt.sub(lieHips);
+        fit.position.lerp(lieAt, lieS);
+        fit.quaternion.copy(lieQ);
+        fit.updateMatrixWorld(true);
+      } else if (lieW <= 0 && lieLast) {
+        // (up again: her fit as it always is, facing the body file's own way)
+        lieLast = null;
+        fit.rotation.set(0, fitFlip, 0);
+      }
 
       // ...then her shoulders, turned further than her belly (shared out up her back), and her head, further than
       // her shoulders (her neck and skull). Each is a turn about the upright axis, laid over her pose.
       // (lying down or on all fours, none of this: her body faces the way it lies; her eyes and aim do the looking)
-      const upright = 1 - downS;
+      const upright = 1 - Math.max(downS, lieS);
       const bellyYaw = facing ? yawNow + legTwist.hips * upright : yawNow;
       const backTurn = (facing ? within(wrap(facing.shoulders - bellyYaw), BACK_TURN_MOST) * upright : 0) + sitTwist;
       // HER HEAD TURNS ABOUT HER TORSO (Joshua, 2026-11-20: "the left and right ended up on the twist axis... it's
@@ -2373,7 +2437,7 @@ if (uHideHead > 0.5) {
       // (and her hands on her knees while she is winded, instead)
       windedHands();
       sitHands();
-      bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0 && windedS === 0);
+      bellyHand.update(frame.dt, live ? live.kickAt : null, live ? live.kickDir : null, downS === 0 && windedS === 0 && lieW === 0);
       // Her hands on their jobs (handReach.ts), over the aim. A hand that cannot get there makes her lean in.
       reach.apply();
       // (a hand on its way to the seat or her thigh while she sits down or gets up does not make her lean in for it)

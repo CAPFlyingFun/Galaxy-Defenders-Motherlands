@@ -201,6 +201,9 @@ export function layBreathTable(u: BreathUniforms, rest: ArrayLike<number>, arm: 
   u.breath.value.w = marks.ribsLowest;
 }
 
+/** `breathVolumes`' arrays, kept between calls. */
+let volumeWork: Float32Array | null = null;
+
 /**
  * How much air each move sweeps at 1 m (m³ per metre, i.e. m²): over her skin's triangles (`rest` her points, rest
  * metres; `index` her triangles), each move's shape at a triangle's corners against the way the triangle faces, times its
@@ -208,7 +211,11 @@ export function layBreathTable(u: BreathUniforms, rest: ArrayLike<number>, arm: 
  * belly's is what her stomach holds beyond its room over `full`.
  */
 export function breathVolumes(u: BreathUniforms, rest: ArrayLike<number>, index: ArrayLike<number>): { chest: number; belly: number; full: number } {
-  const n = Math.floor(rest.length / 3), C = new Float32Array(n * 3), Bm = new Float32Array(n * 3), Fm = new Float32Array(n * 3), c = { x: 0, y: 0, z: 0 }, b = { x: 0, y: 0, z: 0 }, f = { x: 0, y: 0, z: 0 };
+  const n = Math.floor(rest.length / 3), c = { x: 0, y: 0, z: 0 }, b = { x: 0, y: 0, z: 0 }, f = { x: 0, y: 0, z: 0 };
+  // (each move's shape at her points, in arrays made once and refilled: 4.2 MB new at every laying of her breath, which a
+  // change of her belly lays again -- Joshua, 2026-11-24: "so belly changes don't churn memory on iPhone")
+  if (!volumeWork || volumeWork.length < n * 9) volumeWork = new Float32Array(n * 9);
+  const C = volumeWork.subarray(0, n * 3), Bm = volumeWork.subarray(n * 3, n * 6), Fm = volumeWork.subarray(n * 6, n * 9);
   for (let i = 0; i < n; i++) {
     breathShapeAt(u, rest[i * 3], rest[i * 3 + 1], rest[i * 3 + 2], c, b, f);
     C[i * 3] = c.x; C[i * 3 + 1] = c.y; C[i * 3 + 2] = c.z; Bm[i * 3] = b.x; Bm[i * 3 + 1] = b.y; Bm[i * 3 + 2] = b.z; Fm[i * 3] = f.x; Fm[i * 3 + 1] = f.y; Fm[i * 3 + 2] = f.z;
@@ -221,8 +228,11 @@ export function breathVolumes(u: BreathUniforms, rest: ArrayLike<number>, index:
     const bx = rest[k * 3] - rest[i * 3], by = rest[k * 3 + 1] - rest[i * 3 + 1], bz = rest[k * 3 + 2] - rest[i * 3 + 2];
     // (half the cross product: the triangle's area along the way it faces)
     const nx = (ay * bz - az * by) / 2, ny = (az * bx - ax * bz) / 2, nz = (ax * by - ay * bx) / 2;
-    let cs = 0, bs = 0, fs = 0;
-    for (const v of [i, j, k]) { cs += C[v * 3] * nx + C[v * 3 + 1] * ny + C[v * 3 + 2] * nz; bs += Bm[v * 3] * nx + Bm[v * 3 + 1] * ny + Bm[v * 3 + 2] * nz; fs += Fm[v * 3] * nx + Fm[v * 3 + 1] * ny + Fm[v * 3 + 2] * nz; }
+    // (its three corners written out: an array made for them at each of her triangles was 140 MB in ten steps of her belly)
+    const i3 = i * 3, j3 = j * 3, k3 = k * 3;
+    const cs = C[i3] * nx + C[i3 + 1] * ny + C[i3 + 2] * nz + (C[j3] * nx + C[j3 + 1] * ny + C[j3 + 2] * nz) + (C[k3] * nx + C[k3 + 1] * ny + C[k3 + 2] * nz);
+    const bs = Bm[i3] * nx + Bm[i3 + 1] * ny + Bm[i3 + 2] * nz + (Bm[j3] * nx + Bm[j3 + 1] * ny + Bm[j3 + 2] * nz) + (Bm[k3] * nx + Bm[k3 + 1] * ny + Bm[k3 + 2] * nz);
+    const fs = Fm[i3] * nx + Fm[i3 + 1] * ny + Fm[i3 + 2] * nz + (Fm[j3] * nx + Fm[j3 + 1] * ny + Fm[j3 + 2] * nz) + (Fm[k3] * nx + Fm[k3 + 1] * ny + Fm[k3 + 2] * nz);
     chest += cs / 3; belly += bs / 3; full += fs / 3;
   }
   return { chest: Math.abs(chest), belly: Math.abs(belly), full: Math.abs(full) };

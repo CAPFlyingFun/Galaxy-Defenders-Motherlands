@@ -79,7 +79,7 @@ export interface StandingSource {
   /** xyz per vertex. */
   readonly shaped: ArrayLike<number>;
   /** Each morph's name, its weight now, and a vertex's move at full weight (written into `out`). */
-  readonly morphs: readonly { readonly name: string; readonly weight: number; move(vertex: number, out: number[]): void }[];
+  readonly morphs: readonly { readonly name: string; readonly weight: number; move(vertex: number, out: number[]): void; readonly moves?: ArrayLike<number> | null }[];
   /** xyz per vertex, or null. */
   readonly push: ArrayLike<number> | null;
   /** Sparse fields laid in `shaped` now: `index` its vertices, `pos` xyz for each, at `weight`. */
@@ -110,7 +110,10 @@ export function standingShape(source: StandingSource, out?: Float32Array): Float
   const d = [0, 0, 0];
   for (const m of source.morphs) {
     if (!m.weight || !Number.isFinite(m.weight) || MOTION_SHAPES.has(m.name)) continue;
-    for (let v = 0; v < n; v++) { m.move(v, d); S[v * 3] += m.weight * d[0]; S[v * 3 + 1] += m.weight * d[1]; S[v * 3 + 2] += m.weight * d[2]; }
+    // (its moves read straight from their array where it has one: a call a point cost more than the sum)
+    const M = m.moves, w = m.weight;
+    if (M && M.length >= n * 3) { for (let i = 0; i < n * 3; i++) S[i] += w * M[i]; continue; }
+    for (let v = 0; v < n; v++) { m.move(v, d); S[v * 3] += w * d[0]; S[v * 3 + 1] += w * d[1]; S[v * 3 + 2] += w * d[2]; }
   }
   return S;
 }
@@ -230,6 +233,8 @@ export class LevelMesh {
   /** Which search last took each triangle in, and last reached it. */
   private readonly given: Uint32Array;
   private readonly reached: Uint32Array;
+  /** `normals`' sums over each welded point, made once and refilled */
+  private sums: Float64Array | null = null;
   private stamp = 0;
 
   /** `rest` xyz per vertex, `index` three vertices a triangle; two vertices within `weld` of the same place are one point. */
@@ -255,8 +260,9 @@ export class LevelMesh {
    * The way a surface with her triangles faces at each vertex (`space` xyz per vertex; unit normals, xyz per vertex):
    * her triangles' own, summed over each welded point, so the copies of a point along a texture seam face one way.
    */
-  normals(space: ArrayLike<number>): Float32Array {
-    const { point, index } = this, n = point.length, sum = new Float64Array((this.start.length - 1) * 3), out = new Float32Array(n * 3);
+  normals(space: ArrayLike<number>, into?: Float32Array): Float32Array {
+    const { point, index } = this, n = point.length, sum = this.sums ??= new Float64Array((this.start.length - 1) * 3), out = into && into.length === n * 3 ? into : new Float32Array(n * 3);
+    sum.fill(0); out.fill(0);
     for (let t = 0; t * 3 + 2 < index.length; t++) {
       const a = index[t * 3], b = index[t * 3 + 1], c = index[t * 3 + 2];
       if (!(a >= 0 && a < n && b >= 0 && b < n && c >= 0 && c < n)) continue;

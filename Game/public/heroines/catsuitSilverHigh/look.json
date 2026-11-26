@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "catsuitSilverHigh",
-  "bakedAt": "2026-11-24T00:25:11.402Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:28:41.236Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7136092394803955,
+  "barefootHeightMetres": 1.7002272408669494,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -40,13 +40,13 @@
       "sarahHair | sarahHair | 29764 triangles | skinned, 19145 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
-    "lowestPointOverTheFloorMetres": -0.013362774164863424,
-    "solesOverTheFloorMetres": -0.013362774164863424,
-    "crownOverTheFloorMetres": 1.700246465315532,
-    "pointsTheBuilderMoved": 71844,
-    "movedMostGeometryUnits": 0.1503160427614289,
+    "lowestPointOverTheFloorMetres": 7.24401853665196e-05,
+    "solesOverTheFloorMetres": 7.24401853665196e-05,
+    "crownOverTheFloorMetres": 1.700299681052316,
+    "pointsTheBuilderMoved": 51757,
+    "movedMostGeometryUnits": 0.15041494982917936,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16349034652433625,
+    "restSkinSpread": 0.16351130655826226,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -71,6 +71,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T01:11:44+00:00"
+    "packedAt": "2026-11-26T03:55:05+00:00"
   }
 }

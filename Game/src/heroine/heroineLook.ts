@@ -34,6 +34,9 @@ export interface HeroineLook {
     readonly random: { readonly rules: Record<string, never>; readonly groups: readonly never[] };
     readonly head?: unknown;
     readonly pregnancy?: unknown;
+    /** Her own LUNGS and HEART as an export of builder v0.9.76 and after keeps them (read by heroineVitals.ts `lungsOfSave`). */
+    readonly lungs?: unknown;
+    readonly heart?: unknown;
   };
   /**
    * Her clothes, exactly as an export has them (outfit name, painted layers, fabrics), or null to wear the builder's

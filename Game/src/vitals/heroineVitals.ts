@@ -31,7 +31,7 @@
 // It is pure numbers: no 3D, no page. The game steps it once a frame and reads
 // the results; her body (breathing rate, belly) and the display read from it.
 // ============================================================================
-import { PREGNANT_BREATH, STAMINA, beatOf, breathOf, peakHeart, pregnancyShare, restingVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
+import { PREGNANT_BREATH, STAMINA, beatOf, breathOf, heartDefault, lungsDefault, peakHeart, pregnancyShare, readHeart, readLungs, restingVitals, vitalsFor, type Vitals, type VitalsBody, type VitalsNow } from '@charb/actor/vitals';
 import { ABDOMEN_PLACE, RECTUM, STOMACH } from '@charb/actor/abdominalOrgans';
 import { BLADDER } from '@charb/actor/pelvicOrgans';
 import { eat as gutEat, GUT, gutNeeds, restingGut, stepGut, type GutNeeds, type GutState } from '@charb/actor/gut';
@@ -152,11 +152,14 @@ export const VITALS_TUNING = {
   training: { startFitness: 0.2, enduranceMore: 0.5, recoveryMore: 0.3, strengthEase: 0.15 },
   /**
    * HER OWN BODY (Joshua: "Equal starting endurance, individual physiology"): her weight, kg (a load is read against
-   * it), and her heart at rest and at her peak. A woman's peak 206 - 0.88 x her age (the builder's, Gulati 2010); a
-   * man's 208 - 0.7 x his age (Tanaka 2001). HER LUNGS are the builder's (Joshua: "Implement in CCBS"): until its vitals
-   * take a body's own lungs, every body breathes with its default ones.
+   * it). HER LUNGS AND HEART ARE THE BUILDER'S since v0.9.76 (Joshua: "Implement in CCBS"; Char_B actor/vitals.ts
+   * `Lungs`, `Heart`): a body's own (`HeroineBody.lungs`, `.heart`, as a character saved in the builder keeps them) or
+   * its sex's defaults (`lungsDefault`, `heartDefault`): hers the builder's BREATHING and HEARTBEAT (4.2 L, a breath
+   * 0.5 L, 80 L a minute at her hardest; 70 at rest, peak 206 - 0.88 x her age, Gulati 2010); his MALE_LUNGS and
+   * MALE_HEART (6.0 L, a breath 0.5 L, 120 L a minute at his hardest; 65 at rest, peak 208 - 0.7 x his age, Tanaka
+   * 2001). The game's own numbers for them, here until v0.2.175, were the same.
    */
-  body: { womanKg: 60, manKg: 80, womanRestHeart: 70, manRestHeart: 65, manPeakAt: 208, manPeakPerYear: 0.7 },
+  body: { womanKg: 60, manKg: 80 },
   /**
    * Her digestion against the clock: how many hours pass for her stomach in one real second. 1/240 means one
    * minute of play is a quarter of an hour for her gut, so a ten-minute mission is two and a half hours: long
@@ -319,13 +322,28 @@ export interface VitalsInput {
 }
 
 /**
- * HER OWN BODY for her vitals: the builder's (her age, how many weeks pregnant) and the game's (VITALS_TUNING.body):
- * a man (his heart and weight), her weight and her heart at rest if not the usual ones.
+ * HER OWN BODY for her vitals: the builder's (her age, how many weeks pregnant, her own LUNGS and HEART: VitalsBody
+ * `lungs`, `heart`) and the game's (VITALS_TUNING.body): a man (his weight, and his sex's lungs and heart when he has
+ * none of his own), her weight if not the usual one.
  */
 export interface HeroineBody extends VitalsBody {
   readonly male?: boolean;
   readonly bodyKg?: number;
-  readonly restHeart?: number;
+}
+
+/**
+ * A SAVED CHARACTER'S OWN LUNGS AND HEART: what an export of the builder keeps with its body (v0.9.76 and after:
+ * `lungs`, `heart`, each number held to its range by the builder's `readLungs`, `readHeart`), or, for a save from
+ * before or a number left out, its body's own (the male base body's for 'male-base', the female's otherwise).
+ */
+export function lungsOfSave(body: { readonly model?: string; readonly lungs?: unknown; readonly heart?: unknown }): Pick<HeroineBody, 'lungs' | 'heart'> {
+  const male = body.model === 'male-base';
+  return { lungs: readLungs(body.lungs, lungsDefault(male)), heart: readHeart(body.heart, heartDefault(male)) };
+}
+
+/** A body with its lungs and heart filled in: its own, or its sex's defaults (the builder's `lungsDefault`, `heartDefault`). */
+export function withOwnLungs(body: HeroineBody): HeroineBody {
+  return { ...body, lungs: body.lungs ?? lungsDefault(!!body.male), heart: body.heart ?? heartDefault(!!body.male) };
 }
 
 /** One reading of her vitals, for the display and for her body. */
@@ -485,10 +503,9 @@ export function feltForBreaths(which: 'start' | 'top', exertion: number): number
   return table[i] + (table[i + 1] - table[i]) * f;
 }
 
-/** A body's peak heart rate (VITALS_TUNING.body): a woman's by the builder's own formula, a man's by Tanaka's. */
+/** A body's peak heart rate by its own heart (the builder's `peakHeart`: a woman's 206 - 0.88 x her age, a man's 208 - 0.7 x his). */
 export function peakHeartOf(body: HeroineBody): number {
-  const b = VITALS_TUNING.body, age = clamp(body.age ?? 28, 12, 90);
-  return body.male ? b.manPeakAt - b.manPeakPerYear * age : peakHeart(age);
+  return peakHeart(body.age ?? 28, body.heart ?? heartDefault(!!body.male));
 }
 
 const MPH = 2.23694;
@@ -551,10 +568,12 @@ export class HeroineVitals {
 
   /**
    * `body`: her age in years and how many weeks pregnant she is (the builder's vitals add pregnancy's faster heart and
-   * deeper breaths from these), and the game's own (HeroineBody: a man, his weight, his heart at rest). Left out, the
-   * builder's own defaults and a woman's.
+   * deeper breaths from these), her own lungs and heart (left out, her sex's: `withOwnLungs`), and the game's own
+   * (HeroineBody: a man, his weight). Left out, the builder's own defaults and a woman's.
    */
-  constructor(private body: HeroineBody = {}) {
+  private body: HeroineBody;
+  constructor(body: HeroineBody = {}) {
+    this.body = withOwnLungs(body);
     this.pregnancy = pregnancyShare(body.weeks);
     this.staminaPoints = this.poolPoints();
     this.now = this.breathe(0, 0);
@@ -614,13 +633,11 @@ export class HeroineVitals {
     const start = vitalsFor(feltForBreaths('start', this.exertBreath), feltEnergy('start'), this.body);
     const top = vitalsFor(feltForBreaths('top', this.exertTop), feltEnergy('top'), this.body);
     const way = clamp(spent, 0, 1);
-    const air = {
-      breathsPerMinute: start.breathsPerMinute + Math.max(0, top.breathsPerMinute - start.breathsPerMinute) * way,
-      tidalL: start.tidalL + (top.tidalL - start.tidalL) * way,
-      inShare: start.inShare + (top.inShare - start.inShare) * way,
-    };
+    const breathsAir = start.breathsPerMinute + Math.max(0, top.breathsPerMinute - start.breathsPerMinute) * way;
+    const tidalAir = start.tidalL + (top.tidalL - start.tidalL) * way;
+    const air = { breathsPerMinute: breathsAir, tidalL: tidalAir, inShare: start.inShare + (top.inShare - start.inShare) * way };
     // her heart: her rest (and pregnancy's), her peak, the share of the reserve between, and its drift as she tires
-    const rest = (this.body.restHeart ?? (this.body.male ? T.body.manRestHeart : T.body.womanRestHeart)) + PREGNANT_BREATH.heart * this.pregnancy;
+    const rest = (this.body.heart ?? heartDefault(!!this.body.male)).restPerMinute + PREGNANT_BREATH.heart * this.pregnancy;
     const peak = Math.max(rest + 20, peakHeartOf(this.body));
     const driftWant = T.heartDrift.driftMost * spent * clamp(this.exertHeart / 0.5, 0, 1);
     this.vitals.drift += (driftWant - this.vitals.drift) * (1 - Math.exp(-h / T.heartDrift.driftSeconds));
@@ -635,7 +652,8 @@ export class HeroineVitals {
     const breath = breathOf(this.vitals.cycle, air.inShare);
     return {
       breathsPerMinute: breaths, beatsPerMinute: beats, tidalL: this.vitals.tidalL, breathL: this.vitals.tidalL * breath, breath,
-      beat: beatOf(this.vitals.pulse), inShare: air.inShare, effort: this.effort, energy: this.staminaPoints / Math.max(1e-9, this.basePoints()), felt: this.exertBreath,
+      beat: beatOf(this.vitals.pulse), inShare: air.inShare, airLPerMin: breaths * this.vitals.tidalL,
+      effort: this.effort, energy: this.staminaPoints / Math.max(1e-9, this.basePoints()), felt: this.exertBreath,
     };
   }
 

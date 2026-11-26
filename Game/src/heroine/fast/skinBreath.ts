@@ -31,7 +31,16 @@
 // model of her breath and heart.
 // ============================================================================
 import * as THREE from 'three';
-import { BREATH_GLSL, breathVolumes, createBreathUniforms, layBreathTable, type BreathUniforms } from '@charb/sarahlab/breathSkin';
+import { BREATH_GLSL, breathVolumes, createBreathUniforms, layBreathTable, type BreathMarks, type BreathUniforms } from '@charb/sarahlab/breathSkin';
+
+/**
+ * WHERE HIS BREATH'S MOVES ARE ANCHORED, the male base body's (rest metres: the top of his pubic bone, the bottom and
+ * top of his breastbone, his middle, the bottom of his rib cage at his sides): the builder's own numbers, measured on
+ * the skeleton laid in him (Char_B sarahlab/SarahLabScene.ts `MALE_BREATH_MARKS`, builder v0.9.76: "his skin breathes
+ * on his own landmarks"; kept there as a const the builder does not export, so its numbers are written here, as they
+ * are). Hers are its measured data (v2Pelvis, v2Thorax). Before v0.2.176 John breathed on hers.
+ */
+export const MALE_BREATH_MARKS: BreathMarks = Object.freeze({ pubisTop: 0.85004, xiphoid: 1.19362, sternumTop: 1.38610, midX: 0.00332, ribsLowest: 1.07166 });
 import { breathFlare, chestShare } from '@charb/actor/vitals';
 import { stomachGiveMl } from '@charb/actor/abdominalOrgans';
 import { KICKS } from '@charb/sarahlab/softBody';
@@ -77,8 +86,9 @@ export class SkinBreath {
   /**
    * @param meshToRest  her skin's own units to her rest frame: metres, her soles on the floor, facing +z
    * @param weeks       how many weeks pregnant she is (her lower ribs flare wider late in pregnancy)
+   * @param marks       where the moves are anchored: left out, hers (the builder's measured data); his for the male body
    */
-  constructor(meshToRest: THREE.Matrix4, weeks: number) {
+  constructor(meshToRest: THREE.Matrix4, weeks: number, private readonly marks?: BreathMarks) {
     this.toRest.value.copy(meshToRest);
     this.toUnits.value.setFromMatrix4(meshToRest).invert();
     this.uniforms.breath.value.z = breathFlare(weeks);
@@ -108,7 +118,7 @@ export class SkinBreath {
     for (let i = 0; i < position.length; i += 3) point.set(position[i], position[i + 1], position[i + 2]).applyMatrix4(m).toArray(rest, i);
     // the builder's own measuring: her trunk's width table (with its landmarks, from its own measured data), then
     // how much room each move sweeps
-    layBreathTable(this.uniforms, rest, this.armShare, {
+    layBreathTable(this.uniforms, rest, this.armShare, this.marks ?? {
       pubisTop: v2Pelvis.landmarks.symphysisTop[1],
       xiphoid: v2Thorax.xiphoid[1],
       sternumTop: v2Thorax.sternumTop[1],

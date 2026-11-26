@@ -134,7 +134,8 @@ async function builderHoops(
   const worn = wornParams(template.id, template.params as CoverageParams);
   const lists: (Float32Array | null)[] = [];
   for (const belly of bellies) {
-    const params = followedAt({ ...worn, follow: { front: 0, back: 0 } }, belly);
+    // (builder v0.9.75: a follow is read by the template's id, its offsets by each dial's own id)
+    const params = followedAt(template.id, { ...worn, follow: { rise: 0, riseBack: 0 } }, belly);
     // (is it a hoop at all? his 0% is not: no need to reshape her for it)
     if (!lowSpec(params, frame).hinge) { lists.push(null); continue; }
     progress(belly);

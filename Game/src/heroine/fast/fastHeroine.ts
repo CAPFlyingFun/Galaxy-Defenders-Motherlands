@@ -74,7 +74,7 @@ import { FINE_FROM_DETAIL, makeSkinMaterials, SUIT_KNITS, type ClothShine, type 
 import { addSkinTexture, loadSkinPictures, type SkinPictures } from './skinTexture';
 import { addSkinShine, shineUniforms, SkinWetness } from './skinShine';
 import { shapeWeightsAt } from './shapedBody';
-import { SkinBreath } from './skinBreath';
+import { MALE_BREATH_MARKS, SkinBreath } from './skinBreath';
 import { WALK_WEIGHT } from '@charb/actor/walkWeight';
 import type { LiveBody } from './liveBody';
 import { weekForBump } from '@charb/sarahlab/baby';
@@ -733,7 +733,8 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
     const held = new THREE.Matrix4().copy(skin.bindMatrixInverse).multiply(first.matrixWorld).multiply(skin.skeleton.boneInverses[0]).multiply(skin.bindMatrix);
     return new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(skin.matrixWorld).multiply(held);
   })();
-  const breath = new SkinBreath(meshToRest, look.manifest.weeks ?? weekForBump(body.belly));
+  // (his breath on his own landmarks, the builder's since v0.9.76; hers on hers)
+  const breath = new SkinBreath(meshToRest, look.manifest.weeks ?? weekForBump(body.belly), male ? MALE_BREATH_MARKS : undefined);
   const layBreath = (): void => breath.lay(body.points, fullIndex, skin, holdIndex, holdWeight);
   layBreath();
   breath.patch(materials.fine);

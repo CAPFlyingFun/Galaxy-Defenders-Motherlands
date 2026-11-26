@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "blazeSuit",
-  "bakedAt": "2026-11-23T20:36:00.121Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:22:36.703Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7003796373085023,
+  "barefootHeightMetres": 1.7002010890513433,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -48,11 +48,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.7164520774938687,
-    "pointsTheBuilderMoved": 51729,
-    "movedMostGeometryUnits": 0.1508153447282388,
+    "crownOverTheFloorMetres": 1.7162735292367097,
+    "pointsTheBuilderMoved": 51761,
+    "movedMostGeometryUnits": 0.15036442403572253,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16343655759112347,
+    "restSkinSpread": 0.16350318607708852,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -77,6 +77,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:14:28+00:00"
+    "packedAt": "2026-11-26T03:43:46+00:00"
   }
 }

@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryResearchSuit",
-  "bakedAt": "2026-11-23T22:25:18.741Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:33:24.795Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7137117630674805,
+  "barefootHeightMetres": 1.7002765487172504,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -44,11 +44,11 @@
       "sarahHair | sarahHair | 29764 triangles | skinned, 19145 points, attrs position/normal/uv/color/skinIndex/skinWeight, 1 shapes, map yes, vertexColors true, colour #ffffff, rough 0.62, side 2, patched true"
     ],
     "extraPieces": [],
-    "lowestPointOverTheFloorMetres": -0.013362774164863424,
-    "solesOverTheFloorMetres": -0.013362774164863424,
+    "lowestPointOverTheFloorMetres": 7.24401853665196e-05,
+    "solesOverTheFloorMetres": 7.24401853665196e-05,
     "crownOverTheFloorMetres": 1.700348988902617,
-    "pointsTheBuilderMoved": 71826,
-    "movedMostGeometryUnits": 0.15052148362746526,
+    "pointsTheBuilderMoved": 51748,
+    "movedMostGeometryUnits": 0.15052148362831444,
     "pointsWithChangedBones": 13408,
     "restSkinSpread": 0.1635134025568394,
     "captureMissing": {
@@ -75,6 +75,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:47:27+00:00"
+    "packedAt": "2026-11-26T04:12:43+00:00"
   }
 }

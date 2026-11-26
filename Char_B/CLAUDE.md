@@ -186,7 +186,8 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
     measured on her posed skin (`setFabricCutArms`): a flat ring round her arm in any pose. Looked up on her rest
     skin, the end ran ragged toward her armpit, where her arm's skin and her trunk's share points (MEASURED in her
     T-pose, a ringer's band);
-  - its HEM is level, at its LENGTH (the drape's band is the edge there).
+  - its HEM is at its LENGTH: painted since 2026-11-24, a stitched band inside it ("A painted shirt's hem, painted");
+    until then the drape's band was the edge there.
 - **A SAVED LOOK KEEPS ITS NUMBERS** (`paintTemplates.wornParams`): a tee saved with NECKLINE 94% opens at 94% (his
   three characters of 2026-11-14 do), and a field a template has gained since (a long sleeve's cuff) is the
   template's. Only a style picked afresh starts at his sheet's depth.
@@ -198,12 +199,11 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   his sheet): inside the cut's line, the top's own fabric a tenth darker with a seam. Each edge's band is shaded by ITS
   OWN distance: taken from the nearer of the neck's and the sleeve's, the shade's edge was drawn where the nearer one
   changed -- a dashed line 3 cm from the rim all round her collar (MEASURED, the ringer).
-  NONE AT A HEM YET. A shirt's hem is its drape's hem band (`tunicDrape.ts`): a sheet in the shirt's own fabric, solid
-  over the last 18 mm above the hem, which covers her skin's paint there. A band drawn on her skin at her hem (20 mm,
-  his sheet's stitched hem) showed only where that sheet dips under her skin -- MEASURED 2026-11-14 in the room: a grey
-  patch at her side in the top's own fabric, and, a pink tee with a red edging, chips of red at her side and hairlines
-  of it round her. To draw a stitched hem the drape's band has to draw it as well (a template may still ask for one:
-  `band.hem`).
+  A HEM'S BAND SINCE 2026-11-24, when a painted shirt's drape was taken off ("A painted shirt's hem, painted", below:
+  20 mm, `SHIRT_HEM_BAND`, in the shirt's own shade whatever its EDGING). Until then none: a shirt's hem was its drape's
+  hem band (`tunicDrape.ts`), a sheet in its own fabric over the last 18 mm above the hem, and a band drawn on her skin
+  there (20 mm) showed only where that sheet dipped under her skin -- MEASURED 2026-11-14 in the room: a grey patch at
+  her side in the top's own fabric, and, a pink tee with a red edging, chips of red at her side and hairlines of it.
 - **EDGING: one colour of its own for a top's bands, or MATCH** (Joshua, 2026-11-14: "for the collars and sleeve bands,
   are those colors also adjustable? So for example can pick a solid pink shirt with solid red color edging"). A drawn
   top's layer shows the editor's trim controls as EDGING: MATCH (the default: every look saved before wears its bands
@@ -276,7 +276,8 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   (above); and, seen from her side at her largest bust, a hairline and a sliver of her skin 3 cm long where the
   scoop's rim passes from the sheet onto her near breast (the sheet stands up to 44 mm off her there; from her front
   the two rims agree to 0.9 mm).
-- **A PAINTED SHIRT'S HEM: her paint ends at the hem band's own bottom edge, on a line that is straight across her
+- (UNTIL 2026-11-24, WHILE A PAINTED SHIRT WORE ITS DRAPE'S BAND: "A painted shirt's hem, painted", below.) **A PAINTED
+  SHIRT'S HEM: her paint ends at the hem band's own bottom edge, on a line that is straight across her
   biggest triangles** (a fault found and fixed; Joshua, 2026-11-14: "Go ahead and push then fix the issues you see";
   `tunicDrape.ts` `HEM_PAINT_ROWS`, `paintTemplates.templateCut`). MEASURED 2026-11-14 on v0.9.23 and on v0.9.24 alike:
   at her side, just above a painted shirt's hem, two chips of what is under the shirt (her leggings, or her skin), each
@@ -365,6 +366,103 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   `tests/topDetails.test.ts`, `tests/topCut.test.ts`, `tests/stylePictures.test.ts`; then the room: the four outlines
   from her front, three-quarter, side and back, and the sports bra's and the crop tee's hems at 0%.
 
+## The crop top, the maternity tee and the bandeau, drawn; two tees' hems follow her belly
+
+- **THEIR EDGES ARE DRAWN** (Joshua, 2026-11-23, his pictures on his phone of their painted edges: "For the cropped top,
+  it's jagged for some reason. (Fix)"; the maternity tee "had bad edges as well"; "Fix the Bandeau… only fix the ragged
+  edges… make it look better", with a picture of a bandeau). Until then all three were paint a value a vertex.
+  - THE CROP TOP AND THE MATERNITY TEE are tees whose hem is their own (`top: 'cropTee'`, as the boxy crop tee: level on
+    her as she is shaped, no drape under it), in the neck each was painted with: the crop top's a scoop at 0.86 (a crew
+    under 0.94 was painted as a scoop, `isScoop`), the maternity tee's a SQUARE at 0.94 (painted, a crew's line level
+    across her chest: wide and shallow). A look saved before keeps its numbers and wears that neck (`wornParams`).
+  - THE BANDEAU IS A TUBE (`topCut.BANDEAU`, `bandeauArms`, `top: 'bandeau'`; Joshua, 2026-11-24, with his picture of a
+    ribbed tube, its arms down over it: "the Bandeau should look the same on top as bottom… it's not even looking… like my
+    reference photo"; of an armhole cut under each arm, the hour after: "check the arms?… Think like a mini skirt wrap with
+    a top and bottom hem… yours only has a bottom and the side top has like a top cutout…"; 2026-11-23: "Make sure you do
+    with arms raise… let it ignore the arm weights and follow body level lines"): strapless, its hem its own. ITS TOP EDGE
+    IS LEVEL ALL ROUND HER, under her arms too, at its NECKLINE / TOP EDGE (`topFront` 0.82: 9.4 cm under her neck joint),
+    a stitched band inside its top edge and its hem alike (`BANDEAU.band`, 1.5 cm).
+    - IN THE ROOM ITS TOP EDGE IS TOLD WHERE HER BONES CARRY EACH POINT AS HER SHAPES AND MORPHS HAVE PUT IT (her raised
+      arms' shapes among them: `fabricMorphed`, laid straight after her morphs and before her breath and her soft body,
+      whose patch is laid on her first), taken back about her chest's bone (the vertex stage's `vFabricAlong` while
+      `fabricCutSide.w` is under 0; `setFabricCutChest`, laid each frame by `layCutArms` with `boneCarry('chest')`). So
+      the skin of her armpits, which her arms' bones carry, is in the tube while it is under its level and leaves it as her
+      arms lift it over: the edge stays a level line round her body. On the CPU (her paint a value a vertex, the tests) it
+      is her rest height. TRIED in her T-pose: her rest place and slip carried by her bones (a tab rose up the front of her
+      arm: her raised arms' shapes were left out); and her arm's skin carried out past her trunk's reach (read in the
+      vertex stage) put over it too (a notch into her armpit, toothed a triangle at a time).
+    - ITS ARMS ARE HERS: nothing of it further out from her middle than HER TRUNK REACHES there (`TopFrame.reach`, laid the
+      first time a bandeau asks -- a third of a second on the build machine -- from her trunk's vertices and the places of
+      the row of triangles joining her arm's skin to her trunk's that keep any of her trunk's share, spread, taken across
+      between the creases of her armpit, evened and 5 mm more: `SIDE_REACH`), read in a picture of her side at her rest
+      place, her left's in the cut picture's alpha and her right's in its green. So the tube goes into the creases of her
+      armpits and no further: her arm's front and back are bare. Told as a sleeve's end, with no band (`cutEdgeAt`).
+    Its sliders as they were (HEM / BELLY 0.56; NECKLINE / TOP EDGE moving front and back together); `topSide` and
+    `topBack` are not read by its drawn cut. MEASURED on her (`tests/topOutline.test.ts`): her areolas 18.9 mm under its top
+    edge; her trunk 4.8 mm and more inside its edge at her arms; the row's places with any of her trunk's share 2.6 mm and
+    more inside it, full list and light (so no edge is drawn along her triangles); her arm's skin 3 cm under her armpit
+    all bare. PICTURED in the room 2026-11-24 (light skin, 1x): at 0, 100 and 200% with her arms down from
+    her front, three-quarter, side and back, and in her T-pose from the four -- one level line round her, into the creases of
+    her armpits, and level through her armpit with her arms raised.
+    BEFORE: (2026-11-23) its top edge a line round her body by where a pixel stands round her (her map's `around`, her
+    side seam's depth as its picture's middle depth, `fabricCutRound`): his 0.82 over her front, eased from 0.7 round her
+    to 19 cm under her neck joint at her side seam and level there all round her back -- the band 13.7 cm deep in front
+    and 4 at her sides and back; (2026-11-24) level front and back with an ARMHOLE under each arm 7 mm clear of that row --
+    a notch down into each armpit from her three-quarter and her back, "a top cutout"; then her arm's skin in it out to a
+    fixed 14.5 cm from her middle -- tabs of it on the backs of her arms (most of that skin faces her front or her back,
+    MEASURED by its normals).
+- **THE BOXY CROP TEE'S AND THE MATERNITY TEE'S HEM FOLLOW HER BELLY, as the under-belly leggings' waistband does**
+  (Joshua, 2026-11-23, his five settings of each on Blaze, pictured; of the maternity tee: "I changed my mind… Yes,
+  follow the belly"). `paintTemplates.ts` `BELLY_FOLLOW` (a table of his settings for each following dial, by template:
+  `followDials`, `followedValues`), `followedAt(id, …)`, `withDialAt(id, …)`, `withFollow(id, …)`, and FOLLOWS BELLY on
+  each. HEM / BELLY: the boxy crop tee 0.29, 0.33, 0.42, 0.53, 0.59; the maternity tee 0.19, 0.12, 0.02, 0.02, 0.02 at
+  0, 50, 100, 150 and 200% (GAME TUNING, his). Their NECKLINE and SLEEVE stay where they are set. A follow keeps what a
+  slider moved each dial by under the dial's own id (`{ hem: … }`; v0.9.74's waistband's `front` / `back` still read).
+  AN OUTFIT THAT SETS ONE OF THOSE DIALS ITSELF -- the grey crop tee's hem (0.42) over his sheet's leggings and under the
+  skirts -- keeps the outfit's number at every size, as before; FOLLOWS BELLY puts it on his settings. MEASURED in the
+  room (light skin, 1x): the crop tee's HEM / BELLY read 0.29, 0.31, 0.33, 0.38, 0.42, 0.47, 0.53, 0.56, 0.59 at 0 to
+  200% by 25s, the maternity tee's 0.19, 0.15, 0.12, 0.07, 0.02 and 0.02 on; one laying (a hem's new cut drawn, her
+  paint laid) 64 to 77 ms on the build machine, at most every 250 ms while her belly is dragged.
+- After anything changes them: `tests/underBellyFollow.test.ts`, `tests/topOutline.test.ts`, `tests/topCut.test.ts`;
+  then the room: the bandeau at 0, 100 and 200% from her front, three-quarter, side and back; the two tees at 0 to 200%.
+
+## A painted shirt's hem, painted
+
+- **A PAINTED SHIRT HAS NO DRAPE: ITS HEM IS PAINTED, A STITCHED BAND INSIDE IT** (Joshua, 2026-11-24, of the henley's
+  hem band standing off her bump at 150 to 200%: "instead of trying to make it fit if yours having issues, can we
+  instead, add painted edges instead like we did with leggings and shirts sleeves?"; asked whether all of them or the
+  henley first: "let's do all for now… we can come back to it later if I want… but we do have the cloth simulation which
+  we could freeze as well"). `paintTemplates.PAINTED_SHIRT_DRAPE` is 'off': every drawn top with a LENGTH -- the tees, the
+  henley, the polo, the raglan, the wrap, the button-up, the tank, the camisole, the mock neck -- wears no drape's hem
+  band (`tunicDrape.ts`, kept for 'band' and 'full'), and its hem is its cut's own edge, drawn for each pixel
+  (`FabricCut.skinHem`, the shader's `fabricCutHem` 2).
+- **ITS LINE IS THE HIGHER OF TWO, ROUNDED WHERE THEY CROSS** (`fabricMaterial.SKIN_HEM_ROUND`, 2 cm; GAME TUNING):
+  level on her as she is shaped (a top's own hem's: her points' movement off her frame, `ownHem`, worked out down past
+  it), and ON HER SKIN, at its rest height on the skin it was put on, looked up through her skin's slip PULLED BACK
+  through her skin's own stretch (`pulledSlip.ts`), as a drawn bottom's waistband is -- laid while a painted shirt is
+  worn whether or not a drawn bottom is (`layLowSlip`). About her hips and her back the two are one; under a big bump
+  her skin's goes down with her bump to its underside. MEASURED 2026-11-24 in the room, the henley (light skin):
+  - level alone (the boxy crop tee's way): at 150% and 200% a level line across the lower third of her bump, under it
+    her leggings' grey;
+  - on her skin alone: the skin under her body file's bump goes back up her as her bump goes, and at 0% the hem rose
+    over her mound in a U some 5 cm high, her leggings' grey in it;
+  - the higher of the two: PICTURED (light skin; the henley at 0, 100, 150 and 200% from her front, three-quarter, side
+    and back, and seated at 0 and 200%; a plain tee at 0 and 200%): at 0% level round her, a stitched band inside it; from
+    100% her bump covered to its underside, the hem going under it and down round its sides, level round her hips and
+    back. Seated, it lies on her lap as paint does.
+- **A STITCHED BAND** (`topCut.SHIRT_HEM_BAND`, 20 mm, his sheet's stitched hem; GAME TUNING) inside its hem, in the
+  shirt's own fabric a shade darker ALWAYS: a top's EDGING colours its collar and its sleeves' bands, never its hem (a
+  raglan's or a ringer's hem is the body's colour; the shader's `fbe`). A template may say its own (`band.hem`): the
+  ringer's is none. The tops cut above a LENGTH's reach keep their own: the crop tees none, the sports bra its wide band.
+- WHAT WENT WITH THE DRAPE: a painted top to her hips worn over a skirt stood through it in chips at her hips (its
+  drape's band, which no skirt was told of: "The skirts", (d)); a painted shirt's paint taken off below the band's edge
+  (`HEM_PAINT_ROWS`: "A painted top, drawn"); seated, the drape's front rode up by its fabric's stretch.
+- NOT DONE, OFFERED: the maternity tee and the boxy crop tee keep their level hem (his settings on Blaze were set on it):
+  at 100% and over, the maternity tee's leaves a strip of what is under it below her bump.
+- After anything changes it: `tests/topOutline.test.ts` ("a painted shirt's hem is painted"), `tests/topDetails.test.ts`,
+  `tests/bottomCut.test.ts`, `tests/topCut.test.ts`; then the room: the henley and a tee at 0, 100, 150 and 200% from her
+  front, three-quarter, side and back, and seated.
+
 ## The cloth tops
 
 - **Ten of the painted tops as the cloth tee, ADDED beside them** (Joshua, 2026-11-16: "Can we instead convert all the
@@ -445,7 +543,7 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
     12 squared over its distance; the hem by its two side neighbours). (b) THE RING'S TOP EDGE WAVERS SEATED, 1 to 8 mm, at
     the small of her back (its heights there 78.4, 77.9, 78.6, 77.8 cm; standing it is smooth; on her full skin as well, and
     with each of her pose's fields switched off in turn). PLANNED: the drawn ring evened along itself, shrink-free (two
-    rounds of 0.5 and -0.53). (c) `SHEET_TAUT.most` (3 cm) is reached in two strides of six and seated. (d) A PAINTED TOP TO
+    rounds of 0.5 and -0.53). (c) `SHEET_TAUT.most` (3 cm) is reached in two strides of six and seated. (d) (GONE 2026-11-24 with a painted shirt's drape: "A painted shirt's hem, painted") A PAINTED TOP TO
     HER HIPS worn over a skirt: its hem band stands through the skirt in chips at her hips (a painted top's hem is its
     drape's band, which no skirt is told of). (e) Her shoes through the maxi's hem (below). (f) The points under her skin
     squatting (above).
@@ -1448,6 +1546,92 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   skin 6 mm at the most, a running breath 15 mm).
 - Her lungs, heart and the organs under her diaphragm are drawn from her vitals (`ThoraxView.drive`).
 
+## A character's own lungs and heart
+
+- **Each character breathes and beats by numbers of her own** (Galaxy Defender, for its Mary and John, 2026-11-25: "John,
+  on the male base body, breathes and beats exactly like Mary"; "Per-character lung settings, saved with the character
+  and in its JSON export, as customizable defaults (not fixed by sex)"; "Nothing about stamina or endurance changes").
+  `actor/vitals.ts` `Lungs` (total and vital capacity, a breath at rest, breaths a minute at rest, the biggest working
+  breath as a share of the vital capacity, the most air a minute, the most breaths a minute) and `Heart` (at rest, and
+  the peak's formula: its value at age 0 and its drop a year), taken by `vitalsFor` and `stepVitals` through
+  `VitalsBody.lungs` / `.heart` -- left out, the female body's. A pregnancy's changes are laid on top of them.
+  `vitalsFor` and `VitalsNow` say the air moved a minute (`airLPerMin`): over `mostLPerMin`, how hard breathing works.
+- **THE TWO BODIES' OWN** (exported for a game: `FEMALE_LUNGS`, `FEMALE_HEART`, `MALE_LUNGS`, `MALE_HEART`, `lungsDefault`,
+  `heartDefault`, `readLungs`, `readHeart`): the female body's are `BREATHING` and `HEARTBEAT`, number for number, and
+  her total 4.2 L; the male base body's are GDM's (GAME TUNING within physiology's: total 6.0 L, vital 4.7, a breath 0.5,
+  14 a minute, the biggest 55% of his vital capacity, 120 L a minute, 50 a minute; his heart 65 at rest, 208 - 0.7 x his
+  age, Tanaka 2001). Ranges in `LUNG_RANGE`, `HEART_RANGE`.
+- MEASURED: Mary to the last bit as before, with her numbers passed or left out (every felt effort and energy, weeks 0,
+  20 and 40, three ages; ten minutes of each activity stepped, two resting after): at rest 14 a minute, 0.5 L, 70; at her
+  hardest 46.9, 1.705 L, 80 L a minute, 181.4. John: at rest 14, 0.5 L, 65; at his hardest 46.4 a minute, 2.585 L, 120 L
+  a minute, 188.4 at 28 years; held there until spent, up to 124.5 L a minute as he empties (the quicker, shallower
+  breathing of spent energy, hers too: up to 82.4), 109.9 once spent. His effort and energy go exactly as hers at every
+  activity.
+- **KEPT WITH HER BODY** (`characterSaves` `SavedBody.lungs`, `.heart`, every number, written with each save, in its
+  export; `lungsOf`, `heartOf`: a save from before is its model's own). In the room, the Body tab's LUNGS & HEART:
+  each box blank until typed, her body's own in grey, a ↺ each and BODY'S OWN for all, and what they come to at her
+  hardest. What is typed is kept for each body, as her head is (`typedVitals`).
+- **HIS SKIN BREATHES ON HIS OWN LANDMARKS** (`SarahLabScene.ts` `MALE_BREATH_MARKS`, `breathMarksNow`): her breath's moves
+  are anchored on her bones' landmarks (src/data); his were hers until 2026-11-25. MEASURED on the skeleton laid in him
+  (the probe's `breathMarks`): the top of his pubic bone 2.0 cm lower than hers, the bottom of his breastbone 1.0 cm
+  lower and its top 1.8 cm higher, the bottom of his rib cage at his sides 1.6 cm lower. Kept as numbers, as hers are,
+  so his breath lays no skeleton. MEASURED in the room on him at his hardest: his skin sweeps 2,518 mL for 2,518 mL
+  breathed, 24 mm at the most (at the bottom of his breastbone; 4.9 mm at rest). PICTURED at his 0% from his side and
+  three-quarter, all out and all in.
+- **HIS DRAWN CHEST BREATHES BY HIS OWN SHARE** (`breathDepth`): a breath's share of the body's vital capacity, as that
+  share of hers; hers is the litres over 0.5 as before.
+- **NEVER CARRYING ON THE MALE BASE BODY** (a fault found 2026-11-25, `pregnancy.ts` `carryingFor`): her PREGNANT left on
+  and the body switched to his, he breathed with a pregnancy's numbers (16 a minute, 0.70 L, his heart 77 at rest), and
+  his navel and his balance took her weeks. MEASURED after, her PREGNANT still on: 14, 0.50 L, 65.
+- After anything changes them: `tests/lungsAndHeart.test.ts`, `tests/vitals.test.ts`, `tests/pregnantToggle.test.ts`,
+  `tests/characterSaves.test.ts`, `tests/characterExport.test.ts`; then the room: her vitals line at rest and her
+  hardest, MALE and his, and `breathCheck` on him.
+
+## Her skeleton and her bare feet, laid a slice at a time
+
+- **SNEAKERS · OFF LAYS HER SKELETON AND FITS HER BARE FEET OVER IT, AND THE ROOM GOES ON DRAWING** (a fault Joshua found,
+  2026-11-24: "pressing to turn off the sneakers causes the app to lock up for about 60s, then crash/restart afterwards").
+  Barefoot, her feet are fitted over her foot bones (`footCover.ts`), so her skeleton is laid (`skeletonInV2.ts`) if it is
+  not yet -- all of it, in one piece of work. MEASURED in the room as a phone (430 x 932, touch; the build machine):
+  140.6 s of the page doing nothing else, one task of 137 s.
+- WHAT IT COST, by the profile: her skin's depth at each of her bones' 45,112 points (six rays each and the nearest of
+  her triangles, `insideSkin.ts` `depthsInSkin`) every pass and every step of the fit; the distance to a triangle made a
+  function of its own at every call; Math.hypot (a dozen times a plain root: MEASURED, 2e7 of each); sorting thousands of
+  her points within 10 cm of each bone point for the four nearest; her feet's rounding hunting her points across a Map
+  of string keys.
+- NOW, WHAT IS LAID IS THE SAME: the rays' answer is kept for a point while it has moved less than it stood from her
+  skin (`RaysKept`); a cell, or a triangle's box, no nearer than the nearest found is passed over; the four nearest are
+  kept as they are found, the first found first among equals, as the sort had them; cells are numbers (`cellKey`); her
+  feet's points are read straight through memory, in the order they were summed; a plain root where Math.hypot was.
+  MEASURED against the old laying, number for number (the probe's `skeletonLaid`): her bare feet's field the same to the
+  last bit; her skeleton's 45,112 points 4,909 of them moved, by 0.055 mm at the most (a root's last bit tips a point at
+  its margin from one pass to the next), and so 4,275 of its weights by up to 0.027.
+- AND IT IS DONE A SLICE AT A TIME (`insideSkin.ts` `Steps`, `runSteps`; `SkeletonInV2.stepped`, `footCoverSteps`;
+  SarahLabScene's `inSlices`, `SLICE_MS`): each slice as long as the room took since the last, 12 to 100 ms (GAME
+  TUNING), so the room draws at about half its rate while her feet are fitted and never stops. MEASURED as above: its
+  work 18.8 s in 163 slices, the longest 347 ms (140.6 s in one before); on a phone, NOT MEASURED -- by the old laying's
+  minute there, some 8 s of work over twice that. Left off if another
+  laying, or another body, comes first. `new SkeletonInV2(...)` and `footCover(...)` still lay it at once (a probe's
+  relaying, the tests).
+- The probe's `skeletonLaid()`: her skeleton's points and weights and her feet's field as laid, how long it took, and
+  its slices' work.
+- After anything changes how her skeleton or her feet are laid: `tests/insideSkin.test.ts`, `tests/footCover.test.ts`,
+  `tests/herOwnSkeleton.test.ts`, `tests/sarahSkeleton.test.ts`; then the room as a phone: SNEAKERS · OFF, its time, its
+  longest slice, and `skeletonLaid()` against the laying before.
+- **HER BREATH'S ARRAYS ARE MADE ONCE AND REFILLED** (Joshua, 2026-11-24: "make them once, refill them so belly changes
+  don't churn memory on iPhone"). Her breath is laid again when her shape changes, at most twice a second (`layBreath`):
+  her standing shape and her rest places (`breathWork`, 1.4 MB each) and each move's shape at her points
+  (`breathSkin.ts` `volumeWork`, 4.2 MB) were new at every laying; so were a held stroke's surface's in the painters
+  (`levelWork`: her standing shape, its heights and its normals; `LevelMesh.normals`' sums). `tests/vitals.test.ts`
+  holds that a refilled laying says what a fresh one does. MEASURED 2026-11-24 in the room (every typed array of a
+  megabyte and more made, counted by where it is made, over ten 1% steps of her belly): none of her breath's or a held
+  stroke's after. FOUND THE SAME WAY, AND MADE ONCE SINCE: her opening's area's copies of her attributes
+  (`vulvaMesh.ts` `readExtras`: her attribute copied whole, and the area's own made new, at every change -- 29.6 MB in the
+  ten steps; now read where it is and the area's refilled) and her womb's wall field (`baby.ts` `wallField`, a 1.1 MB
+  grid for each new shape of her womb: 68 MB in the ten steps; now the last four wombs' grids are kept and a new womb
+  takes over the oldest's, `WALL_FIELDS_KEPT`, `tests/wallField.test.ts`) -- NEITHER COUNTED AGAIN. FOUND AND LEFT: her
+  rest shape's shift (4.6 MB) and her pulled slip's working (about 12 MB).
+
 ## Her organs
 
 - Her lungs, heart and diaphragm (`actor/thoracicOrgans.ts`); under her diaphragm her liver, gallbladder, spleen and
@@ -1927,8 +2111,11 @@ TRADDOMIUM, Beyond Extinction, TMB-Story, and future games").
   the top of her shoulder were big and counted as her arm's well onto her trunk -- her skin stood through the cloth in
   six-sided holes. MEASURED in the room with his tee's own settings (ease 0, neck 0.24), seated: holes on the light
   skin, none on the full one, none with her shoulders whole (`SHOULDER`: from 1.24 to 1.42 m, her arm's skin and what
-  is over 9 cm out from her middle). 143,640 triangles of her 208,592 (it was 127,704): her hands alone are some
-  33,000 -- the first saving to take if he allows them less.
+  is over 9 cm out from her middle). AND DOWN TO 1.18 M SINCE 2026-11-24 (a fault found in the bandeau's pictures, fixed
+  and told): thinned under 1.24, the row of triangles that joins her arm's skin to her trunk's at the back of her armpit
+  came 15 mm down into the bandeau's band, and in her T-pose its top edge was ragged along them; kept whole from 1.18 the
+  row is her full skin's, triangle for triangle (863). 146,172 triangles of her 208,592 (143,640 before, 127,704 at
+  first): her hands alone are some 33,000 -- the first saving to take if he allows them less.
 - A re-meshed body (Meshy, 6,737 points) was looked at and not used: another shape and pose, its points in other
   places, her face lost.
 - WORK ON THE LIGHT SKIN FIRST (`?probe=cloth&body=light`, 1x): what he approves there is applied to the full one.

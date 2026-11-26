@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryCasualTank",
-  "bakedAt": "2026-11-23T23:30:27.833Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:18:11.429Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7003421274863577,
+  "barefootHeightMetres": 1.70027654871725,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -34,23 +34,10 @@
   "band": {
     "colour": "#2b2c31"
   },
-  "hem": {
-    "aboveHips": -0.0038,
-    "colour": "#561029",
-    "knit": {
-      "family": "athletic",
-      "colour": 0,
-      "tint": "#551029",
-      "tileM": 0.04499,
-      "opacity": 1,
-      "roughness": 0.922
-    }
-  },
   "facts": {
     "drawnInTheRoom": [
       "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
-      "tunicDrape | MeshStandardMaterial | 7360 triangles | skinned, 8640 points, attrs position/normal/fabricRest/fabricRestNormal/color/drapeCut/skinIndex/skinWeight/jiggle/babyPush, 3 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
@@ -65,11 +52,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.7164145676717242,
-    "pointsTheBuilderMoved": 51734,
-    "movedMostGeometryUnits": 0.15069379625937154,
+    "crownOverTheFloorMetres": 1.7163489889026164,
+    "pointsTheBuilderMoved": 51749,
+    "movedMostGeometryUnits": 0.15052148362831444,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16348130127579524,
+    "restSkinSpread": 0.1635134025568394,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -94,6 +81,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:37:05+00:00"
+    "packedAt": "2026-11-26T04:07:26+00:00"
   }
 }

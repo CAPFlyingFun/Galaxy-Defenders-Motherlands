@@ -192,9 +192,10 @@ function casualLook(
   side?: { readonly on: number; readonly trunk: LiveBand['trunk'] },
   waist?: LiveWaist['keys'],
   /**
-   * Its shirt's hem: 'baked' the builder's drape baked as a piece (as in v0.2.162); 'band' a band the game makes as it
-   * makes her belt (`hemBand`); 'live' the builder's drape run live (`liveDrape`, held off until the builder's band
-   * touches her: see below).
+   * Its shirt's hem: 'baked' the builder's own hem as it bakes (since builder v0.9.75 PAINTED, a stitched band inside
+   * it; before, its drape baked as a piece, v0.2.162); 'band' a band the game makes as it makes her belt (`hemBand`,
+   * v0.2.163); 'live' the builder's drape run live (`liveDrape`). 'band' and 'live' need the builder's drape, which it
+   * no longer hangs on a painted shirt (paintTemplates.ts PAINTED_SHIRT_DRAPE 'off'): see below.
    */
   hem: 'baked' | 'band' | 'live' = 'baked',
 ): HeroineLook {
@@ -238,6 +239,13 @@ function casualLook(
     //   ending on that level line (bakeLook.ts `levelShirtHem`).
     // (Only a top with a length has one: the crop tees, M5 and M6, have none.) M3 first, then M1, M2 and M4 (Joshua,
     // 2026-11-23: "For now, only do M3"; of M3 with the band: "Looks great so far").
+    // - 'baked' AGAIN SINCE BUILDER v0.9.75 (v0.2.176; Joshua had the builder's agent change it, 2026-11-24: "can we
+    //   instead, add painted edges instead like we did with leggings and shirts sleeves?"; to the game's band he had said
+    //   "Do your belt edging until the other agent fixes it"): a painted shirt has NO DRAPE now; its hem is painted on
+    //   her skin, the higher of a level line and its line on her skin, with a 20 mm stitched band inside it in the
+    //   shirt's own shade (Char_B CLAUDE.md "A painted shirt's hem, painted"). Baked, it is paint like the rest of the
+    //   shirt: it rides her skin as her belly grows, as the builder's skin line does. The game's band needs the drape's
+    //   level line (bakeLook.ts `levelShirtHem`) and is kept for 'band' if the builder ever hangs one again.
     ...(hem === 'band' ? { noTunicDrape: true, hemBand: true } : hem === 'live' ? { noTunicDrape: true, liveDrape: true } : {}),
     ...(side ? { liveBand: { colour: painted[side.on].colour, layer: first + side.on, trunk: side.trunk } } : {}),
     ...(liveWaist ? { liveWaist } : {}),
@@ -292,7 +300,7 @@ export const MARY_CASUAL_TEE_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M1, 0
       leg: (p, knee) => any(outerLeg(p, 0.13, 0.95, () => 0.005), kneeRing(p, knee, { wide: 0.045, tall: 0.06, half: 0.004, lift: 0.005 })),
     }),
   },
-], { on: 0, trunk: sidePanel(0.005, 0.004) }, undefined, 'band');
+], { on: 0, trunk: sidePanel(0.005, 0.004) }, undefined, 'baked');
 
 /**
  * M2 EXPLORER TANK SET. The board's charcoal side panels on his burgundy tank (live, under its armholes), and on the
@@ -302,7 +310,7 @@ export const MARY_CASUAL_TANK_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M2, 
   { colour: T.charcoal, paint: painter({}) },
   { colour: T.lightGrey, paint: painter({ leg: (p) => any(thighCurve(p, 0.007), shinCurve(p, 0.007)) }) },
   { colour: T.tankBurgundy, paint: painter({ leg: (p) => outerLeg(p, 0.13, 0.95, () => 0.004) }) },
-], { on: 0, trunk: sidePanel(0.03, 0.018, 0.74) }, undefined, 'band');
+], { on: 0, trunk: sidePanel(0.03, 0.018, 0.74) }, undefined, 'baked');
 
 /**
  * M3 ZIP TOP & LEGGINGS (the henley). The board's violet shoulders and sleeves (down to his violet sleeve bands) and
@@ -322,7 +330,7 @@ export const MARY_CASUAL_HENLEY_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M3
       leg: (p) => Math.min(outerLeg(p, 0.13, 0.9, through([[0.13, 0.011], [0.47, 0.017], [0.9, 0.01]])), before(p, 0.91, 0.01)),
     }),
   },
-], { on: 0, trunk: sidePanel(0.028, 0.018) }, undefined, 'band');
+], { on: 0, trunk: sidePanel(0.028, 0.018) }, undefined, 'baked');
 
 /**
  * M4 UTILITY ROMPER (the polo and shorts). The board's orange: shoulders and sleeves (down to his orange sleeve bands),
@@ -346,7 +354,7 @@ export const MARY_CASUAL_POLO_LOOK: HeroineLook = casualLook(CASUAL_EXPORTS.M4, 
       leg: (p) => Math.min(outerLeg(p, -0.05, 0.2, () => 0.02), before(p, 0.23, 0.015)),
     }),
   },
-], { on: 0, trunk: sidePanel(0.026, 0.02) }, undefined, 'band');
+], { on: 0, trunk: sidePanel(0.026, 0.02) }, undefined, 'baked');
 
 /**
  * M5 CASUAL JACKET SET (the dark crop tee). The board's jacket colours: white over her shoulders and down the outside

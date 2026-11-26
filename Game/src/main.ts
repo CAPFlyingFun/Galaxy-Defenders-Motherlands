@@ -31,7 +31,7 @@ import { createPause, type Pause } from './ui/pauseMenu';
 import { CameraRig } from './camera/cameraRig';
 import { createStandInHeroine } from './heroine/standIn';
 import { NO_LIMITS, PACE_TUNING, Pace, type PaceLimits } from './input/pace';
-import { HeroineVitals, VITALS_TUNING } from './vitals/heroineVitals';
+import { HeroineVitals, VITALS_TUNING, lungsOfSave, type HeroineBody as VitalsBodyOf } from './vitals/heroineVitals';
 import { VitalsPanel } from './vitals/vitalsPanel';
 import { loadHeroineSettings, outfitLook, saveSetting, skinOilyOf, type HeroineSettings } from './heroine/heroineSettings';
 import type { IntakeAction } from './ui/hud';
@@ -94,8 +94,9 @@ const SIDE_WALK_MOST_FULL_TERM = 0.8;
 const SIDE_EFFORT = 1.25;
 /**
  * JOHN'S OWN BODY for his vitals (Joshua, 2026-11-25: "Equal starting endurance, individual physiology"): 32, a man's
- * heart (65 at rest, peak 208 - 0.7 x his age) and weight (vitals/heroineVitals.ts VITALS_TUNING.body). His lungs come
- * with the builder's lung settings (asked of its agent); his endurance starts the same as hers.
+ * weight (vitals/heroineVitals.ts VITALS_TUNING.body), and since builder v0.9.76 HIS OWN LUNGS AND HEART, the builder's
+ * (his look's saved body, or the male base body's own: 6.0 L, 120 L a minute at his hardest; 65 at rest, peak 208 -
+ * 0.7 x his age; `lungsOfSave`, filled in where his vitals are made). His endurance starts the same as hers.
  */
 const JOHN_BODY = { age: 32, weeks: 0, male: true } as const;
 import { CAMERA_STYLES, CAMERA_STYLE_NAMES, type CameraStyle } from './camera/cameraRig';
@@ -1014,7 +1015,9 @@ async function start(): Promise<void> {
     v.recovery = graphics.trainRecovery / 100; v.strength = graphics.trainStrength / 100;
     return v;
   };
-  let vitals = trainVitals(prologue ? new HeroineVitals(JOHN_BODY) : new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 }));
+  // (John's lungs and heart as his look keeps them: builder v0.9.76; hers are the female body's own)
+  const johnBody: VitalsBodyOf = { ...JOHN_BODY, ...lungsOfSave((await import('./heroine/looks')).LOOKS.john.body) };
+  let vitals = trainVitals(prologue ? new HeroineVitals(johnBody) : new HeroineVitals({ age: 28, weeks: heroine.weeks ?? 40 }));
   const firstOne: Character = { name: prologue ? 'John' : 'Blaze', body: bodyNow, vitals, kit: blazeKit, cam: null, autoFire: graphics.autoFire === 'on' ? 'on' : 'off', brain: null, port: null, needs: null, combat: null };
   if (prologue) john = firstOne; else blaze = firstOne;
   playing = firstOne;
@@ -1042,7 +1045,7 @@ async function start(): Promise<void> {
       const kit = makeKit(standIn(() => john?.body ?? body), x, z, turn.base);
       // (he starts in MANUAL whatever hers is: standing by in AUTO he would draw and fire the moment the game opens;
       //  swapped to, AUTO is set for him, and kept)
-      john = { name: 'John', body, vitals: trainVitals(new HeroineVitals(JOHN_BODY)), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
+      john = { name: 'John', body, vitals: trainVitals(new HeroineVitals(johnBody)), kit, cam: null, autoFire: 'off', brain: null, port: null, needs: null, combat: null };
       markStart('John made');
       if (island) body.setGround?.(island.standAt);
       body.setPosition(x, z, groundUnder(x, z));

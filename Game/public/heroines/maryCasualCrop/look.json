@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryCasualCrop",
-  "bakedAt": "2026-11-23T22:22:34.655Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:31:21.803Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7004586441458716,
+  "barefootHeightMetres": 1.7001461175431383,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -61,11 +61,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.716531084331238,
-    "pointsTheBuilderMoved": 51702,
-    "movedMostGeometryUnits": 0.15120501332977065,
+    "crownOverTheFloorMetres": 1.7162185577285047,
+    "pointsTheBuilderMoved": 51767,
+    "movedMostGeometryUnits": 0.15026932973465568,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.1631922015214084,
+    "restSkinSpread": 0.16347278823308042,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -79,7 +79,7 @@
     },
     "upperLidsAsBaked": 0.15,
     "liveBandPoints": 0,
-    "liveWaistPoints": 11245,
+    "liveWaistPoints": 11226,
     "albedoCoveredTexels": 7537150,
     "textureIslands": 317,
     "islandsShrunkTo": 0.8150525093078614
@@ -90,6 +90,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:43:20+00:00"
+    "packedAt": "2026-11-26T04:00:08+00:00"
   }
 }

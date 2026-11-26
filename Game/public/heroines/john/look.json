@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "john",
-  "bakedAt": "2026-11-23T23:38:40.583Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:30:35.667Z",
+  "builderVersion": "0.9.76",
   "belly": 50,
   "vertexCount": 123023,
-  "barefootHeightMetres": 1.7593295108916778,
+  "barefootHeightMetres": 1.7592559977530906,
   "navel": -3,
   "motion": {
     "walkBob": 100,
@@ -31,7 +31,6 @@
       "Mesh_0 | Material_0 | 221817 triangles | HER SKIN | skinned, 123023 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/_cloth_cover/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 2 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "finger-fills | finger-fills | 5137 triangles | skinned, 2797 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
       "cleavageBridge | MeshStandardMaterial | 1368 triangles | rigid under Mesh_0, 754 points, attrs position/normal/fabricRest/fabricRestNormal/fabricSlip/color, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
-      "tunicDrape | MeshStandardMaterial | 6560 triangles | skinned, 8400 points, attrs position/normal/fabricRest/fabricRestNormal/color/drapeCut/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false"
     ],
@@ -43,11 +42,11 @@
     ],
     "lowestPointOverTheFloorMetres": 0.0019189883587634338,
     "solesOverTheFloorMetres": 0.018545025080202837,
-    "crownOverTheFloorMetres": 1.7778745359718806,
+    "crownOverTheFloorMetres": 1.7778010228332934,
     "pointsTheBuilderMoved": 102055,
     "movedMostGeometryUnits": 0.036989296306057746,
     "pointsWithChangedBones": 3791,
-    "restSkinSpread": 0.13403380801576859,
+    "restSkinSpread": 0.15482675618716013,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -72,6 +71,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:53:03+00:00"
+    "packedAt": "2026-11-26T03:58:24+00:00"
   }
 }

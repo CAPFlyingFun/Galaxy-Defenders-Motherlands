@@ -1,11 +1,11 @@
 {
   "version": 1,
   "look": "maryCasualHenley",
-  "bakedAt": "2026-11-23T23:31:18.605Z",
-  "builderVersion": "0.9.74",
+  "bakedAt": "2026-11-26T03:16:40.043Z",
+  "builderVersion": "0.9.76",
   "belly": 10,
   "vertexCount": 115710,
-  "barefootHeightMetres": 1.7004781763379495,
+  "barefootHeightMetres": 1.7002272408669499,
   "navel": 20,
   "motion": {
     "walkBob": 200,
@@ -34,22 +34,10 @@
   "band": {
     "colour": "#2b2c31"
   },
-  "hem": {
-    "aboveHips": -0.0038,
-    "colour": "#acadb4",
-    "knit": {
-      "family": "athletic",
-      "colour": 1,
-      "tileM": 0.04499,
-      "opacity": 1,
-      "roughness": 0.922
-    }
-  },
   "facts": {
     "drawnInTheRoom": [
       "Mesh_0_1 | Material_0 | 201755 triangles | HER SKIN | skinned, 115710 points, attrs skinIndex/position/normal/uv/skinWeight/_cloth_cover/jiggle/babyPush/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
       "finger-fills | finger-fills | 7897 triangles | skinned, 4251 points, attrs position/normal/color/skinIndex/skinWeight, 0 shapes, map no, vertexColors true, colour #ffffff, rough 0.4, side 2, patched false",
-      "tunicDrape | MeshStandardMaterial | 7360 triangles | skinned, 8640 points, attrs position/normal/fabricRest/fabricRestNormal/color/drapeCut/skinIndex/skinWeight/jiggle/babyPush, 3 shapes, map no, vertexColors true, colour #ffffff, rough 0.9, side 2, patched true",
       "sneakerL | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sneakerR | MeshStandardMaterial | 16942 triangles | skinned, 9202 points, attrs position/uv/color/skinIndex/skinWeight/normal, 0 shapes, map yes, vertexColors true, colour #ffffff, rough 0.85, side 2, patched false",
       "sarahVulva | Material_0 | 10496 triangles | skinned, 6191 points, attrs position/normal/uv/skinIndex/skinWeight/jiggle/babyPush/color/fabricPaint/fabricRest/fabricRestNormal/fabricAux/fabricSlip/fabricDetail/fabricDetailN/fabricRegionTint, 20 shapes, map yes, vertexColors false, colour #ffffff, rough 1, side 2, patched true",
@@ -64,11 +52,11 @@
     ],
     "lowestPointOverTheFloorMetres": -5.970725671000876e-05,
     "solesOverTheFloorMetres": 0.016072440185366462,
-    "crownOverTheFloorMetres": 1.716550616523316,
-    "pointsTheBuilderMoved": 51649,
-    "movedMostGeometryUnits": 0.15174864031640697,
+    "crownOverTheFloorMetres": 1.7162996810523163,
+    "pointsTheBuilderMoved": 51758,
+    "movedMostGeometryUnits": 0.15041494982917936,
     "pointsWithChangedBones": 13408,
-    "restSkinSpread": 0.16261958260128767,
+    "restSkinSpread": 0.16351130655826226,
     "captureMissing": {
       "position": 0,
       "normal": 0
@@ -93,6 +81,6 @@
     "normal": "normal.ktx2",
     "surface": "surface.ktx2",
     "albedoSmall": "albedo-small.webp",
-    "packedAt": "2026-11-24T00:39:26+00:00"
+    "packedAt": "2026-11-26T04:03:58+00:00"
   }
 }

@@ -38,7 +38,7 @@ import {
   fabricFamily, matchSet as matchedSet, opacityOf, setMatches, swatchRect, tileUnits, trimPick, IMAGE_TILE_CM, type FabricChoice, type FabricFamilyId, type FabricLayout,
   type FabricPick, type FabricSet, type OutfitConfig, type PaintTool,
 } from './fabricLibrary';
-import { LOW_SLIP_ATTRIBUTE, ensureRest, fabricCutWorn, fabricFieldWorn, fabricLowWorn, fabricSlip, fieldCells, setArmSkin, setDetailKeep, setFabricCut, setFabricCutArms, setFabricLayer, setFabricLow, setFabricLowFold, setFabricLowFoldStretch, setFabricLowInner, setFabricLowLegs, setFabricLowMoon, setFabricLowSwing, setHang, setRegionOverlay, setUnder, type FabricCut, type FabricLayer, type FabricLow } from './fabricMaterial';
+import { LOW_SLIP_ATTRIBUTE, ensureRest, fabricCutWorn, fabricFieldWorn, fabricLowWorn, fabricSlip, fieldCells, setArmSkin, setDetailKeep, setFabricCut, setFabricCutArms, setFabricCutChest, setFabricLayer, setFabricLow, setFabricLowFold, setFabricLowFoldStretch, setFabricLowInner, setFabricLowLegs, setFabricLowMoon, setFabricLowSwing, setHang, setRegionOverlay, setUnder, type FabricCut, type FabricLayer, type FabricLow } from './fabricMaterial';
 import { FOLD_LINE, LOW_CUT, bandInner, bandStations, foldEase, foldLift, foldNear, foldOf, foldStretch, frontMoon, innerMoon, stationEdges, hoopInside, isDrawnBottom, legBlend, legPlanes, limbSkin, lowFrame, lowSpec, planeFront, planeShare, roomAt, swingOf, type BandPoint, type BandStations, type FrontMoon, type LowFrame, type LowLeg, type LowSpec } from './bottomCut';
 import { makePulledSlip, pulledSlipDriver, type PulledDriver } from './pulledSlip';
 import { MOTION_SHAPES } from './levelLine';
@@ -51,7 +51,7 @@ import type { DetailKeep } from './bodyDetail';
 import { DEFAULT_LAYER_DETAIL, DEFAULT_VULVA_KEEP, resolveDetail, resolveVulva, type LayerDetail, type ResolvedDetail } from './detailMaterials';
 import { BRUSH_RANGE_CM, BodyPaint, PAINT_LAYER_COUNT, packLayer } from './bodyPaint';
 import { LEVEL_LINE_OFFERED, lineModeLine, lineModeNote, nextLineMode, type LineMode } from './levelLine';
-import { BODY_REGIONS, REGION_GROUPS, groupOf, groupRegions, type BodyMap, type RegionSide } from './bodyRegions';
+import { BODY_REGIONS, REGION_GROUPS, groupOf, groupRegions, seamDepth, type BodyMap, type RegionSide } from './bodyRegions';
 import { CleavageBridge } from './cleavageBridge';
 import { TINT_BASE_COLOUR, readTint, tintLabel, tintPixels } from './fabricTint';
 import { keepUpload, pictureImage, pictureName } from './pictureStore';
@@ -59,7 +59,7 @@ import { HEM_LIFT_FLAT, HEM_LIFT_RIBBED, TunicDrape } from './tunicDrape';
 import { AUTO_DETAIL, type DetailOverride, type SavedClothes } from './characterSaves';
 import {
   BAND_SHADE, COVERAGE_DIALS, COVERAGE_TEMPLATES, DEFAULT_SHIRT_LENGTH, DRAWN_NECK, GARMENT_SETS, PIECE_KIND_NAMES, TEMPLATE_GROUPS, coverage, cutLayer, designedField, dialValue, dialsFor, paintedShirtLength, PAINTED_SHIRT_DRAPE, pieceKind, shirtHem,
-  templateCut, templateDetail, withDial, wornParams, canFollow, followedAt, withDialAt, withFollow, type CoverageDial, type CoverageParams, type DesignedField, type PieceKind,
+  templateCut, templateDetail, withDial, wornParams, canFollow, followDials, followedAt, withDialAt, withFollow, type CoverageDial, type CoverageParams, type DesignedField, type PieceKind,
 } from './paintTemplates';
 
 /** A drawn top's cut as the editor keeps it: what it is cut to (its key), the cut, and what is drawn on it. */
@@ -67,6 +67,8 @@ interface WornCut {
   readonly key: string; readonly cut: TopCut; readonly detail: TopDetailSpec | null;
   /** Its hem is the top's OWN edge -- above a LENGTH's reach, no drape's band over it: the sports bra, the boxy crop tee (`FabricCut.ownHem`). */
   readonly ownHem: boolean;
+  /** A painted shirt's (a LENGTH's) hem, with no drape's band over it since 2026-11-24, on her skin: `FabricCut.skinHem`, `PAINTED_SHIRT_DRAPE`. */
+  readonly skinHem: boolean;
 }
 
 export const FABRIC_PANEL_ROLE = 'sarahlab-fabric';
@@ -210,7 +212,7 @@ export interface FabricHooks {
    * her thigh's bone (her hip joint's), her shin's (her knee's) and her foot's (her ankle's) say where her leg's three
    * joints are (`fabricMaterial.setFabricLowLegs`).
    */
-  boneCarry?(mesh: THREE.Mesh, bone: 'shoulderL' | 'elbowL' | 'shoulderR' | 'elbowR' | 'hipL' | 'kneeL' | 'ankleL' | 'hipR' | 'kneeR' | 'ankleR', out: THREE.Matrix4): THREE.Matrix4 | null;
+  boneCarry?(mesh: THREE.Mesh, bone: 'chest' | 'shoulderL' | 'elbowL' | 'shoulderR' | 'elbowR' | 'hipL' | 'kneeL' | 'ankleL' | 'hipR' | 'kneeR' | 'ankleR', out: THREE.Matrix4): THREE.Matrix4 | null;
   /** An atlas, decoded, or null if it could not be fetched. */
   loadImage(path: string): Promise<(CanvasImageSource & { width: number; height: number }) | null>;
   /**
@@ -947,7 +949,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     p.checkpoint(i);
     // a shirt keeps the length chosen for shirts
     // (a waistband that follows her belly, at her belly's size)
-    const withLength = followedAt(params.length !== null ? withDial(params, 'length', shirtLength) : params, belly());
+    const withLength = followedAt(id, params.length !== null ? withDial(params, 'length', shirtLength) : params, belly());
     templates[i] = { id, params: withLength };
     p.setLayer(i, coverage(map, withLength, cutOf(withLength)?.cut ?? null));
     ensurePaintFabric(); refreshTargets(); touched();
@@ -961,7 +963,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     if (!body || !map?.rest || !map.joints) return null;
     if (frameOf?.mesh !== body) {
       const index = hooks.skinTriangles?.(body) ?? (body.userData.allIndices as ArrayLike<number> | undefined) ?? body.geometry.index?.array, J = map.joints;
-      const frame = index ? topFrame({ rest: map.rest, index, unitsPerMetre: hooks.unitsPerMetre?.(body) ?? hooks.unitsPerCm(body) * 100, facing: map.facing, joints: { neck: J.neck, hipL: J.hipL, hipR: J.hipR, shoulderL: J.shoulderL, elbowL: J.elbowL, wristL: J.wristL, shoulderR: J.shoulderR, elbowR: J.elbowR, wristR: J.wristR } }) : null;
+      const frame = index ? topFrame({ rest: map.rest, index, unitsPerMetre: hooks.unitsPerMetre?.(body) ?? hooks.unitsPerCm(body) * 100, facing: map.facing, joints: { neck: J.neck, hipL: J.hipL, hipR: J.hipR, shoulderL: J.shoulderL, elbowL: J.elbowL, wristL: J.wristL, shoulderR: J.shoulderR, elbowR: J.elbowR, wristR: J.wristR }, sideSeam: seamDepth(map), armSkin: (v) => Number.isFinite(map.arm[v]) }) : null;
       frameOf = { mesh: body, frame };
       for (const t of cutTextures.values()) t.dispose();
       cuts.clear(); cutTextures.clear(); wornCut = null;
@@ -1033,7 +1035,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       if (cuts.size >= 24) { const oldest = cuts.keys().next().value as string; cuts.delete(oldest); cutTextures.get(oldest)?.dispose(); cutTextures.delete(oldest); }
     }
     cuts.set(key, made);
-    return { key, cut: made.cut, detail: made.detail, ownHem: params.length === null && params.hemFront !== null && !hasNoHem(params) };
+    return { key, cut: made.cut, detail: made.detail, ownHem: params.length === null && params.hemFront !== null && !hasNoHem(params), skinHem: params.length !== null && PAINTED_SHIRT_DRAPE === 'off' };
   }
   /** A drawn top's layer beside its fabric: its bands, its EDGING and what is drawn on it. */
   const cutLayerOf = (worn: WornCut, c: FabricChoice) => ({ ...cutLayer(worn.cut), edging: edgingOf(c), detail: worn.detail ? { pack: worn.detail.pack } : null });
@@ -1053,14 +1055,20 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping; texture.generateMipmaps = false; texture.needsUpdate = true;
       cutTextures.set(key, texture);
     }
-    const arm = (a: TopFrame['arms'][number]) => sleevePlane(a, cut.spec.sleeve, U), S = cut.side ? cut.spec.outline?.side : null;
+    const arm = (a: TopFrame['arms'][number]) => sleevePlane(a, cut.spec.sleeve, U), S = cut.side ? cut.spec.outline?.side : null, B = cut.spec.bandeau;
+    // (a bandeau, a tube: the level of its top edge in place of a sleeve's end, carried each frame by her chest's bone, and
+    // its edges at her arms -- `topCut.BANDEAU`, `layCutArms`)
+    const level = B ? bandeauLevel(B.front) : null;
     return {
       texture, rect: [f.x0, f.y0, 1 / (f.cols * f.cell), 1 / (f.rows * f.cell)], depth: [f.zLo, f.zHi - f.zLo, cut.spec.sideBlend ?? TOP_CUT.sideBlend * U, TOP_CUT.range * U],
-      armL: arm(f.arms[0]), armR: arm(f.arms[1]), limb: [f.mid, cut.spec.sleeve, Number.isFinite(cut.spec.hemY) ? cut.spec.hemY : -1e9, f.facing], seam: [CUT_SEAM.dark, CUT_SEAM.halfWidth * U],
-      side: S ? [S.z0, S.gate, ARMSCYE.feather * U, ARMSCYE.join * U] : null, start: S && Number.isFinite(S.startY) ? [S.startX, S.startY, S.slope] : null,
-      ownHem: worn.ownHem,
+      armL: level ?? arm(f.arms[0]), armR: level ?? arm(f.arms[1]), limb: [f.mid, cut.spec.sleeve, Number.isFinite(cut.spec.hemY) ? cut.spec.hemY : -1e9, f.facing], seam: [CUT_SEAM.dark, CUT_SEAM.halfWidth * U],
+      side: S ? [S.z0, S.gate, ARMSCYE.feather * U, ARMSCYE.join * U] : B ? [B.z0, B.base, 0, -1] : null,
+      start: S && Number.isFinite(S.startY) ? [S.startX, S.startY, S.slope] : null,
+      ownHem: worn.ownHem, skinHem: worn.skinHem,
     };
   }
+  /** A bandeau's top edge as a level (her mesh's own space, at rest): a place p is `p . (the first three) + the fourth` over it. */
+  const bandeauLevel = (y: number): readonly [number, number, number, number] => [0, 1, 0, -y];
   /** A one-piece's or the catsuit's neck shape as it is worn: its own pick, else its outline's or its template's style; past the base of her neck, a turtleneck. */
   function neckShapeOf(p: CoverageParams): NeckStyle | 'turtle' {
     if (p.neckFront !== null && p.neckFront > 1) return 'turtle';
@@ -1087,7 +1095,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     const i = layer(), t = i >= 0 ? templates[i] : null, p = bodyPaint(), map = regionMap();
     if (!t || !p || !map) return;
     if (dial === 'length') shirtLength = paintedShirtLength(value);
-    templates[i] = { id: t.id, params: withDialAt(t.params, dial, value, belly()) };
+    templates[i] = { id: t.id, params: withDialAt(t.id, t.params, dial, value, belly()) };
     p.setLayer(i, coverage(map, templates[i]!.params, cutOf(templates[i]!.params)?.cut ?? null));
     sync(); draw(); touched();
   }
@@ -1096,7 +1104,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     const i = layer(), t = i >= 0 ? templates[i] : null, p = bodyPaint(), map = regionMap();
     if (!t || !p || !map || !canFollow(t.id)) return;
     p.checkpoint(i);
-    templates[i] = { id: t.id, params: withFollow(t.params, !t.params.follow, belly()) };
+    templates[i] = { id: t.id, params: withFollow(t.id, t.params, !t.params.follow, belly()) };
     p.setLayer(i, coverage(map, templates[i]!.params, cutOf(templates[i]!.params)?.cut ?? null));
     sync(); draw(); touched();
   }
@@ -1121,8 +1129,8 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     for (let i = 0; i < PAINT_LAYER_COUNT; i++) {
       const t = templates[i];
       if (!t?.params.follow) continue;
-      const q = followedAt(t.params, b);
-      if (Math.abs((q.riseFront ?? 0) - (t.params.riseFront ?? 0)) < 1e-4 && Math.abs((q.riseBack ?? 0) - (t.params.riseBack ?? 0)) < 1e-4 && Math.abs((q.riseSide ?? 0) - (t.params.riseSide ?? 0)) < 1e-4) continue;
+      const q = followedAt(t.id, t.params, b);
+      if (followDials(t.id).every((d) => Math.abs(dialValue(q, d) - dialValue(t.params, d)) < 1e-4)) continue;
       templates[i] = { id: t.id, params: q };
       p.setLayer(i, coverage(map, q, cutOf(q)?.cut ?? null));
       moved = true;
@@ -1275,7 +1283,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       if (follows) press(followButton, !!tpl!.params.follow);
       for (const [id, d] of dials) {
         d.wrap.style.display = used.includes(id) ? 'flex' : 'none';
-        if (tpl) { const v = dialValue(tpl.params, id); d.input.value = String(v); d.label.textContent = `${COVERAGE_DIALS.find((x) => x.id === id)!.name} · ${v.toFixed(2)}${tpl.params.follow && (id === 'rise' || id === 'riseBack') ? ' · follows belly' : ''}`; }
+        if (tpl) { const v = dialValue(tpl.params, id); d.input.value = String(v); d.label.textContent = `${COVERAGE_DIALS.find((x) => x.id === id)!.name} · ${v.toFixed(2)}${tpl.params.follow && (followDials(tpl.id) as readonly string[]).includes(id) ? ' · follows belly' : ''}`; }
       }
     }
     removeRow.style.display = (onLayer && kindOf(i)) || (!onLayer && !!hooks.takeOff) ? 'flex' : 'none';
@@ -1577,7 +1585,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     // about her frame as well (`FabricCut.ownHem`): the reach goes down past it, and is made again when one worn after
     // needs more than the last)
     const cutFrame = wornCut && frameOf?.mesh === body ? frameOf.frame : null;
-    const below = cutFrame && wornCut ? Math.max(CUT_SLIP_REACH_M.below * cutFrame.unitsPerMetre, wornCut.ownHem && Number.isFinite(wornCut.cut.spec.hemY) ? cutFrame.neckY - wornCut.cut.spec.hemY + CUT_SLIP_HEM_M * cutFrame.unitsPerMetre : 0) : 0;
+    const below = cutFrame && wornCut ? Math.max(CUT_SLIP_REACH_M.below * cutFrame.unitsPerMetre, (wornCut.ownHem || wornCut.skinHem) && Number.isFinite(wornCut.cut.spec.hemY) ? cutFrame.neckY - wornCut.cut.spec.hemY + CUT_SLIP_HEM_M * cutFrame.unitsPerMetre : 0) : 0;
     if (wornCut && fabricCutWorn(material) && (cutSlip?.mesh !== body || cutSlipBelow < below)) {
       const frame = cutFrame;
       if (frame) {
@@ -1624,7 +1632,13 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     if (!body || !worn) return;
     const material = Array.isArray(body.material) ? body.material[0] : body.material;
     if (!fabricCutWorn(material)) return;
-    const f = worn.cut.frame, sleeve = worn.cut.spec.sleeve;
+    const f = worn.cut.frame, sleeve = worn.cut.spec.sleeve, B = worn.cut.spec.bandeau;
+    if (B) {
+      // (a bandeau: its top edge told about her chest's bone, wherever that bone is -- `topCut.BANDEAU`)
+      const m = hooks.boneCarry?.(body, 'chest', carried) ?? null;
+      setFabricCutChest(material, m ? m.invert() : carried.identity());
+      return;
+    }
     const planes = f.arms.map((arm, k): readonly [number, number, number, number] => {
       const rest = sleevePlane(arm, sleeve, f.unitsPerMetre), side = k === 0 ? 'L' : 'R';
       const m = hooks.boneCarry?.(body, sleeve > arm.upper.length ? `elbow${side}` : `shoulder${side}`, carried) ?? null;
@@ -1649,8 +1663,10 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
     const body = hooks.body();
     if (!body) return;
     const material = skinMaterialOf(body), g = body.geometry as THREE.BufferGeometry;
-    if (!fabricLowWorn(material)) return;
-    const frame = lowOf?.mesh === body ? lowOf.frame : null, map = regionMap();
+    // (and while a painted shirt is worn: its hem is looked up by it too, `FabricCut.skinHem`)
+    const shirt = !!wornCut?.skinHem && fabricCutWorn(material);
+    if (!fabricLowWorn(material) && !shirt) return;
+    const frame = lowOf?.mesh === body ? lowOf.frame : shirt ? lowFrameNow() : null, map = regionMap();
     if (!frame || !map) return;
     if (painting && showingRegions) { if (lowSlip) lowSlip.laid = false; return; }
     if (lowSlip?.mesh !== body) lowSlip = lowSlipOver(body, frame, map);
@@ -2087,9 +2103,12 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
         let params = t.params.length !== null ? withDial(t.params, 'length', shirtLength) : t.params;
         if (want.cutout !== undefined) params = { ...params, cutout: want.cutout };
         if (want.neckShape) params = { ...params, neckShape: want.neckShape, neckFront: DRAWN_NECK[want.neckShape] };
-        // (an outfit's rise on a waistband that follows her belly is a move on top of his settings; then it is laid at her belly's size)
-        for (const [dial, value] of Object.entries(want.dials ?? {}) as [CoverageDial['id'], number][]) if (Number.isFinite(value)) params = withDialAt(params, dial, value, belly());
-        params = followedAt(params, belly());
+        // (a template that follows her belly is laid at her belly's size -- unless the outfit sets one of its following
+        // dials itself, the grey crop tee's hem over his sheet's leggings: that piece keeps the outfit's number at every
+        // size, as it always did, and FOLLOWS BELLY puts it back on his settings)
+        const own = Object.entries(want.dials ?? {}).filter(([, v]) => Number.isFinite(v)) as [CoverageDial['id'], number][];
+        for (const [dial, value] of own) params = withDial(params, dial, value);
+        params = own.some(([d]) => (followDials(t.id) as readonly string[]).includes(d)) ? withFollow(t.id, params, false, 0) : followedAt(t.id, params, belly());
         templates[i] = { id: t.id, params };
         p.setLayer(i, coverage(map, params, cutOf(params)?.cut ?? null));
         // (a drawn top's bands in a colour of their own: its trim, not matched)
@@ -2142,7 +2161,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       if (l) {
         // (what a look saved before its template gained a field does not say is the template's own: `wornParams`)
         // (and a waistband that follows her belly, at her belly's size)
-        const params = l.template ? followedAt(wornParams(l.template.id, l.template.params), belly()) : null;
+        const params = l.template ? followedAt(l.template.id, wornParams(l.template.id, l.template.params), belly()) : null;
         templates[i] = l.template && params ? { id: l.template.id, params } : null;
         p.setLayer(i, params ? coverage(map, params, cutOf(params)?.cut ?? null) : Float32Array.from(base64ToBytes(l.mask), (b) => b / 255));
         paintChoices[i] = l.choice;
@@ -2204,7 +2223,7 @@ export function fabricPanel(hooks: FabricHooks): FabricPanel {
       if (k?.laid && attr) for (const v of k.vertices) { longest = Math.max(longest, Math.hypot(attr.getX(v), attr.getY(v), attr.getZ(v))); narrowest = Math.min(narrowest, attr.getW(v)); widest = Math.max(widest, attr.getW(v)); }
       return {
         frame: { unitsPerMetre: frame.unitsPerMetre, mid: frame.mid, hipY: frame.hipY, trunk: frame.trunk, facing: frame.facing, legs: frame.legs.map((l) => ({ name: l.name, thigh: l.thigh, shin: l.shin })), middle: frame.middle.length, groin: frame.groin.length, crease: frame.crease ? Array.from(frame.crease) : null, fold: lowFold, band: lowBand?.mesh === body ? { stations: lowBand.stations.count, cuts: lowBand.stations.a.map((a) => a.length), lean: lowBand.stations.lean, ms: lowBandMs, told: lowBandTold } : null },
-        worn: fabricLowWorn(skinMaterialOf(body)),
+        worn: fabricLowWorn(skinMaterialOf(body)) || (!!wornCut?.skinHem && fabricCutWorn(skinMaterialOf(body))),
         layers: templates.map((t, i) => { const spec = t && paint?.has(i) && layerShown(i) && paintChoices[i].fabric ? lowOfParams(t.params) : null; return spec ? { template: t!.id, waist: spec.waist, end: spec.end, start: spec.start, bands: [spec.bands.waist, spec.bands.leg, spec.bands.top], edged: !!edgingOf(paintChoices[i]), hinge: spec.hinge, reach: spec.reach, swing: lowSwings[i], inner: lowInner[i] ? Array.from(lowInner[i]!) : null, stretch: lowStretch ? Array.from(lowStretch, (k) => +k.toFixed(3)) : null, moon: lowMoons[i] ? { width: lowMoons[i]![0].width, fill: lowMoons[i]![0].fill, edge: Array.from(lowMoons[i]![0].table), inner: Array.from(lowMoons[i]![1].table) } : null } : null; }),
         slip: k ? { points: k.points, vertices: k.vertices.length, laid: k.laid, pending: k.driver.pending, solved: k.driver.stats.solved, pulled: k.driver.stats.pulled, morphs: k.driver.stats.morphs.slice(), longest, across: [narrowest, widest] } : null,
       };

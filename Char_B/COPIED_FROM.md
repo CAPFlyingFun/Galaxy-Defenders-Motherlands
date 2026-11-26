@@ -1,6 +1,10 @@
 # Char_B: a copy of the Custom Character Builder System
 
-Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `00bb88e`
+Copied from `CAPFlyingFun/Custom-Character-Builder-System`, branch `main`, commit `0e66b62`
+(2026-11-25, v0.9.76: a character's own lungs and heart, `actor/vitals.ts` `Lungs`, `Heart`, `MALE_LUNGS`,
+`MALE_HEART`, passed through `VitalsBody.lungs` / `.heart`; the male base body never carrying; his skin breathing on
+his own landmarks; and since v0.9.75 a painted shirt's hem PAINTED with a stitched band, no drape, the bandeau a tube,
+her bare feet fitted a slice at a time). Before that: `00bb88e`
 (2026-11-23, v0.9.74: the under-belly leggings' waistband follows the belly slider by Joshua's five settings,
 `paintTemplates.ts` `UNDER_BELLY_FOLLOW`, `followedAt`). Before that: `941b8ea`
 (2026-11-23, v0.9.73: a face's details for every character, made for GDM's Mary and John: freckles, a two-tone iris,

@@ -294,7 +294,9 @@ use the game's single copy of three.js.
 - Outfits (Joshua, 2026-11-16): the first 3D armor "looks too boxy". Helmet, armor, guns and boots stay 3D
   pieces but must be reshaped to match the attire in his images; NO body paint until the armor matches. Some
   outfits show the bare belly (as his images do).
-- THE BUILDER, v0.9.74 (copied 2026-11-23 from its `main` 00bb88e at Joshua's word, "the other agent is pushing V0.9.74
+- THE BUILDER, v0.9.76 (copied 2026-11-25 from its `main` 0e66b62 at Joshua's word, "CCBS got updated": a character's
+  own LUNGS and HEART, `actor/vitals.ts` `Lungs`, `Heart`, `MALE_LUNGS`, `MALE_HEART`; since v0.9.75 a painted shirt's
+  hem PAINTED with a stitched band, no drape; see v0.2.176). Before that v0.9.74 (copied 2026-11-23 from its `main` 00bb88e at Joshua's word, "the other agent is pushing V0.9.74
   of CCBS now so you can use what it did for the leggings": the under-belly leggings' waistband follows the belly slider
   by his five settings, `paintTemplates.ts` `UNDER_BELLY_FOLLOW`; see v0.2.163). Before that v0.9.73
   (copied 2026-11-23 from its `main` 941b8ea at Joshua's word, "go ahead as well on the builder":
@@ -1507,7 +1509,8 @@ use the game's single copy of three.js.
   sprint by the stick): 30 / 42 / 48 / 50 breaths at 5 / 10 / 15 / 20 s, heart 126 / 155 / 167 / 171; on the island
   her slope read (-2.6% walking inland) and her effort followed; no errors.
   NOT YET: John's own LUNGS (the builder's agent is asked for per-character lung and heart settings in its vitals;
-  until then every body breathes with the default lungs, and John's breathing equals Mary's); earning fitness.
+  until then every body breathes with the default lungs, and John's breathing equals Mary's: DONE in v0.2.176, builder
+  v0.9.76); earning fitness.
 - v0.2.175: HER BREATHING CLIMBS WITH THE STAMINA SHE SPENDS (PLAN B), AND THE STAMINA BAR TAKEN OUT (Joshua,
   2026-11-25, of v0.2.174: "remove the bar from the text fields… I didn't ask for it", "the gauge style already had a
   circular gauge so no need for two of them"; "How about a reverse BrPM based on stamina remaining?... when you get to
@@ -1530,6 +1533,37 @@ use the game's single copy of three.js.
   empty (2:01). JOG 30 s 26 -> 25, at half (4 min) 30 -> 27, 30 at empty (8:19). Standing after a sprint to empty:
   +10 s 37 -> 44, +30 s 25 -> 28, +60 s 17 -> 17. Bent over (until her breathing is 28): after a jog 6.5 -> 9.5 s, a run
   16.6 -> 21.5 s, a sprint 21.5 (its most) in both; her paces come back at the same times.
+- v0.2.176: BUILDER v0.9.76, JOHN'S OWN LUNGS AND HEART, THE CASUAL SHIRTS' PAINTED HEMS, EVERY OUTFIT RE-BAKED (Joshua,
+  2026-11-25: "CCBS got updated", with its agent's report; "Go ahead and push when done… share screenshots"). (1) THE
+  BUILDER v0.9.76 (Char_B/COPIED_FROM.md: 66 files; see THE BUILDER above). Two calls changed with it: bakeLook.ts
+  `followedAt(template.id, …)` (a follow is read by template now) and VitalsNow's `airLPerMin` (the air a minute,
+  heroineVitals.ts `breathe`). (2) LUNGS AND HEART (heroineVitals.ts `withOwnLungs`, `lungsOfSave`, `peakHeartOf`;
+  VITALS_TUNING.body keeps only the weights): every body breathes by the builder's `vitalsFor` with ITS OWN LUNGS and
+  beats by ITS OWN HEART (`VitalsBody.lungs`, `.heart`): a saved character's own (an export of v0.9.76 keeps them; read
+  through the builder's `readLungs`/`readHeart`, held to its ranges), else its sex's defaults (`lungsDefault`,
+  `heartDefault`). JOHN (main.ts `johnBody`): his look's saved body, so today the male base body's (6.0 L, 0.5 L a breath
+  at rest, 120 L a minute at his hardest; 65 at rest, 208 - 0.7 x his age); Joshua can type his own in CCBS's Body tab
+  and export him. Her start and top tables (plan B) are still worked out for the DEFAULT lungs, so other lungs breathe
+  their own way at the same exertion. HIS SKIN BREATHES ON HIS OWN LANDMARKS (skinBreath.ts `MALE_BREATH_MARKS`, the
+  builder's numbers, which it does not export; fastHeroine.ts gives them to a male body's SkinBreath). MEASURED
+  (sim_physiology.ts and a scratch run): Mary to the last decimal as v0.2.175; John at rest 14 a minute and 65 beats,
+  breathing 5 s / half his pool / empty: jog 23.1 / 26.4 / 28.6, run 24.9 / 32.0 / 37.1, sprint 26.0 / 39.4 / 50 (Mary
+  24.1 / 27.4 / 29.7, 25.9 / 32.9 / 38, 27 / 39.9 / 50), his bigger breaths moving 69 / 89 / 121 L a minute at empty
+  (hers 47 / 60 / 80); his heart as before (154, 173, 181). His stamina and times as hers.
+  (3) THE CASUAL SHIRTS' HEMS, M1-M4 (casualSets.ts `hem` 'baked'): since v0.9.75 the builder hangs NO DRAPE on a painted
+  shirt (paintTemplates.ts PAINTED_SHIRT_DRAPE 'off'): its hem is painted, the higher of a level line and its line on her
+  skin, a 20 mm stitched band inside it in the shirt's own shade (Joshua had its agent do it, 2026-11-24: "can we instead,
+  add painted edges instead like we did with leggings and shirts sleeves?"; to the game's band: "Do your belt edging
+  until the other agent fixes it"). The game's band (v0.2.163) needs the drape's level line (bakeLook.ts `levelShirtHem`),
+  so with no drape it cannot be laid: M1-M4 now wear the builder's painted hem, baked as paint (it rides her skin as her
+  belly grows, as the builder's skin line does). The band's code is kept for 'band'. PICTURED (heroine lab, gear hidden,
+  10 / 100 / 200 %, three-quarter, side, back): a clean level hem at 10 %, under her bump from 100 %; its edge is only
+  as sharp as her picture (a slight step at 100 % on M3's light grey).
+  (4) EVERY OUTFIT RE-BAKED on v0.9.76 (his standing rule): all 29 looks (35-60 s each), skin heights, packed pictures
+  (41 min; the lowest 48.6 dB), all 180 thumbnails (36 looks); before and after pictured as two sheets (10 and 150 %):
+  the same but for M1-M4's hems. IN THE BUILT GAME (town, Mary in M3 and John, 932 x 430): at rest Mary 14.1 a minute
+  and 71 (week 12), John 14 and 65, his breaths 0.5 L; John sprinting 26.2 / 31.4 a minute at 5 / 10 s, 2.47 L a
+  breath; no errors.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

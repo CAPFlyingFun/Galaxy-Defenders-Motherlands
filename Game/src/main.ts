@@ -70,7 +70,7 @@ import { BreathSound, loadBreathVoice } from './audio/breathSound';
 // THE PROLOGUE (v0.2.153; Joshua's opening demo, Draft 1): its code is fetched only when it is the map (types here)
 import type { Tunnel } from './world/prologue/tunnel';
 import type { HomeScene } from './world/home/homeScene';
-import type { Mind } from './mind';
+import type { Interaction, Mind, MindWorld } from './mind';
 import { needsFromReading } from './world/home/mindBridge';
 import { KNEE_PILLOW, LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
 import type { HomeMindBody } from './world/home/homeMindBody';
@@ -1738,9 +1738,12 @@ async function start(): Promise<void> {
   // other (a Society: who is home, who is played, invitations to talk), and driving their own body through the game's
   // walk, sit and lie (world/home/homeMindBody.ts). The one played is 'manual' (the mind does nothing); the one standing
   // by is 'autonomous'. The old brain (src/npc/) is not run at home.
-  let homeWorld: unknown = null, homeSociety: unknown = null;
+  let homeWorld: MindWorld | null = null, homeSociety: unknown = null;
+  /** What the one played can do where they stand (mind/interact.ts), once the mind's module is in (home only). */
+  let interactionsNear: typeof import('./mind').interactionsNear | null = null;
+  let nearestInteraction: typeof import('./mind').nearestInteraction | null = null;
   if (home) {
-    const [{ Mind, Society, MARY_PROFILE, JOHN_PROFILE }, { HomeWorld }, { HomeMindBody }] = await Promise.all([
+    const [{ Mind, Society, MARY_PROFILE, JOHN_PROFILE, interactionsNear: near, nearestInteraction: nearest }, { HomeWorld }, { HomeMindBody }] = await Promise.all([
       import('./mind'), import('./world/home/homeWorld'), import('./world/home/homeMindBody'),
     ]);
     const world = new HomeWorld(home.layout);
@@ -1767,6 +1770,8 @@ async function start(): Promise<void> {
       c.mind = new Mind(profile, mb, world, society, { mode: c === playing ? 'manual' : 'autonomous' });
     }
     homeWorld = world; homeSociety = society;
+    interactionsNear = near;
+    nearestInteraction = nearest;
   }
   /** The game clock as a mind reads it. */
   const clockTime = () => ({ day: clock.day, hour: clock.hour, seconds: clock.totalSeconds });
@@ -1888,7 +1893,10 @@ async function start(): Promise<void> {
       else if (promptIs === 'table') useTable(which);
       else if (promptIs === 'grab') grabBar(which);
       else if (promptIs === 'door') useDoor(which);
+      else if (promptIs === 'home') useHome();
     },
+    // THE ⇄ AT THE PROMPT'S END: the next way of using what is here (SIT, WATCH TV, NAP...)
+    onPromptMore: () => { if (homeChoices.length > 1) homeChoiceAt = (homeChoiceAt + 1) % homeChoices.length; },
     // RELOAD: at the table, the table's reload (it refills her pouches too); anywhere else, from her belt
     onReload: () => {
       if (tableUse.canUse(motion.x, motion.z) && tableUse.needsReload) useTable('reload');
@@ -1943,8 +1951,21 @@ async function start(): Promise<void> {
   }
   /** The hands picked for the bar she is about to take hold of (kept while her guns go away first). */
   let grabWhich: 'both' | Hand = 'both';
-  /** What THE PROMPT is for this frame: the table, a bar, the door, or nothing. */
-  let promptIs: 'table' | 'grab' | 'door' | 'story' | null = null;
+  /** What THE PROMPT is for this frame: the table, a bar, the door, the story, at home what can be done here, or nothing. */
+  let promptIs: 'table' | 'grab' | 'door' | 'story' | 'home' | null = null;
+  /**
+   * AT HOME, WHAT THE ONE PLAYED CAN DO HERE (Joshua, 2026-11-26: "an interaction button when close to each other or
+   * like the sink, toilet, bed, etc, and manually do stuff (will still play programmed animations)"; mind/interact.ts):
+   * the ways of using the thing they face, or the other person to talk to; which of them the prompt shows (the ⇄ goes
+   * round them), and what they were (a new thing starts at its first way).
+   */
+  let homeChoices: Interaction[] = [];
+  let homeChoiceAt = 0;
+  let homeChoiceKey = '';
+  /** The one played is doing what they asked for at home (their mind runs it: walking, sitting, lying). */
+  const askedNow = (): boolean => !!playing?.mind?.asked && !!playing.mindBody;
+  /** Let go of what they asked for: the plan stopped, and they get up from where they sit or lie. */
+  const stopAsked = (): void => { playing?.mind?.stopNow(); playing?.mindBody?.release(); };
   /** She is side-stepping this frame (crab steps: her stamina pays a little more per metre). */
   let sideStepping = false;
   /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
@@ -1955,6 +1976,24 @@ async function start(): Promise<void> {
     // (that hand must be empty: its gun goes into its holster first, then she goes to the door)
     if (heroine.hands?.hasGun(hand) && holsterUse.hasHolsters) { holsterUse.start(hand); doorAfterHolster = hand; }
     else if (!heroine.hands?.hasGun(hand)) doorUse.start(motion.x, motion.z, hand);
+  }
+  /**
+   * THE PROMPT AT HOME: doing what it shows (their mind runs it as it does when they do it by themselves: mind.ts
+   * `doNow`), or, while they do it, letting go of it (STOP / GET UP). Their guns go into their holsters first.
+   */
+  function useHome(): void {
+    const mind = playing?.mind;
+    if (!mind) return;
+    if (mind.asked) { stopAsked(); return; }
+    const choice = homeChoices[homeChoiceAt];
+    if (!choice) return;
+    if (!mind.doNow(choice)) {
+      hud.showNotice(choice.activity === 'talk' ? `${choice.withName?.split(' ')[0] ?? 'They'} can't talk right now` : `Can't ${choice.word.toLowerCase()} right now`);
+      return;
+    }
+    if (heroine.hands && (heroine.hands.hasGun('left') || heroine.hands.hasGun('right')) && !holsterUse.busy && !beltReload.busy) holsterUse.holsterAll();
+    // (lying down is not for first person yet: the view goes to third person for it)
+    if (choice.activity === 'sleep' && rig.mode === 'first') toggleView();
   }
 
   hud.topSlot().appendChild(vitalsPanel.element);
@@ -2401,7 +2440,7 @@ async function start(): Promise<void> {
     // HER STANCE: what she is asked to be, and what it allows her (input/pace.ts `levelMost`, `speedMost`)
     {
       // (busy at the table, a bar or a door: she stands up for it)
-      if ((busyNow() || mustGoNow || bathroomLeft > 0) && stance !== 'stand') stance = 'stand';
+      if ((busyNow() || mustGoNow || bathroomLeft > 0 || askedNow()) && stance !== 'stand') stance = 'stand';
       heroine.setStance?.(stanceAsked());
       const st = heroine.stanceInfo?.();
       const c = Math.max(0, Math.min(1, pace.carrying));
@@ -2422,6 +2461,8 @@ async function start(): Promise<void> {
       }
       // (squatting for the bathroom: she stays where she is, and does not aim or fire)
       if (bathroomLeft > 0) { pace.speedMost = 0; stanceNoAim = true; }
+      // (AT HOME, seated, lying, or sitting down or getting up from what they asked for: still, no aim)
+      if (playing?.mindBody && ((heroine.sitShare?.() ?? 0) > 0 || (heroine.lieInfo?.() ?? 0) > 0)) { pace.speedMost = 0; stanceNoAim = true; }
       // (the story holding him still: the prologue's opening, in the dark)
       if (story?.locked) { pace.speedMost = 0; stanceNoAim = true; }
       // (going down on all fours: both guns are put away first, on the way down)
@@ -2465,6 +2506,19 @@ async function start(): Promise<void> {
         // (straight to her spot at a walk, the last step no further than the spot)
         const away = Math.hypot(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
         const toward = Math.atan2(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
+        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
+      } else motion.update(dt, 0, 0, turn.base, 0);
+    } else if (askedNow()) {
+      // AT HOME, DOING WHAT THEY ASKED FOR (the prompt: mind/interact.ts): their mind walks them, the way round the
+      // furniture (world/home/homeMindBody.ts), at a walk, as it walks the one standing by. The stick pushed lets go of
+      // it: from the next frame it is theirs again (sitting or lying, once they are up: HER STANCE above holds them).
+      heroine.setSideSteps?.(null);
+      pace.step(dt, 0, limits);
+      const walkTo = playing?.mindBody?.walkTo ?? null;
+      if (controls.moveX !== 0 || controls.moveY !== 0) { stopAsked(); motion.update(dt, 0, 0, turn.base, 0); }
+      else if (walkTo) {
+        const away = Math.hypot(walkTo.x - motion.x, walkTo.z - motion.z);
+        const toward = Math.atan2(walkTo.x - motion.x, walkTo.z - motion.z);
         motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
     } else if (rig.mode === 'third' && rig.style === 'drone') {
@@ -2556,6 +2610,27 @@ async function start(): Promise<void> {
     // (the story's prompt, where nothing else wants it: SCAN near markings in the prologue)
     const storyWord = story?.promptWord() ?? null;
     if (storyWord && !promptIs) { promptIs = 'story'; hud.setPrompt(storyWord); }
+    // (AT HOME, where nothing else wants it: what can be done here (mind/interact.ts), or, while they do what they
+    //  asked for, GET UP (seated or lying) or STOP)
+    if (!promptIs && playing?.mind && homeWorld && interactionsNear) {
+      const mb = playing.mindBody;
+      if (askedNow()) {
+        promptIs = 'home';
+        homeChoices = []; homeChoiceKey = '';
+        hud.setPrompt(mb && (mb.seated || (heroine.sitShare?.() ?? 0) > 0) ? 'GET UP' : 'STOP');
+      } else if (!busyNow() && !holstering && stance === 'stand' && bathroomLeft <= 0 && (heroine.sitShare?.() ?? 0) <= 0 && (heroine.lieInfo?.() ?? 0) <= 0) {
+        const other = bystander();
+        const others = other?.mind ? [{ id: other.mind.id, name: other.mind.profile.name, position: { x: other.kit.motion.x, z: other.kit.motion.z }, asleep: other.mind.asleep }] : [];
+        homeChoices = interactionsNear(homeWorld, playing.mind.id, { x: motion.x, z: motion.z }, rig.mode === 'first' ? rig.yaw : turn.base, others);
+        // (a new thing or person starts at its first way)
+        const key = homeChoices.map((c) => `${c.object?.id ?? c.with}:${c.word}`).join('|');
+        if (key !== homeChoiceKey) { homeChoiceKey = key; homeChoiceAt = 0; }
+        if (homeChoices.length) {
+          promptIs = 'home';
+          hud.setPrompt(homeChoices[homeChoiceAt].word, homeChoices.length > 1 ? `${homeChoiceAt + 1}/${homeChoices.length}` : null);
+        }
+      }
+    }
     hud.setHolster(busyNow() || holstering ? null : holsterUse.label());
     hud.setReload((atTable && tableUse.needsReload) || (!busyNow() && !holstering && beltReload.canStart));
 
@@ -2604,9 +2679,13 @@ async function start(): Promise<void> {
     //  Only AT A WALK (Joshua, 2026-11-18): faster, her body turns to run the way the stick sends her.
     // (SITTING ON HER TOILET she stays square to it, her head alone looking round, as at the table: src/world/toilet.ts)
     const seatedYaw = playing?.kit.toilet.inUse ? playing.kit.toilet.yaw : null;
-    turnInput.hold = doorUse.faceYaw() ?? seatedYaw ?? busyFace ?? (walkSides() ? rig.yaw : null);
+    // (AT HOME, doing what they asked for: their mind turns them to the seat, the sink, the bed, and holds them square
+    //  to it while they sit; where it looks (the screen) they look, in third person)
+    const askedBody = askedNow() ? playing?.mindBody ?? null : null;
+    if (askedBody && askedBody.lookYaw !== null && rig.mode === 'third') turnInput.look = askedBody.lookYaw;
+    turnInput.hold = doorUse.faceYaw() ?? seatedYaw ?? busyFace ?? askedBody?.holdYaw ?? (walkSides() ? rig.yaw : null);
     // (holding on in first person: her head alone turns, 90 degrees each way, the rest of her square: bodyTurn.ts `grip`)
-    turnInput.grip = busyFace !== null || seatedYaw !== null;
+    turnInput.grip = busyFace !== null || seatedYaw !== null || (askedBody?.seated ?? false);
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
@@ -2932,6 +3011,20 @@ async function start(): Promise<void> {
     for (const c of [blaze, john]) c?.kit.toilet.update(dt);
     // SHE CAN HOLD IT NO LONGER (mustGoNow): whatever she is doing, she lets go, her guns go away, and she goes
     if (mustGoNow && bathroomLeft <= 0) {
+      // (AT HOME there are real toilets: the nearest one, walked to and sat on as they do by themselves (mind.ts
+      //  `doNow`); whatever else they were doing there is let go first. The pop-up toilet only where there is none.)
+      const mind = playing?.mind;
+      const toilet = mind && homeWorld && nearestInteraction ? nearestInteraction(homeWorld, mind.id, { x: motion.x, z: motion.z }, 'toilet', 'USE TOILET', 'toilet') : null;
+      if (mind && toilet) {
+        if (mind.activity === 'toilet') mustGoNow = false;
+        else {
+          if (mind.asked) stopAsked();
+          // (once they are up from where they sat or lay)
+          if ((heroine.sitShare?.() ?? 0) <= 0 && (heroine.lieInfo?.() ?? 0) <= 0 && mind.doNow(toilet)) mustGoNow = false;
+        }
+      }
+    }
+    if (mustGoNow && bathroomLeft <= 0 && !(playing?.mind && homeWorld && nearestInteraction?.(homeWorld, playing.mind.id, { x: motion.x, z: motion.z }, 'toilet', 'USE TOILET', 'toilet'))) {
       if (grabUse.holding) grabUse.letGo();
       if (doorUse.holding) doorUse.letGo();
       // (anything she was about to do next is dropped)
@@ -2944,7 +3037,14 @@ async function start(): Promise<void> {
     // (wet: fully for WET_HOLD out of the water, then drying over WET_DRY)
     wetFor = waterDepthNow > 0.02 ? 0 : wetFor + dt;
     const wet = wetFor <= WET_HOLD ? 1 : Math.max(0, 1 - (wetFor - WET_HOLD) / WET_DRY);
-    vitals.step(dt, { speed: motion.speed * (sideStepping ? SIDE_EFFORT : 1), firing: shooting, threat, ground: island ? { x: motion.x, z: motion.z, y: island.groundAt(motion.x, motion.z) } : undefined, waterDepth: waterDepthNow, wet });
+    // (at home, what they asked for: seated or lying they rest, asleep their sleep, exercise felt as its walk or jog)
+    const playedBody = playing?.mindBody ?? null;
+    const playedWork = playedBody && playedBody.workload > 0 ? 1.1 + ((playedBody.workload - 0.3) / 0.3) * (2.64 - 1.1) : 0;
+    vitals.step(dt, {
+      speed: Math.max(motion.speed * (sideStepping ? SIDE_EFFORT : 1), playedWork), firing: shooting, threat,
+      ground: island ? { x: motion.x, z: motion.z, y: island.groundAt(motion.x, motion.z) } : undefined, waterDepth: waterDepthNow, wet,
+      seated: playedBody?.seated, asleep: playedBody?.asleep, sleepQuality: playedBody?.sleepQuality,
+    });
     const reading = vitals.reading;
     // THE ONE NOT BEING PLAYED: what they were doing carries on, and their brain runs them (Step 1 and 2)
     {
@@ -2952,7 +3052,8 @@ async function start(): Promise<void> {
       if (other) stepStandingBy(other, dt, threat);
       // (at home the one played keeps their own mind too, in 'manual': it plans nothing, but their feelings and their
       //  day's counts go on, and the one standing by finds them where they are to talk to)
-      if (playing?.mind) playing.mind.tick(dt, clockTime(), needsFromReading(playing.vitals.reading));
+      //  ... and what the player asks of them at home is run by it: their body asked first for the pose it keeps
+      if (playing?.mind) { playing.mindBody?.frame(dt); playing.mind.tick(dt, clockTime(), needsFromReading(playing.vitals.reading)); }
     }
     if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;
@@ -2986,8 +3087,10 @@ async function start(): Promise<void> {
             (other.body.lieInfo?.() ?? 0) > 0
               ? `🛌 ${((s: number): string => Math.abs(s) < 0.05 ? 'on the back' : Math.abs(s) > 0.95 ? `on the ${s > 0 ? 'left' : 'right'} side` : 'turning over')(other.body.lieSideNow?.() ?? 0)}`
               : `🚶 ${d.nav}${d.destination ? ` → ${d.destination}` : ''}`,
-            `⚖️ ${d.scores.slice(0, 3).map((x) => `${x.activity} ${Math.round(x.score)}`).join(' · ')}`,
+            `⚖️ ${d.scores.slice(0, 3).map((x) => `${x.short} ${Math.round(x.score)}`).join(' · ')}`,
             `🍽️ ${pc(n.food)} 💧 ${pc(n.water)} 🚽 ${pc(n.bathroom)} 🔋 ${pc(n.energy)}${n.asleep ? ' 💤' : ''}`,
+            // (what last went wrong, for 10 game minutes: Joshua could not tell that a meal kept failing)
+            ...(d.failed ? [`✗ ${d.failed.text} (${d.failed.when})`] : []),
           ];
         });
       } else if (other && other.brain && other.port && graphics.npcThoughts === 'on') {

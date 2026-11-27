@@ -27,6 +27,8 @@ export interface MindWorld {
   stock(objectId: string, kind: StockKind): number;
   /** take some: false if there is not enough */
   take(objectId: string, kind: StockKind, count?: number): boolean;
+  /** put some back (a meal taken out and not eaten: the plan failed on the way to the table) */
+  putBack(objectId: string, kind: StockKind, count?: number): void;
   /** a few spots to stand about in a room (wandering, a chat) */
   standSpots(room: string): readonly Vec2[];
   /** every room's id and name */
@@ -49,8 +51,12 @@ export interface MindBody {
   position(): Vec2;
   /** the pose they are in now (or getting into) */
   motion(): Motion;
-  /** walk toward `to` (round the home's walls), and face `facing` (compass yaw) once there; call again each frame */
-  goTo(to: Vec2, facing: number | null): MoveStatus;
+  /**
+   * walk toward `to` (round the home's walls), and face `facing` (compass yaw) once there; call again each frame.
+   * `within`: a person or a place to come NEAR, not onto (a talk, staying with someone): 'arrived' once this many
+   * metres from it the walking way (not through a wall), turned to face it.
+   */
+  goTo(to: Vec2, facing: number | null, within?: number): MoveStatus;
   stopMoving(): void;
   /** take a pose where they stand (sit back onto what is behind them, lie down, stand up); 'ready' once in it */
   pose(motion: Motion, facing: number | null): 'changing' | 'ready';

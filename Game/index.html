@@ -66,11 +66,19 @@
     background: linear-gradient(90deg, transparent, rgba(234, 242, 255, .34), transparent);
     transform: translateX(-110%); animation: splash-sweep 1.7s linear infinite; will-change: transform; }
   @keyframes splash-sweep { to { transform: translateX(400%); } }
-  /* Under the bar: what is loading (left) and the percentage (right); under that, the time left. */
+  /* OVERALL AND THE STEP'S OWN (Joshua, 2026-11-26: "We can do a overall% and per loading % so it's clear"): over the
+     bar, "Overall" and the whole load's percentage; under it, what is loading now with ITS OWN percentage (and its
+     megabytes, for a step that downloads) and a thin bar of its own; under that, the time left and the download. */
   .splash-line { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-top: 10px;
     font-size: 13px; letter-spacing: .03em; }
+  .splash-overall { margin: 0 0 6px; }
+  .splash-overall-label { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8fa3c8; }
   .splash-step { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .splash-percent { font-size: 17px; font-weight: 800; color: #5ee8c8; font-variant-numeric: tabular-nums; }
+  .splash-step-percent { font-size: 12px; font-weight: 700; color: #b6c6e6; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .splash-stepbar { height: 4px; margin-top: 5px; border-radius: 2px; background: rgba(16, 26, 46, .8); overflow: hidden; }
+  .splash-stepfill { width: 0%; height: 100%; border-radius: 2px; background: #8fa3c8; transition: width .25s ease-out; }
+  .splash-stepbar.is-unknown { visibility: hidden; }
   /* (its line keeps its height when it is empty, so nothing shifts when the time appears) */
   .splash-version { margin-top: 14px; font-size: 11px; letter-spacing: .08em; color: #5d6f94; text-align: center; }
   .splash-time { min-height: 1.4em; margin-top: 4px; text-align: left; font-size: 12px; letter-spacing: .03em; color: #8fa3c8; }
@@ -169,13 +177,18 @@
   <div class="splash-box">
     <div class="splash-kicker">GALAXY DEFENDERS</div>
     <div class="splash-title">MOTHERLANDS</div>
+    <div class="splash-line splash-overall">
+      <span class="splash-overall-label">Overall</span>
+      <span class="splash-percent" id="splash-percent">0%</span>
+    </div>
     <div class="splash-bar" id="splash-bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="splash-fill" id="splash-fill"></div>
     </div>
     <div class="splash-line">
       <span class="splash-step" id="splash-step">Starting…</span>
-      <span class="splash-percent" id="splash-percent">0%</span>
+      <span class="splash-step-percent" id="splash-step-percent"></span>
     </div>
+    <div class="splash-stepbar is-unknown" id="splash-stepbar"><div class="splash-stepfill" id="splash-stepfill"></div></div>
     <div class="splash-time" id="splash-time"></div>
     <div class="splash-bytes" id="splash-bytes"></div>
     <!-- the game's version (src/ui/versionTag.ts), so the one on the phone can be told at a glance -->
@@ -197,8 +210,10 @@
     <!-- LOADING, UPRIGHT (Joshua, 2026-11-17: let it load at first launch in portrait for a head start). It does load
          behind this cover; this shows how far along it is (filled in by src/ui/splash.ts, the same as the splash). -->
     <div class="rotate-loading rotate-load">
+      <div class="splash-line splash-overall"><span class="splash-overall-label">Overall</span><span class="splash-percent" id="rotate-percent">0%</span></div>
       <div class="splash-bar"><div class="splash-fill" id="rotate-fill"></div></div>
-      <div class="splash-line"><span class="splash-step" id="rotate-step">Starting…</span><span class="splash-percent" id="rotate-percent">0%</span></div>
+      <div class="splash-line"><span class="splash-step" id="rotate-step">Starting…</span><span class="splash-step-percent" id="rotate-step-percent"></span></div>
+      <div class="splash-stepbar is-unknown" id="rotate-stepbar"><div class="splash-stepfill" id="rotate-stepfill"></div></div>
       <div class="splash-time" id="rotate-time"></div>
       <div class="splash-bytes" id="rotate-bytes"></div>
       <div class="splash-version" id="rotate-version"></div>

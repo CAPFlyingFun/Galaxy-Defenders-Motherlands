@@ -25,7 +25,7 @@ import type { HeroineVitals } from '../../vitals/heroineVitals';
 import type { HomeLayout } from './homeLayout';
 import type { HomeNav } from './homeNav';
 import type { WalkerWalls } from './homeScene';
-import { DUVET_FROM_HEAD, DUVET_TOP, MATTRESS_TOP } from './homeScene';
+import { DUVET_FROM_HEAD, DUVET_TOP, MATTRESS_TOP } from './homeBlocks';
 import { foodMlForBar, waterMlBetween } from './mindBridge';
 
 /** What the game hands this body: its walk, its turning, its sitting and lying, its vitals. main.ts fills it in. */
@@ -156,9 +156,9 @@ export class HomeMindBody implements MindBody {
     return this.wanted === 'stand' ? 'stand' : this.wanted;
   }
 
-  goTo(to: Vec2, facing: number | null): MoveStatus {
-    // (a bed's spot is not walked to: its edge beside where her hips will lie is)
-    const found = this.slotAt(to);
+  goTo(to: Vec2, facing: number | null, within = 0): MoveStatus {
+    // (a bed's spot is not walked to: its edge beside where her hips will lie is; a person is walked up to, not onto)
+    const found = within > 0 ? null : this.slotAt(to);
     let dest = to, destYaw = facing;
     if (found && found.slot.motion === 'lie') {
       this.bed = this.bedPlan(found.object, found.slot);
@@ -166,7 +166,8 @@ export class HomeMindBody implements MindBody {
     }
     const using = found?.object.id ?? null;
     const here = this.hooks.position();
-    if (!this.pathTo || Math.hypot(this.pathTo.x - dest.x, this.pathTo.z - dest.z) > 0.01) {
+    // (a person walked up to moves: their way is asked again only once they have moved a third of a metre)
+    if (!this.pathTo || Math.hypot(this.pathTo.x - dest.x, this.pathTo.z - dest.z) > (within > 0 ? 0.3 : 0.01)) {
       // (a new place: its way, the thing there let through)
       const way = this.nav.path(here, dest, using);
       if (!way) return 'blocked';
@@ -177,6 +178,18 @@ export class HomeMindBody implements MindBody {
     // (on along the way: the next point, or the end)
     while (this.path.length > 1 && Math.hypot(this.path[0].x - here.x, this.path[0].z - here.z) < NEXT_WITHIN) this.path.shift();
     const end = this.path[this.path.length - 1];
+    // (NEAR, NOT ONTO: arrived once the walk left, and from its end to them, is no more than `within`: a metre from
+    //  someone on the sofa the walking way, never a metre off through a wall; turned to face them)
+    if (within > 0) {
+      let left = Math.hypot(this.path[0].x - here.x, this.path[0].z - here.z) + Math.hypot(end.x - to.x, end.z - to.z);
+      for (let i = 1; i < this.path.length; i++) left += Math.hypot(this.path[i].x - this.path[i - 1].x, this.path[i].z - this.path[i - 1].z);
+      if (left <= within) {
+        this.walkTo = null;
+        this.holdYaw = facing ?? Math.atan2(to.x - here.x, to.z - here.z);
+        this.pathTo = null; this.path = [];
+        return 'arrived';
+      }
+    }
     if (this.path.length <= 1 && Math.hypot(end.x - here.x, end.z - here.z) < ARRIVE_WITHIN) {
       this.walkTo = null;
       this.holdYaw = destYaw;

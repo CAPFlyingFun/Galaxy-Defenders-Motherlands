@@ -42,21 +42,25 @@ import { createProceduralSky, type Environment, type ProceduralSky } from '../is
 import { PopUpToilet } from '../toilet';
 import { FISHER_HOME, generateHome, type Doorway, type HomeLayout, type HomeSpec, type RoomKind, type WallPiece } from './homeLayout';
 import { HomeNav } from './homeNav';
+import { BODY_RADIUS, DUVET_FROM_HEAD, DUVET_TOP, HomeWalls, INNER_THICK, MATTRESS_TOP, OUTER_THICK, PILLOW_TOP, SEAT_TOP, doorBlock, objectBlock, wallBlock, type Block } from './homeBlocks';
 
 /** How high the walls and ceilings are, metres. */
 export const WALL_HEIGHT = 2.7;
 /** The top of a doorway; a window's sill and head. */
 const DOOR_TOP = 2.15, SILL = 0.9, WINDOW_HEAD = 2.15;
-/** How thick an outer and an inner wall is, metres. */
-const OUTER_THICK = 0.2, INNER_THICK = 0.12;
-/** A bed's mattress top over the floor, metres (its frame 0.3 high, the mattress 0.2 on it): where she lies. */
-export const MATTRESS_TOP = 0.5;
-/** A bed's duvet (over the foot 62 % of it) and pillows: their tops, metres over the floor (where a body lies on them). */
-export const DUVET_TOP = 0.555, PILLOW_TOP = 0.62;
-/** The duvet reaches from a bed's foot to this far from its head end, metres (to the pillows' front: a body lies on it). */
-export const DUVET_FROM_HEAD = 0.5;
-/** She is a circle this round, seen from above (her body about 0.25 m round, a little to spare). GAME TUNING. */
-export const BODY_RADIUS = 0.3;
+/** The beds' and seats' heights (homeBlocks.ts, where a body meets them: the headless simulation uses them too). */
+export { DUVET_FROM_HEAD, DUVET_TOP, MATTRESS_TOP, PILLOW_TOP, SEAT_TOP };
+
+/**
+ * THE CHAIRS' SEATS AND THE SOFA'S AND ARMCHAIRS' CUSHIONS, their tops over the floor, metres (v0.2.180). Measured with
+ * Mary seated by the prompt (her skin over each seat, front to back, every 5 cm): her body sits at its own seat height
+ * (fastHeroine.ts `seatFor`), and at the chairs' 0.49 and the cushions' 0.505 her seat went 1.3-2.2 cm and her thighs
+ * up to 4.1 cm into them. Now her seat and thighs are within 2 cm of the top (Mary at a 10 % belly 0.1-2.1 cm into it,
+ * at 150 % up to 2.9 cm over it at the back of a dining chair, John 1.7 cm into it at most): a cushion gives that much.
+ */
+const CHAIR_TOP = 0.465, CUSHION_TOP = 0.48;
+/** She is a circle this round, seen from above (homeBlocks.ts, where every wall and thing's box is made). */
+export { BODY_RADIUS };
 /** A sliding door opens when anyone comes this near its middle, and shuts this long after nobody is. GAME TUNING. */
 const DOOR_NEAR = 1.8, DOOR_SHUT_AFTER = 1.0;
 /** How long a door takes to slide fully open or shut, seconds. */
@@ -65,8 +69,8 @@ const DOOR_SECONDS = 0.45;
 const DOOR_BLOCKS_UNDER = 0.55;
 /** The camera keeps this far off a wall, metres. */
 const CAMERA_OFF_WALL = 0.15;
-/** The lawn reaches this far from the house's middle, and she may walk this far out. */
-const LAWN_HALF = 200, WALK_OUT = 30;
+/** The lawn reaches this far from the house's middle (she may walk homeBlocks.ts `WALK_OUT` out). */
+const LAWN_HALF = 200;
 
 /** Where a character starts, and which way they face. */
 export interface HomeStart {
@@ -213,74 +217,8 @@ class Batch {
 }
 
 // ---- WHAT STOPS HER: boxes turned the way they face ------------------------------------------------------------------
-
-/** A box on the floor: its middle, its half sizes across (x) and along (z) its own frame, and the way it faces. */
-interface Block {
-  readonly cx: number;
-  readonly cz: number;
-  readonly hx: number;
-  readonly hz: number;
-  readonly cos: number;
-  readonly sin: number;
-  /** solid only while this says so (a door: while it is shut) */
-  readonly solid?: () => boolean;
-  /** the camera keeps off it too (walls and doors, not furniture) */
-  readonly view: boolean;
-  /** the thing it is (furniture), or null (a wall, a door) */
-  readonly objectId: string | null;
-  /** a sliding door */
-  readonly door: boolean;
-  /** how far from its middle any of it reaches (a quick first test) */
-  readonly reach: number;
-}
-
-function block(cx: number, cz: number, w: number, d: number, facing: number, view: boolean, solid?: () => boolean, objectId: string | null = null): Block {
-  return { cx, cz, hx: w / 2, hz: d / 2, cos: Math.cos(facing), sin: Math.sin(facing), view, solid, reach: Math.hypot(w, d) / 2, objectId, door: !!solid };
-}
-
-/** HOME WALLS: her circle pushed out of every solid box, three times over so a corner between two lets her go. */
-class HomeWalls implements WalkerWalls {
-  /** the thing this walker is using now: its box lets them through */
-  ignore: string | null = null;
-  constructor(private readonly blocks: readonly Block[], private readonly middle: Vec2) {}
-
-  move(x: number, z: number, stepX: number, stepZ: number, out: GroundPoint): GroundPoint {
-    let nx = x + stepX, nz = z + stepZ;
-    for (let pass = 0; pass < 3; pass++) {
-      let moved = false;
-      for (const b of this.blocks) {
-        const dx = nx - b.cx, dz = nz - b.cz;
-        if (Math.abs(dx) > b.reach + BODY_RADIUS || Math.abs(dz) > b.reach + BODY_RADIUS) continue;
-        if (b.solid && !b.solid()) continue;
-        if (this.ignore !== null && b.objectId === this.ignore) continue;
-        // (into the box's own frame: its x across, its z the way it faces)
-        const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
-        const qx = Math.max(-b.hx, Math.min(b.hx, lx)), qz = Math.max(-b.hz, Math.min(b.hz, lz));
-        let px = lx - qx, pz = lz - qz;
-        const dist = Math.hypot(px, pz);
-        if (dist >= BODY_RADIUS) continue;
-        if (dist > 1e-6) {
-          const push = (BODY_RADIUS - dist) / dist;
-          px *= push; pz *= push;
-        } else {
-          // (her middle inside the box: out by the nearest side)
-          const toX = b.hx - Math.abs(lx), toZ = b.hz - Math.abs(lz);
-          if (toX < toZ) { px = Math.sign(lx || 1) * (toX + BODY_RADIUS); pz = 0; } else { px = 0; pz = Math.sign(lz || 1) * (toZ + BODY_RADIUS); }
-        }
-        // (back to the world: the inverse of the turn above)
-        nx += px * b.cos + pz * b.sin;
-        nz += -px * b.sin + pz * b.cos;
-        moved = true;
-      }
-      if (!moved) break;
-    }
-    // (out on the lawn, no further than WALK_OUT from the house)
-    const ox = nx - this.middle.x, oz = nz - this.middle.z, far = Math.hypot(ox, oz);
-    if (far > WALK_OUT) { nx = this.middle.x + (ox / far) * WALK_OUT; nz = this.middle.z + (oz / far) * WALK_OUT; }
-    out.x = nx; out.z = nz;
-    return out;
-  }
-}
+// (homeBlocks.ts: the boxes and a walker's walls are made there, from the layout alone, so the headless household
+//  simulation walks into the same chairs and tables)
 
 // ---- THE SLIDING DOORS -------------------------------------------------------------------------------------------------
 
@@ -358,8 +296,7 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
     piece('skirting', from, hi, 0, 0.08, thick + 0.012);
     piece('accent', lo, hi, 2.47, 2.5, thick + 0.012);
     // (what stops her: the whole piece, windows and all, and the camera)
-    const len = hi - lo, mid = (lo + hi) / 2;
-    blocks.push(alongX ? block(mid, line, len, thick, 0, true) : block(line, mid, thick, len, 0, true));
+    blocks.push(wallBlock(p));
   };
   for (const p of layout.walls) wallPiece(p);
 
@@ -417,8 +354,7 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
     const door: SlidingDoor = { doorway: dw, root, panel, side: localSide, open: 0, lonely: 99 };
     doors.push(door);
     // (a shut door stops her, and the camera)
-    blocks.push(alongX ? block(dw.at.x, dw.at.z, dw.width, thick, 0, true, () => door.open < DOOR_BLOCKS_UNDER)
-      : block(dw.at.x, dw.at.z, thick, dw.width, 0, true, () => door.open < DOOR_BLOCKS_UNDER));
+    blocks.push(doorBlock(dw, () => door.open < DOOR_BLOCKS_UNDER));
   }
 
   // ---- 5. THE THINGS, each in its own frame: +Z the way it faces, x across it, its middle on the floor --------------
@@ -444,7 +380,7 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         // (the pop-up toilet's own model, standing: its frame's middle is the floor under the sitter's hips, 6 cm in
         //  front of the toilet's middle)
         const t = new PopUpToilet();
-        t.show(o.at.x + Math.sin(o.facing) * 0.06, 0, o.at.z + Math.cos(o.facing) * 0.06, o.facing, 0.43);
+        t.show(o.at.x + Math.sin(o.facing) * 0.06, 0, o.at.z + Math.cos(o.facing) * 0.06, o.facing, SEAT_TOP);
         for (let k = 0; k < 4; k++) t.update(0.2);
         t.inUse = false;
         group.add(t.root);
@@ -488,11 +424,12 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         break;
       case 'diningChair':
       case 'deskChair': {
+        // (the seat's top at CHAIR_TOP, where her seat and thighs rest: measured, v0.2.180)
         const s = Math.min(w, d);
-        batch.box('chair', s, 0.06, s, 0, 0.46, 0, frame);
+        batch.box('chair', s, 0.06, s, 0, CHAIR_TOP - 0.03, 0, frame);
         batch.box('chair', s, 0.48, 0.05, 0, 0.72, -s / 2 + 0.025, frame);
         for (const [x, z] of [[-s / 2 + 0.03, -s / 2 + 0.03], [s / 2 - 0.03, -s / 2 + 0.03], [-s / 2 + 0.03, s / 2 - 0.03], [s / 2 - 0.03, s / 2 - 0.03]] as const) {
-          batch.box('graphite', 0.03, 0.43, 0.03, x, 0.215, z, frame);
+          batch.box('graphite', 0.03, CHAIR_TOP - 0.06, 0.03, x, (CHAIR_TOP - 0.06) / 2, z, frame);
         }
         break;
       }
@@ -515,7 +452,8 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         const seats = o.type === 'sofa' ? 3 : 1, arm = 0.18;
         batch.box('sofa', w, 0.42, d, 0, 0.21, 0, frame);
         const sw = (w - 2 * arm) / seats;
-        for (let k = 0; k < seats; k++) batch.box('cushion', sw - 0.04, 0.12, d - 0.26, -w / 2 + arm + sw * (k + 0.5), 0.48, 0.1, frame);
+        // (the cushions' tops at CUSHION_TOP, where a body's seat and thighs rest: measured, v0.2.180)
+        for (let k = 0; k < seats; k++) batch.box('cushion', sw - 0.04, 0.12, d - 0.26, -w / 2 + arm + sw * (k + 0.5), CUSHION_TOP - 0.06, 0.1, frame);
         batch.box('sofa', w, 0.5, 0.22, 0, 0.67, -d / 2 + 0.11, frame);
         for (const x of [-w / 2 + arm / 2, w / 2 - arm / 2]) batch.box('sofa', arm, 0.62, d, x, 0.31, 0, frame);
         break;
@@ -529,7 +467,7 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         solid = false;
         break;
     }
-    if (solid) blocks.push(block(o.at.x, o.at.z, w, d, o.facing, false, undefined, o.id));
+    if (solid) blocks.push(objectBlock(o));
   }
 
   batch.build(group, new Set<MaterialName>(['floorWood', 'floorWarm', 'floorTile', 'floorKitchen', 'floorPale', 'lawn', 'concrete', 'mattress', 'duvetMain', 'duvetGuest', 'duvetGuest2', 'cushion', 'wood', 'stone']));
@@ -546,16 +484,16 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
   const starts: Record<ActorId, HomeStart> = {};
   for (const [who, p] of Object.entries(layout.spawns)) starts[who] = { x: p.x, z: p.z, yaw: -Math.PI / 2 };
 
-  const walls = new HomeWalls(blocks, middle);
+  const walls = new HomeWalls(blocks, middle, layout.objects);
   const viewBlocks = blocks.filter((b) => b.view);
   // (the walk grid over the house and half a metre round it)
-  const nav = new HomeNav(blocks, { x0: origin.x - 0.5, z0: origin.z - 0.5, x1: origin.x + W + 0.5, z1: origin.z + D + 0.5 }, BODY_RADIUS);
+  const nav = new HomeNav(blocks, { x0: origin.x - 0.5, z0: origin.z - 0.5, x1: origin.x + W + 0.5, z1: origin.z + D + 0.5 }, BODY_RADIUS, layout.objects);
   return {
     group,
     layout,
     walls,
     nav,
-    walkerWalls: () => new HomeWalls(blocks, middle),
+    walkerWalls: () => new HomeWalls(blocks, middle, layout.objects),
     starts,
     keepClear(from, to) {
       // (a ray from the point the camera looks from to the camera, against each wall's box, grown by CAMERA_OFF_WALL

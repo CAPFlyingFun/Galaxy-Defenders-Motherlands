@@ -48,6 +48,14 @@
 // a device's first load, so then only what has arrived is told), and how fast they are arriving now (`bytesPerSecond`,
 // over the last 2 seconds). A file the phone already keeps (the game's offline copy) arrives at once and is counted
 // the same: what matters is that it is IN.
+//
+// THE STEP'S OWN SHARE (Joshua, 2026-11-26: "We can do a overall% and per loading % so it's clear"; `step` below):
+// how far through the step loading now this load is, beside the whole load's share. Last time's marks say where the
+// step began and where the next one did: a step that downloads (its files came to over a quarter of a megabyte last
+// time) is as far through as its bytes are, against last time's; any other (unpacking, building, a pause) is TIMED:
+// the seconds it has taken so far against the seconds it took last time (the one place a clock moves a number, and
+// only the step's own: the whole load's bar still moves only by marks and bytes). Not known (a first load, or a step
+// that was not there last time): none.
 // ============================================================================
 import { firstTimeRecord } from './loadFirstTime';
 
@@ -106,9 +114,24 @@ export interface LoadMeter {
   readonly bytesExpected: number | null;
   /** How fast bytes are arriving now, bytes a second (over the last 2 seconds). */
   bytesPerSecond(): number;
+  /**
+   * THE STEP LOADING NOW: how far through it (0..1, null when it cannot be told), and for a step that downloads, the
+   * bytes of it in so far against last time's (null for a step that does not).
+   */
+  stepProgress(): StepProgress;
   /** Everything the meter knows, for the test scripts and the curious (`gdm.meter.report()` with ?debug=1). */
   report(): LoadReport;
 }
+
+/** The step loading now (`LoadMeter.stepProgress`). */
+export interface StepProgress {
+  readonly fraction: number | null;
+  readonly bytes: number;
+  readonly bytesExpected: number | null;
+}
+
+/** A step that downloaded more than this last time is measured by its bytes; any other by the time along the load. */
+const STEP_BY_BYTES = 256 * 1024;
 
 export interface LoadReport {
   /** Which kind of load this is (see loadKind below): loads are only compared with loads of the same kind. */
@@ -278,6 +301,21 @@ export function startLoadMeter(kind: string, heldSeconds = 0): LoadMeter {
   const onHidden = (): void => { if (document.hidden) interrupted = true; };
   document.addEventListener('visibilitychange', onHidden);
 
+  /** The step loading now: where it began and ended in last time's load, its bytes then, and its bytes so far now. */
+  let stepNow: { from: number; to: number; bytesThen: number } | null = null;
+  let stepBytes = 0, stepBegan = 0;
+  /** Last time's step marks (and its end), in order: where each step began, ended, and the bytes downloaded in it. */
+  const stepsThen = new Map<string, { from: number; to: number; bytesThen: number }>();
+  {
+    let open: { name: string; from: number; bytesThen: number } | null = null;
+    for (const mark of last.marks) {
+      const isStep = mark[0].startsWith('step ') || mark[0] === 'done';
+      if (isStep && open) { if (!stepsThen.has(open.name)) stepsThen.set(open.name, { from: open.from, to: mark[1], bytesThen: open.bytesThen }); open = null; }
+      if (mark[0].startsWith('step ')) open = { name: mark[0], from: mark[1], bytesThen: 0 };
+      if (open) open.bytesThen += mark[2];
+    }
+  }
+
   const once = (name: string): string => {
     const count = (used.get(name) ?? 0) + 1;
     used.set(name, count);
@@ -315,6 +353,7 @@ export function startLoadMeter(kind: string, heldSeconds = 0): LoadMeter {
   /** `count` more bytes have arrived. */
   const counted = (count: number): void => {
     bytes += count;
+    stepBytes += count;
     const t = now();
     arrivals.push({ at: t, bytes });
     while (arrivals.length > 1 && t - arrivals[0].at > SPEED_WINDOW) arrivals.shift();
@@ -399,7 +438,22 @@ export function startLoadMeter(kind: string, heldSeconds = 0): LoadMeter {
     step(key: string, text: string): void {
       if (finished) return;
       label = text;
-      reach(once(`step ${key}`));
+      const name = once(`step ${key}`);
+      // (this step's place in last time's load, if it was there: its own share is measured against it)
+      stepNow = stepsThen.get(name) ?? null;
+      stepBytes = 0; stepBegan = now();
+      reach(name);
+    },
+
+    stepProgress(): StepProgress {
+      if (finished) return { fraction: 1, bytes: stepBytes, bytesExpected: null };
+      const s = stepNow;
+      if (!s) return { fraction: null, bytes: stepBytes, bytesExpected: null };
+      // (a step that downloads: its bytes against last time's; this time's may come to more, so never past 99 % until the next step)
+      if (s.bytesThen > STEP_BY_BYTES) return { fraction: Math.min(0.99, stepBytes / s.bytesThen), bytes: stepBytes, bytesExpected: Math.max(s.bytesThen, stepBytes) };
+      // (any other: its seconds so far against its seconds last time)
+      if (!(s.to > s.from)) return { fraction: null, bytes: stepBytes, bytesExpected: null };
+      return { fraction: clamp((now() - stepBegan) / (s.to - s.from), 0, 0.99), bytes: stepBytes, bytesExpected: null };
     },
 
     hold(): void { if (heldFrom === null) heldFrom = performance.now() / 1000; },

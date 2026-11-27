@@ -30,8 +30,9 @@ import { Emotions, type EmotionState, type StoryPush } from './emotions';
 import { Memory } from './memory';
 import { trait } from './traits';
 import { seededRng, seedOf, type Rng } from './random';
+import { askedChoice, type Interaction } from './interact';
 import {
-  ACTIVITIES, ACTIVITY_BY_ID, bathroomUrgency, foodUrgency, levelsNow, waterUrgency,
+  ACTIVITIES, ACTIVITY_BY_ID, ACTIVITY_SHORT, bathroomUrgency, foodUrgency, levelsNow, waterUrgency,
   type ActivityDef, type Choice, type LevelsNow, type MindContext, type OtherView, type Step,
 } from './activities';
 
@@ -45,6 +46,12 @@ const SWITCH_RATIO = 1.3, SWITCH_MARGIN = 8;
 const NEED_INTERRUPTS_FROM = 55;
 /** Real seconds a walk may take before it is given up as stuck; a pose, before it is given up. */
 const WALK_GIVE_UP = 90, POSE_GIVE_UP = 15;
+/**
+ * A NEED THAT KEEPS FAILING (Joshua, 2026-11-26: John's meal failed nine times while his water ran down, the meal at
+ * 99 always beating the drink at 60): each failure of it in the last FRUSTRATION_MINUTES game minutes multiplies its
+ * appeal by FRUSTRATION_DAMP, so after one or two the next need comes first. GAME TUNING.
+ */
+const FRUSTRATION_MINUTES = 30, FRUSTRATION_DAMP = 0.6;
 
 /** What is running: the activity, its choice, its plan and where it has got to. */
 interface Running {
@@ -72,7 +79,10 @@ export interface MindDebug {
   readonly step: string;
   readonly destination: string | null;
   readonly next: string | null;
-  readonly scores: readonly { readonly activity: ActivityId; readonly score: number; readonly reason: string }[];
+  /** the best few choices: each activity, its word or two (`short`: "meal", "TV"), its score and why */
+  readonly scores: readonly { readonly activity: ActivityId; readonly short: string; readonly score: number; readonly reason: string }[];
+  /** the last thing that failed, if within the last 10 game minutes ("no way to the dining chair"), and when */
+  readonly failed: { readonly text: string; readonly when: string } | null;
   readonly needs: NeedsSnapshot;
   readonly feel: Readonly<EmotionState>;
   readonly traits: CharacterProfile['traits'];
@@ -100,7 +110,7 @@ export class Mind {
   private time: GameTime = { day: 1, hour: 0, seconds: 0 };
   private lastSeconds = -1;
   private nav = 'standing';
-  private readonly meal = { targetBar: 0, portionMl: 0, eatenMl: 0 };
+  private readonly meal: { targetBar: number; portionMl: number; eatenMl: number; from: string | null } = { targetBar: 0, portionMl: 0, eatenMl: 0, from: null };
 
   constructor(
     readonly profile: CharacterProfile,
@@ -138,7 +148,15 @@ export class Mind {
   /** "Walking to the kitchen: food 24% < 30%" */
   get thought(): string {
     const r = this.running;
-    return r ? `${capital(this.doing)}: ${r.choice.reason}` : capital(this.doing);
+    if (!r) return capital(this.doing);
+    // (the reason without what the doing already says: "Talking with John: talk with John (lonely 11%)" is
+    //  "Talking with John (lonely 11%)", "Reading: read" is "Reading"; Joshua, 2026-11-26, its text ran out of the bubble)
+    const why = r.choice.reason, head = why.split(' (')[0].toLowerCase();
+    if (head && this.doing.toLowerCase().includes(head)) {
+      const rest = why.slice(head.length).trim();
+      return rest ? `${capital(this.doing)} ${rest}` : capital(this.doing);
+    }
+    return `${capital(this.doing)}: ${why}`;
   }
 
   // ---- control ------------------------------------------------------------------------------------------------------
@@ -175,8 +193,11 @@ export class Mind {
     const day = this.memory.day(time.day);
     if (needs.asleep) day.sleepHours += gameDt / 3600;
     if (!this.running && this.mode === 'autonomous') day.idleMinutes += gameDt / 60;
-    // 2. THE PLAYER OR THE STORY has them: nothing more
-    if (this.mode === 'manual' || this.mode === 'scripted') return;
+    // 2. THE PLAYER OR THE STORY has them: nothing more (but what the player asked them to do, `doNow`, is done)
+    if (this.mode === 'manual' || this.mode === 'scripted') {
+      if (this.mode === 'manual' && this.running) this.runStep(realDt, gameDt);
+      return;
+    }
     // 3. DECIDE, once a second (staggered), or at once when asked
     this.thinkIn -= realDt;
     if (this.thinkIn <= 0) { this.thinkIn = THINK_EVERY; this.decide(); }
@@ -252,7 +273,11 @@ export class Mind {
         const at = ch.pick?.slot.use ?? ch.spot;
         if (at && Math.hypot(at.x - c.leader.position.x, at.z - c.leader.position.z) > COMPANION_REACH) continue;
       }
-      choices.push(ch);
+      // (A NEED THAT KEEPS FAILING lets the next one in: each time it failed in the last FRUSTRATION_MINUTES game
+      //  minutes takes it down by FRUSTRATION_DAMP, so a meal that cannot be had stops standing in front of a drink;
+      //  an emergency is still weighed first whatever its score)
+      const failures = def.category === 'need' ? this.memory.failuresSince(def.id, c.now, FRUSTRATION_MINUTES) : 0;
+      choices.push(failures ? { ...ch, score: ch.score * FRUSTRATION_DAMP ** failures, reason: `${ch.reason} (failed ${failures}x)` } : ch);
     }
     choices.sort((a, b) => b.score - a.score);
     this.scores = choices;
@@ -284,8 +309,31 @@ export class Mind {
     }
   }
 
+  // ---- the player's own asks (mind/interact.ts) -----------------------------------------------------------------------
+
+  /**
+   * THE PLAYER ASKS (the interact button: main.ts): the one played does this NOW, as the AI would do it by themselves
+   * (walking there, sitting, lying, eating...). They stay 'manual': once it is done nothing more is planned. False if
+   * it cannot be done (no food left, the other person gone or busy).
+   */
+  doNow(i: Interaction): boolean {
+    if (this.running) this.stop('interrupted', 'the player asked for something else');
+    const choice = askedChoice(this.context(), i);
+    if (!choice) { this.memory.note(this.time, this.when(), 'fail', i.activity, `${i.word}: cannot now`); return false; }
+    this.start(choice, 'asked');
+    return !!this.running;
+  }
+
+  /** The player lets go of what they asked for (the stick pushed, or the button): stopped where it is (they get up). */
+  stopNow(): void {
+    if (this.running) this.stop('interrupted', 'the player let go');
+  }
+
+  /** Whether the one played is doing something they asked for. */
+  get asked(): boolean { return this.mode === 'manual' && !!this.running; }
+
   /** Starts a chosen activity: its plan made, logged with the best scores. */
-  private start(choice: Choice, kind: 'choose' | 'switch' | 'emergency'): void {
+  private start(choice: Choice, kind: 'choose' | 'switch' | 'emergency' | 'asked'): void {
     const def = ACTIVITY_BY_ID[choice.activity];
     const steps = def.plan(this.context(), choice);
     if (kind === 'emergency') this.memory.day(this.time.day).emergencies++;
@@ -339,7 +387,7 @@ export class Mind {
       case 'go': {
         // (stand up first, if sitting or lying)
         if (this.body.motion() !== 'stand') { this.nav = 'getting up'; if (this.body.pose('stand', null) !== 'ready') return; }
-        const status = this.body.goTo(step.to, step.facing);
+        const status = this.body.goTo(step.to, step.facing, step.within);
         this.nav = status === 'moving' ? 'walking' : status;
         if (status === 'arrived') { if (step.pick) this.memory.worked(step.pick.object.id); this.next(); }
         else if (status === 'blocked') this.fail(`no way to ${step.pick ? `the ${step.pick.object.name.toLowerCase()}` : 'there'}`, step.pick?.object.id);
@@ -418,6 +466,12 @@ export class Mind {
     this.world.release(this.id);
     this.body.stopMoving();
     this.body.exert(0);
+    // (a meal taken out of the fridge and not yet begun goes back in it: each failed try had thrown one away)
+    if (this.meal.from) {
+      this.world.putBack(this.meal.from, 'meals');
+      this.meal.from = null;
+      this.memory.note(this.time, this.when(), 'note', r.def.id, 'put the meal back in the fridge');
+    }
     this.running = null;
     this.nav = 'standing';
     this.memory.did({ activity: r.def.id, from: r.from, to: this.time.seconds, how });
@@ -442,7 +496,14 @@ export class Mind {
     return {
       name: this.profile.name, mode: this.mode, activity: r?.def.label ?? null, reason: r?.choice.reason ?? '',
       step: this.doing, destination: dest, next: words(after),
-      scores: this.scores.slice(0, 8).map((ch) => ({ activity: ch.activity, score: Math.round(ch.score), reason: ch.reason })),
+      scores: this.scores.slice(0, 8).map((ch) => ({ activity: ch.activity, short: ACTIVITY_SHORT[ch.activity], score: Math.round(ch.score), reason: ch.reason })),
+      failed: ((): { text: string; when: string } | null => {
+        const f = this.memory.lastFailure();
+        if (!f || this.time.seconds - f.at > 10 * 60) return null;
+        // (only what went wrong: "Eat a meal: no way to the dining chair" -> "no way to the dining chair")
+        const colon = f.text.indexOf(': ');
+        return { text: colon >= 0 ? f.text.slice(colon + 2) : f.text, when: f.when.replace(/^D\d+ /, '') };
+      })(),
       needs: this.needsNow, feel: this.emotions.state, traits: this.profile.traits, reserved, nav: this.nav,
       objectives: { ...this.objectives }, levels: this.levels(),
     };

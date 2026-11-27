@@ -12,7 +12,11 @@
   /* (thoughtBubble.ts moves it with a transform: to their head on screen, then up by its own height) */
   transform: translate(-9999px, -9999px);
   pointer-events: none;
-  max-width: 200px;
+  /* (as wide as its longest line, up to 40 % of the screen; a longer line wraps. Joshua, 2026-11-26: at a fixed
+     200 px its lines ran out past its edge) */
+  width: max-content;
+  max-width: min(40vw, 400px);
+  box-sizing: border-box;
   padding: 3px 7px 4px;
   border: 1px solid rgba(94, 232, 200, 0.55);
   border-radius: 8px;
@@ -30,7 +34,9 @@
 .gd-thought pre {
   margin: 0;
   font: inherit;
-  white-space: pre;
+  /* (each line as written, wrapped at the bubble's edge, a long word broken rather than run out) */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* THE TAIL: a small turned square under the card's middle, the card's colour and edge */
 .gd-thought::after {

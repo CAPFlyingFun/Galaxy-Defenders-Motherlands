@@ -30,7 +30,7 @@ export interface LogEntry {
   /** game seconds since day 1 began, and the clock's "Day 2 07:42" */
   readonly at: number;
   readonly when: string;
-  readonly kind: 'choose' | 'switch' | 'emergency' | 'finish' | 'fail' | 'interrupt' | 'mode' | 'invite' | 'story' | 'note';
+  readonly kind: 'choose' | 'switch' | 'emergency' | 'asked' | 'finish' | 'fail' | 'interrupt' | 'mode' | 'invite' | 'story' | 'note';
   readonly activity: ActivityId | null;
   readonly text: string;
   /** the best few scores when it chose (activity: score) */
@@ -109,6 +109,21 @@ export class Memory {
     let n = 0;
     for (let i = this.recent.length - 1; i >= 0 && now - this.recent[i].to <= hours * 3600; i--) if (this.recent[i].activity === activity) n++;
     return n;
+  }
+
+  /** How many times an activity FAILED in the last `minutes` game minutes (a need that keeps failing lets the next in). */
+  failuresSince(activity: ActivityId, now: number, minutes: number): number {
+    let n = 0;
+    for (let i = this.recent.length - 1; i >= 0 && now - this.recent[i].to <= minutes * 60; i--) {
+      if (this.recent[i].activity === activity && this.recent[i].how === 'failed') n++;
+    }
+    return n;
+  }
+
+  /** The last time something failed, and why (the thought bubble shows it a while): null if nothing has. */
+  lastFailure(): LogEntry | null {
+    for (let i = this.log.length - 1; i >= 0; i--) if (this.log[i].kind === 'fail') return this.log[i];
+    return null;
   }
 
   /** Today's counts (made the first time asked). */

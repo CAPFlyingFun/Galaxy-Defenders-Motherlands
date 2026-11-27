@@ -500,6 +500,16 @@
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
+/* THE ⇄ AT THE PROMPT'S END (at home: the next way of using what is here): a tap of its own */
+.gd-prompt .gd-prompt-more {
+  display: inline-block;
+  margin: -8px -12px -8px 12px;
+  padding: 8px 10px;
+  border-left: 1px solid rgba(255, 95, 162, 0.55);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #ffeaf3;
+}
 /* (while arranging the controls, everything shows, so it can be placed) */
 .gd-hud.is-editing .gd-rail[hidden], .gd-hud.is-editing .gd-prompt[hidden] { display: flex !important; }
 .gd-hud.is-editing .gd-hands[hidden] { display: flex !important; }

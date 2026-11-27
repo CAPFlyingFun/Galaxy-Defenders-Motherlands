@@ -60,6 +60,12 @@ export class HomeWorld implements MindWorld {
     return true;
   }
 
+  putBack(objectId: string, kind: StockKind, count = 1): void {
+    const s = this.left.get(objectId) ?? {};
+    s[kind] = (s[kind] ?? 0) + count;
+    this.left.set(objectId, s);
+  }
+
   /** TEST: set what is left in a thing (an empty fridge). */
   setStock(objectId: string, kind: StockKind, count: number): void {
     const s = this.left.get(objectId) ?? {};

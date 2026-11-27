@@ -7,12 +7,14 @@
 // days, not just one... Test resource shortages, blocked destinations, occupied objects and interrupted activities...
 // Include decision logging from the beginning."
 //
-// THE STAND-IN BODY (SimBody) does what the game's bodies will: walks the home's routes (homeRoutes.ts, through its
-// doorways) at a walk, 1.1 m/s; takes poses in real time (sitting down or getting up 3 s, lying down or up 4 s); and
-// passes eating, drinking, the bathroom and sleep to the vitals. The game's vitals are stepped as main.ts steps them,
-// four times a real second, their slow clocks on the game clock (6x, and 120x while everyone home is asleep).
+// THE BODY: since v0.2.180 the GAME'S OWN mind body (homeMindBody.ts), on the game's own walk grid and walls (homeNav.ts,
+// homeBlocks.ts), over a stand-in for the drawn body (SimBody: its place, walked and pushed out of the walls as the
+// game's walk is, at 1.1 m/s; its turn; its sit and lie, timed as the game's). Eating, drinking, the bathroom and sleep
+// go to the vitals. The game's vitals are stepped as main.ts steps them, four times a real second, their slow clocks on
+// the game clock (6x, and 120x while everyone home is asleep).
 //
 // SCENARIOS (each prints its days and its checks, PASS or FAIL):
+//   0. spots        every spot of every thing in the house can be stood on and walked to, with the game's walls
 //   1. normal       both at home, three days
 //   2. pantry       the fridge nearly empty and few snacks: two days
 //   3. blocked      bath 2's door blocked all day: one day
@@ -30,99 +32,106 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { GameClock } from '../src/core/gameClock';
 import { HeroineVitals, type HeroineBody } from '../src/vitals/heroineVitals';
-import { Mind, Society, MARY_PROFILE, JOHN_PROFILE, type ActorId, type CharacterProfile, type ControlMode, type GameTime, type MindBody, type Motion, type MoveStatus, type Prop, type Vec2 } from '../src/mind';
-import { generateHome } from '../src/world/home/homeLayout';
+import { Mind, Society, MARY_PROFILE, JOHN_PROFILE, type ActorId, type CharacterProfile, type ControlMode, type GameTime, type Vec2 } from '../src/mind';
+import { generateHome, type HomeLayout } from '../src/world/home/homeLayout';
 import { HomeWorld } from '../src/world/home/homeWorld';
-import { foodMlForBar, needsFromReading, waterMlBetween } from '../src/world/home/mindBridge';
+import { needsFromReading } from '../src/world/home/mindBridge';
+import { BODY_RADIUS, HomeWalls, SPOT_REACH, layoutBlocks, spotPush, type Block } from '../src/world/home/homeBlocks';
+import { HomeNav } from '../src/world/home/homeNav';
+import { HomeMindBody } from '../src/world/home/homeMindBody';
 
 const STEP = 0.25;            // real seconds a frame
 const WALK = 1.1;             // metres a second
 const OUT = '/tmp/household';
 
 // ---- THE STAND-IN BODY ----------------------------------------------------------------------------------------------
+//
+// SINCE v0.2.180 THE MIND'S BODY IS THE GAME'S OWN (homeMindBody.ts `HomeMindBody`), on the game's own walk grid
+// (homeNav.ts) and walls (homeBlocks.ts): a chair it cannot reach, it cannot reach here either. (Joshua, 2026-11-26:
+// in the game they "didn't fill up with food or water and it kept saying they were": every dining chair's spot was
+// 12 cm from the table's edge and a body is kept 30 cm off anything solid; this simulation's first stand-in walked the
+// doorways' routes straight through the furniture, and passed.) What stands in for the game is only the body under it
+// (SimBody): its place, walked toward the HomeMindBody's `walkTo` at 1.1 m/s and pushed out of the walls exactly as the
+// game's walk is; its turn toward `holdYaw`; and its sit (3 s down, 3 s up) and lie (on the bed's edge 3 s, then
+// back 2.5 s), as the game's are timed.
 
-class SimBody implements MindBody {
-  pos: Vec2;
-  facing = 0;
-  private settled: Motion = 'stand';
-  private changingTo: Motion | null = null;
-  private changeLeft = 0;
-  private route: Vec2[] = [];
-  private routeTo: Vec2 | null = null;
-  /** this frame's real seconds (set by the loop) and how far the body walked in it */
-  frameDt = STEP;
+/** How long sitting down takes, and lying back after it, seconds (sitPose.ts SIT.seconds, LIE.seconds). */
+const SIT_SECONDS = 3, LIE_SECONDS = 2.5;
+/** How fast the body turns on the spot, radians a second. */
+const TURN_RATE = 4;
+
+class SimBody {
+  x: number;
+  z: number;
+  yaw = 0;
+  /** seconds into sitting down (0 standing .. SIT_SECONDS seated), and into lying back from the edge */
+  private sitT = 0;
+  private lieT = 0;
+  /** asked this frame: to stay seated, to lie */
+  private sitAsked = false;
+  private lieAsked = false;
+  /** metres walked this frame, and in all */
   moved = 0;
-  asleep = false;
-  sleepQuality = 1;
-  workload = 0;
-  prop: Prop | null = null;
-  /** total metres walked */
   walked = 0;
+  readonly mb: HomeMindBody;
+  readonly walls: HomeWalls;
 
-  constructor(readonly id: ActorId, start: Vec2, readonly vitals: HeroineVitals, private readonly world: HomeWorld) {
-    this.pos = { ...start };
+  constructor(readonly id: ActorId, start: Vec2, readonly vitals: HeroineVitals, layout: HomeLayout, nav: HomeNav, blocks: readonly Block[], middle: Vec2) {
+    this.x = start.x; this.z = start.z;
+    this.walls = new HomeWalls(blocks, middle, layout.objects);
+    this.mb = new HomeMindBody({
+      id, vitals, walls: this.walls,
+      position: () => ({ x: this.x, z: this.z }),
+      facing: () => this.yaw,
+      floorY: () => 0,
+      sitFor: () => { this.sitAsked = true; },
+      sitShare: () => this.sitT / SIT_SECONDS,
+      lieOn: (spot) => { if (spot) this.lieAsked = true; },
+      lieShare: () => this.lieT / LIE_SECONDS,
+    }, layout, nav);
   }
 
-  position(): Vec2 { return this.pos; }
-  motion(): Motion { return this.settled; }
+  position(): Vec2 { return { x: this.x, z: this.z }; }
 
-  goTo(to: Vec2, facing: number | null): MoveStatus {
-    if (this.settled !== 'stand') return 'moving';
-    if (!this.routeTo || Math.hypot(this.routeTo.x - to.x, this.routeTo.z - to.z) > 0.01) {
-      const r = this.world.routes.route(this.pos, to);
-      if (!r) return 'blocked';
-      this.route = r.points.slice(1);
-      this.routeTo = to;
-    }
-    let budget = WALK * this.frameDt;
-    while (budget > 0 && this.route.length) {
-      const p = this.route[0], d = Math.hypot(p.x - this.pos.x, p.z - this.pos.z);
-      if (d <= budget) { this.pos = { ...p }; this.route.shift(); budget -= d; this.moved += d; }
-      else {
-        this.facing = Math.atan2(p.x - this.pos.x, p.z - this.pos.z);
-        this.pos = { x: this.pos.x + ((p.x - this.pos.x) / d) * budget, z: this.pos.z + ((p.z - this.pos.z) / d) * budget };
-        this.moved += budget;
-        budget = 0;
+  /** Before the mind's tick: the frame's seconds to the mind's body, which asks again for the pose it keeps. */
+  before(dt: number): void {
+    this.sitAsked = false; this.lieAsked = false;
+    this.mb.frame(dt);
+  }
+
+  /** After the mind's tick: the body does what was asked: walks, turns, sits, lies (or gets up). */
+  after(dt: number): void {
+    const mb = this.mb;
+    // (walking: toward the next point, pushed out of the walls as the game's walk is)
+    if (mb.walkTo && this.sitT <= 0 && this.lieT <= 0) {
+      const dx = mb.walkTo.x - this.x, dz = mb.walkTo.z - this.z, d = Math.hypot(dx, dz);
+      if (d > 1e-4) {
+        const step = Math.min(d, WALK * dt);
+        const out = { x: 0, z: 0 };
+        this.walls.move(this.x, this.z, (dx / d) * step, (dz / d) * step, out);
+        this.moved += Math.hypot(out.x - this.x, out.z - this.z);
+        this.x = out.x; this.z = out.z;
+        this.yaw = Math.atan2(dx, dz);
       }
+    } else if (mb.holdYaw !== null && this.sitT <= 0 && this.lieT <= 0) {
+      // (turned toward the way asked, before sitting or lying)
+      const diff = Math.atan2(Math.sin(mb.holdYaw - this.yaw), Math.cos(mb.holdYaw - this.yaw));
+      this.yaw += Math.sign(diff) * Math.min(Math.abs(diff), TURN_RATE * dt);
     }
-    if (!this.route.length) { if (facing !== null) this.facing = facing; this.routeTo = null; return 'arrived'; }
-    return 'moving';
+    // (sitting: down while asked, up when not; lying: on the edge first, then back; up the same way backwards)
+    const sitting = this.sitAsked || this.lieAsked;
+    if (this.lieAsked && this.sitT >= SIT_SECONDS) this.lieT = Math.min(LIE_SECONDS, this.lieT + dt);
+    else if (!this.lieAsked && this.lieT > 0) this.lieT = Math.max(0, this.lieT - dt);
+    if (sitting) this.sitT = Math.min(SIT_SECONDS, this.sitT + dt);
+    else if (this.lieT <= 0) this.sitT = Math.max(0, this.sitT - dt);
   }
-
-  stopMoving(): void { this.route = []; this.routeTo = null; }
-
-  pose(motion: Motion, facing: number | null): 'changing' | 'ready' {
-    if (facing !== null && this.settled === 'stand' && !this.changingTo) this.facing = facing;
-    if (this.settled === motion && !this.changingTo) return 'ready';
-    if (this.changingTo !== motion) {
-      this.changingTo = motion;
-      // (getting into or out of a bed takes 4 s, a seat 3 s; between two non-standing poses, through standing)
-      this.changeLeft = motion === 'lie' || motion === 'doze' || this.settled === 'lie' || this.settled === 'doze' ? 4 : 3;
-    }
-    this.changeLeft -= this.frameDt;
-    if (this.changeLeft > 0) return 'changing';
-    this.settled = motion;
-    this.changingTo = null;
-    return 'ready';
-  }
-
-  consume(foodMl: number, waterMl: number): void { this.vitals.consume(foodMl, waterMl); }
-  bathroomVisit(): { seconds: number; bowels: boolean } { return this.vitals.bathroomVisit(); }
-  relieve(bowels: boolean): void { this.vitals.relieve(bowels); }
-  sleep(asleep: boolean, quality: number): void { this.asleep = asleep; this.sleepQuality = quality; }
-  exert(workload: number): void { this.workload = workload; }
-  hold(prop: Prop | null): void { this.prop = prop; }
-  lookAt(): void { /* (nothing to turn in the stand-in) */ }
-  foodMlForBar(bar: number): number { return foodMlForBar(bar); }
-  waterMlForBar(bar: number): number { return waterMlBetween(this.vitals.reading.water, bar); }
-  stomachFoodMl(): number { return this.vitals.contents.foodMl; }
 
   /** The vitals' step for this frame: walking, or exercise felt as its walking speed; seated, asleep. */
   stepVitals(dt: number): void {
     const walkSpeed = this.moved / Math.max(1e-6, dt);
     // (exercise at a workload: the speed whose work it is, a walk 0.3 at 1.1 m/s to a jog 0.6 at 2.64)
-    const exerciseSpeed = this.workload > 0 ? 1.1 + ((this.workload - 0.3) / 0.3) * (2.64 - 1.1) : 0;
-    this.vitals.step(dt, { speed: Math.max(walkSpeed, exerciseSpeed), firing: false, seated: this.settled !== 'stand', asleep: this.asleep, sleepQuality: this.sleepQuality });
+    const exerciseSpeed = this.mb.workload > 0 ? 1.1 + ((this.mb.workload - 0.3) / 0.3) * (2.64 - 1.1) : 0;
+    this.vitals.step(dt, { speed: Math.max(walkSpeed, exerciseSpeed), firing: false, seated: this.mb.seated, asleep: this.mb.asleep, sleepQuality: this.mb.sleepQuality });
     this.walked += this.moved;
     this.moved = 0;
   }
@@ -135,6 +144,10 @@ interface Resident { readonly mind: Mind; readonly body: SimBody; readonly vital
 class Household {
   readonly clock: GameClock;
   readonly world = new HomeWorld(generateHome());
+  /** the game's own boxes and walk grid, made from the same layout (homeBlocks.ts, homeNav.ts) */
+  readonly blocks: Block[];
+  readonly nav: HomeNav;
+  readonly middle: Vec2;
   readonly society = new Society();
   readonly people = new Map<ActorId, Resident>();
   /** samples every 15 game minutes, for the timeline file: time, then per person food, water, energy, bathroom, stress, loneliness, activity */
@@ -153,13 +166,18 @@ class Household {
 
   constructor(startHour = 7, readonly label = '') {
     this.clock = new GameClock(startHour, 6);
+    const layout = this.world.layout, o = layout.origin;
+    this.blocks = layoutBlocks(layout);
+    this.middle = { x: o.x + layout.size.w / 2, z: o.z + layout.size.d / 2 };
+    // (the walk grid over the house and half a metre round it, as homeScene.ts makes it)
+    this.nav = new HomeNav(this.blocks, { x0: o.x - 0.5, z0: o.z - 0.5, x1: o.x + layout.size.w + 0.5, z1: o.z + layout.size.d + 0.5 }, BODY_RADIUS, layout.objects);
   }
 
   add(profile: CharacterProfile, body: HeroineBody, mode: ControlMode = 'autonomous'): Resident {
     const vitals = new HeroineVitals(body);
     vitals.setSleepiness(Math.max(0, (this.clock.hour - profile.habits.wake) * 0.045));
-    const sim = new SimBody(profile.id, this.world.layout.spawns[profile.id], vitals, this.world);
-    const mind = new Mind(profile, sim, this.world, this.society, { mode });
+    const sim = new SimBody(profile.id, this.world.layout.spawns[profile.id], vitals, this.world.layout, this.nav, this.blocks, this.middle);
+    const mind = new Mind(profile, sim.mb, this.world, this.society, { mode });
     const r = { mind, body: sim, vitals };
     this.people.set(profile.id, r);
     return r;
@@ -176,10 +194,11 @@ class Household {
     const t = this.time;
     for (const p of this.people.values()) {
       p.vitals.gameHoursPerSecond = this.clock.hoursPerRealSecond;
-      p.body.frameDt = STEP;
       if (this.society.isAway(p.mind.id)) { p.vitals.step(STEP, { speed: 0.6, firing: false }); continue; }
       const t0 = performance.now();
+      p.body.before(STEP);
       p.mind.tick(STEP, t, needsFromReading(p.vitals.reading));
+      p.body.after(STEP);
       const took = performance.now() - t0;
       this.mindMs += took;
       this.mindTicks++;
@@ -417,7 +436,7 @@ function companion(): void {
   const stops: Vec2[] = ['kitchen', 'hall', 'bedroom', 'living', 'mainBedroom', 'kitchen'].map((r) => h.world.standSpots(r)[0]);
   let stop = 0, stay = 0, near = 0, samples = 0;
   h.runUntil(1, 12, () => {
-    if (mary.body.goTo(stops[stop % stops.length], null) === 'arrived') { stay += STEP * 6; if (stay > 120) { stay = 0; stop++; } }
+    if (mary.body.mb.goTo(stops[stop % stops.length], null) === 'arrived') { stay += STEP * 6; if (stay > 120) { stay = 0; stop++; } }
     const a = mary.body.position(), b = john.body.position();
     samples++;
     if (Math.hypot(a.x - b.x, a.z - b.z) < 4) near++;
@@ -441,6 +460,31 @@ function saveLoad(): void {
   check('save', 'a saved mind loads back the same', same, `${(json.length / 1024).toFixed(1)} KB of JSON`);
 }
 
+/**
+ * EVERY SPOT IN THE HOUSE: each thing's spot and its way in can be stood on (a body pushed no more than SPOT_REACH off
+ * it by the walls, that thing and its kin let through), and the walk grid finds a way there from the hall and on from
+ * the way in to the spot. (v0.2.179: the four dining chairs, the table, the desk and its chair and the kitchen window
+ * could not be reached, and nothing said so.)
+ */
+function spots(): void {
+  console.log('\n=== 0. SPOTS: every spot of every thing, with the game\'s walls and walk grid ===');
+  const h = new Household(7), layout = h.world.layout;
+  const walls = new HomeWalls(h.blocks, h.middle, layout.objects);
+  const hall = layout.rooms.find((r) => r.kind === 'hall')!.rect;
+  const from = { x: (hall.x0 + hall.x1) / 2, z: (hall.z0 + hall.z1) / 2 };
+  const bad: string[] = [];
+  let n = 0;
+  for (const o of layout.objects) for (const s of o.slots) {
+    n++;
+    const pushUse = spotPush(walls, o.id, s.use), pushIn = spotPush(walls, o.id, s.approach);
+    const wayIn = h.nav.path(from, s.approach, o.id), wayOn = h.nav.path(s.approach, s.use, o.id);
+    if (pushUse > SPOT_REACH || pushIn > SPOT_REACH || !wayIn || !wayOn) {
+      bad.push(`${o.name} ${s.id} (pushed ${pushUse.toFixed(2)} / ${pushIn.toFixed(2)} m${wayIn && wayOn ? '' : ', no way'})`);
+    }
+  }
+  check('spots', 'every spot can be reached', bad.length === 0, bad.length ? bad.join('; ') : `all ${n} spots of ${layout.objects.length} things`);
+}
+
 // ---- RUN -----------------------------------------------------------------------------------------------------------
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
@@ -448,6 +492,7 @@ const only = process.argv.slice(2);
 const want = (name: string): boolean => !only.length || only.includes(name);
 const t0 = performance.now();
 let normalRun: Household | null = null;
+if (want('spots')) spots();
 if (want('normal') || want('away')) normalRun = normal();
 if (want('pantry')) pantry();
 if (want('blocked')) blocked();

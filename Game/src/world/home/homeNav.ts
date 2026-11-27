@@ -44,14 +44,27 @@ export class HomeNav {
   /** the furniture in the way on a square: -1 none, -2 more than one, else its index in `ids` */
   private readonly owner: Int16Array;
   private readonly ids: string[] = [];
+  /** a square more than one thing is in the way on (`owner` -2): which things (their indexes in `ids`) */
+  private readonly owners = new Map<number, Set<number>>();
+  /** each thing's kin, by id (a chair's table, a table's chairs: SmartObject `partOf`): walking to one lets you through the other */
+  private readonly kin = new Map<string, Set<string>>();
   // (the search's own arrays, kept between searches)
   private readonly cost: Float32Array;
   private readonly from: Int32Array;
   private readonly closed: Uint8Array;
   private heap: number[] = [];
 
-  constructor(boxes: readonly NavBox[], bounds: { x0: number; z0: number; x1: number; z1: number }, private readonly radius: number) {
+  constructor(boxes: readonly NavBox[], bounds: { x0: number; z0: number; x1: number; z1: number }, private readonly radius: number,
+    objects: readonly { readonly id: string; readonly partOf?: string }[] = []) {
     this.x0 = bounds.x0; this.z0 = bounds.z0;
+    for (const o of objects) {
+      if (!o.partOf) continue;
+      const a = this.kin.get(o.id) ?? new Set<string>(), b = this.kin.get(o.partOf) ?? new Set<string>();
+      a.add(o.partOf);
+      b.add(o.id);
+      this.kin.set(o.id, a);
+      this.kin.set(o.partOf, b);
+    }
     this.nx = Math.ceil((bounds.x1 - bounds.x0) / CELL);
     this.nz = Math.ceil((bounds.z1 - bounds.z0) / CELL);
     const n = this.nx * this.nz;
@@ -76,19 +89,38 @@ export class HomeNav {
           if (Math.hypot(ox, oz) >= radius) continue;
           const k = j * this.nx + i;
           if (idx < 0) this.wall[k] = 1;
-          else this.owner[k] = this.owner[k] === -1 || this.owner[k] === idx ? idx : -2;
+          else if (this.owner[k] === -1 || this.owner[k] === idx) this.owner[k] = idx;
+          else {
+            // (a second thing on this square: which ones are kept, so walking to all of them at once can still pass)
+            const set = this.owners.get(k) ?? new Set<number>(this.owner[k] >= 0 ? [this.owner[k]] : []);
+            set.add(idx);
+            this.owners.set(k, set);
+            this.owner[k] = -2;
+          }
         }
       }
     }
   }
 
   /**
-   * THE WAY from `start` to `end` round the walls and furniture (`using`: the thing being walked to, let through), as a
-   * few points after `start`, the last of them `end` itself; null if there is no way.
+   * THE WAY from `start` to `end` round the walls and furniture (`using`: the thing being walked to, let through, and
+   * the things it belongs with: a dining chair's table), as a few points after `start`, the last of them `end` itself;
+   * null if there is no way.
    */
   path(start: Vec2, end: Vec2, using: string | null = null): Vec2[] | null {
-    const use = using === null ? -1 : this.ids.indexOf(using);
-    const free = (k: number): boolean => this.wall[k] === 0 && (this.owner[k] === -1 || (use >= 0 && this.owner[k] === use));
+    // (the thing walked to, and its kin, let through: every index of a box of theirs)
+    const use = new Set<number>();
+    if (using !== null) {
+      for (const id of [using, ...(this.kin.get(using) ?? [])]) this.ids.forEach((other, i) => { if (other === id) use.add(i); });
+    }
+    const free = (k: number): boolean => {
+      if (this.wall[k] !== 0) return false;
+      const o = this.owner[k];
+      if (o === -1) return true;
+      if (o >= 0) return use.has(o);
+      for (const i of this.owners.get(k) ?? []) if (!use.has(i)) return false;
+      return use.size > 0;
+    };
     const s = this.nearestFree(this.cellOf(start), free), e = this.nearestFree(this.cellOf(end), free);
     if (s < 0 || e < 0) return null;
     const cells = this.search(s, e, free);
@@ -105,10 +137,13 @@ export class HomeNav {
       at = p;
       k = far + 1;
     }
-    // (the end itself: the last square's middle is near it, and a seat's spot may be on a square that is not free)
-    if (points.length && Math.hypot(points[points.length - 1].x - end.x, points[points.length - 1].z - end.z) < CELL * 1.5) points.pop();
-    if (points.length && this.sees(points.length > 1 ? points[points.length - 2] : start, end, free)) points.pop();
-    points.push({ x: end.x, z: end.z });
+    // (the end itself: the last square's middle is near it, and a seat's spot may be on a square that is not free. A walk
+    //  to no thing whose end is not free (a person on the sofa, a spot by a wall) ends on the free square nearest it:
+    //  walking on into the sofa, the walls held her short and she never arrived)
+    const last = using === null && !free(this.cellOf(end)) ? this.centre(e) : end;
+    if (points.length && Math.hypot(points[points.length - 1].x - last.x, points[points.length - 1].z - last.z) < CELL * 1.5) points.pop();
+    if (points.length && this.sees(points.length > 1 ? points[points.length - 2] : start, last, free)) points.pop();
+    points.push({ x: last.x, z: last.z });
     return points;
   }
 

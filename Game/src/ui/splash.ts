@@ -82,14 +82,26 @@ export function timeLeftText(seconds: number | null): string {
 /** Megabytes, to a tenth (1 MB = 1,048,576 bytes, as a phone's own Settings count them). */
 const megabytes = (bytes: number): string => (bytes / 1048576).toFixed(1);
 
-/** The size line: "62.4 / 98.1 MB · 64% · 5.2 MB/s" (or, the whole not known, "62.4 MB · 5.2 MB/s"). */
+/**
+ * THE DOWNLOAD LINE, as TRADDOMIUM writes it (Joshua, 2026-11-26): "Download: 30.6 / 105.5 MB (29.0% @ 0.4 MB/s)";
+ * the whole not known (a first load), "Download: 30.6 MB (@ 0.4 MB/s)". Its percentage is of the BYTES, which is not
+ * the bar's: the bar is the whole load, unpacking and building too.
+ */
 export function bytesText(bytes: number, expected: number | null, perSecond: number): string {
   if (bytes <= 0) return '';
-  const speed = perSecond >= 1024 ? ` · ${megabytes(perSecond)} MB/s` : '';
+  const speed = perSecond >= 1024 ? `@ ${megabytes(perSecond)} MB/s` : '';
   // (this load came to more than last time's: the whole is at least what has come)
-  if (expected === null) return `${megabytes(bytes)} MB downloaded${speed}`;
+  if (expected === null) return `Download: ${megabytes(bytes)} MB${speed ? ` (${speed})` : ''}`;
   const whole = Math.max(expected, bytes);
-  return `${megabytes(bytes)} / ${megabytes(whole)} MB · ${Math.floor((bytes / whole) * 100)}%${speed}`;
+  const share = (Math.floor((bytes / whole) * 1000) / 10).toFixed(1);
+  return `Download: ${megabytes(bytes)} / ${megabytes(whole)} MB (${share}%${speed ? ` ${speed}` : ''})`;
+}
+
+/** THE STEP'S OWN SHARE, to the right of its words: "4.2 / 15.4 MB · 27%" for a step that downloads, "64%" else. */
+export function stepText(fraction: number | null, bytes: number, expected: number | null): string {
+  if (fraction === null) return '';
+  const whole = `${Math.floor(fraction * 100 + 1e-6)}%`;
+  return expected !== null ? `${megabytes(bytes)} / ${megabytes(expected)} MB · ${whole}` : whole;
 }
 
 /**
@@ -138,6 +150,11 @@ export function connectSplash(meter: LoadMeter): Splash {
   const sizeNode = document.getElementById('splash-bytes'), coverSize = document.getElementById('rotate-bytes');
   const writeSize = sizeNode ? writer(sizeNode) : (): void => {};
   const writeCoverSize = coverSize ? writer(coverSize) : (): void => {};
+  // (the step's own share and its thin bar, on the splash and the cover)
+  const stepPercents = ['splash-step-percent', 'rotate-step-percent'].map((id) => document.getElementById(id)).filter((n): n is HTMLElement => !!n).map(writer);
+  const stepBars = ['splash-stepbar', 'rotate-stepbar'].map((id) => document.getElementById(id)).filter((n): n is HTMLElement => !!n);
+  const stepFills = ['splash-stepfill', 'rotate-stepfill'].map((id) => document.getElementById(id)).filter((n): n is HTMLElement => !!n);
+  let stepWidth = '', stepKnown = false;
   /** The size line is worked out a few times a second (the speed would flicker if written every picture). */
   let sizeAt = 0;
   // The same, on the "rotate your device" cover, for a phone held upright while loading (index.html .rotate-loading).
@@ -166,6 +183,16 @@ export function connectSplash(meter: LoadMeter): Splash {
     writePercent(`${whole}%`);
     writeCoverPercent(`${whole}%`);
     if (meter.label) { writeStep(meter.label); writeCoverStep(meter.label); }
+    // THE STEP'S OWN SHARE: its words and its thin bar (hidden while it cannot be told)
+    const sp = meter.stepProgress();
+    const known = sp.fraction !== null;
+    if (known !== stepKnown) { stepKnown = known; for (const b of stepBars) b.classList.toggle('is-unknown', !known); }
+    if (known) {
+      const w = `${(sp.fraction! * 100).toFixed(0)}%`;
+      if (w !== stepWidth) { stepWidth = w; for (const f of stepFills) f.style.width = w; }
+    }
+    const sText = stepText(sp.fraction, sp.bytes, sp.bytesExpected);
+    for (const write of stepPercents) write(sText);
     // The time left, when it can be told. If it cannot: on a first load the line says why; otherwise it says nothing.
     const left = meter.secondsLeft();
     const timeText = left !== null ? timeLeftText(left) : meter.estimating ? ESTIMATING_NOTE : meter.firstLoad && !meter.finished ? FIRST_LOAD_NOTE : '';

@@ -133,4 +133,9 @@ export interface SmartObject {
   readonly stock?: Partial<Record<StockKind, number>>;
   /** free words for the mind: 'faces-screen', 'quiet' */
   readonly tags?: readonly string[];
+  /**
+   * the thing it belongs with (a dining chair's table, the desk chair's desk): someone using one may walk through the
+   * other's box too (homeBlocks.ts), as a chair is pulled out from its table
+   */
+  readonly partOf?: string;
 }

@@ -1769,6 +1769,62 @@ use the game's single copy of three.js.
   builder in the game so I can save my own poses and animations and upload to you to save in the game, then you can
   just do animations between different poses"): exercise is standing still, eating and drinking have no hands, dozing
   on the sofa is a sit, no shower; they lie on top of the duvet, not under it.
+- v0.2.180: THEY REALLY EAT AND DRINK, THE BUBBLE FITS, THE PROMPT AT HOME, AND OVERALL / STEP ON THE SPLASH (Joshua,
+  2026-11-26, his six screenshots of v0.2.179: "1) The loading screen has two different % 2) They didn't fill up with food
+  or water and it kept saying they were 3) Some of the text is outside of the thought bubble… an interaction button when
+  close to each other or like the sink, toilet, bed, etc, and manually do stuff (will still play programmed animations)";
+  for 1: "I want #1 exactly like it is and keep the % on there… We can do a overall% and per loading %"; planned with him,
+  then "go ahead and do all 4"). (1) WHY THEY NEVER ATE (reproduced in the built game): every dining chair's spot was
+  12 cm from the table's edge and a walker is kept 30 cm off anything solid (BODY_RADIUS), so "no way to the dining
+  chair" failed 9 times in a row, each try taking a meal out of the fridge, and the meal (score 99) kept beating the
+  drink (60). The headless simulation missed it: its stand-in walked the doorways' routes straight through the furniture.
+  FIXED: KIN (mind/types.ts `partOf`): a chair belongs with its table (the desk chair with the desk), and using one lets
+  a walker through the other's box too (homeBlocks.ts `HomeWalls`, homeNav.ts `path`), as a chair is pulled out; the
+  chairs set 0.6 m out from the table (homeLayout.ts `CHAIR_OUT`, `seat`, `tableSeat`; a seat's spot is its hips' point
+  + SEAT_BACK 0.37 along its facing); the table's side slot at its east end, the kitchen window's spot 0.9 m out, the
+  desk's spot and chair moved, the bedrooms' windows to x0 + 1.6 (the gap between the chair and the bed was 0.65 m: a
+  body needs about 0.75 on the 0.15 m grid). A MEAL TAKEN AND NOT BEGUN GOES BACK in the fridge (`meal.from`,
+  world.ts `putBack`); once a dining chair has let them down, the sofa, an armchair or the counter (`tableLetDown`); a
+  thing that failed them twice in 30 game minutes appeals 0.6 as much (mind.ts FRUSTRATION_*). THE PURE BOXES
+  (world/home/homeBlocks.ts, new: no three.js) are what the game's walls and the simulation both use.
+  (2) THE SIMULATION ON THE GAME'S OWN WALLS (scripts/sim_household.ts): its body is the game's `HomeMindBody` on the
+  game's walk grid and walls; a new scenario, SPOTS, checks every spot of every thing can be stood on and walked to
+  (36 of 33 things). Found on the way: TALKS failed 2-4 times a day ("no way to there"): the meeting spot, a metre from
+  the other toward her, could be inside the sofa they sat on or through a wall; now she walks up to THEM and stops a
+  metre off the walking way (world.ts `goTo(to, facing, within)`, a go step's `within`; following the one played the
+  same at 1.6 m), and a walk to no thing ends on the free square nearest its end (homeNav.ts). And a stress eater now
+  GRAZES (Joshua's table: snacks x2): stressed, her wish for something different hardly damps a snack, and at its
+  fullest (28 x 2 = 56) it can break off a quiet pastime (activities.ts `SNACK_APPEAL`): measured, she had snacked no
+  more stressed than not (7 -> 6); now 8 -> 10. 34 of 34 checks pass; 0 failures a day in the normal days.
+  (3) THE THOUGHT BUBBLE (ui/thoughtBubble.css): as wide as its longest line up to 40 % of the screen (400 px), lines
+  wrapped inside it; the scores line in short words (activities.ts `ACTIVITY_SHORT`), the reason without the doing
+  repeated, and `✗ <what failed> (when)` for 10 game minutes after a failure.
+  (4) THE PROMPT AT HOME (mind/interact.ts, new; main.ts `useHome`, `homeChoices`): the one played, standing at a thing
+  they face (in their room: within 0.9 m of its edge or 1 m of its spot, within 80 degrees of their facing, or right at
+  it) or near the other person (2.2 m, same room, awake), gets the prompt with what can be done there, by its type
+  (`INTERACTIONS`): toilet USE TOILET; sink DRINK (and WASH UP in a bathroom); fridge EAT; snack cabinet SNACK; dining
+  chair SIT, EAT; sofa SIT, WATCH TV, NAP, READ; armchair SIT, READ, WATCH TV; desk chair SIT, READ; bed SLEEP; the mat
+  EXERCISE; a window LOOK OUTSIDE; the other TALK TO JOHN / MARY. A ⇄ at the prompt's end goes round them (hud.ts
+  `onPromptMore`, `1/3`). Tapped, THEIR OWN MIND DOES IT as the AI does (mind.ts `doNow`: the same activity and plan,
+  the game's walk round the furniture, sit, lie, eat, drink; `askedChoice`: a meal from the fridge is eaten at the
+  table, from a chair the nearest fridge with food; asked, a drink is a glass at least and a meal its portion, hungry or
+  not, `Choice.asked`); they stay 'manual' (nothing more is planned once it is done). While it runs the prompt says STOP
+  (GET UP seated or lying); the stick pushed lets go of it too, and they get up (held still until they are: main.ts
+  HER STANCE). Guns go into their holsters; SLEEP turns first person to third (lying is not for first person yet). AT
+  HOME THE 🚽 goes to the nearest real toilet the same way (`nearestInteraction`), not the pop-up one.
+  (5) THE CHAIRS AND CUSHIONS WHERE SHE SITS (homeScene.ts CHAIR_TOP 0.465, CUSHION_TOP 0.48): measured, her skin over
+  each seat every 5 cm with her sat by the prompt: at 0.49 and 0.505 her seat went 1.3-2.2 cm and her thighs up to 4.1
+  cm in; now Mary (10 %) 0.1-2.1 cm into a top, at 150 % up to 2.9 cm over the back of a dining chair, John 1.7 cm in
+  at most. The toilets stay at SEAT_TOP 0.505 (an open ring).
+  (6) THE SPLASH, OVERALL AND THE STEP'S OWN (index.html, splash.ts, loadMeter.ts `stepProgress`): every number kept,
+  labelled: OVERALL and the whole load's % over the bar; under it what is loading now with ITS OWN % (a step that
+  downloads: "4.2 / 15.4 MB · 27%", by its bytes against last time's; any other: its seconds so far against last
+  time's) and a thin bar of its own (hidden on a first load, when it cannot be told); the time left; and the download
+  as TRADDOMIUM writes it, "Download: 38.4 / 71.4 MB (53.7% @ 9.1 MB/s)" (its % is of the bytes, not the bar's). The
+  same on the rotate cover. TESTED in the built game at 932 x 430: the splash on a first and a second load; John,
+  hungry at 60x, ate at the table (food 11 % -> 55 %); Mary by the prompt drank at the kitchen sink (85 % -> 100 %),
+  sat at a dining chair (SIT ⇄ EAT), GET UP, watched TV on the sofa, talked with John (he turned and talked); the
+  stick let go of her sit; no errors.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

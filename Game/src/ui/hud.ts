@@ -52,6 +52,8 @@ export interface HudOptions {
   onToggleView(): void;
   /** THE PROMPT was pressed (the table's PUT DOWN / PICK UP, a bar's GRAB / LET GO), for both hands or the hand picked. */
   onPrompt?(which: 'both' | 'left' | 'right'): void;
+  /** the ⇄ at the prompt's end: the next of what can be done here (at home: SIT, then WATCH TV, then NAP...) */
+  onPromptMore?(): void;
   /** RELOAD on the rail (at the table: the table's reload; anywhere else: from her belt). */
   onReload?(): void;
   /** AUTO / MANUAL on the rail: her aim, fire and reload switched over. */
@@ -342,6 +344,7 @@ export class Hud {
   private aimModeLabel = '';
   /** THE PROMPT: one bubble, only near something. */
   private readonly prompt: HTMLElement;
+  private readonly promptMore: HTMLElement;
   private promptLabel = '';
   /** The one line under her vitals card: FPS and version. */
   private readonly fpsLine: HTMLElement;
@@ -526,6 +529,16 @@ export class Hud {
     this.prompt = element('button', 'gd-button gd-prompt', this.root, 'GRAB');
     this.prompt.hidden = true;
     tapButton(this.prompt, () => options.onPrompt?.(this.takeHand()));
+    // (THE ⇄ AT ITS END, at home when a thing can be used more than one way (Joshua, 2026-11-26: the interact button):
+    //  a tap on it goes to the next way and does not do the prompt's action, `stopPropagation`)
+    this.promptMore = document.createElement('span');
+    this.promptMore.className = 'gd-prompt-more';
+    for (const kind of ['pointerdown', 'click'] as const) {
+      this.promptMore.addEventListener(kind, (e) => {
+        e.stopPropagation(); e.preventDefault();
+        if (kind === 'pointerdown') options.onPromptMore?.();
+      });
+    }
 
     // ---- Top right, under the gear: each gun's rounds -----------------------------
     this.ammo = element('div', 'gd-ammo', this.root);
@@ -931,10 +944,18 @@ export class Hud {
     this.aimModeButton.classList.toggle('is-auto', auto);
   }
 
-  /** THE PROMPT: shown with this word (PUT DOWN, PICK UP, GRAB POLE, LET GO...), or hidden (null). */
-  setPrompt(label: string | null): void {
+  /**
+   * THE PROMPT: shown with this word (PUT DOWN, PICK UP, GRAB POLE, LET GO, SIT, USE TOILET...), or hidden (null).
+   * `more`: what the ⇄ at its end shows (2/3: the second of three ways), or nothing.
+   */
+  setPrompt(label: string | null, more: string | null = null): void {
     this.prompt.hidden = label === null;
-    if (label !== null && label !== this.promptLabel) { this.prompt.textContent = label; this.promptLabel = label; }
+    const key = `${label}|${more ?? ''}`;
+    if (label !== null && key !== this.promptLabel) {
+      this.prompt.textContent = label;
+      if (more) { this.promptMore.textContent = `⇄ ${more}`; this.prompt.appendChild(this.promptMore); }
+      this.promptLabel = key;
+    }
     this.showHands();
   }
 

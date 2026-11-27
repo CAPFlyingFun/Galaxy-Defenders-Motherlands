@@ -49,12 +49,14 @@ export interface Choice {
   readonly spot?: Vec2;
   /** who it is with (a chat) */
   readonly with?: ActorId;
+  /** the player asked for it (interact.ts): a drink or a meal is had even when they are not thirsty or hungry */
+  readonly asked?: boolean;
 }
 
 /** One step of a plan. */
 export type Step =
   | { readonly kind: 'reserve'; readonly pick: Pick }
-  | { readonly kind: 'go'; readonly to: Vec2; readonly facing: number | null; readonly what: string; readonly pick?: Pick }
+  | { readonly kind: 'go'; readonly to: Vec2; readonly facing: number | null; readonly what: string; readonly pick?: Pick; readonly within?: number }
   | { readonly kind: 'pose'; readonly motion: Motion; readonly facing: number | null; readonly what: string }
   | {
     readonly kind: 'work';
@@ -115,8 +117,11 @@ export interface MindContext {
   invite(to: ActorId, meetMe: Vec2, meetThem: Vec2, gameMinutes: number): boolean;
   /** whether the one they are talking with is still talking with them */
   stillTalkingWith(other: ActorId): boolean;
-  /** a meal's size and target, worked out when it starts (kept for its plan) */
-  meal: { targetBar: number; portionMl: number; eatenMl: number };
+  /**
+   * a meal's size and target, worked out when it starts (kept for its plan); `from` is the fridge it was taken out of
+   * until it is eaten (a plan that stops first puts it back: mind.ts `stop`)
+   */
+  meal: { targetBar: number; portionMl: number; eatenMl: number; from: string | null };
 }
 
 /** How the mind sees someone else at home. */
@@ -366,7 +371,13 @@ const eatMeal: ActivityDef = {
     if (u <= 0) return null;
     const fridge = pickSlot(c, ['fridge'], { stock: 'meals' });
     if (!fridge) return null;
-    const seat = pickSlot(c, ['diningChair'], { from: fridge.slot.use }) ?? pickSlot(c, ['sofa', 'armchair'], { from: fridge.slot.use });
+    // (a chair at the table; but once one of them has let them down (no way to it), not another of them for a while:
+    //  the sofa or an armchair, and with none of those, standing at the counter. Joshua, 2026-11-26: they went from one
+    //  dining chair to the next and never ate)
+    const tableLetDown = c.world.objects().some((o) => o.type === 'diningChair' && c.memory.avoiding(o.id, c.now));
+    const seat = (tableLetDown ? null : pickSlot(c, ['diningChair'], { from: fridge.slot.use }))
+      ?? pickSlot(c, ['sofa', 'armchair'], { from: fridge.slot.use })
+      ?? pickSlot(c, ['counter'], { from: fridge.slot.use });
     if (!seat) return null;
     const why = `food ${pct(bar)}${bar < lv.eatBelow ? ` < ${pct(lv.eatBelow)}` : nearMeal ? ' (meal time)' : ''}${lv.stressEating > 0.15 ? ' (stressed)' : ''}`;
     return { activity: 'eatMeal', score: 100 * u * (1 + 0.15 * t(c, 'foodLover')) * nightDamp(c) - NEED_PER_METRE * (fridge.metres + seat.metres), reason: why, pick: seat, via: fridge };
@@ -382,6 +393,8 @@ const eatMeal: ActivityDef = {
         kind: 'do', what: 'taking a meal',
         fn: (cc) => {
           if (!cc.world.take(fridge.object.id, 'meals')) return false;
+          // (in their hands until it is eaten: a plan that stops before then puts it back in the fridge)
+          cc.meal.from = fridge.object.id;
           // (the meal's size: what takes her food bar from where it is to a target in her range now)
           const [lo, hi] = cc.levels.mealTarget;
           const target = between(cc.rng, lo, hi);
@@ -404,8 +417,10 @@ const eatMeal: ActivityDef = {
           const bite = Math.min(cc.meal.portionMl - cc.meal.eatenMl, (45 / 60) * gameDt);
           if (bite > 0) { cc.body.consume(bite, (8 / 60) * gameDt); cc.meal.eatenMl += bite; }
         },
-        until: (cc) => cc.meal.eatenMl >= cc.meal.portionMl - 0.5 || cc.needs.food >= cc.meal.targetBar,
+        until: (cc) => cc.meal.eatenMl >= cc.meal.portionMl - 0.5 || (!ch.asked && cc.needs.food >= cc.meal.targetBar),
         end: (cc, finished) => {
+          // (begun, it is theirs: eaten, or what is left of it cleared away; not put back)
+          cc.meal.from = null;
           // (a meal broken off before 100 mL is not counted as one: its food still is)
           const d = cc.memory.day(cc.day);
           if (cc.meal.eatenMl >= 100) d.meals++;
@@ -424,6 +439,9 @@ const eatMeal: ActivityDef = {
  * A SNACK from the cabinet, between meals: a little appeal below their snack level, more for a stress eater (Joshua's
  * "Snacking: occasional | more frequent"), eaten standing there.
  */
+/** A snack's appeal before stress eating doubles it (and a wish for something different damps it). */
+const SNACK_APPEAL = 28;
+
 const snack: ActivityDef = {
   id: 'snack', label: 'Have a snack', category: 'need',
   evaluate(c) {
@@ -431,7 +449,11 @@ const snack: ActivityDef = {
     if (bar >= lv.snackBelow || bar < lv.eatBelow - 0.05) return null;
     const cab = pickSlot(c, ['cabinet'], { stock: 'snacks' });
     if (!cab) return null;
-    const score = 26 * lv.snackMore * variety(c, 'snack') * nightDamp(c) - PASTIME_PER_METRE * cab.metres * 0.5;
+    // (a stress eater GRAZES (Joshua's table: snacks x2): stressed, the wish for something different hardly damps it, and
+    //  at its fullest, 28 x 2 = 56, it can break off a quiet pastime as a need does (mind.ts NEED_INTERRUPTS_FROM 55).
+    //  At 26 with the usual damping, measured on the game's walls, she snacked no more stressed than not: 7 -> 6)
+    const tiring = variety(c, 'snack') + (1 - variety(c, 'snack')) * lv.stressEating;
+    const score = SNACK_APPEAL * lv.snackMore * tiring * nightDamp(c) - PASTIME_PER_METRE * cab.metres * 0.5;
     return { activity: 'snack', score, reason: `food ${pct(bar)} < ${pct(lv.snackBelow)}${lv.snackMore > 1.15 ? ' (stress snacking)' : ''}`, pick: cab };
   },
   plan(c, ch) {
@@ -471,7 +493,8 @@ const drink: ActivityDef = {
         kind: 'work', what: 'drinking', prop: 'cup', restful: 0.4,
         // (a glass about every game minute: 250 mL)
         each: (cc, gameDt) => { const sip = Math.min(most - drunk, (250 / 60) * gameDt); if (sip > 0) { cc.body.consume(0, sip); drunk += sip; } },
-        until: (cc) => drunk >= most - 0.5 || cc.needs.water >= target,
+        // (asked for by the player: a glass at least, thirsty or not)
+        until: (cc) => drunk >= most - 0.5 || (cc.needs.water >= target && (!ch.asked || drunk >= 250)),
         end: (cc) => { const d = cc.memory.day(cc.day); d.drinks++; d.waterMl += drunk; },
       },
     ];
@@ -695,6 +718,9 @@ const idle: ActivityDef = {
  * A CHAT with whoever is home (their partner most of all): asked first, and they come if they are free (society.ts);
  * the one played is talked to where they stand. Loneliness, the social and the affectionate make it appeal.
  */
+/** How far apart two people stand to talk, metres. */
+const TALK_APART = 1.0;
+
 const talk: ActivityDef = {
   id: 'talk', label: 'Talk', category: 'social',
   evaluate(c) {
@@ -713,9 +739,11 @@ const talk: ActivityDef = {
   plan(c, ch) {
     const other = c.others.find((o) => o.id === ch.with);
     if (!other) return [];
-    // (meet: they stand a metre apart; I go to them, they turn to me)
+    // (meet: they stand a metre apart; I go up to them, they turn to me. I walk TO them and stop a metre off, the walking
+    //  way: a spot worked out a metre from them toward me could be inside the sofa they sit on, or through a wall, and
+    //  the walk there never arrived: in the household simulation on the game's walls, 2-4 talks a day failed so)
     const me = c.body.position(), dx = me.x - other.position.x, dz = me.z - other.position.z, d = Math.hypot(dx, dz) || 1;
-    const meetMe = { x: other.position.x + (dx / d) * 1.0, z: other.position.z + (dz / d) * 1.0 };
+    const meetMe = { x: other.position.x + (dx / d) * TALK_APART, z: other.position.z + (dz / d) * TALK_APART };
     const minutes = between(c.rng, 10, 25);
     return [
       {
@@ -726,7 +754,7 @@ const talk: ActivityDef = {
           return false;
         },
       },
-      { kind: 'go', to: meetMe, facing: Math.atan2(other.position.x - meetMe.x, other.position.z - meetMe.z), what: `going to talk with ${other.name.split(' ')[0]}` },
+      { kind: 'go', to: { ...other.position }, facing: null, within: TALK_APART, what: `going to talk with ${other.name.split(' ')[0]}` },
       { kind: 'work', what: `talking with ${other.name.split(' ')[0]}`, gameSeconds: minutes * 60, restful: 0.5, enjoying: 0.7, look: other.position, until: (cc) => !cc.stillTalkingWith(other.id) },
     ];
   },
@@ -743,14 +771,15 @@ const follow: ActivityDef = {
     return { activity: 'follow', score: d > 3 ? 62 : 30, reason: `with ${c.leader.name.split(' ')[0]} (${d.toFixed(1)} m)`, spot: l, with: c.leader.id };
   },
   plan() {
-    // (re-aimed every frame at a spot 1.6 m short of the one played; for half a game hour, then chosen again)
+    // (re-aimed every frame at the one played, stopping 1.6 m short of them the walking way; for half a game hour, then
+    //  chosen again)
     return [{
       kind: 'work', what: 'staying close', gameSeconds: 30 * 60, restful: 0.45,
       each: (cc) => {
         const l = cc.leader?.position;
         if (!l) return;
         const me = cc.body.position(), d = Math.hypot(me.x - l.x, me.z - l.z);
-        if (d > 2.2) cc.body.goTo({ x: l.x + ((me.x - l.x) / d) * 1.6, z: l.z + ((me.z - l.z) / d) * 1.6 }, null);
+        if (d > 2.2) cc.body.goTo(l, null, 1.6);
         else cc.body.stopMoving();
         cc.body.lookAt(l);
       },
@@ -760,6 +789,13 @@ const follow: ActivityDef = {
 };
 
 /** Every activity, in the order they are listed in the debug panel. */
+/** Each activity in a word or two, for the thought bubble's scores line ("meal 99 · drink 60 · TV 22"). */
+export const ACTIVITY_SHORT: Readonly<Record<ActivityId, string>> = {
+  toilet: 'toilet', waitTurn: 'wait', eatMeal: 'meal', snack: 'snack', drink: 'drink', sleep: 'sleep', nap: 'nap',
+  rest: 'rest', washUp: 'wash', watchScreen: 'TV', read: 'read', lookOutside: 'window', wander: 'wander',
+  exercise: 'exercise', tidy: 'tidy', idle: 'idle', talk: 'talk', follow: 'follow',
+};
+
 export const ACTIVITIES: readonly ActivityDef[] = [toilet, eatMeal, snack, drink, sleep, nap, rest, washUp, watchScreen, read, lookOutside, wander, exercise, tidy, idle, talk, follow, waitTurn];
 export const ACTIVITY_BY_ID: Readonly<Record<ActivityId, ActivityDef>> = Object.fromEntries(ACTIVITIES.map((a) => [a.id, a])) as Record<ActivityId, ActivityDef>;
 

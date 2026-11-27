@@ -144,6 +144,18 @@ export const FISHER_HOME: HomeSpec = {
 const DOOR_WIDTH = 0.9, FRONT_DOOR_WIDTH = 1.2;
 /** Compass yaws: facing +z (north) is 0, east +PI/2, west -PI/2, south PI. */
 const NORTH = 0, EAST = Math.PI / 2, SOUTH = Math.PI, WEST = -Math.PI / 2;
+/**
+ * SEATS (Joshua, 2026-11-26, his screenshots: Mary's shins through the sofa's front, nobody able to reach a dining
+ * chair). Sitting takes a body BACK from where it stood to where its hips rest by about this much (each body's own
+ * `seatFor().back`: Mary 0.39 m, John 0.35 m), metres: the body stands this far in front of where its hips are to go.
+ */
+export const SEAT_BACK = 0.37;
+/** Where the hips rest, metres along the seat's facing from the thing's middle: the sofa (0.9 m deep, its cushions'
+ *  front edge 0.42 m out) and the armchair (0.8 m) on the front of their cushions, the toilet over its middle (the
+ *  pop-up toilet's own model: its hips 6 cm in front of its middle). The feet then stand 12 cm clear of the front. */
+const SOFA_HIPS = 0.2, ARMCHAIR_HIPS = 0.15, TOILET_HIPS = 0.06;
+/** A dining chair's middle is pulled out this far from the table's edge, metres (its sitter stands 0.21 m off the edge). */
+const CHAIR_OUT = 0.6;
 
 /**
  * BUILDS A HOME from its room list, in the world at `origin` (the house's own south-west corner). Every number here
@@ -249,26 +261,49 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
   const standSpots: Record<string, Vec2[]> = {};
   const used = new Map<string, number>();
   /** A thing at (x, z) in house metres, facing `facing`, with its slots (also in house metres). */
-  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { stock?: SmartObject['stock']; tags?: string[] } = {}): void => {
+  /** Put a thing in the home; returns its id (a chair is put `partOf` its table by that id). */
+  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { stock?: SmartObject['stock']; tags?: string[]; partOf?: string } = {}): string => {
     const n = (used.get(type) ?? 0) + 1;
     used.set(type, n);
+    const id = `${type}-${n}`;
     objects.push({
-      id: `${type}-${n}`, type, name, room, at: at(x, z), facing, size: { w, d },
+      id, type, name, room, at: at(x, z), facing, size: { w, d },
       slots: slots.map((s) => ({ id: s.id, use: at(s.use[0], s.use[1]), facing: s.facing, approach: at(s.approach[0], s.approach[1]), motion: s.motion, ...(s.owner ? { owner: s.owner } : {}) })),
       ...(extra.stock ? { stock: extra.stock } : {}),
       ...(extra.tags ? { tags: extra.tags } : {}),
+      ...(extra.partOf ? { partOf: extra.partOf } : {}),
     });
+    return id;
   };
   /** A slot standing in front of a thing: `out` metres out along the way its front faces, the body facing back at it. */
   const front = (id: string, x: number, z: number, facing: number, out: number, motion: Motion = 'stand', owner?: ActorId): SlotSpec => ({
     id, use: [x + Math.sin(facing) * out, z + Math.cos(facing) * out], facing: facing + Math.PI,
     approach: [x + Math.sin(facing) * (out + 0.5), z + Math.cos(facing) * (out + 0.5)], motion, owner,
   });
-  /** A SEAT: the body stands just in front of it, facing the way it faces, and sits back onto it. */
-  const seat = (id: string, x: number, z: number, facing: number, owner?: ActorId): SlotSpec => ({
-    id, use: [x + Math.sin(facing) * 0.32, z + Math.cos(facing) * 0.32], facing,
-    approach: [x + Math.sin(facing) * 0.9, z + Math.cos(facing) * 0.9], motion: 'sit', owner,
-  });
+  /**
+   * A SEAT: the body stands in front of it, facing the way it faces, and sits back onto it. `hipsAt` is where on the
+   * seat the hips are to come to rest, metres along its facing from (x, z) (the thing's middle); the body stands
+   * SEAT_BACK in front of that (as far as sitting takes it back: each body's own, `seatFor().back`, Mary 0.39 m, John
+   * 0.35 m), so its feet are clear of the seat's front (Joshua's sofa screenshot, 2026-11-26: the spot was 0.32 m out
+   * from every seat's middle, which on the 0.9 m deep sofa is INSIDE it: Mary's feet stood in its base and her shins
+   * came through its front). It is come at from straight in front.
+   */
+  const seat = (id: string, x: number, z: number, facing: number, hipsAt: number, owner?: ActorId): SlotSpec => {
+    const s = Math.sin(facing), c = Math.cos(facing), u = hipsAt + SEAT_BACK;
+    return { id, use: [x + s * u, z + c * u], facing, approach: [x + s * (u + 0.55), z + c * (u + 0.55)], motion: 'sit', owner };
+  };
+  /**
+   * A CHAIR AT A TABLE (a dining chair, the desk chair): pulled out from it (`out` metres from the table's edge to the
+   * chair's middle), facing it. The hips rest just behind the chair's middle; the body stands SEAT_BACK in front of
+   * that, between the chair and the table, and comes at it from BEHIND the chair (the table's in front). The chair is
+   * put `partOf` the table, so whoever uses it may stand over the table's edge (homeBlocks.ts): a body is kept 0.3 m
+   * off anything solid, and the chairs' spots were 12 cm from the table's edge, so nobody could ever sit at the table
+   * (Joshua, 2026-11-26: they "didn't fill up with food or water").
+   */
+  const tableSeat = (cx: number, cz: number, facing: number): SlotSpec => {
+    const s = Math.sin(facing), c = Math.cos(facing), u = -0.02 + SEAT_BACK;
+    return { id: 'seat', use: [cx + s * u, cz + c * u], facing, approach: [cx - s * 0.55, cz - c * 0.55], motion: 'sit' };
+  };
   const spots = (room: string, ...pts: [number, number][]): void => { standSpots[room] = pts.map(([x, z]) => at(x, z)); };
 
   let bedroomIndex = 0;
@@ -293,7 +328,7 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         // a toilet against the north wall at the east end; a shower in a corner away from the door; a sink on the
         // east wall (an ensuite's door is on its west wall, a bathroom's on its south wall)
         const tx = r.x1 - 0.5, tz = r.z1 - 0.4;
-        put('toilet', room.kind === 'ensuite' ? 'Toilet (bath 1)' : `Toilet (${room.name.toLowerCase()})`, room.id, tx, tz, SOUTH, 0.4, 0.7, [seat('seat', tx, tz, SOUTH)]);
+        put('toilet', room.kind === 'ensuite' ? 'Toilet (bath 1)' : `Toilet (${room.name.toLowerCase()})`, room.id, tx, tz, SOUTH, 0.4, 0.7, [seat('seat', tx, tz, SOUTH, TOILET_HIPS)]);
         const showerSouth = room.kind === 'ensuite';
         const sx = showerSouth ? r.x1 - 0.55 : r.x0 + 0.55, sz = showerSouth ? r.z0 + 0.6 : r.z1 - 0.55;
         put('shower', 'Shower', room.id, sx, sz, showerSouth ? NORTH : SOUTH, 1.1, 1.1, [{ id: 'in', use: [sx, sz], facing: showerSouth ? NORTH : SOUTH, approach: [sx + (showerSouth ? -0.2 : 0.3), sz + (showerSouth ? 0.9 : -0.9)], motion: 'stand' }]);
@@ -312,11 +347,19 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         ], { tags: ['single', 'guest'] });
         if (bedroomIndex % 2 === 1) put('wardrobe', 'Wardrobe', room.id, r.x0 + 0.3, r.z0 + 1.6, EAST, 1.2, 0.6, [front('front', r.x0 + 0.3, r.z0 + 1.6, EAST, 0.65)]);
         else {
-          put('desk', 'Desk', room.id, r.x0 + 0.3, r.z1 - 1.6, EAST, 1.2, 0.6, [front('front', r.x0 + 0.3, r.z1 - 1.6, EAST, 0.65)]);
-          // (the chair at the desk: she sits facing the desk, west)
-          put('deskChair', 'Desk chair', room.id, r.x0 + 0.95, r.z1 - 1.6, EAST, 0.5, 0.5, [seat('seat', r.x0 + 0.95, r.z1 - 1.6, WEST)], { tags: ['read'] });
+          // (the desk, 1.2 long against the west wall; tidied from its south end, where the chair is not)
+          const dz = r.z1 - 1.6;
+          const desk = put('desk', 'Desk', room.id, r.x0 + 0.3, dz, EAST, 1.2, 0.6, [{
+            id: 'front', use: [r.x0 + 0.95, dz - 0.55], facing: WEST, approach: [r.x0 + 1.45, dz - 0.55], motion: 'stand',
+          }]);
+          // (the chair at the desk, pulled out 0.4 m from its edge: she sits facing the desk, west; further out, it closed
+          //  the way between it and the bed to the window: the walk grid's squares are 15 cm, and a gap must be wider
+          //  than a body's 0.6 m by about a square)
+          const chairX = r.x0 + 0.6 + 0.4;
+          put('deskChair', 'Desk chair', room.id, chairX, dz, WEST, 0.5, 0.5, [tableSeat(chairX, dz, WEST)], { tags: ['read'], partOf: desk });
         }
-        put('window', `Window (${room.name.toLowerCase()})`, room.id, r.x0 + 0.75, r.z1 - 0.05, SOUTH, 1.0, 0.1, [front('look', r.x0 + 0.75, r.z1 - 0.05, SOUTH, 0.55)]);
+        // (the window toward the room's middle: at its west end the desk stood in the way of looking out)
+        put('window', `Window (${room.name.toLowerCase()})`, room.id, r.x0 + 1.6, r.z1 - 0.05, SOUTH, 1.0, 0.1, [front('look', r.x0 + 1.6, r.z1 - 0.05, SOUTH, 0.55)]);
         spots(room.id, [cx - 0.4, r.z0 + 1.0]);
         break;
       }
@@ -327,11 +370,11 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         put('screen', 'Screen', room.id, sx, sz, EAST, 2.0, 0.15, [front('front', sx, sz, EAST, 1.2)], { tags: ['screen'] });
         const fx = r.x0 + 3.6;
         put('sofa', 'Sofa', room.id, fx, cz, WEST, 2.3, 0.9, [
-          seat('seat-1', fx, cz - 0.75, WEST), seat('seat-2', fx, cz, WEST), seat('seat-3', fx, cz + 0.75, WEST),
+          seat('seat-1', fx, cz - 0.75, WEST, SOFA_HIPS), seat('seat-2', fx, cz, WEST, SOFA_HIPS), seat('seat-3', fx, cz + 0.75, WEST, SOFA_HIPS),
         ], { tags: ['faces-screen', 'soft'] });
         for (const [ax, az] of [[r.x0 + 2.1, r.z0 + 0.75], [r.x0 + 2.1, r.z1 - 0.75]] as const) {
           const toScreen = Math.atan2(sx - ax, sz - az);
-          put('armchair', 'Armchair', room.id, ax, az, toScreen, 0.8, 0.8, [seat('seat', ax, az, toScreen)], { tags: ['faces-screen', 'soft'] });
+          put('armchair', 'Armchair', room.id, ax, az, toScreen, 0.8, 0.8, [seat('seat', ax, az, toScreen, ARMCHAIR_HIPS)], { tags: ['faces-screen', 'soft'] });
         }
         put('window', 'Front window', room.id, r.x0 + 4.2, r.z0 + 0.05, NORTH, 1.6, 0.1, [front('look', r.x0 + 4.2, r.z0 + 0.05, NORTH, 0.55)]);
         put('floorSpot', 'Open floor', room.id, r.x1 - 1.6, cz - 0.6, NORTH, 1.6, 1.6, [{ id: 'mat', use: [r.x1 - 1.6, cz - 0.6], facing: WEST, approach: [r.x1 - 1.6, cz - 0.6], motion: 'stand' }], { tags: ['exercise'] });
@@ -353,16 +396,17 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         put('cabinet', 'Snack cabinet', room.id, r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.8, 0.6, [front('front', r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.6)], { stock: { snacks: spec.stock.snacks } });
         put('counter', 'Counter', room.id, r.x1 - 3.5, r.z0 + 0.3, NORTH, 1.0, 0.6, [front('front', r.x1 - 3.5, r.z0 + 0.3, NORTH, 0.6)]);
         const tx = r.x0 + 2.5, tz = cz + 0.2;
-        put('diningTable', 'Dining table', room.id, tx, tz, NORTH, 1.6, 0.9, [front('side', tx, tz, NORTH, 0.8)]);
-        // (the chairs: two on the north side facing south, two on the south side facing north, each facing the table)
-        for (const [x, z, facing] of [[tx - 0.4, tz + 0.75, SOUTH], [tx + 0.4, tz + 0.75, SOUTH], [tx - 0.4, tz - 0.75, NORTH], [tx + 0.4, tz - 0.75, NORTH]] as const) {
-          // (a dining chair's seat is behind where she stands, the side away from the table)
-          put('diningChair', 'Dining chair', room.id, x + Math.sin(facing) * -0.1, z + Math.cos(facing) * -0.1, facing, 0.45, 0.45, [{
-            id: 'seat', use: [x + Math.sin(facing) * 0.18, z + Math.cos(facing) * 0.18], facing,
-            approach: [x + Math.sin(facing) * -0.6, z + Math.cos(facing) * -0.6], motion: 'sit',
-          }], { tags: ['table'] });
+        // (the table, 1.6 x 0.9; tidied from its east end, clear of the chairs)
+        const table = put('diningTable', 'Dining table', room.id, tx, tz, NORTH, 1.6, 0.9, [front('side', tx, tz, EAST, 1.15)]);
+        // (the chairs: two on the north side facing south, two on the south side facing north, each facing the table,
+        //  pulled out CHAIR_OUT from its edge)
+        const chairZ = 0.45 + CHAIR_OUT;
+        for (const [x, z, facing] of [[tx - 0.4, tz + chairZ, SOUTH], [tx + 0.4, tz + chairZ, SOUTH], [tx - 0.4, tz - chairZ, NORTH], [tx + 0.4, tz - chairZ, NORTH]] as const) {
+          put('diningChair', 'Dining chair', room.id, x, z, facing, 0.45, 0.45, [tableSeat(x, z, facing)], { tags: ['table'], partOf: table });
         }
-        put('window', 'Kitchen window', room.id, r.x0 + 4.6, r.z0 + 0.05, NORTH, 1.2, 0.1, [front('look', r.x0 + 4.6, r.z0 + 0.05, NORTH, 0.55)]);
+        // (the window over the sink: looked out of from in front of the sink, the sink between; at 0.55 m out the body
+        //  stood in the sink)
+        put('window', 'Kitchen window', room.id, r.x0 + 4.6, r.z0 + 0.05, NORTH, 1.2, 0.1, [front('look', r.x0 + 4.6, r.z0 + 0.05, NORTH, 0.9)]);
         spots(room.id, [r.x1 - 2.4, r.z1 - 1.6], [tx + 1.6, tz + 1.4]);
         break;
       }

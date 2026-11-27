@@ -71,7 +71,9 @@ import { BreathSound, loadBreathVoice } from './audio/breathSound';
 import type { Tunnel } from './world/prologue/tunnel';
 import type { HomeScene } from './world/home/homeScene';
 import type { Interaction, Mind, MindWorld } from './mind';
+import { FoodPanel } from './ui/foodPanel';
 import { needsFromReading } from './world/home/mindBridge';
+import { PEOPLE_APART, PLAYER_APART } from './world/home/homeBlocks';
 import { KNEE_PILLOW, LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
 import type { HomeMindBody } from './world/home/homeMindBody';
 /** The home's walls and ceilings, metres (homeScene.ts WALL_HEIGHT; a number here so the module loads only on its map). */
@@ -316,6 +318,20 @@ const BUSY_LOOK_RETURN_PER = Math.PI / 3;
 const BUSY_LOOK_RETURN_MOST = 3;
 /** First person, walking over to the table or a bar: how far the view looks down (radians, about 8 degrees). */
 const FIRST_PERSON_WALK_PITCH = -0.14;
+/**
+ * AT HOME, DOING WHAT THEY ASKED FOR (v0.2.181; Joshua, 2026-11-27: "the head and body should act like using the
+ * bathroom or winded with automatic head/body movements until action is done"): her head looks the way she walks,
+ * then, this near the thing (the walk left, metres), at it; the view eases there over ASKED_VIEW_SECONDS in first person.
+ */
+const ASKED_LOOK_NEAR = 1.8, ASKED_VIEW_SECONDS = 0.35;
+/** Where on each kind of thing she looks, metres over the floor (the fridge's handle, the sink's basin, a seat...). */
+const THING_LOOK_HEIGHT: Record<string, number> = {
+  fridge: 1.15, sink: 0.85, cabinet: 1.05, counter: 0.9, stove: 0.9, toilet: 0.42, shower: 1.0, bed: 0.55,
+  sofa: 0.45, armchair: 0.45, diningChair: 0.45, deskChair: 0.45, diningTable: 0.75, desk: 0.75, screen: 1.1,
+  wardrobe: 1.2, window: 1.3, floorSpot: 0.05,
+};
+/** The things sat or lain on: turning to sit, she looks ahead (her glance at the seat is the sit's own). */
+const SEATS = new Set(['toilet', 'bed', 'sofa', 'armchair', 'diningChair', 'deskChair']);
 /** How quickly her look tips up or down to what she does (seconds, for about two thirds of the way). */
 const ACTION_PITCH_SECONDS = 0.3;
 /** The over-the-shoulder camera with nothing to look at: a little up (radians, about 10 degrees). */
@@ -905,6 +921,8 @@ async function start(): Promise<void> {
     aimTarget: number; supporting: boolean; gait: Gait; gaitResetLeft: number; windedWeight: number;
     waterDepthNow: number; wetFor: number; actionPitch: number; actionPitchWant: number; sinceFire: number;
     limits: PaceLimits; lastMoveX: number; lastMoveY: number;
+    /** standing by at home: their head's tip toward the thing their mind has them use (eased), radians */
+    headTip: number;
   }
   interface Kit {
     /** A stand-in onto their own body (whichever it is now: an outfit change swaps it underneath). */
@@ -935,7 +953,7 @@ async function start(): Promise<void> {
     stance: 'stand', stanceNoAim: false, bathroomLeft: 0, bathroomBowels: false, mustGoNow: false, tableReloading: false, tableAfterDraw: null,
     grabAfterHolster: null, grabAfterTable: null, doorAfterHolster: null, grabWhich: 'both', aimTarget: 0, supporting: false,
     gait: 'stand', gaitResetLeft: 0, windedWeight: 0, waterDepthNow: 0, wetFor: Infinity, actionPitch: 0, actionPitchWant: 0,
-    sinceFire: Infinity, limits: NO_LIMITS, lastMoveX: 0, lastMoveY: 0,
+    sinceFire: Infinity, limits: NO_LIMITS, lastMoveX: 0, lastMoveY: 0, headTip: 0,
   });
   /** A character's own kit, on their own body (`self`), standing at x, z and facing `yaw`. Their guns start holstered. */
   const makeKit = (self: GameHeroine, x: number, z: number, yaw: number): Kit => {
@@ -1204,6 +1222,16 @@ async function start(): Promise<void> {
    * head, as before. `windedWasOn`: whether she was bent over (first person) last frame.
    */
   let windedCarry = false, windedWasOn = false;
+  /**
+   * AT HOME, WHAT THEY ASKED FOR: where her head looks this frame (compass yaw), and the point it looks at (null: the
+   * walk's own slight look down); and, first person, whether the player has turned the view since it began (then the
+   * view is theirs until it is done, as on the toilet; her body stays square to what she does).
+   */
+  let askedYaw: number | null = null;
+  const askedAt = new THREE.Vector3();
+  /** (the one standing by's: the point on their thing, and their eye) */
+  const standingByLookAt = new THREE.Vector3(), standingByEye = new THREE.Vector3();
+  let askedAtOn = false, askedFreed = false;
   /** (the prologue: where the camera looks, his eyes, and the shake's offset; kept for each frame) */
   const storyLook = new THREE.Vector3(), storyEye = new THREE.Vector3(), shakeBy = new THREE.Vector3();
   // (the prologue's flashlight: where his eyes are and look, and its lens, world)
@@ -1385,6 +1413,8 @@ async function start(): Promise<void> {
     if (action === 'tired') { vitals.setEnergy(0.1); return; }
     // (SLEEP 8 HOURS, until there are beds: both of them sleep through it where they stand, and the clock jumps on 8
     //  hours; their stomachs empty, bladders fill and sleepiness goes, as a night would)
+    // (RESTOCK FRIDGE, at home: the fridge and the pantry filled back to what they started with, v0.2.181)
+    if (action === 'restock') { homeLarder?.restock(); return; }
     if (action === 'sleep8') {
       for (const c of [blaze, john]) c?.vitals.passTime(8, true);
       clock.skip(8 * 3600);
@@ -1739,6 +1769,8 @@ async function start(): Promise<void> {
   // walk, sit and lie (world/home/homeMindBody.ts). The one played is 'manual' (the mind does nothing); the one standing
   // by is 'autonomous'. The old brain (src/npc/) is not run at home.
   let homeWorld: MindWorld | null = null, homeSociety: unknown = null;
+  /** the home's fridge and pantry, to fill back up (Settings -> FOOD & DRINK -> Restock fridge) */
+  let homeLarder: { restock(): void } | null = null;
   /** What the one played can do where they stand (mind/interact.ts), once the mind's module is in (home only). */
   let interactionsNear: typeof import('./mind').interactionsNear | null = null;
   let nearestInteraction: typeof import('./mind').nearestInteraction | null = null;
@@ -1768,8 +1800,20 @@ async function start(): Promise<void> {
       }, h.layout, h.nav);
       c.mindBody = mb;
       c.mind = new Mind(profile, mb, world, society, { mode: c === playing ? 'manual' : 'autonomous' });
+      // THE OTHER PERSON IS SOLID (v0.2.181; Joshua: "set collisions with each other"): each step of theirs is kept off
+      // the other one standing (sitting or lying, they are in a seat or a bed, which is solid already). The one standing
+      // by keeps the one played PEOPLE_APART off (and so is shouldered aside: main.ts pushes them each frame); the one
+      // played is stopped a little nearer (PLAYER_APART), so they make way rather than stand off.
+      walls.people = () => {
+        const out: { x: number; z: number; apart: number; yieldTo: boolean }[] = [];
+        for (const o of [blaze, john]) {
+          if (!o || o === c || (o.body.sitShare?.() ?? 0) > 0 || (o.body.lieInfo?.() ?? 0) > 0) continue;
+          out.push({ x: o.kit.motion.x, z: o.kit.motion.z, apart: c === playing ? PLAYER_APART : PEOPLE_APART, yieldTo: o === playing });
+        }
+        return out;
+      };
     }
-    homeWorld = world; homeSociety = society;
+    homeWorld = world; homeSociety = society; homeLarder = world;
     interactionsNear = near;
     nearestInteraction = nearest;
   }
@@ -1966,6 +2010,29 @@ async function start(): Promise<void> {
   const askedNow = (): boolean => !!playing?.mind?.asked && !!playing.mindBody;
   /** Let go of what they asked for: the plan stopped, and they get up from where they sit or lie. */
   const stopAsked = (): void => { playing?.mind?.stopNow(); playing?.mindBody?.release(); };
+  /**
+   * WHERE THEIR HEAD LOOKS, AND WHICH WAY THEIR BODY KEEPS, WHILE THEIR MIND HAS THEM DO SOMETHING AT HOME (v0.2.181):
+   * walking, the way they walk (body and head), and once the walk left is under ASKED_LOOK_NEAR, their head turns to the
+   * thing; there, squared up to it (the mind's `holdYaw`), looking at it (the fridge, the sink: `at`, the point on it)
+   * or, at a seat or bed, ahead (her glance at the seat is the sit's own); where the mind looks (the screen), there.
+   * The one played (main frame) and the one standing by (`stepStandingBy`) alike. Null: their mind has them do nothing.
+   */
+  const thingLook = (c: Character, at: THREE.Vector3): { yaw: number; hold: number | null; atOn: boolean } | null => {
+    const mb = c.mindBody, mind = c.mind;
+    if (!mb || !mind || !mind.activity) return null;
+    const m = c.kit.motion;
+    const thing = mind.thing;
+    if (thing) at.set(thing.at.x, THING_LOOK_HEIGHT[thing.type] ?? 0.8, thing.at.z);
+    const toThing = thing ? Math.atan2(thing.at.x - m.x, thing.at.z - m.z) : null;
+    const walkTo = mb.walkTo;
+    if (walkTo) {
+      const hold = Math.atan2(walkTo.x - m.x, walkTo.z - m.z);
+      return toThing !== null && mb.walkLeft() < ASKED_LOOK_NEAR ? { yaw: toThing, hold, atOn: true } : { yaw: hold, hold, atOn: false };
+    }
+    if (mb.lookYaw !== null) return { yaw: mb.lookYaw, hold: mb.holdYaw, atOn: !!thing && !SEATS.has(thing.type) };
+    if (!thing || SEATS.has(thing.type) || toThing === null) return { yaw: mb.holdYaw ?? c.kit.turn.base, hold: mb.holdYaw, atOn: false };
+    return { yaw: toThing, hold: mb.holdYaw, atOn: true };
+  };
   /** She is side-stepping this frame (crab steps: her stamina pays a little more per metre). */
   let sideStepping = false;
   /** Open the door she is near (the hand at the handle's side, or the one picked), or let go of it. */
@@ -1987,6 +2054,20 @@ async function start(): Promise<void> {
     if (mind.asked) { stopAsked(); return; }
     const choice = homeChoices[homeChoiceAt];
     if (!choice) return;
+    // (THE FRIDGE OR THE PANTRY: its panel, or tapped again, closed)
+    if (choice.panel && choice.object && choice.slot) {
+      if (foodPanel?.isOpen) { foodPanel.close(); foodOpen = null; return; }
+      foodOpen = { object: choice.object, slot: choice.slot, x: motion.x, z: motion.z };
+      foodPanel?.open(choice.panel, homeWorld?.items(choice.object.id) ?? []);
+      return;
+    }
+    doAsked(choice);
+  }
+
+  /** The one played does what they asked for (their mind runs it: mind.ts `doNow`); their guns holstered first. */
+  function doAsked(choice: Interaction): void {
+    const mind = playing?.mind;
+    if (!mind) return;
     if (!mind.doNow(choice)) {
       hud.showNotice(choice.activity === 'talk' ? `${choice.withName?.split(' ')[0] ?? 'They'} can't talk right now` : `Can't ${choice.word.toLowerCase()} right now`);
       return;
@@ -1995,6 +2076,17 @@ async function start(): Promise<void> {
     // (lying down is not for first person yet: the view goes to third person for it)
     if (choice.activity === 'sleep' && rig.mode === 'first') toggleView();
   }
+
+  // THE FRIDGE'S AND THE PANTRY'S PANEL (v0.2.181; Joshua: "it shows you the food list you can choose yourself... like an
+  // inventory"; ui/foodPanel.ts): drawn over the controls; a pick goes to their mind as an `eatItem` (a full meal at the
+  // table, anything else right there standing). The game keeps running while it is open.
+  /** what it was opened at, and where the one played stood (walking away closes it) */
+  let foodOpen: { object: import('./mind').SmartObject; slot: import('./mind').ObjectSlot; x: number; z: number } | null = null;
+  const foodPanel = homeWorld ? new FoodPanel(uiHost, (item) => {
+    const at = foodOpen;
+    foodOpen = null;
+    if (at) doAsked({ word: item.name.toUpperCase(), activity: 'eatItem', object: at.object, slot: at.slot, item });
+  }, () => { foodOpen = null; }) : null;
 
   hud.topSlot().appendChild(vitalsPanel.element);
   // EVERY START IS IN FIRST PERSON (Joshua, 2026-11-24: "The starting default view is 1st person"); the 1st/3rd button
@@ -2224,6 +2316,8 @@ async function start(): Promise<void> {
       const away = Math.hypot(walkTo.x - m.x, walkTo.z - m.z), toward = Math.atan2(walkTo.x - m.x, walkTo.z - m.z);
       m.update(dt, 0, 1, toward, dt > 0 ? Math.min(k.pace.paceSpeed(0), away / dt) : 0);
     } else m.update(dt, 0, 0, k.turn.base, 0);
+    // (AT HOME, standing: shouldered aside by the one played walking into them, v0.2.181)
+    if (mb && (body.sitShare?.() ?? 0) <= 0 && (body.lieInfo?.() ?? 0) <= 0) m.nudge();
     // (the door: holding it they stay on its rail; otherwise it is solid to them too)
     const radius = doorBodyRadius(body.hands?.bellyAhead() ?? 0, k.doorUse.holding);
     if (k.doorUse.holding) k.doorUse.keepOnRail(m, k.doorAsk.pull, radius);
@@ -2237,12 +2331,21 @@ async function start(): Promise<void> {
     const ti = k.turnInput;
     ti.view = 'third';
     ti.move = m.heading;
-    ti.look = ask.look ?? (busy ? null : k.wants.look);
+    // (at home their mind's thing: the way they walk, then the thing, as the one played: `thingLook`)
+    const doingAt = thingLook(c, standingByLookAt);
+    ti.look = ask.look ?? (busy ? null : doingAt?.yaw ?? k.wants.look);
     // (sitting on their toilet: square to it, their head alone looking round)
-    ti.hold = k.doorUse.faceYaw() ?? (k.toilet.inUse ? k.toilet.yaw : null) ?? mb?.holdYaw ?? null;
-    ti.grip = k.toilet.inUse || (mb?.seated ?? false);
+    ti.hold = k.doorUse.faceYaw() ?? (k.toilet.inUse ? k.toilet.yaw : null) ?? doingAt?.hold ?? mb?.holdYaw ?? null;
+    ti.grip = k.toilet.inUse || (mb?.seated ?? false) || !!doingAt;
     k.turn.step(dt, ti);
-    k.turn.headPitch = 0;
+    // (tipped down at the thing as they near it, else level)
+    let tip = 0;
+    if (doingAt?.atOn) {
+      body.eye(standingByEye);
+      tip = Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(standingByLookAt.y - standingByEye.y, Math.max(0.3, Math.hypot(standingByLookAt.x - standingByEye.x, standingByLookAt.z - standingByEye.z))));
+    }
+    s.headTip += (tip - s.headTip) * (1 - Math.exp(-dt / ACTION_PITCH_SECONDS));
+    k.turn.headPitch = s.headTip;
     // 6. AIM AND FIRE (their brain's fire order, in AUTO): in bursts, with their own guns' rounds; each shot a streak
     const noAim = busy || s.windedWeight > 0 || s.bathroomLeft > 0 || s.stance === 'down';
     const at = k.wants.aimAt;
@@ -2399,6 +2502,8 @@ async function start(): Promise<void> {
     if (!windedCarry) rig.applyLook(lookX, lookY); // stick up looks up
     // (the player turned the view this frame: a look of hers laid over it gives way: see the belly glance below)
     const looked = !windedCarry && (lookX !== 0 || lookY !== 0);
+    if (!askedNow()) askedFreed = false;
+    else if (looked && rig.mode === 'first') askedFreed = true;
     const zoom = controls.takeZoom();
     if (rig.mode === 'third') rig.applyZoom(zoom);
 
@@ -2612,6 +2717,14 @@ async function start(): Promise<void> {
     if (storyWord && !promptIs) { promptIs = 'story'; hud.setPrompt(storyWord); }
     // (AT HOME, where nothing else wants it: what can be done here (mind/interact.ts), or, while they do what they
     //  asked for, GET UP (seated or lying) or STOP)
+    // (the fridge's panel: closed once they walk away from it, start doing something, or the other one is played; while
+    //  open, the prompt closes it, and its counts follow what is taken)
+    if (foodPanel?.isOpen) {
+      const away = !foodOpen || Math.hypot(motion.x - foodOpen.x, motion.z - foodOpen.z) > 1.2;
+      if (away || askedNow() || !playing?.mind) { foodPanel.close(); foodOpen = null; }
+      else if (homeWorld) foodPanel.update(homeWorld.items(foodOpen!.object.id));
+    }
+    if (!promptIs && foodPanel?.isOpen) { promptIs = 'home'; hud.setPrompt('CLOSE'); }
     if (!promptIs && playing?.mind && homeWorld && interactionsNear) {
       const mb = playing.mindBody;
       if (askedNow()) {
@@ -2682,15 +2795,32 @@ async function start(): Promise<void> {
     // (AT HOME, doing what they asked for: their mind turns them to the seat, the sink, the bed, and holds them square
     //  to it while they sit; where it looks (the screen) they look, in third person)
     const askedBody = askedNow() ? playing?.mindBody ?? null : null;
-    if (askedBody && askedBody.lookYaw !== null && rig.mode === 'third') turnInput.look = askedBody.lookYaw;
-    turnInput.hold = doorUse.faceYaw() ?? seatedYaw ?? busyFace ?? askedBody?.holdYaw ?? (walkSides() ? rig.yaw : null);
+    // (AT HOME, DOING WHAT THEY ASKED FOR, her head and body move by themselves until it is done, as on the toilet: her
+    //  head looks the way she walks, and near the thing, at it (the fridge, the sink, the seat); her body faces the way
+    //  she walks and then squares up to the thing, so she never walks backwards to it; her head alone turns from there
+    //  (grip). Third person the head looks so; first person the view does, until the player turns it.)
+    askedYaw = null; askedAtOn = false;
+    let askedHold: number | null = null;
+    const asked = askedBody && playing ? thingLook(playing, askedAt) : null;
+    if (asked) {
+      askedYaw = asked.yaw; askedAtOn = asked.atOn; askedHold = asked.hold;
+      turnInput.look = rig.mode === 'third' ? asked.yaw : rig.yaw;
+    }
+    turnInput.hold = doorUse.faceYaw() ?? seatedYaw ?? busyFace ?? askedHold ?? (walkSides() ? rig.yaw : null);
     // (holding on in first person: her head alone turns, 90 degrees each way, the rest of her square: bodyTurn.ts `grip`)
-    turnInput.grip = busyFace !== null || seatedYaw !== null || (askedBody?.seated ?? false);
+    turnInput.grip = busyFace !== null || seatedYaw !== null || askedBody !== null;
     turn.step(dt, turnInput);
     // WHERE SHE LOOKS, UP AND DOWN, WHILE SHE DOES SOMETHING (Joshua, 2026-11-18: her head leads): at what she is
     // going to (the gun stands, the bar), looking down more as she comes close; once her hands are at work, at her
     // hands. Her head tips that way in third person, and in first person the view does.
     actionPitchWant = 0;
+    // (at home, doing what she asked for: down at the thing as she nears it and uses it, or the walk's slight look down)
+    if (askedYaw !== null) {
+      heroine.eye(eyeAt);
+      actionPitchWant = askedAtOn
+        ? Math.max(-FIRST_PERSON_BUSY_PITCH_MOST, Math.atan2(askedAt.y - eyeAt.y, Math.max(0.3, Math.hypot(askedAt.x - eyeAt.x, askedAt.z - eyeAt.z))))
+        : askedBody?.walkTo ? FIRST_PERSON_WALK_PITCH : 0;
+    }
     // (holstering, drawing or reloading on the go: a glance down at the holster or the gun, then back)
     const gearLook = beltAsk.lookAt ?? holsterAsk.lookAt;
     if (!busyNow() && gearLook) {
@@ -2754,7 +2884,7 @@ async function start(): Promise<void> {
     // degrees left and right and +/- 70 up and down... while it still does what it's doing"): the drag since last
     // frame is kept as a look of its own, added to where the view follows, and held within those limits.
     // (and FIRST PERSON ON HER OWN: the view follows her head to the target she aims at, with the same override)
-    const followTarget = rig.mode === 'first' && !busyNow() && !aimedByHand() && turn.aimed;
+    const followTarget = rig.mode === 'first' && !busyNow() && !aimedByHand() && turn.aimed && askedYaw === null;
     if (rig.mode === 'first' && (busyNow() || followTarget)) {
       if (!busyView.on) {
         // (the action has just begun: the view follows from where it is, with no look of the player's added yet)
@@ -2818,6 +2948,14 @@ async function start(): Promise<void> {
       rig.yaw = busyView.setYaw = busyView.yaw + busyView.lookYaw;
       rig.pitch = busyView.setPitch = busyView.pitch + busyView.lookPitch;
     } else busyView.on = false;
+    // FIRST PERSON, AT HOME DOING WHAT THEY ASKED FOR: the view is her head, and her head moves by itself (the way she
+    // walks, the thing, the seat's way as she sits; her own glances on top, as on the toilet), until the player turns
+    // the view: from then it is theirs until it is done (`askedFreed`), her body still square to what she does.
+    if (rig.mode === 'first' && askedYaw !== null && !askedFreed) {
+      const ease = 1 - Math.exp(-dt / ASKED_VIEW_SECONDS);
+      rig.yaw += Math.atan2(Math.sin(askedYaw - rig.yaw), Math.cos(askedYaw - rig.yaw)) * ease;
+      rig.pitch += (actionPitch - rig.pitch) * ease;
+    }
     // FIRST PERSON, HOLSTERING OR DRAWING ON THE GO (Joshua, 2026-11-18: her head leads): the view glances down at the
     // holster and comes back, on top of wherever the player looks (taken off again before the next frame's look, so
     // the player's own aim is never moved).

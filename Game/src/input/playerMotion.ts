@@ -97,4 +97,17 @@ export class PlayerMotion {
     // (never more than her pace: being pushed out of a corner is not running faster)
     this.speed = dt > 0 ? Math.min(speed, travelled / dt) : 0;
   }
+
+  /**
+   * PUSHED WHERE SHE STANDS (v0.2.181, at home): her walls asked where she can be without a step of her own, so someone
+   * walking into her shoulders her aside (the walls keep her off other people: homeBlocks.ts `HomeWalls.people`).
+   * Returns how far she was pushed, metres.
+   */
+  nudge(): number {
+    if (!this.walls) return 0;
+    this.walls.move(this.x, this.z, 0, 0, this.spot);
+    const moved = Math.hypot(this.spot.x - this.x, this.spot.z - this.z);
+    this.x = this.spot.x; this.z = this.spot.z;
+    return moved;
+  }
 }

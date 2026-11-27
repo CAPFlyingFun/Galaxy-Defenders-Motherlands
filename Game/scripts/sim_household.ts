@@ -36,7 +36,7 @@ import { Mind, Society, MARY_PROFILE, JOHN_PROFILE, type ActorId, type Character
 import { generateHome, type HomeLayout } from '../src/world/home/homeLayout';
 import { HomeWorld } from '../src/world/home/homeWorld';
 import { needsFromReading } from '../src/world/home/mindBridge';
-import { BODY_RADIUS, HomeWalls, SPOT_REACH, layoutBlocks, spotPush, type Block } from '../src/world/home/homeBlocks';
+import { BODY_RADIUS, HomeWalls, PEOPLE_APART, SPOT_REACH, layoutBlocks, spotPush, type Block } from '../src/world/home/homeBlocks';
 import { HomeNav } from '../src/world/home/homeNav';
 import { HomeMindBody } from '../src/world/home/homeMindBody';
 
@@ -93,6 +93,19 @@ class SimBody {
 
   position(): Vec2 { return { x: this.x, z: this.z }; }
 
+  /** On their feet (not sitting, lying, or on the way down or up). */
+  get standing(): boolean { return this.sitT <= 0 && this.lieT <= 0; }
+
+  /** How far inside the furniture or walls they stand (the thing they use let in near its spot), metres. */
+  inFurniture(): number {
+    const people = this.walls.people;
+    this.walls.people = () => [];
+    const out = { x: 0, z: 0 };
+    this.walls.move(this.x, this.z, 0, 0, out);
+    this.walls.people = people;
+    return Math.hypot(out.x - this.x, out.z - this.z);
+  }
+
   /** Before the mind's tick: the frame's seconds to the mind's body, which asks again for the pose it keeps. */
   before(dt: number): void {
     this.sitAsked = false; this.lieAsked = false;
@@ -113,7 +126,13 @@ class SimBody {
         this.x = out.x; this.z = out.z;
         this.yaw = Math.atan2(dx, dz);
       }
-    } else if (mb.holdYaw !== null && this.sitT <= 0 && this.lieT <= 0) {
+    } else if (this.standing) {
+      // (standing: pushed off anyone walking into them, as main.ts `nudge` does in the game)
+      const out = { x: 0, z: 0 };
+      this.walls.move(this.x, this.z, 0, 0, out);
+      this.x = out.x; this.z = out.z;
+    }
+    if (!mb.walkTo && mb.holdYaw !== null && this.sitT <= 0 && this.lieT <= 0) {
       // (turned toward the way asked, before sitting or lying)
       const diff = Math.atan2(Math.sin(mb.holdYaw - this.yaw), Math.cos(mb.holdYaw - this.yaw));
       this.yaw += Math.sign(diff) * Math.min(Math.abs(diff), TURN_RATE * dt);
@@ -163,6 +182,12 @@ class Household {
   mindOver1 = 0;
   /** a check that no slot is ever held twice (counted each frame) */
   doubleHolds = 0;
+  /** v0.2.181: frames a standing body was inside furniture or a wall (over 3 cm), the deepest, and of how many */
+  inFurnitureFrames = 0;
+  deepestIn = 0;
+  standingFrames = 0;
+  /** the nearest two people at home ever stood, both on their feet, metres */
+  closestApart = Infinity;
 
   constructor(startHour = 7, readonly label = '') {
     this.clock = new GameClock(startHour, 6);
@@ -180,6 +205,11 @@ class Household {
     const mind = new Mind(profile, sim.mb, this.world, this.society, { mode });
     const r = { mind, body: sim, vitals };
     this.people.set(profile.id, r);
+    // (the others at home and on their feet are solid to them, as in the game: main.ts `walls.people`)
+    sim.walls.people = () => [...this.people.values()]
+      .filter((o) => o !== r && o.body.standing && !this.society.isAway(o.mind.id))
+      // (one gives way to the other, by name: John to Mary... "ladies first")
+      .map((o) => ({ x: o.body.x, z: o.body.z, apart: PEOPLE_APART, yieldTo: o.mind.id > profile.id }));
     return r;
   }
 
@@ -206,6 +236,20 @@ class Household {
       if (took > 1) this.mindOver1++;
       if (this.mindTicks > 2000) this.mindWorstWarm = Math.max(this.mindWorstWarm, took);
       p.body.stepVitals(STEP);
+    }
+    // (v0.2.181: nobody standing inside the furniture or a wall; nobody on top of each other)
+    const standing = home.filter((p) => p.body.standing);
+    for (const p of standing) {
+      const d = p.body.inFurniture();
+      this.standingFrames++;
+      if (d > 0.03) { this.inFurnitureFrames++; this.deepestIn = Math.max(this.deepestIn, d); }
+    }
+    for (let i = 0; i < standing.length; i++) for (let j = i + 1; j < standing.length; j++) {
+      const apart = Math.hypot(standing[i].body.x - standing[j].body.x, standing[i].body.z - standing[j].body.z);
+      if (apart < this.closestApart) {
+        this.closestApart = apart;
+        if (process.env.SIM_DEBUG && apart < 0.55) console.log(`    closest ${apart.toFixed(2)} at ${this.clock.text}: ${standing[i].mind.id} ${standing[i].mind.debug().step} (${standing[i].body.x.toFixed(2)}, ${standing[i].body.z.toFixed(2)}) / ${standing[j].mind.id} ${standing[j].mind.debug().step} (${standing[j].body.x.toFixed(2)}, ${standing[j].body.z.toFixed(2)})`);
+      }
     }
     // (no slot held by two: the world keeps one holder per slot, so this counts only a broken world)
     const seen = new Set<string>();
@@ -241,7 +285,7 @@ function check(scenario: string, name: string, pass: boolean, detail: string): v
 function dayLine(h: Household, id: ActorId, day: number): string {
   const m = h.people.get(id)!.mind, d = m.memory.day(day);
   const pastimes = Object.entries(d.pastimes).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ');
-  return `  ${m.profile.name.split(' ')[0].padEnd(5)} day ${day}: meals ${d.meals} (${Math.round(d.foodMl)} mL, big ${d.bigMeals}), snacks ${d.snacks}, drinks ${d.drinks} (${Math.round(d.waterMl)} mL), toilet ${d.bathroom}, sleep ${d.sleepHours.toFixed(1)} h, switches ${d.switches}, emergencies ${d.emergencies}, failures ${d.failures}, idle ${Math.round(d.idleMinutes)} min\n           pastimes: ${pastimes || '-'}`;
+  return `  ${m.profile.name.split(' ')[0].padEnd(5)} day ${day}: meals ${d.meals} (${Math.round(d.foodMl)} mL, big ${d.bigMeals}), snacks ${d.snacks}, drinks ${d.drinks} (${Math.round(d.waterMl)} mL, ${Math.round(d.waterWithFoodMl)} with food), toilet ${d.bathroom}, sleep ${d.sleepHours.toFixed(1)} h, switches ${d.switches}, emergencies ${d.emergencies}, failures ${d.failures}, idle ${Math.round(d.idleMinutes)} min\n           pastimes: ${pastimes || '-'}`;
 }
 
 /** The lowest each bar went over a run (from the samples), and how long it stayed under a line. */
@@ -310,7 +354,8 @@ function normal(): Household {
     const days = [1, 2, 3].map((d) => m.memory.day(d));
     check('normal', `${id}: eats every day`, days.every((d) => d.meals >= 2), days.map((d) => `${d.meals} meals`).join(', '));
     // (day 1 is 17 hours, from 07:00 with their water topped up: one big drink is enough there; a whole day, two)
-    check('normal', `${id}: drinks every day`, days.every((d, i) => i === 0 ? d.drinks >= 1 && d.waterMl >= 400 : d.drinks >= 2 && d.waterMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} mL)`).join(', '));
+    // (the water had: drunk, and with food since v0.2.181: a meal's glass of water, an apple's own)
+    check('normal', `${id}: drinks every day`, days.every((d, i) => i === 0 ? d.drinks >= 1 && d.waterMl + d.waterWithFoodMl >= 400 : d.drinks >= 2 && d.waterMl + d.waterWithFoodMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} + ${Math.round(d.waterWithFoodMl)} mL with food)`).join(', '));
     check('normal', `${id}: uses the toilet every day`, days.every((d) => d.bathroom >= 3), days.map((d) => `${d.bathroom}`).join(', '));
     check('normal', `${id}: sleeps 6-10 h a night`, days.slice(1).every((d) => d.sleepHours >= 6 && d.sleepHours <= 10.5), days.map((d) => `${d.sleepHours.toFixed(1)} h`).join(', '));
     check('normal', `${id}: needs never neglected`, low.hungryAwake <= 30 && low.water >= 0.08 && low.bathroomHigh < 0.97, `food awake lowest ${pct(low.foodAwake)} (under 8% awake ${low.hungryAwake} min at most; asleep ${pct(low.food)}), water ${pct(low.water)}, energy ${pct(low.energy)}; fullest bathroom ${pct(low.bathroomHigh)}`);
@@ -320,6 +365,11 @@ function normal(): Household {
     check('normal', `${id}: varied pastimes`, kinds.every((k) => k >= 4) && most.every((s) => s <= 0.45), kinds.map((k, i) => `${k} kinds, top ${pct(most[i])}`).join('; '));
   }
   check('normal', 'never two in one slot', h.doubleHolds === 0, `${h.doubleHolds}`);
+  check('normal', 'never inside the furniture', h.inFurnitureFrames === 0,
+    `${h.inFurnitureFrames} of ${h.standingFrames} frames on their feet over 3 cm in${h.inFurnitureFrames ? `, the deepest ${(h.deepestIn * 100).toFixed(1)} cm` : ''}`);
+  // (kept PEOPLE_APART off each other; pressed into a corner together by a wall they can come a little nearer, but
+  //  never closer than two shoulders touching, 0.45 m between their middles: once in three days, 0.47 m, at a window)
+  check('normal', 'never on top of each other', h.closestApart >= 0.45, `the nearest they stood: ${h.closestApart.toFixed(2)} m`);
   console.log(`  the minds' cost: ${(h.mindMs / h.mindTicks * 1000).toFixed(1)} µs a mind a frame on average (${h.mindTicks} frames of ${STEP} s), stand-in body included; ${(h.mindMs / h.mindTicks / STEP * 1000).toFixed(0)} µs of a mind's work a real second; the slowest frame ${(h.mindWorst * 1000).toFixed(0)} µs (${(h.mindWorstWarm * 1000).toFixed(0)} once warmed up), ${h.mindOver1} frames over 1 ms`);
   writeLog('normal', h);
   return h;
@@ -330,6 +380,8 @@ function pantry(): void {
   const h = new Household(7);
   h.world.setStock('fridge-1', 'meals', 3);
   h.world.setStock('cabinet-1', 'snacks', 2);
+  // (the fridge's own snacks too, since v0.2.181 kept by item: its apples and cheese)
+  h.world.setStock('fridge-1', 'snacks', 0);
   h.add(MARY_PROFILE, MARY_BODY);
   h.add(JOHN_PROFILE, JOHN_BODY);
   h.runUntil(3, 7);
@@ -476,8 +528,10 @@ function spots(): void {
   let n = 0;
   for (const o of layout.objects) for (const s of o.slots) {
     n++;
-    const pushUse = spotPush(walls, o.id, s.use), pushIn = spotPush(walls, o.id, s.approach);
-    const wayIn = h.nav.path(from, s.approach, o.id), wayOn = h.nav.path(s.approach, s.use, o.id);
+    // (the thing let in only within LET_IN of its own spot, as when walking: a bed's, by its side where the way in is)
+    const letIn = s.motion === 'lie' ? s.approach : s.use;
+    const pushUse = s.motion === 'lie' ? 0 : spotPush(walls, o.id, s.use, letIn), pushIn = spotPush(walls, o.id, s.approach, letIn);
+    const wayIn = h.nav.path(from, s.approach, o.id, letIn), wayOn = s.motion === 'lie' ? [] : h.nav.path(s.approach, s.use, o.id, letIn);
     if (pushUse > SPOT_REACH || pushIn > SPOT_REACH || !wayIn || !wayOn) {
       bad.push(`${o.name} ${s.id} (pushed ${pushUse.toFixed(2)} / ${pushIn.toFixed(2)} m${wayIn && wayOn ? '' : ', no way'})`);
     }

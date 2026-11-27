@@ -5,10 +5,13 @@
 // character's kit and body (main.ts hands it a few hooks), at the game's own real-time pace, and says how it is going.
 //
 // WALKING: the way round the walls and furniture from the walk grid (homeNav.ts), followed point by point at a walk (the
-// kit's own walk: main.ts `stepStandingBy` reads `walkTo`); the thing being walked to is let through (the walker's
-// walls ignore it, homeScene.ts `walkerWalls`), so a seat's spot right in front of it can be reached. A body that makes
-// no headway for 2.5 s asks for its way again; after three tries it is 'blocked' (the mind then avoids that thing a
-// while: mind/memory.ts).
+// kit's own walk: main.ts `stepStandingBy` reads `walkTo`); the thing being walked to is let in near its spot only
+// (homeBlocks.ts LET_IN: the walker's walls and the walk grid alike), so the way goes round it and a seat's spot right in
+// front of it can be reached. A body that makes no headway for 2.5 s asks for its way again; after three tries it is
+// 'blocked' (the mind then avoids that thing a while: mind/memory.ts).
+// OTHER PEOPLE (v0.2.181; Joshua: "set collisions with each other"): solid (the walls keep them apart), and the way is
+// asked round anyone standing on it; held up by someone (within a metre, no headway), the body WAITS for them to pass,
+// asking its way again, up to WAIT_FOR_PEOPLE before it counts as stuck.
 //
 // POSES (the game's own, not the builder's: Joshua, 2026-11-26, "I want you to do the poses and animations as it's game
 // specific"):
@@ -55,6 +58,23 @@ const NEXT_WITHIN = 0.25, ARRIVE_WITHIN = 0.12;
 const TURNED_WITHIN = 0.12;
 /** No headway for this long (0.05 m) asks for the way again; this many asks and the walk is blocked. */
 const STUCK_SECONDS = 2.5, STUCK_TRIES = 3;
+/** Held up by someone: asked again this often while they stand in the way (s), waited for this long in all (s). */
+const PERSON_STUCK_SECONDS = 0.8, WAIT_FOR_PEOPLE = 12;
+/** Someone within this of the next leg (m), looked at this often (s): the way is asked again round them. */
+const PERSON_ON_WAY = 0.9, PERSON_LOOK_EVERY = 0.5;
+/**
+ * GIVING WAY (v0.2.181): someone they give way to (the one played; in the simulation, by name) this near (m) and this
+ * far round from the way they walk (radians) and they stop, at most this long (s) at a time, while the other passes
+ * (and shoulders them aside: main.ts `nudge`). Met head on in a doorway, the walls had pressed the two together.
+ */
+const GIVE_WAY_WITHIN = 1.1, GIVE_WAY_AHEAD = 0.9, GIVE_WAY_MOST = 3;
+/**
+ * WAITING THEIR TURN AT A SPOT (v0.2.181): someone standing this near (m) where they are going (at the fridge, getting a
+ * snack) and they stop once this near (m) and wait for them to move, at most this many GAME minutes (a snack eaten at
+ * the fridge, a small meal), not counted as stuck. Before, they pressed against them 12 s and gave up: "no way to the
+ * fridge" (the household simulation, Mary while John had an apple there).
+ */
+const SPOT_TAKEN_WITHIN = 0.5, SPOT_WAIT_FROM = 1.3, SPOT_WAIT_MOST = 15;
 /** Sitting, the sit is asked to last this long ahead each frame: just over the bow before getting up (SIT_LOOK.bowBefore,
  *  2.5 s), so there is no bow while seated, and asked to stand, the bow starts within 0.4 s and up she gets. */
 const SIT_AHEAD = 2.9;
@@ -76,6 +96,13 @@ const BED_EDGE_OUT = 0.24;
 const HIPS_FROM_PILLOW = 0.6;
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** How far a point is from the line from a to b (its nearest point on it), metres. */
+function toSegment(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+  return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+}
 
 /** A bed being used: where she sits on its edge, which way her back is to it, and where she lies. */
 interface BedPlan {
@@ -106,6 +133,15 @@ export class HomeMindBody implements MindBody {
   private path: Vec2[] = [];
   private pathTo: Vec2 | null = null;
   private pathUsing: string | null = null;
+  /** where the thing walked to lets this body in (its spot; a bed's edge), or null (a walk to no thing) */
+  private letInAt: Vec2 | null = null;
+  /** seconds to the next look for someone on the way, and waited for people so far on this walk */
+  private personLookIn = 0;
+  private waitedFor = 0;
+  /** seconds given way so far (to GIVE_WAY_MOST), and then past them without giving way until they are clear */
+  private gaveWayFor = 0;
+  /** game minutes waited for someone on the spot they are going to (to SPOT_WAIT_MOST) */
+  private spotWaited = 0;
   private stuckFor = 0;
   /** Lying: her side now (+1 her left, -1 her right, 0 her back; public for test pages) and game minutes to her next turn. */
   sleepSide = 0;
@@ -142,7 +178,7 @@ export class HomeMindBody implements MindBody {
     this.bed = null;
     this.walkTo = null; this.lookYaw = null; this.holdYaw = null;
     this.path = []; this.pathTo = null;
-    this.hooks.walls.ignore = null;
+    this.hooks.walls.ignore = null; this.hooks.walls.ignoreAt = null; this.letInAt = null;
     this.hooks.lieOn(null);
     this.asleep = false; this.workload = 0; this.prop = null;
   }
@@ -165,15 +201,18 @@ export class HomeMindBody implements MindBody {
       dest = this.bed.edge; destYaw = this.bed.sitYaw;
     }
     const using = found?.object.id ?? null;
+    // (where the thing lets her in: a seat's own spot to sit from, a bed's edge)
+    const letInAt = found ? (found.slot.motion === 'lie' ? dest : found.slot.use) : null;
     const here = this.hooks.position();
     // (a person walked up to moves: their way is asked again only once they have moved a third of a metre)
     if (!this.pathTo || Math.hypot(this.pathTo.x - dest.x, this.pathTo.z - dest.z) > (within > 0 ? 0.3 : 0.01)) {
-      // (a new place: its way, the thing there let through)
-      const way = this.nav.path(here, dest, using);
+      // (a new place: its way, the thing there let in near its spot)
+      this.letInAt = letInAt;
+      const way = this.wayTo(here, dest, using);
       if (!way) return 'blocked';
       this.path = way; this.pathTo = { ...dest }; this.pathUsing = using;
-      this.hooks.walls.ignore = using;
-      this.stuckFor = 0; this.tries = 0; this.lastAt = { ...here };
+      this.hooks.walls.ignore = using; this.hooks.walls.ignoreAt = letInAt;
+      this.stuckFor = 0; this.tries = 0; this.waitedFor = 0; this.spotWaited = 0; this.lastAt = { ...here };
     }
     // (on along the way: the next point, or the end)
     while (this.path.length > 1 && Math.hypot(this.path[0].x - here.x, this.path[0].z - here.z) < NEXT_WITHIN) this.path.shift();
@@ -198,18 +237,73 @@ export class HomeMindBody implements MindBody {
     }
     this.walkTo = this.path[0];
     this.holdYaw = null;
-    // (no headway: ask again; three times and give up)
+    // (THEIR TURN: someone on the spot itself, and they are nearly there: they stop, face it and wait for them to go)
+    if (within <= 0 && this.walkLeft() < SPOT_WAIT_FROM
+      && this.hooks.walls.people().some((p) => Math.hypot(p.x - dest.x, p.z - dest.z) < SPOT_TAKEN_WITHIN)) {
+      this.spotWaited += this.dt * this.hooks.vitals.gameHoursPerSecond * 60;
+      if (this.spotWaited > SPOT_WAIT_MOST) { this.walkTo = null; this.pathTo = null; return 'blocked'; }
+      this.walkTo = null;
+      this.holdYaw = Math.atan2(dest.x - here.x, dest.z - here.z);
+      this.lastAt = { ...here }; this.stuckFor = 0;
+      return 'waiting';
+    }
+    // (GIVING WAY: someone they give way to just ahead, and not the one they walk up to: they stop, a few seconds at most)
+    {
+      const ax = this.walkTo.x - here.x, az = this.walkTo.z - here.z, al = Math.hypot(ax, az) || 1;
+      const ahead = this.hooks.walls.people().some((p) => {
+        if (!p.yieldTo) return false;
+        if (within > 0 && Math.hypot(p.x - to.x, p.z - to.z) < 0.5) return false;
+        const dx = p.x - here.x, dz = p.z - here.z, d = Math.hypot(dx, dz);
+        return d < GIVE_WAY_WITHIN && Math.acos(Math.max(-1, Math.min(1, (dx * ax + dz * az) / (d * al || 1)))) < GIVE_WAY_AHEAD;
+      });
+      if (ahead && this.gaveWayFor < GIVE_WAY_MOST) {
+        this.gaveWayFor += this.dt;
+        this.walkTo = null;
+        this.lastAt = { ...here }; this.stuckFor = 0;
+        return 'moving';
+      }
+      if (!ahead) this.gaveWayFor = 0;
+    }
+    // (someone standing on the next leg: the way asked again round them, twice a second at most)
+    this.personLookIn -= this.dt;
+    if (this.personLookIn <= 0) {
+      this.personLookIn = PERSON_LOOK_EVERY;
+      if (this.hooks.walls.people().some((p) => toSegment(p, here, this.path[0]) < PERSON_ON_WAY)) {
+        const way = this.wayTo(here, dest, this.pathUsing);
+        if (way) { this.path = way; this.walkTo = this.path[0]; }
+      }
+    }
+    // (no headway: ask again; three times and give up. Held up by SOMEONE, it waits for them instead, asking again)
     if (Math.hypot(here.x - this.lastAt.x, here.z - this.lastAt.z) > 0.05) { this.lastAt = { ...here }; this.stuckFor = 0; }
     else {
       this.stuckFor += this.dt;
-      if (this.stuckFor > STUCK_SECONDS) {
+      const byPerson = this.hooks.walls.people().some((p) => Math.hypot(p.x - here.x, p.z - here.z) < 1) && this.waitedFor < WAIT_FOR_PEOPLE;
+      if (this.stuckFor > (byPerson ? PERSON_STUCK_SECONDS : STUCK_SECONDS)) {
+        if (byPerson) this.waitedFor += this.stuckFor;
         this.stuckFor = 0;
-        if (++this.tries > STUCK_TRIES) { this.walkTo = null; this.pathTo = null; return 'blocked'; }
-        const way = this.nav.path(here, dest, this.pathUsing);
+        if (!byPerson && ++this.tries > STUCK_TRIES) { this.walkTo = null; this.pathTo = null; return 'blocked'; }
+        const way = this.wayTo(here, dest, this.pathUsing);
         if (way) this.path = way;
       }
     }
     return 'moving';
+  }
+
+  /** The way to `dest` round the walls, the furniture (the thing used let in near its spot) and anyone standing; with
+   *  no way round them (one blocks the only door), the way through, to wait for them on. */
+  private wayTo(here: Vec2, dest: Vec2, using: string | null): Vec2[] | null {
+    const letIn = this.letInAt ?? dest;
+    const people = this.hooks.walls.people();
+    return (people.length ? this.nav.path(here, dest, using, letIn, people) : null) ?? this.nav.path(here, dest, using, letIn);
+  }
+
+  /** How far the walk under way has left to go, metres (along its way; 0 when not walking). */
+  walkLeft(): number {
+    if (!this.walkTo || !this.path.length) return 0;
+    const here = this.hooks.position();
+    let left = Math.hypot(this.path[0].x - here.x, this.path[0].z - here.z);
+    for (let i = 1; i < this.path.length; i++) left += Math.hypot(this.path[i].x - this.path[i - 1].x, this.path[i].z - this.path[i - 1].z);
+    return left;
   }
 
   stopMoving(): void {

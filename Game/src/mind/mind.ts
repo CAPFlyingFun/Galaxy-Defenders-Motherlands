@@ -22,7 +22,7 @@
 //
 // The mind never touches the game: a MindWorld and a MindBody (world.ts) are all it has.
 // ============================================================================
-import type { ActivityId, ActorId, ControlMode, GameTime, NeedsSnapshot, Vec2 } from './types';
+import type { ActivityId, ActorId, ControlMode, GameTime, NeedsSnapshot, SmartObject, Vec2 } from './types';
 import type { CharacterProfile } from './profile';
 import type { MindBody, MindWorld } from './world';
 import type { Society } from './society';
@@ -31,6 +31,7 @@ import { Memory } from './memory';
 import { trait } from './traits';
 import { seededRng, seedOf, type Rng } from './random';
 import { askedChoice, type Interaction } from './interact';
+import { foodItem } from './food';
 import {
   ACTIVITIES, ACTIVITY_BY_ID, ACTIVITY_SHORT, bathroomUrgency, foodUrgency, levelsNow, waterUrgency,
   type ActivityDef, type Choice, type LevelsNow, type MindContext, type OtherView, type Step,
@@ -110,7 +111,7 @@ export class Mind {
   private time: GameTime = { day: 1, hour: 0, seconds: 0 };
   private lastSeconds = -1;
   private nav = 'standing';
-  private readonly meal: { targetBar: number; portionMl: number; eatenMl: number; from: string | null } = { targetBar: 0, portionMl: 0, eatenMl: 0, from: null };
+  private readonly meal: { targetBar: number; portionMl: number; eatenMl: number; from: string | null; item: string | null } = { targetBar: 0, portionMl: 0, eatenMl: 0, from: null, item: null };
 
   constructor(
     readonly profile: CharacterProfile,
@@ -131,6 +132,23 @@ export class Mind {
   // ---- what others (and the debug panel) can see --------------------------------------------------------------------
 
   get activity(): ActivityId | null { return this.running?.def.id ?? null; }
+
+  /**
+   * THE THING THEY ARE BUSY WITH NOW: the one this step walks to or uses (the fridge on the way to the table, then
+   * the chair), else the activity's own; null for none (a wander, a talk). The game turns their head to it (main.ts,
+   * v0.2.181: "the head and body should act like using the bathroom... with automatic head/body movements").
+   */
+  get thing(): SmartObject | null {
+    const r = this.running;
+    if (!r) return null;
+    // (the walk under way or the last one walked: what is used where they now stand; before any, the first ahead)
+    for (let i = Math.min(r.index, r.steps.length - 1); i >= 0; i--) {
+      const s = r.steps[i];
+      if (s.kind === 'go' && s.pick) return s.pick.object;
+    }
+    for (const s of r.steps) if (s.kind === 'go' && s.pick) return s.pick.object;
+    return r.choice.pick?.object ?? null;
+  }
   get choice(): Choice | null { return this.running?.choice ?? null; }
   get needs(): NeedsSnapshot { return this.needsNow; }
   get asleep(): boolean { return this.needsNow.asleep; }
@@ -388,7 +406,9 @@ export class Mind {
         // (stand up first, if sitting or lying)
         if (this.body.motion() !== 'stand') { this.nav = 'getting up'; if (this.body.pose('stand', null) !== 'ready') return; }
         const status = this.body.goTo(step.to, step.facing, step.within);
-        this.nav = status === 'moving' ? 'walking' : status;
+        this.nav = status === 'moving' ? 'walking' : status === 'waiting' ? 'waiting their turn' : status;
+        // (waiting for someone on the spot is not being stuck: the body has its own limit for that)
+        if (status === 'waiting') r.stepReal = 0;
         if (status === 'arrived') { if (step.pick) this.memory.worked(step.pick.object.id); this.next(); }
         else if (status === 'blocked') this.fail(`no way to ${step.pick ? `the ${step.pick.object.name.toLowerCase()}` : 'there'}`, step.pick?.object.id);
         else if (r.stepReal > WALK_GIVE_UP) this.fail(`stuck ${step.what}`, step.pick?.object.id);
@@ -467,11 +487,11 @@ export class Mind {
     this.body.stopMoving();
     this.body.exert(0);
     // (a meal taken out of the fridge and not yet begun goes back in it: each failed try had thrown one away)
-    if (this.meal.from) {
-      this.world.putBack(this.meal.from, 'meals');
-      this.meal.from = null;
-      this.memory.note(this.time, this.when(), 'note', r.def.id, 'put the meal back in the fridge');
+    if (this.meal.from && this.meal.item) {
+      this.world.putBackItem(this.meal.from, this.meal.item);
+      this.memory.note(this.time, this.when(), 'note', r.def.id, `put the ${foodItem(this.meal.item)?.name.toLowerCase() ?? 'food'} back`);
     }
+    this.meal.from = null; this.meal.item = null;
     this.running = null;
     this.nav = 'standing';
     this.memory.did({ activity: r.def.id, from: r.from, to: this.time.seconds, how });

@@ -4,6 +4,7 @@
 // later the characters' kits in main.ts), and the headless household simulation with its own simple bodies
 // (scripts/sim_household.ts). So the mind runs the same in the game, in a test, in CCBS or in another game.
 // ============================================================================
+import type { FoodItem } from './food';
 import type { ActorId, Motion, SmartObject, StockKind, Vec2 } from './types';
 
 /** A home and its things, as one mind may use them. */
@@ -23,12 +24,14 @@ export interface MindWorld {
   reserve(objectId: string, slotId: string, by: ActorId): boolean;
   /** let go of everything one holds (or only of one thing) */
   release(by: ActorId, objectId?: string): void;
-  /** how much of a resource a thing has left (meals in the fridge) */
+  /** how much of a resource a thing has left (meals in the fridge: the sum of its items on that shelf, mind/food.ts) */
   stock(objectId: string, kind: StockKind): number;
-  /** take some: false if there is not enough */
-  take(objectId: string, kind: StockKind, count?: number): boolean;
-  /** put some back (a meal taken out and not eaten: the plan failed on the way to the table) */
-  putBack(objectId: string, kind: StockKind, count?: number): void;
+  /** each item a thing holds and how many are left, in the panel's order (none left included) */
+  items(objectId: string): readonly { readonly item: FoodItem; readonly count: number }[];
+  /** take one of an item: false if there is none left */
+  takeItem(objectId: string, itemId: string): boolean;
+  /** put one back (taken out and not begun: the plan failed on the way to the table) */
+  putBackItem(objectId: string, itemId: string): void;
   /** a few spots to stand about in a room (wandering, a chat) */
   standSpots(room: string): readonly Vec2[];
   /** every room's id and name */
@@ -39,7 +42,8 @@ export interface MindWorld {
 export type Prop = 'plate' | 'cup' | 'snack' | 'book';
 
 /** What a walk is doing: still going, there, or unable to get there. */
-export type MoveStatus = 'moving' | 'arrived' | 'blocked';
+/** 'waiting': stopped short of a spot someone else stands on, for them to move (v0.2.181); not counted as stuck. */
+export type MoveStatus = 'moving' | 'waiting' | 'arrived' | 'blocked';
 
 /**
  * ONE CHARACTER'S BODY, as the mind drives it. Every call is a wish for this frame; the body does it with the game's own

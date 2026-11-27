@@ -1825,6 +1825,63 @@ use the game's single copy of three.js.
   hungry at 60x, ate at the table (food 11 % -> 55 %); Mary by the prompt drank at the kitchen sink (85 % -> 100 %),
   sat at a dining chair (SIT ⇄ EAT), GET UP, watched TV on the sofa, talked with John (he turned and talked); the
   stick let go of her sit; no errors.
+- v0.2.181: THE FRIDGE AND PANTRY AS AN INVENTORY, THEIR HEADS AND BODIES WHILE THEY DO WHAT THEY ARE ASKED, SOLID
+  FURNITURE AND EACH OTHER (Joshua, 2026-11-27, of v0.2.180: "The head when you manually press something like eat doesn't
+  look around and move... I was walking backwards to sit down"; "I saw them walk through the couch 🛋️ and we should set
+  collisions with each other and objects"; "When a user gets to the refrigerator, it should be like sims... it shows you
+  the food list you can choose yourself like a large meal, snack, etc... little icons or images like an inventory and not
+  all food needs to be cook"; his answers: "the head and body should act like using the bathroom 🚽 or winded with
+  automatic head/body moments until action is done", the panel "Keep running", heating "Leave alone for now", "if over a
+  medium meal 🍽️ will sit at the table, anything else right there standing").
+  (1) THE FOOD (`mind/food.ts`, pure): FOOD ITEMS, each a kind (snack, small meal, full meal, drink), an emoji, its food
+  and its own water: the FRIDGE apple 🍎, cheese stick 🧀 (snacks, 150 mL), sandwich 🥪, salad 🥗 (small meals, 400), pasta 🍝,
+  ready meal 🍱 (full meals, 700), water bottle 💧, juice 🧃, milk 🥛, sports drink 🥤; the PANTRY (the cabinet, renamed)
+  granola bar 🍫, banana 🍌, trail mix 🥜, cookies 🍪 (`START_STOCK`). HomeWorld keeps them by item (`items`, `takeItem`,
+  `putBackItem`, `restock`; `stock(kind)` is their sum; saved by item). FULL MEALS AT THE TABLE (a dining chair; the sofa
+  or an armchair if the table is taken or has let them down), EVERYTHING ELSE STANDING RIGHT THERE (`atTheTable`,
+  activities.ts `itemPlan`, the one plan for the AI's meals and snacks and the player's pick: to the fridge, take it,
+  20 game seconds getting it out, the AI now and then cooking a full meal first, sat at the table for a full meal, eaten
+  at 45 mL a game minute (a snack in 3, a drink at 250 a minute), its own water and a meal's glass of water (8 mL a
+  minute) with it). The AI's MEAL SIZE: wanting more than 420 mL of food a full meal, less a small one (`FULL_MEAL_FROM`;
+  the kinds tried IN ORDER, `pickItem`: in one draw a full meal wanted came out a sandwich two times in three), stopped
+  at its target; a snack from the pantry or the fridge's fruit and cheese. Taken and not begun, it goes back where it came
+  from (mind.ts `stop`). Restock: Settings -> FOOD & DRINK -> Restock fridge.
+  (2) THE PANEL (`ui/foodPanel.ts` + .css): at the fridge the prompt says OPEN FRIDGE, at the pantry OPEN PANTRY (the dining
+  chair now only SIT); tapped, a panel at the top middle, three tiles across (at four, names were cut short): the emoji,
+  the name, "Small meal · 400 mL", how many are left ("none left" greyed) and a full meal's "at the table"; the fridge has
+  Food and Drinks tabs. THE GAME KEEPS RUNNING; it closes on a pick, ✕, the prompt (CLOSE while it is open) or walking
+  more than 1.2 m away. A pick is the player's own `eatItem` (their mind runs it, as the prompt's actions: interact.ts
+  `askedChoice`, had whole). Their guns go into their holsters.
+  (3) THEIR HEADS AND BODIES WHILE THEIR MIND RUNS THEM (main.ts `thingLook`, `THING_LOOK_HEIGHT`, `SEATS`), the one played
+  doing what they asked and the one standing by alike: walking, they face the way they walk (before, her body kept the
+  last way the player had turned her: her walking backwards to the chair) and within 1.8 m of the walk's end their head turns
+  to the thing (`ASKED_LOOK_NEAR`); there, they square up to it and look at it, tipped to a height on it (the fridge 1.15 m,
+  a sink 0.85, the toilet 0.42...), but a seat or a bed ahead; their head alone turns (`grip`). FIRST PERSON the view eases
+  to her head's look (`ASKED_VIEW_SECONDS` 0.35 s) until the player drags it, which frees it until the action is done
+  (`askedFreed`). Her own looks (the sit's glances, the bow) go on as before. MEASURED in the built game: walking from the
+  fridge to a dining chair with a pasta, never more than 59 degrees off the way she walked (none backwards); her head 0
+  degrees off the fridge eating a sandwich; first person, turned 80 degrees away, the view on the sink 43, 11, 4, 1, 0
+  degrees off it at 0.4 s steps, tipped 50 degrees down into it.
+  (4) SOLID FURNITURE (homeBlocks.ts `LET_IN` 0.7, homeNav.ts `path(start, end, using, letInAt, avoid)`): the thing used
+  (and its kin, a chair's table) let through ONLY within 0.7 m of its own spot, by the walls and the way alike: before, it
+  was let through all over, so a way to the sofa cut across the sofa (Joshua's "walk through the couch"). A bed's way in is
+  its edge. MEASURED (the household simulation, its walker the game's): 0 of 62,000-72,000 frames on their feet more than
+  3 cm inside anything.
+  (5) EACH OTHER (homeBlocks.ts `Person`, `PEOPLE_APART` 0.6, `PLAYER_APART` 0.45; main.ts each walker's `walls.people`;
+  playerMotion.ts `nudge`): each is kept off the other while standing (not sitting or lying): the AI 0.6 m off the one
+  played, the one played only 0.45, so the AI is SHOULDERED ASIDE (nudged every frame, standing still too). The AI's way
+  goes round anyone standing (tried with them, then without), is asked again if someone stands on its next leg
+  (`PERSON_ON_WAY` 0.9 m, twice a second), waits up to 12 s pressed against someone before it counts as stuck, GIVES WAY
+  (stops, up to 3 s) to the one played just ahead of it (`GIVE_WAY_*`), and WAITS ITS TURN short of a spot someone stands
+  on (`SPOT_*`: within 1.3 m of it, up to 15 game minutes, the mind told 'waiting', its walk timer not run: "waiting their
+  turn" in the bubble). Choosing, a slot someone stands on is not free (activities.ts `SPOT_TAKEN` 0.5 m: the kitchen
+  window's spot is the sink's). MEASURED: in the simulation never closer than 0.55-0.6 m; in the built game John, hungry,
+  came to the fridge while she stood at it, waited 0.76 m off her, and took his pasta once she stepped away.
+  (6) THE SIMULATION (scripts/sim_household.ts): its people kept apart as the game's; NEW CHECKS: never inside the
+  furniture, never on top of each other; water WITH FOOD counted (memory.ts `waterWithFoodMl`: a meal's glass and an
+  apple's own water; the drinks check counts it: with it they drink less from the tap, 0.4-1.6 L a day). 36 of 36 pass,
+  three runs; no "no way to the fridge" any more (Mary pressed 12 s against John at it and gave up).
+  NOT YET: heating food (his "later"), favourites, a shopping trip to restock.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

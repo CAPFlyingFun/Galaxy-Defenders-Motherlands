@@ -46,6 +46,8 @@ export interface DayCounts {
   foodMl: number;
   drinks: number;
   waterMl: number;
+  /** water had WITH FOOD (v0.2.181): a meal's glass of water and the food's own (an apple's, a salad's) */
+  waterWithFoodMl: number;
   bathroom: number;
   /** game hours asleep that day (sleep is counted to the day it happens in) */
   sleepHours: number;
@@ -130,7 +132,7 @@ export class Memory {
   day(day: number): DayCounts {
     let d = this.days.get(day);
     if (!d) {
-      d = { meals: 0, bigMeals: 0, snacks: 0, foodMl: 0, drinks: 0, waterMl: 0, bathroom: 0, sleepHours: 0, pastimes: {}, switches: 0, emergencies: 0, failures: 0, idleMinutes: 0 };
+      d = { meals: 0, bigMeals: 0, snacks: 0, foodMl: 0, drinks: 0, waterMl: 0, waterWithFoodMl: 0, bathroom: 0, sleepHours: 0, pastimes: {}, switches: 0, emergencies: 0, failures: 0, idleMinutes: 0 };
       this.days.set(day, d);
     }
     return d;
@@ -160,7 +162,8 @@ export class Memory {
     this.avoid.clear();
     for (const [k, v] of s.avoid ?? []) this.avoid.set(k, v);
     this.days.clear();
-    for (const [k, v] of s.days ?? []) this.days.set(k, v);
+    // (a day saved before v0.2.181 has no water-with-food count: none)
+    for (const [k, v] of s.days ?? []) this.days.set(k, { ...v, waterWithFoodMl: v.waterWithFoodMl ?? 0 });
     this.log.splice(0, this.log.length, ...(s.log ?? []));
   }
 }

@@ -15,8 +15,11 @@
 //                   windows, which stand in their walls).
 //   HomeWalls       a walker's walls: a body (a circle of BODY_RADIUS) pushed out of every solid box; while it uses a
 //                   thing, that thing's box -- and the thing it belongs with (`partOf`: a dining chair's table, the
-//                   desk chair's desk) -- lets it through.
-//   spotFree        can a body stand on this spot at all (with that thing let through)? The test every spot passes.
+//                   desk chair's desk) -- lets it through, but ONLY WITHIN LET_IN OF ITS SPOT (v0.2.181: let through
+//                   all the way, Joshua saw them walk through the sofa to its seat); and the OTHER PEOPLE standing in
+//                   the house are solid too (`people`): kept their `apart` off.
+//   spotPush        how far a body standing on a spot is pushed off it (that thing let in near its spot): the test
+//                   every spot passes.
 // ============================================================================
 import type { GroundPoint } from '../collision';
 import type { Walls } from '../../input/playerMotion';
@@ -44,6 +47,27 @@ export const OUTER_THICK = 0.2, INNER_THICK = 0.12;
 export const WALK_OUT = 30;
 /** A body this near a spot has arrived there (homeMindBody.ts `ARRIVE_WITHIN`), metres: a spot it is pushed further off can never be reached. */
 export const SPOT_REACH = 0.12;
+/**
+ * THE THING BEING USED LETS A BODY IN ONLY THIS NEAR ITS SPOT, metres (its middle from the spot): a body steps into a
+ * seat from in front of it, the last stretch, and walks round it the rest of the way (v0.2.181; Joshua, 2026-11-27: "I
+ * saw them walk through the couch").
+ */
+export const LET_IN = 0.7;
+/**
+ * HOW FAR APART TWO PEOPLE ARE KEPT, their middles, metres (Joshua: "set collisions with each other"): a body standing
+ * by the AI keeps the one PLAYED this far off, and so makes way for them (it is pushed); the one played is stopped a
+ * little nearer (PLAYER_APART), so they shoulder past the AI rather than stop dead in front of it.
+ */
+export const PEOPLE_APART = 0.6, PLAYER_APART = 0.45;
+
+/** Another person in the way: where they stand and how far off them a body is kept. */
+export interface Person {
+  readonly x: number;
+  readonly z: number;
+  readonly apart: number;
+  /** a walker GIVES WAY to them (stops a moment) when they are just ahead: the one played, to the AI */
+  readonly yieldTo?: boolean;
+}
 
 /** A box on the floor: its middle, its half sizes across (x) and along (z) its own frame, and the way it faces. */
 export interface Block {
@@ -112,8 +136,12 @@ export function layoutBlocks(layout: HomeLayout, doorShut?: (dw: Doorway) => () 
  * filled from each thing's `partOf`, both ways: a dining chair lets you through its table, and the table its chairs).
  */
 export class HomeWalls implements Walls {
-  /** the thing this walker is using now: its box, and its kin's, let them through */
+  /** the thing this walker is using now: its box, and its kin's, let them through (within LET_IN of `ignoreAt`) */
   ignore: string | null = null;
+  /** the spot of the thing being used: only this near it is the thing let through (null: anywhere) */
+  ignoreAt: Vec2 | null = null;
+  /** the other people standing in the house (asked each step): a body is kept off each by their `apart` */
+  people: () => readonly Person[] = () => [];
   /** each thing's kin (a chair's table; a table's chairs) */
   private readonly kin = new Map<string, Set<string>>();
 
@@ -128,21 +156,35 @@ export class HomeWalls implements Walls {
     }
   }
 
-  /** Does the thing being used let a body through `objectId`'s box? */
-  private letsThrough(objectId: string | null): boolean {
+  /** Does the thing being used let a body at (x, z) through `objectId`'s box? Only near its spot. */
+  private letsThrough(objectId: string | null, x: number, z: number): boolean {
     if (this.ignore === null || objectId === null) return false;
-    return objectId === this.ignore || (this.kin.get(this.ignore)?.has(objectId) ?? false);
+    if (objectId !== this.ignore && !(this.kin.get(this.ignore)?.has(objectId) ?? false)) return false;
+    return this.ignoreAt === null || Math.hypot(x - this.ignoreAt.x, z - this.ignoreAt.z) <= LET_IN;
   }
 
   move(x: number, z: number, stepX: number, stepZ: number, out: GroundPoint): GroundPoint {
     let nx = x + stepX, nz = z + stepZ;
+    const people = this.people();
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
+      // (the other people first: pushed off them, then the furniture and walls have the last word)
+      for (const p of people) {
+        let dx = nx - p.x, dz = nz - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d >= p.apart) continue;
+        // (right on top of them: out the way the step came from, or any way)
+        if (d < 1e-4) { dx = -stepX || 1; dz = -stepZ; }
+        const len = Math.hypot(dx, dz);
+        nx = p.x + (dx / len) * p.apart;
+        nz = p.z + (dz / len) * p.apart;
+        moved = true;
+      }
       for (const b of this.blocks) {
         const dx = nx - b.cx, dz = nz - b.cz;
         if (Math.abs(dx) > b.reach + BODY_RADIUS || Math.abs(dz) > b.reach + BODY_RADIUS) continue;
         if (b.solid && !b.solid()) continue;
-        if (this.letsThrough(b.objectId)) continue;
+        if (this.letsThrough(b.objectId, nx, nz)) continue;
         // (into the box's own frame: its x across, its z the way it faces)
         const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
         const qx = Math.max(-b.hx, Math.min(b.hx, lx)), qz = Math.max(-b.hz, Math.min(b.hz, lz));
@@ -173,14 +215,14 @@ export class HomeWalls implements Walls {
 }
 
 /**
- * HOW FAR OFF ITS SPOT A BODY IS PUSHED standing on `spot` while using `objectId` (that thing, and its kin, let
- * through), metres. Over SPOT_REACH, nobody can ever arrive there.
+ * HOW FAR OFF ITS SPOT A BODY IS PUSHED standing on `spot` while using `objectId` (that thing, and its kin, let through
+ * within LET_IN of `letInAt`, the thing's own spot to use it from), metres. Over SPOT_REACH, nobody can ever arrive there.
  */
-export function spotPush(walls: HomeWalls, objectId: string | null, spot: Vec2): number {
-  const was = walls.ignore;
-  walls.ignore = objectId;
+export function spotPush(walls: HomeWalls, objectId: string | null, spot: Vec2, letInAt: Vec2 | null = spot): number {
+  const was = walls.ignore, wasAt = walls.ignoreAt, wasPeople = walls.people;
+  walls.ignore = objectId; walls.ignoreAt = letInAt; walls.people = () => [];
   const out: GroundPoint = { x: 0, z: 0 };
   walls.move(spot.x, spot.z, 0, 0, out);
-  walls.ignore = was;
+  walls.ignore = was; walls.ignoreAt = wasAt; walls.people = wasPeople;
   return Math.hypot(out.x - spot.x, out.z - spot.z);
 }

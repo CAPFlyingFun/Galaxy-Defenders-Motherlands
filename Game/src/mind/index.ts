@@ -10,6 +10,7 @@ export * from './memory';
 export * from './world';
 export * from './society';
 export * from './activities';
+export * from './food';
 export * from './interact';
 export * from './mind';
 export * from './random';

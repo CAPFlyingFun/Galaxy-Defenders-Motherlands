@@ -42,7 +42,7 @@ import { createProceduralSky, type Environment, type ProceduralSky } from '../is
 import { PopUpToilet } from '../toilet';
 import { FISHER_HOME, generateHome, type Doorway, type HomeLayout, type HomeSpec, type RoomKind, type WallPiece } from './homeLayout';
 import { HomeNav } from './homeNav';
-import { BODY_RADIUS, DUVET_FROM_HEAD, DUVET_TOP, HomeWalls, INNER_THICK, MATTRESS_TOP, OUTER_THICK, PILLOW_TOP, SEAT_TOP, doorBlock, objectBlock, wallBlock, type Block } from './homeBlocks';
+import { BODY_RADIUS, DUVET_FROM_HEAD, DUVET_TOP, HomeWalls, INNER_THICK, MATTRESS_TOP, OUTER_THICK, PILLOW_TOP, SEAT_TOP, doorBlock, objectBlock, wallBlock, type Block, type Person } from './homeBlocks';
 
 /** How high the walls and ceilings are, metres. */
 export const WALL_HEIGHT = 2.7;
@@ -85,6 +85,10 @@ export interface HomeStart {
  */
 export interface WalkerWalls extends Walls {
   ignore: string | null;
+  /** the used thing is let in only within LET_IN of this spot (homeBlocks.ts) */
+  ignoreAt: Vec2 | null;
+  /** the other people standing in the house, asked each step (main.ts gives each walker the others) */
+  people: () => readonly Person[];
 }
 
 /** The drawn home: add `group` to the scene; `update` each frame; `setEnvironment` each frame with the sky's moment. */

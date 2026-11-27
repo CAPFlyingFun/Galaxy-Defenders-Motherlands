@@ -11,10 +11,15 @@
 // DOING IT (mind.ts `doNow`): the same activity the AI runs, with its own plan and the game's own walking, sitting and
 // lying (homeMindBody.ts), on the thing they chose (`askedChoice` turns the button into the AI's choice). The one
 // played stays 'manual': nothing more is planned for them once it is done, and the stick or the button lets go of it.
+//
+// THE FRIDGE AND THE PANTRY OPEN A PANEL (v0.2.181; Joshua, 2026-11-27: "it shows you the food list you can choose
+// yourself... like an inventory"): their button is OPEN FRIDGE / OPEN PANTRY (`panel`), the game shows what is in it
+// (ui/foodPanel.ts), and a pick is an `eatItem` with that item: a full meal at the table, anything else standing there.
 // ============================================================================
 import type { ActivityId, ActorId, ObjectSlot, ObjectType, SmartObject, Vec2 } from './types';
 import type { MindWorld } from './world';
 import { pickSlot, type Choice, type MindContext, type Pick } from './activities';
+import { atTheTable, type FoodItem } from './food';
 
 /** One thing the one played can do: its button word, the activity, and the thing or person it is with. */
 export interface Interaction {
@@ -26,6 +31,10 @@ export interface Interaction {
   /** the person, for TALK */
   readonly with?: ActorId;
   readonly withName?: string;
+  /** the fridge's or the pantry's panel to open (not an activity: main.ts shows what is in it) */
+  readonly panel?: 'fridge' | 'pantry';
+  /** what was picked from that panel (an `eatItem`) */
+  readonly item?: FoodItem;
 }
 
 /** One way of using a type of thing: its word, its activity, and when it is offered. */
@@ -33,6 +42,7 @@ interface Offer {
   readonly word: string;
   readonly activity: ActivityId;
   readonly when?: (o: SmartObject, world: MindWorld) => boolean;
+  readonly panel?: 'fridge' | 'pantry';
 }
 
 /**
@@ -46,12 +56,9 @@ export const INTERACTIONS: Partial<Record<ObjectType, readonly Offer[]>> = {
     { word: 'DRINK', activity: 'drink' },
     { word: 'WASH UP', activity: 'washUp', when: (o) => o.room !== 'kitchen' },
   ],
-  fridge: [{ word: 'EAT', activity: 'eatMeal', when: (o, w) => w.stock(o.id, 'meals') > 0 }],
-  cabinet: [{ word: 'SNACK', activity: 'snack', when: (o, w) => w.stock(o.id, 'snacks') > 0 }],
-  diningChair: [
-    { word: 'SIT', activity: 'rest' },
-    { word: 'EAT', activity: 'eatMeal', when: (_o, w) => w.objects().some((f) => f.type === 'fridge' && w.stock(f.id, 'meals') > 0) },
-  ],
+  fridge: [{ word: 'OPEN FRIDGE', activity: 'eatItem', panel: 'fridge' }],
+  cabinet: [{ word: 'OPEN PANTRY', activity: 'eatItem', panel: 'pantry' }],
+  diningChair: [{ word: 'SIT', activity: 'rest' }],
   sofa: [
     { word: 'SIT', activity: 'rest' },
     { word: 'WATCH TV', activity: 'watchScreen', when: (o) => !!o.tags?.includes('faces-screen') },
@@ -129,7 +136,7 @@ export function interactionsNear(world: MindWorld, me: ActorId, at: Vec2, facing
   if (best) {
     for (const offer of INTERACTIONS[best.o.type] ?? []) {
       if (offer.when && !offer.when(best.o, world)) continue;
-      things.push({ word: offer.word, activity: offer.activity, object: best.o, slot: best.slot });
+      things.push({ word: offer.word, activity: offer.activity, object: best.o, slot: best.slot, ...(offer.panel ? { panel: offer.panel } : {}) });
     }
   }
   if (person && (!best || personCost < best.cost)) return [person, ...things];
@@ -137,9 +144,9 @@ export function interactionsNear(world: MindWorld, me: ActorId, at: Vec2, facing
 }
 
 /**
- * AN INTERACTION AS THE MIND'S CHOICE: the activity the AI would run, on the thing chosen. A meal from the fridge is
- * eaten at the table (the chair the AI would pick); from a chair at the table, from the fridge with food in it. Null if
- * it cannot be done (no food left, the other person gone).
+ * AN INTERACTION AS THE MIND'S CHOICE: the activity the AI would run, on the thing chosen. A pick from the fridge or
+ * the pantry: a full meal is eaten at the table (the chair the AI would pick, else the sofa or an armchair, else
+ * standing), anything else standing there. Null if it cannot be done (none left, the other person gone).
  */
 export function askedChoice(c: MindContext, i: Interaction): Choice | null {
   const reason = 'the player asked';
@@ -150,16 +157,12 @@ export function askedChoice(c: MindContext, i: Interaction): Choice | null {
   if (!i.object || !i.slot) return null;
   const here = c.body.position();
   const pick: Pick = { object: i.object, slot: i.slot, metres: c.world.travel(here, i.slot.approach) ?? 0 };
-  if (i.activity === 'eatMeal') {
-    if (i.object.type === 'fridge') {
-      // (from the fridge: to a chair at the table, else the sofa or an armchair, else standing at the counter)
-      const seat = pickSlot(c, ['diningChair'], { from: i.slot.use, othersOwn: true })
-        ?? pickSlot(c, ['sofa', 'armchair'], { from: i.slot.use, othersOwn: true })
-        ?? pickSlot(c, ['counter'], { from: i.slot.use, othersOwn: true });
-      return seat ? { activity: 'eatMeal', score: 100, reason, pick: seat, via: pick, asked: true } : null;
-    }
-    const fridge = pickSlot(c, ['fridge'], { stock: 'meals', othersOwn: true });
-    return fridge ? { activity: 'eatMeal', score: 100, reason, pick, via: fridge, asked: true } : null;
+  if (i.activity === 'eatItem') {
+    if (!i.item || !c.world.items(i.object.id).some((e) => e.item.id === i.item!.id && e.count > 0)) return null;
+    const seat = atTheTable(i.item)
+      ? pickSlot(c, ['diningChair'], { from: i.slot.use, othersOwn: true }) ?? pickSlot(c, ['sofa', 'armchair'], { from: i.slot.use, othersOwn: true })
+      : null;
+    return { activity: 'eatItem', score: 100, reason: `${reason}: ${i.item.name.toLowerCase()}`, pick: seat ?? pick, via: pick, item: i.item, asked: true };
   }
   return { activity: i.activity, score: 100, reason, pick, asked: true };
 }

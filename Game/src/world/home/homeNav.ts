@@ -9,13 +9,19 @@
 // that much); A* across the free squares (eight ways, corners not cut), then the corners that are not needed taken out
 // (from each point, on to the furthest point it can see in a straight line), so the way is a few straight legs.
 //
-// THE THING BEING USED IS LET THROUGH: a seat's spot to sit from is in front of the seat, closer than a body's radius,
-// and the bed's side is right against the bed. The way to a thing is asked with that thing's id: its own squares are
-// free for that walk (the game's walls let the walker through it too: homeScene.ts `walkerWalls`).
+// THE THING BEING USED IS LET IN NEAR ITS SPOT: a seat's spot to sit from is in front of the seat, closer than a body's
+// radius, and the bed's side is right against the bed. The way to a thing is asked with that thing's id: its own
+// squares are free for that walk, but only within LET_IN of its spot (`letInAt`), so the way goes ROUND it to its front
+// and steps in (v0.2.181; free all the way, a way to the sofa's seat cut straight through the sofa: Joshua, "I saw them
+// walk through the couch"). The game's walls let the walker in the same way (homeBlocks.ts `HomeWalls`).
+//
+// OTHER PEOPLE (`avoid`): the squares within `apart` of someone standing are not free, so the way goes round them;
+// those within a step of the walker's own start stay free (so they can walk away from someone beside them).
 //
 // SLIDING DOORS ARE FREE: they open as anyone comes near, so the way goes straight through a doorway.
 // ============================================================================
 import type { Vec2 } from '../../mind/types';
+import { LET_IN, type Person } from './homeBlocks';
 
 /** The size of a square, metres. GAME TUNING (finer is smoother and slower: about 10,000 squares for the house). */
 export const CELL = 0.15;
@@ -103,23 +109,33 @@ export class HomeNav {
   }
 
   /**
-   * THE WAY from `start` to `end` round the walls and furniture (`using`: the thing being walked to, let through, and
-   * the things it belongs with: a dining chair's table), as a few points after `start`, the last of them `end` itself;
-   * null if there is no way.
+   * THE WAY from `start` to `end` round the walls and furniture (`using`: the thing being walked to, let in within
+   * LET_IN of `letInAt` -- its spot, `end` if not given -- and the things it belongs with: a dining chair's table), and
+   * round the people in `avoid`, as a few points after `start`, the last of them `end` itself; null if there is no way.
    */
-  path(start: Vec2, end: Vec2, using: string | null = null): Vec2[] | null {
-    // (the thing walked to, and its kin, let through: every index of a box of theirs)
+  path(start: Vec2, end: Vec2, using: string | null = null, letInAt: Vec2 = end, avoid: readonly Person[] = []): Vec2[] | null {
+    // (the thing walked to, and its kin, let through near its spot: every index of a box of theirs)
     const use = new Set<number>();
     if (using !== null) {
       for (const id of [using, ...(this.kin.get(using) ?? [])]) this.ids.forEach((other, i) => { if (other === id) use.add(i); });
     }
+    const near = (k: number): boolean => {
+      const c = this.centre(k);
+      return Math.hypot(c.x - letInAt.x, c.z - letInAt.z) <= LET_IN + CELL;
+    };
     const free = (k: number): boolean => {
       if (this.wall[k] !== 0) return false;
+      if (avoid.length) {
+        const c = this.centre(k);
+        if (Math.hypot(c.x - start.x, c.z - start.z) > CELL * 2) {
+          for (const p of avoid) if (Math.hypot(c.x - p.x, c.z - p.z) < p.apart) return false;
+        }
+      }
       const o = this.owner[k];
       if (o === -1) return true;
-      if (o >= 0) return use.has(o);
+      if (o >= 0) return use.has(o) && near(k);
       for (const i of this.owners.get(k) ?? []) if (!use.has(i)) return false;
-      return use.size > 0;
+      return use.size > 0 && near(k);
     };
     const s = this.nearestFree(this.cellOf(start), free), e = this.nearestFree(this.cellOf(end), free);
     if (s < 0 || e < 0) return null;

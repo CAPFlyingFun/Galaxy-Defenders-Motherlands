@@ -80,7 +80,9 @@ export interface NeedsSnapshot {
 export type ActivityId =
   | 'toilet' | 'eatMeal' | 'snack' | 'drink' | 'sleep' | 'nap' | 'rest' | 'washUp'
   | 'watchScreen' | 'read' | 'lookOutside' | 'wander' | 'exercise' | 'tidy' | 'idle'
-  | 'talk' | 'follow' | 'waitTurn';
+  | 'talk' | 'follow' | 'waitTurn'
+  // (the player's own pick from the fridge or the pantry: mind/interact.ts; never chosen by the AI)
+  | 'eatItem';
 
 /** HOW A BODY IS POSED to use something: standing at it, sitting on it, lying in it, or sleeping sitting up (CCBS's doze). */
 export type Motion = 'stand' | 'sit' | 'lie' | 'doze';
@@ -129,8 +131,8 @@ export interface SmartObject {
   readonly size: { readonly w: number; readonly d: number };
   /** the places it can be used from (at least one) */
   readonly slots: readonly ObjectSlot[];
-  /** what it holds, at the start (the home's runtime counts it down: world.ts) */
-  readonly stock?: Partial<Record<StockKind, number>>;
+  /** the food and drink it holds at the start, by item (mind/food.ts; the home's runtime counts it down: world.ts) */
+  readonly items?: Readonly<Record<string, number>>;
   /** free words for the mind: 'faces-screen', 'quiet' */
   readonly tags?: readonly string[];
   /**

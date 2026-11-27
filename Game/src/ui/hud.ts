@@ -38,7 +38,7 @@ import { clearAndStartFresh } from '../core/freshStart';
 /** What the dome test buttons can ask for. */
 export type DomeDebugAction = 'hit' | 'shatter' | 'repair-all' | 'wet';
 /** What Settings -> FOOD & DRINK can do (main.ts `intake`). */
-export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'needToGo2' | 'mustGo' | 'bathroom' | 'tired' | 'sleep8';
+export type IntakeAction = 'snack' | 'smallMeal' | 'fullMeal' | 'sip' | 'bottle' | 'canteen' | 'hungry' | 'thirsty' | 'needToGo' | 'needToGo2' | 'mustGo' | 'bathroom' | 'tired' | 'sleep8' | 'restock';
 
 export interface HudOptions {
   /** Show the debug readout and dome test buttons. */
@@ -796,8 +796,8 @@ export class Hud {
     intakeRow([['Make hungry', 'hungry'], ['Make thirsty', 'thirsty'], ['Bathroom', 'bathroom']]);
     // (to test THE BATHROOM BAR and the 🚽 button: her bladder to the urge, 350 mL, or a strong urge, 520 mL)
     intakeRow([['Need to go', 'needToGo'], ['Need to go #2', 'needToGo2'], ['Must go now', 'mustGo']]);
-    intakeRow([['Make tired', 'tired'], ['Sleep 8 hours', 'sleep8']]);
-    element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 10 s and her bladder is emptied (until there is a toilet). From 85% full the 🚽 counts down; at 0:00 she goes wherever she is. Make tired: her energy to 10% (only sleep brings it back now). Sleep 8 hours: both of them sleep and the clock jumps 8 hours (until there are beds). The full readout shows her stomach, bladder, sleepiness and fatigue.');
+    intakeRow([['Make tired', 'tired'], ['Sleep 8 hours', 'sleep8'], ['Restock fridge', 'restock']]);
+    element('small', 'gd-note', settings, 'Close Settings to watch: she eats or drinks over a few seconds and her food or water bar and her belly rise with it. Make hungry / thirsty: her bar to 25%. Bathroom: she squats for 10 s and her bladder is emptied (until there is a toilet). From 85% full the 🚽 counts down; at 0:00 she goes wherever she is. Make tired: her energy to 10% (only sleep brings it back now). Sleep 8 hours: both of them sleep and the clock jumps 8 hours (until there are beds). Restock fridge: at home, the fridge and the pantry filled back to what they started with. The full readout shows her stomach, bladder, sleepiness and fatigue.');
     element('h2', 'gd-settings-part', settings, 'TEST TOOLS');
     const tools = element('div', 'gd-debug-row', settings);
     const tool = (label: string, action: DomeDebugAction) => tapButton(element('button', 'gd-button', tools, label), () => options.onDomeDebug(action));

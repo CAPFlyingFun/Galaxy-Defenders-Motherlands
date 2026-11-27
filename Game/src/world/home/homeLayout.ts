@@ -25,7 +25,8 @@
 // A room list (HomeSpec) gives each row's rooms and their widths; the furnishing below places each kind's things
 // against its walls, so a wider or narrower home lays out the same way.
 // ============================================================================
-import type { ActorId, Motion, ObjectSlot, ObjectType, SmartObject, StockKind, Vec2 } from '../../mind/types';
+import type { ActorId, Motion, ObjectSlot, ObjectType, SmartObject, Vec2 } from '../../mind/types';
+import { START_STOCK } from '../../mind/food';
 
 /** The kinds of room a home is made of. */
 export type RoomKind = 'mainBedroom' | 'bedroom' | 'bathroom' | 'ensuite' | 'living' | 'entry' | 'kitchen' | 'hall';
@@ -109,7 +110,6 @@ export interface HomeSpec {
   readonly mainBed: readonly [ActorId, ActorId];
   /** who lives here, and where each starts */
   readonly residents: Readonly<Record<ActorId, Vec2>>;
-  readonly stock: Readonly<Record<StockKind, number>>;
 }
 
 /**
@@ -137,7 +137,6 @@ export const FISHER_HOME: HomeSpec = {
   frontDepth: 5.5,
   mainBed: ['mary', 'john'],
   residents: { mary: { x: 5.0, z: 3.6 }, john: { x: 5.6, z: 2.2 } },
-  stock: { meals: 60, drinks: 40, snacks: 30 },
 };
 
 /** Inner doors: how wide the gap is. The front door is wider. */
@@ -262,14 +261,14 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
   const used = new Map<string, number>();
   /** A thing at (x, z) in house metres, facing `facing`, with its slots (also in house metres). */
   /** Put a thing in the home; returns its id (a chair is put `partOf` its table by that id). */
-  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { stock?: SmartObject['stock']; tags?: string[]; partOf?: string } = {}): string => {
+  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { items?: SmartObject['items']; tags?: string[]; partOf?: string } = {}): string => {
     const n = (used.get(type) ?? 0) + 1;
     used.set(type, n);
     const id = `${type}-${n}`;
     objects.push({
       id, type, name, room, at: at(x, z), facing, size: { w, d },
       slots: slots.map((s) => ({ id: s.id, use: at(s.use[0], s.use[1]), facing: s.facing, approach: at(s.approach[0], s.approach[1]), motion: s.motion, ...(s.owner ? { owner: s.owner } : {}) })),
-      ...(extra.stock ? { stock: extra.stock } : {}),
+      ...(extra.items ? { items: extra.items } : {}),
       ...(extra.tags ? { tags: extra.tags } : {}),
       ...(extra.partOf ? { partOf: extra.partOf } : {}),
     });
@@ -390,10 +389,10 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         // the fridge and stove on the east wall (the back door between them and the south wall), the sink, cabinet
         // and counter along the south wall, the dining table and its four chairs in the middle-west, a window south
         const ex = r.x1 - 0.35;
-        put('fridge', 'Fridge', room.id, ex, r.z1 - 0.9, WEST, 0.8, 0.7, [front('front', ex, r.z1 - 0.9, WEST, 0.7)], { stock: { meals: spec.stock.meals, drinks: spec.stock.drinks } });
+        put('fridge', 'Fridge', room.id, ex, r.z1 - 0.9, WEST, 0.8, 0.7, [front('front', ex, r.z1 - 0.9, WEST, 0.7)], { items: START_STOCK.fridge });
         put('stove', 'Stove', room.id, ex, r.z0 + 3.4, WEST, 0.7, 0.65, [front('front', ex, r.z0 + 3.4, WEST, 0.65)]);
         put('sink', 'Kitchen sink', room.id, r.x1 - 2.5, r.z0 + 0.3, NORTH, 0.8, 0.6, [front('front', r.x1 - 2.5, r.z0 + 0.3, NORTH, 0.6)]);
-        put('cabinet', 'Snack cabinet', room.id, r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.8, 0.6, [front('front', r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.6)], { stock: { snacks: spec.stock.snacks } });
+        put('cabinet', 'Pantry', room.id, r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.8, 0.6, [front('front', r.x1 - 1.5, r.z0 + 0.3, NORTH, 0.6)], { items: START_STOCK.cabinet });
         put('counter', 'Counter', room.id, r.x1 - 3.5, r.z0 + 0.3, NORTH, 1.0, 0.6, [front('front', r.x1 - 3.5, r.z0 + 0.3, NORTH, 0.6)]);
         const tx = r.x0 + 2.5, tz = cz + 0.2;
         // (the table, 1.6 x 0.9; tidied from its east end, clear of the chairs)

@@ -1,0 +1,65 @@
+/* ============================================================================
+   foodPanel.css -- the fridge's and the pantry's panel (ui/foodPanel.ts): in the middle of the screen, above the
+   controls, three tiles across on a phone on its side (932 x 430: at four, "Cheese stick" and "Small meal · 400 mL" were
+   cut short), its own scroll if it ever runs past the screen.
+   The HUD's own colours: navy, teal lines, gold for the tab showing.
+   ============================================================================ */
+.gd-food {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 54px);
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 300px));
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  box-sizing: border-box;
+  padding: 10px 12px 8px;
+  border: 1px solid rgba(94, 232, 200, 0.55);
+  border-radius: 14px;
+  background: rgba(4, 6, 13, 0.92);
+  color: #eaf2ff;
+  font-size: 13px;
+  z-index: 30;
+  pointer-events: auto;
+}
+.gd-food[hidden] { display: none; }
+.gd-food-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.gd-food-title { font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: #ffd56b; }
+.gd-food-tabs { display: flex; gap: 6px; flex: 1; justify-content: center; }
+.gd-food-tabs[hidden] { display: none; }
+.gd-food-tab, .gd-food-close {
+  border: 1px solid rgba(94, 232, 200, 0.45);
+  border-radius: 8px;
+  background: rgba(16, 26, 46, 0.72);
+  color: #b9c6dd;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 12px;
+}
+.gd-food-tab.is-on { border-color: #ffd56b; color: #ffd56b; }
+.gd-food-close { margin-left: auto; padding: 4px 10px; color: #eaf2ff; }
+.gd-food-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.gd-food-tile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 58px;
+  padding: 6px 7px;
+  border: 1px solid rgba(94, 232, 200, 0.35);
+  border-radius: 10px;
+  background: rgba(16, 26, 46, 0.72);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.gd-food-tile:active { border-color: #ffd56b; }
+.gd-food-tile.is-out { opacity: 0.38; }
+.gd-food-pic { font-size: 28px; line-height: 1; }
+.gd-food-words { display: flex; flex-direction: column; min-width: 0; }
+.gd-food-name { font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gd-food-size, .gd-food-left { font-size: 11px; color: #9fb0cc; white-space: nowrap; }
+.gd-food-left { color: #5ee8c8; }
+.gd-food-tile.is-out .gd-food-left { color: #9fb0cc; }
+.gd-food-note { margin-top: 7px; font-size: 11px; color: #9fb0cc; text-align: center; }

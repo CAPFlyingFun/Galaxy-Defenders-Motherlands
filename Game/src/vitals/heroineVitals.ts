@@ -616,6 +616,9 @@ export class HeroineVitals {
    * HOW MANY WEEKS PREGNANT she is now (0: not pregnant): Settings and story steps change it while she plays
    * (heroine/pregnancyPlan.ts). Her heart, breathing and staying power follow from the next step.
    */
+  /** How many weeks pregnant she is (0: not). */
+  get weeksPregnant(): number { return this.body.weeks ?? 0; }
+
   setWeeks(weeks: number): void {
     if (weeks === (this.body.weeks ?? 0)) return;
     this.body = { ...this.body, weeks };

@@ -1713,6 +1713,27 @@ use the game's single copy of three.js.
   0.555, `PILLOW_TOP` 0.62. Mary's side of the main bed the west, John's the east (a guess). Her arms' aim and her
   head's looks are off while she lies; first person is not for lying yet. Pictured: sitting down, on the edge, lying
   back, lying, getting up; both lying from the side, above and by the pillow.
+  SLEEPING ON THEIR SIDES (Joshua, 2026-11-26: "Are they both sleeping on their sides yet or just back?", "Go ahead and
+  add first"): the lie spot carries a SIDE (+1 her LEFT side down, -1 her right, 0 her back); her whole body is ROLLED a
+  quarter turn about her own length before she is tipped back (fastHeroine.ts `lieSide`, `lieRollQ`), and her SIDE POSE
+  (groundPose.ts `SIDE_POSE`, `sideTurns`, written for her left side and mirrored) laid over her back pose by how far
+  over she is: back a little rounded and BENT UP toward her top side (`lift`: her shoulders are wider than her hips, and
+  laid straight her lower shoulder went 6-11 cm into the bed), her head bent back down onto the pillow (`neckDown`), the
+  arm she lies on forward and IN (`bottomOut`: her standing arm's 17 degrees out was down into the bed, its hand 16 cm
+  into the pillow), its hand by her face, the top arm in front of her (over her belly when it is big), knees bent, the
+  top one further forward, the lower leg out onto the bed (Mary). Hips over the duvet by half their width (Mary 0.185,
+  John 0.205). MEASURED as the back pose: John on his left side head -0.4 / back 0.7 / hips 0.5 / thighs -0.2 / shins
+  -2.5 / feet 2.4 cm into the bed, on his right 0.3 / 1.6 / 1.6 / 1.0 / -0.9 / 4.6; Mary (10 and 150 %) 3.2 / 1.6 / 1.2 /
+  -1.0 / -3.0 / -1.3 (heads sink 0-4 cm into the pillow); the holster under the lower thigh 5-7 cm into the duvet;
+  turning over, the skin never more than 1.5 cm in. TURNING OVER (LIE `turnSeconds` 3): asleep, every 30-90 GAME minutes
+  (homeMindBody.ts `SLEEP_SIDES`; people turn 10-20 times a night), to another of back / left / right at random (30 /
+  35 / 35 %); from 28 weeks pregnant mostly her side, her left the most (5 / 70 / 25 %: off her back, the left best for
+  the baby's blood flow); from one side to the other she rolls through her back. The thought bubble says "on the back",
+  "on the left side", "turning over". Test pages: `gdm.sidePose.female/male` live, a body's `mindBody.sleepSide` and
+  `turnOverIn` (game minutes). (Not yet: a pillow between her knees; two of them in the bed at once, as one is always
+  played.) THE CAMERA UNDER THE CEILING (cameraRig.ts `cameraCeiling`, 2.58 m at home): looking down at her in a room
+  the third-person camera rose over the ceiling (one-sided, unseen from above) and showed the house over its walls; now
+  it is brought in along its line of sight to stay under it.
   (5) AN OPEN SIT (fastHeroine.ts `sitFor(seconds, open)`, SIT_LOOK `openGapLeast`/`openGapMost`): the mind's sits
   last as long as it wants (held 2.9 s ahead each frame, `SIT_AHEAD`: just over the bow, so asked to stand she bows and
   is up at once), and while held she glances round every 5-14 s.

@@ -59,7 +59,7 @@ import { smoothBand } from '../liveBand';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { LIE, SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
-import { LIE_POSE, STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, lieTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import { LIE_POSE, SIDE_POSE, STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, lieTurns, sideTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
@@ -598,8 +598,16 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
    * LYING DOWN ON A BED (LIE; `lieOn`): where her hip joints lie (world), and the way her feet point; how far lying she
    * is (0 sitting on the edge .. LIE.seconds lying), and the spot kept while she sits up again after `lieOn(null)`.
    */
-  type LieSpot = { x: number; y: number; z: number; yaw: number };
+  type LieSpot = { x: number; y: number; z: number; yaw: number; side?: number };
   let lieSpot: LieSpot | null = null, lieLast: LieSpot | null = null, lieW = 0;
+  /**
+   * LYING ON HER SIDE OR BACK (the spot's `side`: +1 her LEFT side down, -1 her right, 0 her back): where she is now
+   * between them (-1..1), and a turn over in hand (from, to, how far through it 0..1, over LIE.turnSeconds).
+   */
+  const lieSide = { now: 0, from: 0, to: 0, t: 1 };
+  const lieRollQ = new THREE.Quaternion();
+  /** Her side pose's turns, written each frame she lies on a side (groundPose.ts `sideTurns`). */
+  const sideOut: MutableJointTurn[] = [];
   /** Lying, her head's roll to one side (LIE.rollLeast..rollMost): now, where it is going, and when it moves again. */
   const lieRoll = { now: 0, from: 0, to: 0, t: 1, wait: 0 };
   /** Her neck's and skull's turns as her pose leaves them, before her looks (laid back over them as she lies). */
@@ -1920,6 +1928,7 @@ if (uHideHead > 0.5) {
       lieSpot = spot ? { ...spot } : null;
     },
     lieInfo: () => lieW,
+    lieSideNow: () => lieSide.now,
     setSkinShine(oily: number): void { shine.skinOily.value = Math.max(-1, Math.min(1, oily)); },
     soakSkin(): void { wetness.soak(); },
     bellyNow: () => body.belly,
@@ -2065,6 +2074,15 @@ if (uHideHead > 0.5) {
         lieLast = lieSpot;
         sitAsked = true; sitLeft = Math.max(sitLeft, LIE.holdSit);
         if (sitT >= SIT.seconds) lieW = Math.min(1, lieW + frame.dt / LIE.seconds);
+        // (her side: lying down she goes straight to it, as her body rolls with her lying back; lying, a new one is a
+        //  TURN OVER, eased over LIE.turnSeconds from wherever she is)
+        const want = Math.max(-1, Math.min(1, lieSpot.side ?? 0));
+        if (lieW <= 0) { lieSide.now = lieSide.from = lieSide.to = want; lieSide.t = 1; }
+        else if (want !== lieSide.to) { lieSide.from = lieSide.now; lieSide.to = want; lieSide.t = 0; }
+        if (lieSide.t < 1) {
+          lieSide.t = Math.min(1, lieSide.t + frame.dt / LIE.turnSeconds);
+          lieSide.now = lieSide.from + (lieSide.to - lieSide.from) * smooth(lieSide.t);
+        }
       } else if (lieW > 0) {
         lieW = Math.max(0, lieW - frame.dt / LIE.seconds);
         sitAsked = true; sitLeft = Math.max(sitLeft, LIE.upAfter);
@@ -2127,6 +2145,9 @@ if (uHideHead > 0.5) {
       if (sitS > 0) motion.overlay(seatedTurns(motion.measure, motion.bind, male ? 0 : body.belly, sitOut), sitS * (1 - lieS));
       // (lying: her own lying pose, groundPose.ts LIE_POSE, laid over the sit as she lies back)
       if (lieS > 0) motion.overlay(lieTurns(male ? LIE_POSE.male : LIE_POSE.female, motion.measure, motion.bind, lieOut), lieS);
+      // (on her side: her side pose over that, by how far over she is; mirrored for her right side)
+      const sideShare = Math.abs(lieSide.now);
+      if (lieS > 0 && sideShare > 0) motion.overlay(sideTurns(male ? SIDE_POSE.male : SIDE_POSE.female, lieSide.now > 0, motion.measure, motion.bind, sideOut), lieS * sideShare);
       // (from the first moment, for her feet's step out, though her hips have not begun to go down)
       ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
       ground.seatSpread[0] = sitNow.apart[0]; ground.seatSpread[1] = sitNow.apart[1];
@@ -2256,13 +2277,18 @@ if (uHideHead > 0.5) {
       if (lieS > 0 && lieLast) {
         root.updateMatrixWorld(true);
         // (the spot is on the top of what she lies on: her hip joints lie her own flesh over it, LIE_POSE)
-        lieAt.set(lieLast.x, lieLast.y + (male ? LIE_POSE.male : LIE_POSE.female).hipsOver, lieLast.z);
+        // (on her side, her hips' own half width and flesh under them instead, by how far over she is)
+        const backOver = (male ? LIE_POSE.male : LIE_POSE.female).hipsOver, sideOver = (male ? SIDE_POSE.male : SIDE_POSE.female).hipsOver;
+        lieAt.set(lieLast.x, lieLast.y + backOver + (sideOver - backOver) * Math.abs(lieSide.now), lieLast.z);
         root.worldToLocal(lieAt);
         const turn = Math.atan2(Math.sin(lieLast.yaw - root.rotation.y), Math.cos(lieLast.yaw - root.rotation.y));
         lieTurnQ.setFromAxisAngle(Y_UP, turn * lieS);
         lieTipQ.setFromAxisAngle(X_AXIS, -(LIE.tip - LIE.incline) * lieS);
         lieFlipQ.setFromAxisAngle(Y_UP, fitFlip);
-        lieQ.copy(lieTurnQ).multiply(lieTipQ).multiply(lieFlipQ);
+        // (ROLLED onto her side about her own length before she is tipped back: a quarter turn about her upright, so
+        //  her left faces down once she is tipped, for +1; her right for -1)
+        lieRollQ.setFromAxisAngle(Y_UP, (Math.PI / 2) * lieSide.now * lieS);
+        lieQ.copy(lieTurnQ).multiply(lieTipQ).multiply(lieRollQ).multiply(lieFlipQ);
         lieHips.copy(hipsInFit).multiply(fit.scale).applyQuaternion(lieQ);
         lieAt.sub(lieHips);
         fit.position.lerp(lieAt, lieS);
@@ -2443,7 +2469,9 @@ if (uHideHead > 0.5) {
           root.updateMatrixWorld(true);
           bone(joints.pelvis).getWorldPosition(leanFrom);
           spineAxis.copy(neckBone.getWorldPosition(leanTo)).sub(leanFrom).normalize();
-          for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], spineAxis, lieRoll.now * lieS * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
+          // (on her side her head rests on the pillow as her side pose has it: only a little of the roll)
+          const rollShare = 1 - 0.75 * Math.abs(lieSide.now);
+          for (let i = 0; i < neckBones.length; i++) turnAbout(neckBones[i], spineAxis, lieRoll.now * lieS * rollShare * (HEAD_TURN_SHARES[i + HEAD_TURN_SHARES.length - neckBones.length] ?? 0));
           root.updateMatrixWorld(true);
         } else { lieRoll.now = 0; lieRoll.t = 1; lieRoll.wait = 0; }
       }

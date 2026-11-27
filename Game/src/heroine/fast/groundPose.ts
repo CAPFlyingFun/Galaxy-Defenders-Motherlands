@@ -328,6 +328,79 @@ export function lieTurns(pose: LiePose, measure: HumanMeasure, bind: readonly Bi
   return out;
 }
 
+/**
+ * LYING ON HER SIDE (v0.2.179; Joshua, 2026-11-26: "Are they both sleeping on their sides yet or just back?", "Go ahead
+ * and add first"): a relaxed side sleeper's pose, written in her own standing frame as if she lay on her LEFT side (the
+ * bottom arm and leg her left); `sideTurns` mirrors it for her right. Her whole body is then rolled onto that side and
+ * tipped back (fastHeroine.ts LIE). Her back a little rounded, her bottom arm forward with its hand by her face, her top
+ * arm resting in front of her (late in a pregnancy, over her belly), her knees bent, the top one further forward; her
+ * head resting on the pillow, bent down toward it a little. GAME TUNING, degrees and metres.
+ */
+export interface SidePose {
+  /** her hip joints over the top of what she lies on, metres (half her hips' width, and her flesh, under them) */
+  hipsOver: number;
+  /** her back rounded forward, low and high */
+  spine: number; chest: number;
+  /** her back bent UP toward her top side, degrees, shared low and high: her shoulders are wider than her hips, so
+   *  laid straight her lower shoulder went into the bed while her hips lay on it */
+  lift: number;
+  /** her head: chin a little toward her chest, and bent down toward the pillow (toward her lower shoulder) */
+  neck: number; neckDown: number;
+  /** the arm she lies on: forward at her shoulder, elbow bent (its hand by her face), and how far out from her side
+   *  (out is DOWN into the bed once she lies on that side: her standing arm's 17 hung her elbow 9 cm into it) */
+  bottomArm: number; bottomElbow: number; bottomOut: number;
+  /** the arm on top: forward, elbow bent, and in across her front (negative out) so it rests in front of her */
+  topArm: number; topElbow: number; topArmOut: number;
+  /** the leg she lies on: thigh forward, knee bent, and out to her side (DOWN onto the bed: her hip joint stands over it
+   *  by half her hips' width, so her knee and ankle come down to it) */
+  bottomHips: number; bottomKnee: number; bottomLegOut: number;
+  /** the leg on top: further forward, its knee more bent, a little across the other (negative out) */
+  topHips: number; topKnee: number; topOut: number;
+  /** her feet relaxed, toes pointed a little */
+  point: number;
+}
+export const SIDE_POSE: { female: SidePose; male: SidePose } = {
+  female: { hipsOver: 0.185, spine: 8, chest: 6, lift: 16, neck: 8, neckDown: 34, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 4, topHips: 55, topKnee: 70, topOut: -6, point: 20 },
+  male: { hipsOver: 0.205, spine: 8, chest: 6, lift: 12, neck: 8, neckDown: 30, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 0, topHips: 55, topKnee: 70, topOut: -6, point: 20 },
+};
+
+/** Her pose lying on her side (SIDE_POSE): `onLeft` her left side down, else her right; turns from her bind pose. */
+export function sideTurns(pose: SidePose, onLeft: boolean, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
+  while (out.length < 17) out.push({ joint: -1, ax: 0, ay: 1, az: 0, radians: 0 });
+  const j = measure.joints;
+  const left = measure.leftSign < 0 ? -1 : 1;
+  let n = 0;
+  const put = (joint: number, ax: number, ay: number, az: number, radians: number): void => {
+    const t = out[n++]; t.joint = joint; t.ax = ax; t.ay = ay; t.az = az; t.radians = radians;
+  };
+  put(j.pelvis, 0, 1, 0, 0);
+  // (a turn about her forward axis takes what is above it toward -X for a positive angle: toward her left, on +left, by
+  //  a negative one. `down` is the X of the side she lies on)
+  const down = onLeft ? left : -left;
+  putXZ(put, j.spine, pose.spine * DEG, down * pose.lift * 0.5 * DEG);
+  putXZ(put, j.chest, pose.chest * DEG, down * pose.lift * 0.5 * DEG);
+  // (her head bent back down toward her lower side, onto the pillow, by her back's lift and more)
+  putXZ(put, j.neck, pose.neck * DEG, -down * (pose.neckDown + pose.lift) * DEG);
+  // her arms: the one she lies on and the one on top
+  for (const side of [0, 1] as const) {
+    const isLeft = side === 0, bottom = isLeft === onLeft;
+    const xSign = isLeft ? left : -left;
+    arm(put, bind, isLeft ? j.shoulderL : j.shoulderR, isLeft ? j.elbowL : j.elbowR, isLeft ? j.wristL : j.wristR, xSign,
+      (bottom ? pose.bottomArm : pose.topArm) * DEG, (bottom ? pose.bottomElbow : pose.topElbow) * DEG, 8 * DEG, 0,
+      (bottom ? pose.bottomOut : pose.topArmOut) * DEG);
+  }
+  // her legs: the one she lies on and the one on top
+  for (const side of [0, 1] as const) {
+    const isLeft = side === 0, bottom = isLeft === onLeft;
+    const s = isLeft ? left : -left;
+    leg(put, isLeft ? j.hipL : j.hipR, isLeft ? j.kneeL : j.kneeR, isLeft ? j.ankleL : j.ankleR, s,
+      (bottom ? pose.bottomHips : pose.topHips) * DEG, (bottom ? pose.bottomLegOut : pose.topOut) * DEG, 6 * DEG,
+      (bottom ? pose.bottomKnee : pose.topKnee) * DEG, pose.point * DEG);
+  }
+  out.length = n;
+  return out;
+}
+
 /** Kneeling: her whole body's forward tip, radians (her lean), and her hips' height (her thigh down to her knee). */
 export function kneelTip(): number { return KNEEL.lean * DEG; }
 export function kneelHips(sizes: BodySizes): number { return foursHips(sizes); }
@@ -390,11 +463,13 @@ const about = (x: number, y: number, z: number, angle: number): number[] => {
  * One arm: lowered from her T as the builder's standing arm is, then swung FORWARD by `forward` radians at the
  * shoulder, its elbow bent `elbow` (and taken out of the bind's kink), its wrist turned in a little.
  */
-function arm(put: Put, bind: readonly BindJoint[], shoulder: number, elbow: number, wrist: number, xSign: number, forward: number, elbowBend: number, wristIn: number, flat = 0): void {
+function arm(put: Put, bind: readonly BindJoint[], shoulder: number, elbow: number, wrist: number, xSign: number, forward: number, elbowBend: number, wristIn: number, flat = 0, outFromDown = 17 * DEG): void {
   const s = bind[shoulder], e = bind[elbow], w = bind[wrist];
   const droop = Math.atan2(s.y - e.y, Math.abs(e.x - s.x));
   const kink = droop - Math.atan2(e.y - w.y, Math.abs(w.x - e.x));
-  putXZ(put, shoulder, -forward, -xSign * (Math.PI / 2 - 17 * DEG - droop));
+  // (lowered from her T to `outFromDown` off straight down, out to her side: the builder's standing arm's 17 degrees;
+  //  less, or under 0, brings it in across her front)
+  putXZ(put, shoulder, -forward, -xSign * (Math.PI / 2 - outFromDown - droop));
   // THE ELBOW: the bind's kink taken out about Z, then bent FORWARD about the line across her body (X), as a knee bends
   // the other way. (Not the builder's bend about Y: that assumes an arm straight out in a T, and her body file's arms
   // already hang nearly down, so a turn about Y only twisted her forearm about itself.)

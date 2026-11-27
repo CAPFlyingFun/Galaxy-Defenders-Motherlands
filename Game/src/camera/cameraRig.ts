@@ -181,6 +181,12 @@ export class CameraRig {
    * metres behind her, and from its usual pivot, 3.3 m up and looking level, she was under the bottom of the picture.
    */
   pivotCeiling: number | null = null;
+  /**
+   * ...and the CAMERA itself kept under it, metres over her feet (null: no roof): looking down at her in a room it rose
+   * over the ceiling (one-sided, so unseen from above) and showed the house from over its walls. Brought in toward the
+   * point it looks from, as by `keepClear`, so it still looks the same way.
+   */
+  cameraCeiling: number | null = null;
   /** (where the camera looks from, for `keepClear`, one vector kept for it) */
   private readonly clearFrom = new THREE.Vector3();
   /**
@@ -397,13 +403,18 @@ export class CameraRig {
    * point it looks from, along its own line of sight, so it still looks the same way, only from nearer.
    */
   private clearView(heroine: HeroineBody): void {
-    if (!this.keepClear) return;
+    if (!this.keepClear && this.cameraCeiling === null) return;
     const feet = heroine.root.position;
     // (the side views and the cinematic shots look AT a point by her; the others look from their pivot)
     if (this.style === 'sideLeft' || this.style === 'sideRight' || this.style === 'cinematic') this.clearFrom.copy(this.shotAt);
     else if (this.style === 'drone') this.clearFrom.set(feet.x, feet.y + 1.5, feet.z);
     else this.clearFrom.copy(this.pivot);
-    this.keepClear(this.clearFrom, this.camera.position);
+    this.keepClear?.(this.clearFrom, this.camera.position);
+    // (under the roof: along the same line, toward where it looks from, until it is under the ceiling)
+    if (this.cameraCeiling !== null) {
+      const top = feet.y + this.cameraCeiling, cam = this.camera.position, from = this.clearFrom;
+      if (cam.y > top && from.y < top) cam.lerpVectors(from, cam, (top - from.y) / (cam.y - from.y));
+    }
   }
 
   /** The lowest the camera may be at its own place: just over the ground there (or over her feet's level). */

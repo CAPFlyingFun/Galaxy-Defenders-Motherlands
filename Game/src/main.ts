@@ -72,7 +72,7 @@ import type { Tunnel } from './world/prologue/tunnel';
 import type { HomeScene } from './world/home/homeScene';
 import type { Mind } from './mind';
 import { needsFromReading } from './world/home/mindBridge';
-import { LIE_POSE } from './heroine/fast/groundPose';
+import { LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
 import type { HomeMindBody } from './world/home/homeMindBody';
 /** The home's walls and ceilings, metres (homeScene.ts WALL_HEIGHT; a number here so the module loads only on its map). */
 const HOME_WALL_HEIGHT = 2.7;
@@ -1246,6 +1246,7 @@ async function start(): Promise<void> {
     // (the follow camera's pivot under the ceilings: 2.2 m, half a metre under them, so she is in the picture when the
     //  walls bring the camera in close)
     rig.pivotCeiling = HOME_WALL_HEIGHT - 0.5;
+    rig.cameraCeiling = HOME_WALL_HEIGHT - 0.12;
     rig.faceAtOnce(START.yaw);
   }
   /**
@@ -1993,7 +1994,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, home, homeWorld, homeSociety, liePose: LIE_POSE, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, home, homeWorld, homeSociety, liePose: LIE_POSE, sidePose: SIDE_POSE, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       // (the game's own clock, seconds of play: for test pages that time things in game time, not the browser's)
       get elapsed() { return elapsed; },
@@ -2977,7 +2978,10 @@ async function start(): Promise<void> {
           return [
             `🧠 ${other.name} · ${clock.text}`,
             `▶ ${mind.thought}`,
-            `🚶 ${d.nav}${d.destination ? ` → ${d.destination}` : ''}`,
+            // (in bed: which way they lie, on their back or a side, turning over between)
+            (other.body.lieInfo?.() ?? 0) > 0
+              ? `🛌 ${((s: number): string => Math.abs(s) < 0.05 ? 'on the back' : Math.abs(s) > 0.95 ? `on the ${s > 0 ? 'left' : 'right'} side` : 'turning over')(other.body.lieSideNow?.() ?? 0)}`
+              : `🚶 ${d.nav}${d.destination ? ` → ${d.destination}` : ''}`,
             `⚖️ ${d.scores.slice(0, 3).map((x) => `${x.activity} ${Math.round(x.score)}`).join(' · ')}`,
             `🍽️ ${pc(n.food)} 💧 ${pc(n.water)} 🚽 ${pc(n.bathroom)} 🔋 ${pc(n.energy)}${n.asleep ? ' 💤' : ''}`,
           ];

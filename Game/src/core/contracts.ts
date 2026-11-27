@@ -222,9 +222,11 @@ export interface HeroineBody {
    * metres: on the mattress) and her feet toward `yaw` (the bed's foot end, compass yaw). null: she sits up, then gets
    * up, where she sat. Asked each frame it is wanted (as it is now).
    */
-  lieOn?(spot: { x: number; y: number; z: number; yaw: number } | null): void;
+  lieOn?(spot: { x: number; y: number; z: number; yaw: number; side?: number } | null): void;
   /** How far lying down she is: 0 not at all (standing or sitting) .. 1 lying. */
   lieInfo?(): number;
+  /** Lying, where she is between her sides: +1 on her left, -1 on her right, 0 on her back (turning over, between). */
+  lieSideNow?(): number;
   /** How far through sitting she is: 0 standing .. 1 seated. */
   sitShare?(): number;
   /** How much of her own look while she sits is on (0..1; heroine/fast/sitPose.ts SIT_LOOK): first person, turning the

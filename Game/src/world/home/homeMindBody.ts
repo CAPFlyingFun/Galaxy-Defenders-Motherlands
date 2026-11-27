@@ -43,7 +43,7 @@ export interface HomeBodyHooks {
   sitFor(seconds: number, open?: boolean): void;
   sitShare(): number;
   /** the body's own lie (fastHeroine.ts `lieOn`) and how far lying it is (0..1) */
-  lieOn(spot: { x: number; y: number; z: number; yaw: number } | null): void;
+  lieOn(spot: { x: number; y: number; z: number; yaw: number; side?: number } | null): void;
   lieShare(): number;
 }
 
@@ -56,6 +56,16 @@ const STUCK_SECONDS = 2.5, STUCK_TRIES = 3;
 /** Sitting, the sit is asked to last this long ahead each frame: just over the bow before getting up (SIT_LOOK.bowBefore,
  *  2.5 s), so there is no bow while seated, and asked to stand, the bow starts within 0.4 s and up she gets. */
 const SIT_AHEAD = 2.9;
+/**
+ * SLEEPING SIDES: how likely her back, left side and right side are (any day, and from `lateFrom` weeks pregnant), and
+ * how many game minutes between turning over (people change position some 10-20 times a night).
+ */
+const SLEEP_SIDES = {
+  usual: { back: 0.3, left: 0.35, right: 0.35 },
+  late: { back: 0.05, left: 0.7, right: 0.25 },
+  lateFrom: 28,
+  turnLeast: 30, turnMost: 90,
+} as const;
 /** At a bed's edge she stands this far out from the mattress's side, so her hips land just on it as she sits. */
 const BED_EDGE_OUT = 0.24;
 /** Her hip joints lie this far toward the foot from the bed's spot (its slot's `use`, by the pillow). */
@@ -93,6 +103,9 @@ export class HomeMindBody implements MindBody {
   private pathTo: Vec2 | null = null;
   private pathUsing: string | null = null;
   private stuckFor = 0;
+  /** Lying: her side now (+1 her left, -1 her right, 0 her back; public for test pages) and game minutes to her next turn. */
+  sleepSide = 0;
+  turnOverIn = 0;
   private tries = 0;
   private lastAt: Vec2 = { x: 0, z: 0 };
   private dt = 0;
@@ -107,6 +120,11 @@ export class HomeMindBody implements MindBody {
   /** Once a frame BEFORE the mind ticks: the frame's seconds, and the pose asked for kept up. */
   frame(dt: number): void {
     this.dt = dt;
+    // (asleep in bed, she TURNS OVER now and then: game minutes, so the night's turns come at any clock speed)
+    if (this.wanted === 'lie' && this.asleep && this.hooks.lieShare() >= 1) {
+      this.turnOverIn -= dt * this.hooks.vitals.gameHoursPerSecond * 60;
+      if (this.turnOverIn <= 0) { this.sleepSide = this.pickSide(this.sleepSide); this.turnOverIn = this.nextTurnOver(); }
+    }
     if (this.wanted === 'sit' || this.wanted === 'doze') this.hooks.sitFor(SIT_AHEAD, true);
     if (this.wanted === 'lie' && this.bed) this.hooks.lieOn(this.lieSpot(this.bed));
     else this.hooks.lieOn(null);
@@ -193,6 +211,8 @@ export class HomeMindBody implements MindBody {
       // (her back to the bed first, then down onto its edge and back)
       this.holdYaw = this.bed.sitYaw;
       if (this.wanted !== 'lie' && Math.abs(wrap(this.hooks.facing() - this.bed.sitYaw)) > TURNED_WITHIN) return 'changing';
+      // (lying down: the side she will lie on, and how long before she first turns over)
+      if (this.wanted !== 'lie') { this.sleepSide = this.pickSide(null); this.turnOverIn = this.nextTurnOver(); }
       this.wanted = 'lie';
       return this.hooks.lieShare() >= 1 ? 'ready' : 'changing';
     }
@@ -251,8 +271,28 @@ export class HomeMindBody implements MindBody {
     return { object: o, edge, sitYaw: Math.atan2(outX, outZ), hips, feetYaw: o.facing, under };
   }
 
-  private lieSpot(b: BedPlan): { x: number; y: number; z: number; yaw: number } {
+  private lieSpot(b: BedPlan): { x: number; y: number; z: number; yaw: number; side: number } {
     // (on the top of what her hips lie on: her body lays her own flesh over it, groundPose.ts LIE_POSE)
-    return { x: b.hips.x, y: this.hooks.floorY() + b.under, z: b.hips.z, yaw: b.feetYaw };
+    return { x: b.hips.x, y: this.hooks.floorY() + b.under, z: b.hips.z, yaw: b.feetYaw, side: this.sleepSide };
+  }
+
+  /**
+   * WHICH WAY SHE SLEEPS (Joshua, 2026-11-26: "Are they both sleeping on their sides yet or just back?"): her back, her
+   * left side or her right (`SLEEP_SIDES`), at random by those weights, never the one she is on when she turns over.
+   * From 28 weeks pregnant mostly on her side, her left the most (as she is told to then: off her back, the left best for
+   * the baby's blood flow).
+   */
+  private pickSide(now: number | null): number {
+    const late = this.hooks.vitals.weeksPregnant >= SLEEP_SIDES.lateFrom;
+    const w = late ? SLEEP_SIDES.late : SLEEP_SIDES.usual;
+    const choices = ([[0, w.back], [1, w.left], [-1, w.right]] as const).filter(([side]) => side !== now);
+    let roll = Math.random() * choices.reduce((sum, [, weight]) => sum + weight, 0);
+    for (const [side, weight] of choices) { roll -= weight; if (roll <= 0) return side; }
+    return choices[choices.length - 1][0];
+  }
+
+  /** Game minutes until her next turn over. */
+  private nextTurnOver(): number {
+    return SLEEP_SIDES.turnLeast + Math.random() * (SLEEP_SIDES.turnMost - SLEEP_SIDES.turnLeast);
   }
 }

@@ -211,4 +211,6 @@ export const LIE = Object.freeze({
    * `glide` seconds to another (now and then nearly straight up), as a sleeper's head shifts.
    */
   rollLeast: 6, rollMost: 22, holdLeast: 15, holdMost: 40, glide: 2.5,
+  /** TURNING OVER (onto her side, her back, the other side): seconds (her body rolls and her pose goes over together) */
+  turnSeconds: 3,
 });

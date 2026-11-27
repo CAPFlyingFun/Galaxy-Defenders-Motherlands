@@ -1882,6 +1882,49 @@ use the game's single copy of three.js.
   apple's own water; the drinks check counts it: with it they drink less from the tap, 0.4-1.6 L a day). 36 of 36 pass,
   three runs; no "no way to the fridge" any more (Mary pressed 12 s against John at it and gave up).
   NOT YET: heating food (his "later"), favourites, a shopping trip to restock.
+- v0.2.182: THE CHAIRS PULL OUT, HER BELLY KEPT OFF THE TABLE AND THE COUNTERS, AND THE HOUSE SHARED WITHOUT DEADLOCKS
+  (Joshua, 2026-11-27, of v0.2.181: "we need to be able for the characters to pull the chair out, or twist them sit
+  down, and back at the table. Now that we have collisions, it's failing to sit I guess because it walks through the
+  chair from behind it"; I chose pulling out; then "make sure with Mary's large belly, her belly doesn't clip the table
+  or even like standing at the sink"). (1) THE CHAIRS (`world/home/homeChairs.ts`, PURE, game and simulation alike):
+  the dining chairs and the desk chair stand TUCKED IN (middle `CHAIR.tuck` 0.15 m from the table's edge), each
+  pulled out from its FREE SIDE (the table's end, not the next chair: SmartObject `pullsOut.side`, homeLayout.ts
+  `tableSeat`). Sitting (homeMindBody.ts `goToChair`, `SeatPhase`): walk beside its back (`grabSpot`), face the table,
+  her hand on its backrest rail (main.ts `grip` hook: reach, then hold), walk BACK with it at 0.5 m/s facing the table
+  (`faceWalking`, `walkSpeed`), let go, step round into the gap (`standSpot`), sit, then SCOOT IN with it (her root and
+  her planted feet carried: FastHeroine `carry`, footGround.ts `carry`) until HER BELLY is 4 cm off the edge
+  (`scootFor`, the egg's front from armClear.ts `bellyFurthest`), the chair's middle no nearer than `nearestSeated`
+  0.32 (at 0.22 John's hands on his thighs went 2 cm into the desk's top, measured). How far she pulls it is for her
+  belly too (`pullFor`, 0.45-0.85 m). GETTING UP is the same backwards (scoot out, up, step out, take it, push it in),
+  finished even after the mind lets go (`stepLeaving`: GET UP, the stick, a new plan); the mind waits on it (motion
+  'sit'). Each chair's BOX is one object that moves (`MovableBlock`, shared with the walls), the walk grid lays the
+  chairs in their own layer (homeNav.ts `movable`, `version`); drawn as two instanced meshes (homeScene.ts 5b).
+  (2) HER BELLY: a spot at the FRONT of a thing (sink, counter, fridge...) moves back by as much as her belly needs
+  (homeMindBody.ts `clearOfBelly`), her hips kept back there (`keepFace`), and standing, a belly circle in the walls
+  (homeBlocks.ts `BELLY_RADIUS`). MEASURED in the built game, every point of her skin and gear: seated at the table,
+  nothing in its top, her nearest skin at its height 4.4 cm off its edge at 150 %, 8.6 at 200 %, 5.7 at 10 %; pulling
+  the chair at 200 % 6.3 cm off; at the kitchen sink at 200 % 0.5 cm off the edge of its top above it, 4.9 below it;
+  John at the desk 0 (his thighs under it). (3) FOUND IN THE SIMULATION (ten sets of dice, `SIM_SEED`) and fixed:
+  pushed off her line beside the chair by someone (Mary come to talk), John went into the chair's own lane: she steps
+  back onto it (`LINE_OFF` 5 cm), and a push that hardly moves for 1.2 s is finished from where she stands, arm out
+  (`REACH_AFTER`, `REACH_MOST` 0.75 m); a chair left out with her still in the gap: it and the table let her walk out
+  first (walls `escape`); A CHAIR LEFT OUT, nobody using it, walked into from behind is BUMPED BACK IN (homeChairs.ts
+  `bump`, walls `chairs`; the walk grid plans as if tucked in, `navBlock`; never while only asking, `spotPush`); two
+  passing in a narrow way may squeeze to 0.47 m apart (`SQUEEZE_LEAST`; held at 0.6 they stood pressed together in the
+  hall until both gave up); a walk up to someone is done once within its metre with no wall between (homeNav.ts
+  `noWallBetween`: their way could end on their far side and she circled them); no way only because of a chair in use:
+  they wait for it, 20 s at most (`chairsAside`); nobody waits their turn for someone only PASSING a spot (`Person.
+  passing`, `HomeMindBody.going`); seated, someone right at them: they stay down until there is room (`someoneAtUs`);
+  a pose may take 30 s before it counts as failed (mind.ts `POSE_GIVE_UP`, was 15: getting up from a chair is 10-20 s
+  with someone in the way). THE LAYOUT: the desk is 1 m nearer the door, its chair beside the foot of the bed (between
+  them was 1 m, too narrow for two, and the only way to the window), and tidied from its north end (its south end was
+  the chair's own grab spot). (4) THE SIMULATION: its walls bump chairs and keep bellies as the game's; the SPOTS check
+  pulls every chair out and sits at it for a flat front and a big belly; a full day's drinks: one drink at least and a
+  litre of water in all (a meal brings its glass of water: two drinks a day was asked before meals did; John had 1.3 L
+  in one drink and seven meals). `SIM_SEED`, `SIM_DEBUG`, `SIM_TRACE=<hour> SIM_DAY= SIM_WHO=` (its header). RESULTS on
+  ten sets of dice: the normal days pass every check on all ten, no failure at all on nine (one invitation to talk
+  refused); "she eats more when stressed" flips with the dice: 10-26 %, about 15 % more on average (v0.2.181 17 % on
+  eight), under the check's bar of 15 % on seven of the ten; on v0.2.181 it failed three times in eight.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

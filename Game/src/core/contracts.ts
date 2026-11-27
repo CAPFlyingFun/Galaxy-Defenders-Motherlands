@@ -117,6 +117,11 @@ export interface HeroineHands {
   /** How far her belly stands out in front of her, metres from her middle (for where she stands at a table). */
   bellyAhead(): number;
   /**
+   * The point of her belly furthest along `direction` (world, a unit way) as it is NOW (seated, bent, breathing), or null
+   * if she has no belly measured: how near the table she can scoot in on a chair (v0.2.182, homeChairs.ts).
+   */
+  bellyFurthest?(direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 | null;
+  /**
    * GRABBING A BAR (fingerTouch.ts). The pose her hand bone must have to hold a bar: the palm's middle on its surface
    * at `at` (a point on its axis), facing it along `palmTo`, the fingers going round toward `wrapToward`.
    */
@@ -216,6 +221,11 @@ export interface HeroineBody {
   seatFor?(): { top: number; back: number };
   /** Sit down onto the seat behind her (SIT.seconds), stay this many seconds, then get up (SIT.seconds). */
   sitFor?(seconds: number, open?: boolean): void;
+  /**
+   * CARRIED (v0.2.182: a chair she sits on scooted in or out, homeChairs.ts): the game has moved her by (dx, dz), world
+   * metres, and her planted feet go with her (else her legs would stretch back to where they stood).
+   */
+  carry?(dx: number, dz: number): void;
   /**
    * LYING DOWN ON A BED (v0.2.179, the game's own pose: heroine/fast/fastHeroine.ts LIE): from where she stands at its
    * side, facing away from it, she sits on its edge, then swings round and lies back, her hip joints at `spot` (world,

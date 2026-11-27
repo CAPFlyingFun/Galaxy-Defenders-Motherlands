@@ -31,7 +31,9 @@
 // little off them; the ceilings do not (above them it looks in).
 //
 // COST, for the phone: the walls, floors, ceilings and things are MERGED, one draw for each material (about 25),
-// plus each door's panel and edge (two each) and the two toilets.
+// plus each door's panel and edge (two each) and the two toilets. THE CHAIRS MOVE (v0.2.182: pulled out to be sat on,
+// homeChairs.ts), so they are not merged: one InstancedMesh for their seats and backs and one for their legs (two
+// draws for all five), each chair's matrix set where it is whenever one moves.
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -42,6 +44,7 @@ import { createProceduralSky, type Environment, type ProceduralSky } from '../is
 import { PopUpToilet } from '../toilet';
 import { FISHER_HOME, generateHome, type Doorway, type HomeLayout, type HomeSpec, type RoomKind, type WallPiece } from './homeLayout';
 import { HomeNav } from './homeNav';
+import { HomeChairs } from './homeChairs';
 import { BODY_RADIUS, DUVET_FROM_HEAD, DUVET_TOP, HomeWalls, INNER_THICK, MATTRESS_TOP, OUTER_THICK, PILLOW_TOP, SEAT_TOP, doorBlock, objectBlock, wallBlock, type Block, type Person } from './homeBlocks';
 
 /** How high the walls and ceilings are, metres. */
@@ -89,6 +92,12 @@ export interface WalkerWalls extends Walls {
   ignoreAt: Vec2 | null;
   /** the other people standing in the house, asked each step (main.ts gives each walker the others) */
   people: () => readonly Person[];
+  /** their belly now, where it stands out past their body (main.ts: kept off the walls and furniture too, v0.2.182) */
+  belly: () => { readonly ahead: number; readonly yaw: number } | null;
+  /** a chair (and its table) they were left standing in, let through until they are out of both (homeBlocks.ts) */
+  escape: string | null;
+  /** the chairs that pull out: one left out is bumped in when walked into (homeChairs.ts `bump`) */
+  chairs: HomeChairs | null;
 }
 
 /** The drawn home: add `group` to the scene; `update` each frame; `setEnvironment` each frame with the sky's moment. */
@@ -101,6 +110,8 @@ export interface HomeScene {
   walkerWalls(): WalkerWalls;
   /** the walk grid, round the walls and furniture (homeNav.ts) */
   readonly nav: HomeNav;
+  /** the chairs that pull out, and how far each is out now (homeChairs.ts: the walls and the walk grid follow them) */
+  readonly chairs: HomeChairs;
   /** where each resident starts */
   readonly starts: Readonly<Record<ActorId, HomeStart>>;
   /** the camera kept off the walls: `to` is brought in toward `from` */
@@ -242,6 +253,7 @@ interface SlidingDoor {
 /** Makes the home from its room list (the Fishers' by default), its house's south-west corner at `origin`. */
 export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -8, z: -6 }): HomeScene {
   const layout = generateHome(spec, origin);
+  const chairs = new HomeChairs(layout.objects);
   const M = makeMaterials();
   const batch = new Batch(M);
   const group = new THREE.Group();
@@ -427,16 +439,10 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         }
         break;
       case 'diningChair':
-      case 'deskChair': {
-        // (the seat's top at CHAIR_TOP, where her seat and thighs rest: measured, v0.2.180)
-        const s = Math.min(w, d);
-        batch.box('chair', s, 0.06, s, 0, CHAIR_TOP - 0.03, 0, frame);
-        batch.box('chair', s, 0.48, 0.05, 0, 0.72, -s / 2 + 0.025, frame);
-        for (const [x, z] of [[-s / 2 + 0.03, -s / 2 + 0.03], [s / 2 - 0.03, -s / 2 + 0.03], [-s / 2 + 0.03, s / 2 - 0.03], [s / 2 - 0.03, s / 2 - 0.03]] as const) {
-          batch.box('graphite', 0.03, CHAIR_TOP - 0.06, 0.03, x, (CHAIR_TOP - 0.06) / 2, z, frame);
-        }
+      case 'deskChair':
+        // (drawn below, one instance each, where it is pulled out to: homeChairs.ts; a chair that does not pull out is
+        //  drawn there too, where it stands)
         break;
-      }
       case 'desk':
         batch.box('wood', w, 0.04, d, 0, 0.74, 0, frame);
         for (const x of [-w / 2 + 0.02, w / 2 - 0.02]) batch.box('graphite', 0.04, 0.72, d - 0.04, x, 0.36, 0, frame);
@@ -471,8 +477,54 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         solid = false;
         break;
     }
-    if (solid) blocks.push(objectBlock(o));
+    if (solid) blocks.push(chairs.get(o.id)?.block ?? objectBlock(o));
   }
+
+  // ---- 5b. THE CHAIRS (v0.2.182): one model, an instance each, moved as each is pulled out ------------------------------
+  // (the model in the chair's own frame, for a 0.45 m chair: its seat's top at CHAIR_TOP, where her seat and thighs
+  //  rest (measured, v0.2.180), its back at the back (-z); a wider chair (the desk's 0.5) is the same scaled across)
+  const chairObjects = layout.objects.filter((o) => o.type === 'diningChair' || o.type === 'deskChair');
+  const CHAIR_MODEL = 0.45;
+  const chairParts: THREE.BufferGeometry[] = [], legParts: THREE.BufferGeometry[] = [];
+  const piece = (list: THREE.BufferGeometry[], w: number, h: number, d: number, x: number, y: number, z: number): void => {
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.translate(x, y, z);
+    list.push(g);
+  };
+  {
+    const s = CHAIR_MODEL;
+    piece(chairParts, s, 0.06, s, 0, CHAIR_TOP - 0.03, 0);
+    piece(chairParts, s, 0.48, 0.05, 0, 0.72, -s / 2 + 0.025);
+    for (const [x, z] of [[-s / 2 + 0.03, -s / 2 + 0.03], [s / 2 - 0.03, -s / 2 + 0.03], [-s / 2 + 0.03, s / 2 - 0.03], [s / 2 - 0.03, s / 2 - 0.03]] as const) {
+      piece(legParts, 0.03, CHAIR_TOP - 0.06, 0.03, x, (CHAIR_TOP - 0.06) / 2, z);
+    }
+  }
+  const chairMeshes = ([[chairParts, M.chair], [legParts, M.graphite]] as const).map(([parts, material]) => {
+    const merged = mergeGeometries([...parts], false)!;
+    for (const g of parts) g.dispose();
+    const mesh = new THREE.InstancedMesh(merged, material, Math.max(1, chairObjects.length));
+    mesh.name = 'home chairs';
+    mesh.count = chairObjects.length;
+    group.add(mesh);
+    return mesh;
+  });
+  const chairMatrix = new THREE.Matrix4(), chairTurn = new THREE.Quaternion(), chairScale = new THREE.Vector3(), chairAt = new THREE.Vector3();
+  const UP = new THREE.Vector3(0, 1, 0);
+  let chairsDrawn = -1;
+  /** Each chair's instance where it is now (only when one has moved). */
+  const drawChairs = (): void => {
+    if (chairsDrawn === chairs.version) return;
+    chairsDrawn = chairs.version;
+    chairObjects.forEach((o, i) => {
+      const c = chairs.get(o.id);
+      const m = c ? chairs.middle(c) : o.at;
+      const wide = Math.min(o.size.w, o.size.d) / CHAIR_MODEL;
+      chairMatrix.compose(chairAt.set(m.x, 0, m.z), chairTurn.setFromAxisAngle(UP, o.facing), chairScale.set(wide, 1, wide));
+      for (const mesh of chairMeshes) mesh.setMatrixAt(i, chairMatrix);
+    });
+    for (const mesh of chairMeshes) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); }
+  };
+  drawChairs();
 
   batch.build(group, new Set<MaterialName>(['floorWood', 'floorWarm', 'floorTile', 'floorKitchen', 'floorPale', 'lawn', 'concrete', 'mattress', 'duvetMain', 'duvetGuest', 'duvetGuest2', 'cushion', 'wood', 'stone']));
   // (the glass after everything solid, so what is behind it is drawn first)
@@ -491,13 +543,15 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
   const walls = new HomeWalls(blocks, middle, layout.objects);
   const viewBlocks = blocks.filter((b) => b.view);
   // (the walk grid over the house and half a metre round it)
-  const nav = new HomeNav(blocks, { x0: origin.x - 0.5, z0: origin.z - 0.5, x1: origin.x + W + 0.5, z1: origin.z + D + 0.5 }, BODY_RADIUS, layout.objects);
+  const nav = new HomeNav(blocks, { x0: origin.x - 0.5, z0: origin.z - 0.5, x1: origin.x + W + 0.5, z1: origin.z + D + 0.5 }, BODY_RADIUS, layout.objects,
+    { boxes: chairs.list.map((c) => c.navBlock), version: () => chairs.version });
   return {
     group,
     layout,
     walls,
     nav,
-    walkerWalls: () => new HomeWalls(blocks, middle, layout.objects),
+    chairs,
+    walkerWalls: () => { const w = new HomeWalls(blocks, middle, layout.objects); w.chairs = chairs; return w; },
     starts,
     keepClear(from, to) {
       // (a ray from the point the camera looks from to the camera, against each wall's box, grown by CAMERA_OFF_WALL
@@ -536,6 +590,7 @@ export function createHomeScene(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x
         }
       }
       for (const t of toilets) t.update(dt);
+      drawChairs();
     },
     setEnvironment(env, seconds) {
       sky.update(env, seconds);

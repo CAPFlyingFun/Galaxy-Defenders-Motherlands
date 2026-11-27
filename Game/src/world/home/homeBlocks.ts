@@ -12,7 +12,8 @@
 //                   a door's box is solid only while the door is shut.
 //   layoutBlocks    every box of a layout: each wall piece (windows and all), each sliding door (if a door's state is
 //                   given; the simulation leaves them open), each solid thing (all but the floor's open spots and the
-//                   windows, which stand in their walls).
+//                   windows, which stand in their walls); a chair that pulls out is its own box that moves with it
+//                   (homeChairs.ts: the walls hold that very object, v0.2.182).
 //   HomeWalls       a walker's walls: a body (a circle of BODY_RADIUS) pushed out of every solid box; while it uses a
 //                   thing, that thing's box -- and the thing it belongs with (`partOf`: a dining chair's table, the
 //                   desk chair's desk) -- lets it through, but ONLY WITHIN LET_IN OF ITS SPOT (v0.2.181: let through
@@ -25,6 +26,7 @@ import type { GroundPoint } from '../collision';
 import type { Walls } from '../../input/playerMotion';
 import type { SmartObject, Vec2 } from '../../mind/types';
 import type { Doorway, HomeLayout, WallPiece } from './homeLayout';
+import type { HomeChairs } from './homeChairs';
 
 /** A bed's mattress top over the floor, metres (its frame 0.3 high, the mattress 0.2 on it): where she lies. */
 export const MATTRESS_TOP = 0.5;
@@ -41,6 +43,12 @@ export const SEAT_TOP = 0.505;
 
 /** A body is a circle this wide, metres (a doorway is 0.9 m wide). */
 export const BODY_RADIUS = 0.3;
+/**
+ * HER BELLY, when it stands out past her body's circle (v0.2.182; Joshua: "make sure with Mary's large belly, her belly
+ * doesn't clip the table or even like standing at the sink"): a second circle this wide, metres, its front at her
+ * belly's front (`HomeWalls.belly`), kept off the walls and furniture as her body is.
+ */
+export const BELLY_RADIUS = 0.16;
 /** The walls' thickness: outer and inner, metres. */
 export const OUTER_THICK = 0.2, INNER_THICK = 0.12;
 /** Out on the lawn, no further than this from the house's middle, metres. */
@@ -59,6 +67,12 @@ export const LET_IN = 0.7;
  * little nearer (PLAYER_APART), so they shoulder past the AI rather than stop dead in front of it.
  */
 export const PEOPLE_APART = 0.6, PLAYER_APART = 0.45;
+/**
+ * SQUEEZED PAST EACH OTHER (v0.2.182): a wall or a thing may push someone nearer another than their `apart`, down to
+ * this (two passing in the hall, turned a little sideways); nearer than this, the step is not taken (`move`). At their
+ * full 0.6 the two of them met in the hall by the second bathroom and stood pressed together until both gave up.
+ */
+export const SQUEEZE_LEAST = 0.47;
 
 /** Another person in the way: where they stand and how far off them a body is kept. */
 export interface Person {
@@ -67,6 +81,12 @@ export interface Person {
   readonly apart: number;
   /** a walker GIVES WAY to them (stops a moment) when they are just ahead: the one played, to the AI */
   readonly yieldTo?: boolean;
+  /**
+   * on their way somewhere (walking a way, or the one played moving): standing on a spot they are only passing it, and
+   * nobody waits their turn for them (homeMindBody.ts `walk`; v0.2.182: in the 1 m between the desk chair and the bed,
+   * John waited for Mary to leave the chair's spot while she waited for him to let her by)
+   */
+  readonly passing?: boolean;
 }
 
 /** A box on the floor: its middle, its half sizes across (x) and along (z) its own frame, and the way it faces. */
@@ -98,6 +118,22 @@ export function isSolid(o: SmartObject): boolean {
   return o.type !== 'floorSpot' && o.type !== 'window';
 }
 
+/** Where a ray from `p` along the unit `dir` first meets the box `b` (metres along it), or Infinity if it misses. */
+export function rayToBlock(p: Vec2, dir: Vec2, b: Block): number {
+  // (into the box's own frame, as homeBlocks.ts turns a body into it)
+  const dx = p.x - b.cx, dz = p.z - b.cz;
+  const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
+  const ux = dir.x * b.cos - dir.z * b.sin, uz = dir.x * b.sin + dir.z * b.cos;
+  let t0 = -Infinity, t1 = Infinity;
+  for (const [o, u, h] of [[lx, ux, b.hx], [lz, uz, b.hz]] as const) {
+    if (Math.abs(u) < 1e-9) { if (Math.abs(o) > h) return Infinity; continue; }
+    let a = (-h - o) / u, c = (h - o) / u;
+    if (a > c) { const s = a; a = c; c = s; }
+    t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+  }
+  return t0 <= t1 && t1 >= 0 ? t0 : Infinity;
+}
+
 /** The box of one wall piece (the whole piece, windows and all). */
 export function wallBlock(p: WallPiece): Block {
   const thick = p.outer ? OUTER_THICK : INNER_THICK;
@@ -121,12 +157,13 @@ export function objectBlock(o: SmartObject): Block {
 
 /**
  * Every box of a layout: its walls, its sliding doors (each solid while `doorShut(door)` says so; with no `doorShut`,
- * the doors are left out: always open, as the simulation has them), and its solid things.
+ * the doors are left out: always open, as the simulation has them), and its solid things (a chair that pulls out: its
+ * own moving box from `chairs`).
  */
-export function layoutBlocks(layout: HomeLayout, doorShut?: (dw: Doorway) => () => boolean): Block[] {
+export function layoutBlocks(layout: HomeLayout, doorShut?: (dw: Doorway) => () => boolean, chairs?: HomeChairs): Block[] {
   const blocks = layout.walls.map(wallBlock);
   if (doorShut) for (const dw of layout.doors.filter((d) => d.kind === 'sliding')) blocks.push(doorBlock(dw, doorShut(dw)));
-  for (const o of layout.objects) if (isSolid(o)) blocks.push(objectBlock(o));
+  for (const o of layout.objects) if (isSolid(o)) blocks.push(chairs?.get(o.id)?.block ?? objectBlock(o));
   return blocks;
 }
 
@@ -142,6 +179,20 @@ export class HomeWalls implements Walls {
   ignoreAt: Vec2 | null = null;
   /** the other people standing in the house (asked each step): a body is kept off each by their `apart` */
   people: () => readonly Person[] = () => [];
+  /** their belly now: how far it stands out in front of their middle and the way they face (null: none past their body) */
+  belly: () => { readonly ahead: number; readonly yaw: number } | null = () => null;
+  /**
+   * A THING THEY ARE STILL STANDING IN, let go of (v0.2.182): a chair left pulled out with them still in the gap between
+   * it and its table (someone stood where they were to step out: homeMindBody.ts `abandonSeat`). It and its kin let them
+   * through, anywhere, until they have walked out of both; then it is null again (`move`). In a gap of 35 cm between a
+   * desk and its chair, a body's 30 cm circle cannot be out of both, and the walls had wedged her between them.
+   */
+  escape: string | null = null;
+  /**
+   * THE CHAIRS THAT PULL OUT (v0.2.182): one left out, nobody using it, walked into from behind is bumped back in
+   * (homeChairs.ts `bump`) rather than stopping them. Null: none (and while probing a spot, `spotPush`).
+   */
+  chairs: HomeChairs | null = null;
   /** each thing's kin (a chair's table; a table's chairs) */
   private readonly kin = new Map<string, Set<string>>();
 
@@ -158,15 +209,78 @@ export class HomeWalls implements Walls {
 
   /** Does the thing being used let a body at (x, z) through `objectId`'s box? Only near its spot. */
   private letsThrough(objectId: string | null, x: number, z: number): boolean {
-    if (this.ignore === null || objectId === null) return false;
+    if (objectId === null) return false;
+    if (this.escape !== null && (objectId === this.escape || (this.kin.get(this.escape)?.has(objectId) ?? false))) return true;
+    if (this.ignore === null) return false;
     if (objectId !== this.ignore && !(this.kin.get(this.ignore)?.has(objectId) ?? false)) return false;
     return this.ignoreAt === null || Math.hypot(x - this.ignoreAt.x, z - this.ignoreAt.z) <= LET_IN;
+  }
+
+  /**
+   * How far a circle of radius `r` at (cx, cz) must go to be out of box `b`, world metres, written to `push`; false if
+   * it is not in it.
+   */
+  private pushOut(b: Block, cx: number, cz: number, r: number, push: { x: number; z: number }): boolean {
+    const dx = cx - b.cx, dz = cz - b.cz;
+    if (Math.abs(dx) > b.reach + r || Math.abs(dz) > b.reach + r) return false;
+    // (into the box's own frame: its x across, its z the way it faces)
+    const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
+    const qx = Math.max(-b.hx, Math.min(b.hx, lx)), qz = Math.max(-b.hz, Math.min(b.hz, lz));
+    let px = lx - qx, pz = lz - qz;
+    const dist = Math.hypot(px, pz);
+    if (dist >= r) return false;
+    if (dist > 1e-6) {
+      const k = (r - dist) / dist;
+      px *= k; pz *= k;
+    } else {
+      // (its middle inside the box: out by the nearest side)
+      const toX = b.hx - Math.abs(lx), toZ = b.hz - Math.abs(lz);
+      if (toX < toZ) { px = Math.sign(lx || 1) * (toX + r); pz = 0; } else { px = 0; pz = Math.sign(lz || 1) * (toZ + r); }
+    }
+    // (back to the world: the inverse of the turn above)
+    push.x = px * b.cos + pz * b.sin;
+    push.z = -px * b.sin + pz * b.cos;
+    return true;
+  }
+
+  /** Whether a body standing at (x, z) is inside any box that stops it (the thing used let in near its spot). */
+  /** A chair left out bumped in by a body at (x, z) (not into anyone else standing); true if it moved. */
+  private bumpChair(objectId: string | null, x: number, z: number, people: readonly Person[]): boolean {
+    const c = this.chairs?.get(objectId);
+    if (!c) return false;
+    const chairs = this.chairs!;
+    return chairs.bump(c, x, z, BODY_RADIUS, (out) => people.some((p) => chairs.hits(c, out, p.x, p.z, BODY_RADIUS) && !chairs.hits(c, c.out, p.x, p.z, BODY_RADIUS)));
+  }
+
+  /** Whether a body at (x, z) overlaps `objectId`'s box or any of its kin's (by more than a centimetre). */
+  private inThing(objectId: string, x: number, z: number): boolean {
+    const push = { x: 0, z: 0 }, kin = this.kin.get(objectId);
+    for (const b of this.blocks) {
+      if (b.objectId !== objectId && !(b.objectId !== null && kin?.has(b.objectId))) continue;
+      if (this.pushOut(b, x, z, BODY_RADIUS, push) && Math.hypot(push.x, push.z) > 0.01) return true;
+    }
+    return false;
+  }
+
+  private inside(x: number, z: number): boolean {
+    const push = { x: 0, z: 0 };
+    for (const b of this.blocks) {
+      if (b.solid && !b.solid()) continue;
+      if (this.letsThrough(b.objectId, x, z)) continue;
+      if (this.pushOut(b, x, z, BODY_RADIUS, push) && Math.hypot(push.x, push.z) > 0.01) return true;
+    }
+    return false;
   }
 
   move(x: number, z: number, stepX: number, stepZ: number, out: GroundPoint): GroundPoint {
     let nx = x + stepX, nz = z + stepZ;
     const people = this.people();
-    for (let pass = 0; pass < 3; pass++) {
+    // (her belly's circle, if it stands out past her body's: its middle `off` in front of hers, the way she faces)
+    const belly = this.belly();
+    const off = belly && belly.ahead > BODY_RADIUS ? belly.ahead - BELLY_RADIUS : -1;
+    const fx = belly ? Math.sin(belly.yaw) : 0, fz = belly ? Math.cos(belly.yaw) : 0;
+    const push = { x: 0, z: 0 };
+    for (let pass = 0; pass < (people.length ? 5 : 3); pass++) {
       let moved = false;
       // (the other people first: pushed off them, then the furniture and walls have the last word)
       for (const p of people) {
@@ -181,31 +295,27 @@ export class HomeWalls implements Walls {
         moved = true;
       }
       for (const b of this.blocks) {
-        const dx = nx - b.cx, dz = nz - b.cz;
-        if (Math.abs(dx) > b.reach + BODY_RADIUS || Math.abs(dz) > b.reach + BODY_RADIUS) continue;
         if (b.solid && !b.solid()) continue;
         if (this.letsThrough(b.objectId, nx, nz)) continue;
-        // (into the box's own frame: its x across, its z the way it faces)
-        const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
-        const qx = Math.max(-b.hx, Math.min(b.hx, lx)), qz = Math.max(-b.hz, Math.min(b.hz, lz));
-        let px = lx - qx, pz = lz - qz;
-        const dist = Math.hypot(px, pz);
-        if (dist >= BODY_RADIUS) continue;
-        if (dist > 1e-6) {
-          const push = (BODY_RADIUS - dist) / dist;
-          px *= push; pz *= push;
-        } else {
-          // (its middle inside the box: out by the nearest side)
-          const toX = b.hx - Math.abs(lx), toZ = b.hz - Math.abs(lz);
-          if (toX < toZ) { px = Math.sign(lx || 1) * (toX + BODY_RADIUS); pz = 0; } else { px = 0; pz = Math.sign(lz || 1) * (toZ + BODY_RADIUS); }
-        }
-        // (back to the world: the inverse of the turn above)
-        nx += px * b.cos + pz * b.sin;
-        nz += -px * b.sin + pz * b.cos;
-        moved = true;
+        let into = this.pushOut(b, nx, nz, BODY_RADIUS, push);
+        // (a chair left out, walked into from behind: bumped in toward its table, and only what is left of it stops them)
+        if (into && this.bumpChair(b.objectId, nx, nz, people)) { moved = true; into = this.pushOut(b, nx, nz, BODY_RADIUS, push); }
+        if (into) { nx += push.x; nz += push.z; moved = true; }
+        // (and her belly: where it would go into the thing, she is held back by as much)
+        if (off >= 0 && this.pushOut(b, nx + fx * off, nz + fz * off, BELLY_RADIUS, push)) { nx += push.x; nz += push.z; moved = true; }
       }
       if (!moved) break;
     }
+    // (SQUEEZED: a wall or a thing pushed them back nearer someone than they are kept (two passing in a narrow way, a
+    //  metre between a desk chair and a bed): they may pass as near as SQUEEZE_LEAST; nearer, the step is not taken,
+    //  unless it takes them further from that person, or they stood inside something (just up from the sofa: then out
+    //  of it comes first)
+    for (const p of people) {
+      const now = Math.hypot(nx - p.x, nz - p.z);
+      if (now < Math.min(p.apart, SQUEEZE_LEAST) - 0.005 && now < Math.hypot(x - p.x, z - p.z) && !this.inside(x, z)) { nx = x; nz = z; break; }
+    }
+    // (out of the thing they were left standing in, and its kin: it holds them again from now on)
+    if (this.escape !== null && !this.inThing(this.escape, nx, nz)) this.escape = null;
     // (out on the lawn, no further than WALK_OUT from the house)
     const ox = nx - this.middle.x, oz = nz - this.middle.z, far = Math.hypot(ox, oz);
     if (far > WALK_OUT) { nx = this.middle.x + (ox / far) * WALK_OUT; nz = this.middle.z + (oz / far) * WALK_OUT; }
@@ -219,10 +329,11 @@ export class HomeWalls implements Walls {
  * within LET_IN of `letInAt`, the thing's own spot to use it from), metres. Over SPOT_REACH, nobody can ever arrive there.
  */
 export function spotPush(walls: HomeWalls, objectId: string | null, spot: Vec2, letInAt: Vec2 | null = spot): number {
-  const was = walls.ignore, wasAt = walls.ignoreAt, wasPeople = walls.people;
-  walls.ignore = objectId; walls.ignoreAt = letInAt; walls.people = () => [];
+  const was = walls.ignore, wasAt = walls.ignoreAt, wasPeople = walls.people, wasChairs = walls.chairs;
+  // (only asking: no chair is bumped, nobody else counts)
+  walls.ignore = objectId; walls.ignoreAt = letInAt; walls.people = () => []; walls.chairs = null;
   const out: GroundPoint = { x: 0, z: 0 };
   walls.move(spot.x, spot.z, 0, 0, out);
-  walls.ignore = was; walls.ignoreAt = wasAt; walls.people = wasPeople;
+  walls.ignore = was; walls.ignoreAt = wasAt; walls.people = wasPeople; walls.chairs = wasChairs;
   return Math.hypot(out.x - spot.x, out.z - spot.z);
 }

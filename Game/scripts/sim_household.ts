@@ -28,6 +28,10 @@
 // RUN IT (from Game/; esbuild comes with Vite, `@charb` is the builder's folder as in vite.config.ts):
 //   node_modules/.bin/esbuild scripts/sim_household.ts --bundle --platform=node --format=esm \
 //     --alias:@charb=../Char_B/src --outfile=/tmp/sim_household.mjs && node /tmp/sim_household.mjs [scenario...]
+// WITH (environment): SIM_SEED=n other dice for every mind (a result that changes with them is chance);
+//   SIM_DEBUG=1 a line for each frame someone stands inside the furniture, or nearer another than 0.55 m;
+//   SIM_TRACE=<hour> SIM_DAY=<day> [SIM_WHO=mary] each frame for about 5 game minutes from then: what each is doing,
+//   where, their chair's step and which chairs are out (v0.2.182: how the chairs' troubles were found).
 // ============================================================================
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { GameClock } from '../src/core/gameClock';
@@ -37,6 +41,8 @@ import { generateHome, type HomeLayout } from '../src/world/home/homeLayout';
 import { HomeWorld } from '../src/world/home/homeWorld';
 import { needsFromReading } from '../src/world/home/mindBridge';
 import { BODY_RADIUS, HomeWalls, PEOPLE_APART, SPOT_REACH, layoutBlocks, spotPush, type Block } from '../src/world/home/homeBlocks';
+import { CHAIR, HomeChairs } from '../src/world/home/homeChairs';
+import { seedOf } from '../src/mind/random';
 import { HomeNav } from '../src/world/home/homeNav';
 import { HomeMindBody } from '../src/world/home/homeMindBody';
 
@@ -65,7 +71,7 @@ class SimBody {
   z: number;
   yaw = 0;
   /** seconds into sitting down (0 standing .. SIT_SECONDS seated), and into lying back from the edge */
-  private sitT = 0;
+  sitT = 0;
   private lieT = 0;
   /** asked this frame: to stay seated, to lie */
   private sitAsked = false;
@@ -76,9 +82,10 @@ class SimBody {
   readonly mb: HomeMindBody;
   readonly walls: HomeWalls;
 
-  constructor(readonly id: ActorId, start: Vec2, readonly vitals: HeroineVitals, layout: HomeLayout, nav: HomeNav, blocks: readonly Block[], middle: Vec2) {
+  constructor(readonly id: ActorId, start: Vec2, readonly vitals: HeroineVitals, layout: HomeLayout, nav: HomeNav, blocks: readonly Block[], middle: Vec2, chairs: HomeChairs) {
     this.x = start.x; this.z = start.z;
     this.walls = new HomeWalls(blocks, middle, layout.objects);
+    this.walls.chairs = chairs;
     this.mb = new HomeMindBody({
       id, vitals, walls: this.walls,
       position: () => ({ x: this.x, z: this.z }),
@@ -88,7 +95,9 @@ class SimBody {
       sitShare: () => this.sitT / SIT_SECONDS,
       lieOn: (spot) => { if (spot) this.lieAsked = true; },
       lieShare: () => this.lieT / LIE_SECONDS,
-    }, layout, nav);
+      // (carried on a chair scooting in or out, v0.2.182: no feet here, just their place)
+      carry: (dx, dz) => { this.x += dx; this.z += dz; },
+    }, layout, nav, chairs);
   }
 
   position(): Vec2 { return { x: this.x, z: this.z }; }
@@ -98,11 +107,11 @@ class SimBody {
 
   /** How far inside the furniture or walls they stand (the thing they use let in near its spot), metres. */
   inFurniture(): number {
-    const people = this.walls.people;
-    this.walls.people = () => [];
+    const people = this.walls.people, chairs = this.walls.chairs;
+    this.walls.people = () => []; this.walls.chairs = null;
     const out = { x: 0, z: 0 };
     this.walls.move(this.x, this.z, 0, 0, out);
-    this.walls.people = people;
+    this.walls.people = people; this.walls.chairs = chairs;
     return Math.hypot(out.x - this.x, out.z - this.z);
   }
 
@@ -119,12 +128,14 @@ class SimBody {
     if (mb.walkTo && this.sitT <= 0 && this.lieT <= 0) {
       const dx = mb.walkTo.x - this.x, dz = mb.walkTo.z - this.z, d = Math.hypot(dx, dz);
       if (d > 1e-4) {
-        const step = Math.min(d, WALK * dt);
+        // (at a walk, or a chair's pull or push pace: v0.2.182)
+        const step = Math.min(d, Math.min(WALK, mb.walkSpeed ?? WALK) * dt);
         const out = { x: 0, z: 0 };
         this.walls.move(this.x, this.z, (dx / d) * step, (dz / d) * step, out);
         this.moved += Math.hypot(out.x - this.x, out.z - this.z);
         this.x = out.x; this.z = out.z;
-        this.yaw = Math.atan2(dx, dz);
+        // (facing the way they walk, or held: backing up with a chair)
+        this.yaw = mb.faceWalking ?? Math.atan2(dx, dz);
       }
     } else if (this.standing) {
       // (standing: pushed off anyone walking into them, as main.ts `nudge` does in the game)
@@ -163,8 +174,9 @@ interface Resident { readonly mind: Mind; readonly body: SimBody; readonly vital
 class Household {
   readonly clock: GameClock;
   readonly world = new HomeWorld(generateHome());
-  /** the game's own boxes and walk grid, made from the same layout (homeBlocks.ts, homeNav.ts) */
+  /** the game's own boxes and walk grid, made from the same layout (homeBlocks.ts, homeNav.ts), and its chairs */
   readonly blocks: Block[];
+  readonly chairs: HomeChairs;
   readonly nav: HomeNav;
   readonly middle: Vec2;
   readonly society = new Society();
@@ -192,24 +204,27 @@ class Household {
   constructor(startHour = 7, readonly label = '') {
     this.clock = new GameClock(startHour, 6);
     const layout = this.world.layout, o = layout.origin;
-    this.blocks = layoutBlocks(layout);
+    this.chairs = new HomeChairs(layout.objects);
+    this.blocks = layoutBlocks(layout, undefined, this.chairs);
     this.middle = { x: o.x + layout.size.w / 2, z: o.z + layout.size.d / 2 };
-    // (the walk grid over the house and half a metre round it, as homeScene.ts makes it)
-    this.nav = new HomeNav(this.blocks, { x0: o.x - 0.5, z0: o.z - 0.5, x1: o.x + layout.size.w + 0.5, z1: o.z + layout.size.d + 0.5 }, BODY_RADIUS, layout.objects);
+    // (the walk grid over the house and half a metre round it, as homeScene.ts makes it, the chairs moving in it)
+    this.nav = new HomeNav(this.blocks, { x0: o.x - 0.5, z0: o.z - 0.5, x1: o.x + layout.size.w + 0.5, z1: o.z + layout.size.d + 0.5 }, BODY_RADIUS, layout.objects,
+      { boxes: this.chairs.list.map((c) => c.navBlock), version: () => this.chairs.version });
   }
 
   add(profile: CharacterProfile, body: HeroineBody, mode: ControlMode = 'autonomous'): Resident {
     const vitals = new HeroineVitals(body);
     vitals.setSleepiness(Math.max(0, (this.clock.hour - profile.habits.wake) * 0.045));
-    const sim = new SimBody(profile.id, this.world.layout.spawns[profile.id], vitals, this.world.layout, this.nav, this.blocks, this.middle);
-    const mind = new Mind(profile, sim.mb, this.world, this.society, { mode });
+    const sim = new SimBody(profile.id, this.world.layout.spawns[profile.id], vitals, this.world.layout, this.nav, this.blocks, this.middle, this.chairs);
+    // (SIM_SEED=n: other dice for every mind, to see how much a result is chance)
+    const mind = new Mind(profile, sim.mb, this.world, this.society, { mode, seed: seedOf(profile.id) + Number(process.env.SIM_SEED ?? 0) });
     const r = { mind, body: sim, vitals };
     this.people.set(profile.id, r);
     // (the others at home and on their feet are solid to them, as in the game: main.ts `walls.people`)
     sim.walls.people = () => [...this.people.values()]
       .filter((o) => o !== r && o.body.standing && !this.society.isAway(o.mind.id))
       // (one gives way to the other, by name: John to Mary... "ladies first")
-      .map((o) => ({ x: o.body.x, z: o.body.z, apart: PEOPLE_APART, yieldTo: o.mind.id > profile.id }));
+      .map((o) => ({ x: o.body.x, z: o.body.z, apart: PEOPLE_APART, yieldTo: o.mind.id > profile.id, passing: o.body.mb.going }));
     return r;
   }
 
@@ -237,18 +252,25 @@ class Household {
       if (this.mindTicks > 2000) this.mindWorstWarm = Math.max(this.mindWorstWarm, took);
       p.body.stepVitals(STEP);
     }
+    if (process.env.SIM_TRACE && this.clock.day === Number(process.env.SIM_DAY ?? 1) && this.clock.hour >= Number(process.env.SIM_TRACE) && this.clock.hour < Number(process.env.SIM_TRACE) + 0.08) {
+      for (const j of [...this.people.values()].filter((p) => !process.env.SIM_WHO || p.mind.id === process.env.SIM_WHO)) { const mb = j.body.mb as any;
+      console.log(`    trace ${this.clock.text} ${j.mind.id} ${j.mind.debug().step} (${j.body.x.toFixed(3)}, ${j.body.z.toFixed(3)}) sitT ${j.body.sitT.toFixed(2)} to ${mb.walkTo ? `(${mb.walkTo.x.toFixed(2)}, ${mb.walkTo.z.toFixed(2)})` : '-'} seat ${mb.seat ? `${mb.seat.phase}${mb.seat.leaving ? ' leaving' : ''} t ${mb.seat.t.toFixed(2)}` : '-'} chairs ${this.chairs.list.filter((c) => c.out > 0).map((c) => `${c.object.id} ${c.out.toFixed(2)}`).join(' ')} escape ${j.body.walls.escape}`); }
+    }
     // (v0.2.181: nobody standing inside the furniture or a wall; nobody on top of each other)
     const standing = home.filter((p) => p.body.standing);
     for (const p of standing) {
       const d = p.body.inFurniture();
       this.standingFrames++;
-      if (d > 0.03) { this.inFurnitureFrames++; this.deepestIn = Math.max(this.deepestIn, d); }
+      if (d > 0.03) {
+        this.inFurnitureFrames++; this.deepestIn = Math.max(this.deepestIn, d);
+        if (process.env.SIM_DEBUG) console.log(`    in furniture ${(d * 100).toFixed(1)} cm at ${this.clock.text}: ${p.mind.id} ${p.mind.debug().step} (${p.body.x.toFixed(2)}, ${p.body.z.toFixed(2)}) ignore ${p.body.walls.ignore}; others ${standing.filter((o) => o !== p).map((o) => `${o.mind.id} (${o.body.x.toFixed(2)}, ${o.body.z.toFixed(2)})`).join(' ')}; chairs out ${this.chairs.list.filter((c) => c.out > 0).map((c) => `${c.object.id} ${c.out.toFixed(2)}`).join(' ')}`);
+      }
     }
     for (let i = 0; i < standing.length; i++) for (let j = i + 1; j < standing.length; j++) {
       const apart = Math.hypot(standing[i].body.x - standing[j].body.x, standing[i].body.z - standing[j].body.z);
       if (apart < this.closestApart) {
         this.closestApart = apart;
-        if (process.env.SIM_DEBUG && apart < 0.55) console.log(`    closest ${apart.toFixed(2)} at ${this.clock.text}: ${standing[i].mind.id} ${standing[i].mind.debug().step} (${standing[i].body.x.toFixed(2)}, ${standing[i].body.z.toFixed(2)}) / ${standing[j].mind.id} ${standing[j].mind.debug().step} (${standing[j].body.x.toFixed(2)}, ${standing[j].body.z.toFixed(2)})`);
+        if (process.env.SIM_DEBUG && apart < 0.55) console.log(`    closest ${apart.toFixed(2)} at ${this.clock.text}: ${standing[i].mind.id} ${standing[i].mind.debug().step} (${standing[i].body.x.toFixed(2)}, ${standing[i].body.z.toFixed(2)}) / ${standing[j].mind.id} ${standing[j].mind.debug().step} (${standing[j].body.x.toFixed(2)}, ${standing[j].body.z.toFixed(2)}); seats ${standing.map((p) => `${p.mind.id} ${(p.body.mb as any).seat ? `${(p.body.mb as any).seat.c.object.id} ${(p.body.mb as any).seat.phase} ${(p.body.mb as any).seat.leaving ? 'leaving' : ''}` : '-'}`).join(' / ')}; chairs out ${this.chairs.list.filter((c) => c.out > 0).map((c) => `${c.object.id} ${c.out.toFixed(2)}`).join(' ')}; in ${standing.map((p) => `${p.mind.id} ${(p.body.inFurniture() * 100).toFixed(1)} cm ignore ${p.body.walls.ignore}`).join(' / ')}`);
       }
     }
     // (no slot held by two: the world keeps one holder per slot, so this counts only a broken world)
@@ -355,7 +377,11 @@ function normal(): Household {
     check('normal', `${id}: eats every day`, days.every((d) => d.meals >= 2), days.map((d) => `${d.meals} meals`).join(', '));
     // (day 1 is 17 hours, from 07:00 with their water topped up: one big drink is enough there; a whole day, two)
     // (the water had: drunk, and with food since v0.2.181: a meal's glass of water, an apple's own)
-    check('normal', `${id}: drinks every day`, days.every((d, i) => i === 0 ? d.drinks >= 1 && d.waterMl + d.waterWithFoodMl >= 400 : d.drinks >= 2 && d.waterMl + d.waterWithFoodMl >= 600), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} + ${Math.round(d.waterWithFoodMl)} mL with food)`).join(', '));
+    // (the first day is short and starts with them topped up: a meal's glass of water can keep them over the drink
+    //  mark all of it, v0.2.182, so it asks only for water in all; a whole day, a drink at least and a litre in all:
+    //  with seven meals' water John drank once and had 1.3 L, and two drinks a day was asked of him before meals
+    //  brought water)
+    check('normal', `${id}: drinks every day`, days.every((d, i) => i === 0 ? d.waterMl + d.waterWithFoodMl >= 400 : d.drinks >= 1 && d.waterMl + d.waterWithFoodMl >= 1000), days.map((d) => `${d.drinks} (${Math.round(d.waterMl)} + ${Math.round(d.waterWithFoodMl)} mL with food)`).join(', '));
     check('normal', `${id}: uses the toilet every day`, days.every((d) => d.bathroom >= 3), days.map((d) => `${d.bathroom}`).join(', '));
     check('normal', `${id}: sleeps 6-10 h a night`, days.slice(1).every((d) => d.sleepHours >= 6 && d.sleepHours <= 10.5), days.map((d) => `${d.sleepHours.toFixed(1)} h`).join(', '));
     check('normal', `${id}: needs never neglected`, low.hungryAwake <= 30 && low.water >= 0.08 && low.bathroomHigh < 0.97, `food awake lowest ${pct(low.foodAwake)} (under 8% awake ${low.hungryAwake} min at most; asleep ${pct(low.food)}), water ${pct(low.water)}, energy ${pct(low.energy)}; fullest bathroom ${pct(low.bathroomHigh)}`);
@@ -537,6 +563,25 @@ function spots(): void {
     }
   }
   check('spots', 'every spot can be reached', bad.length === 0, bad.length ? bad.join('; ') : `all ${n} spots of ${layout.objects.length} things`);
+  // THE CHAIRS THAT PULL OUT (v0.2.182): tucked in, beside its back is free and reached from the hall; pulled out for a
+  // flat front (0.15 m) and for Mary's biggest belly (0.5 m), beside its back is free, its stand spot reached from there
+  // and free (the chair and table letting her in), and her belly that far off the table's edge standing there
+  const chairBad: string[] = [];
+  for (const c of h.chairs.list) {
+    for (const belly of [0.15, 0.5]) {
+      const pull = h.chairs.pullFor(c, belly);
+      const g0 = h.chairs.grabSpot(c, 0);
+      if (spotPush(walls, null, g0, null) > SPOT_REACH || !h.nav.path(from, g0)) chairBad.push(`${c.object.id} beside its back, tucked in`);
+      h.chairs.set(c, pull);
+      const g1 = h.chairs.grabSpot(c), s1 = h.chairs.standSpot(c);
+      if (spotPush(walls, null, g1, null) > SPOT_REACH) chairBad.push(`${c.object.id} beside its back, pulled out ${pull.toFixed(2)} (pushed ${spotPush(walls, null, g1, null).toFixed(2)})`);
+      if (spotPush(walls, c.object.id, s1, s1) > SPOT_REACH || !h.nav.path(g1, s1, c.object.id, s1)) chairBad.push(`${c.object.id} in front of its seat, pulled out ${pull.toFixed(2)}`);
+      const clear = c.edge + c.out - (CHAIR.hipsAt + CHAIR.seatBack) - belly;
+      if (clear < CHAIR.bellyClear - 1e-3 && pull < CHAIR.pullMost) chairBad.push(`${c.object.id} belly ${belly} only ${clear.toFixed(3)} m off the table`);
+      h.chairs.set(c, 0);
+    }
+  }
+  check('spots', 'every chair can be pulled out and sat at', chairBad.length === 0, chairBad.length ? chairBad.join('; ') : `${h.chairs.list.length} chairs, for a flat front and a big belly`);
 }
 
 // ---- RUN -----------------------------------------------------------------------------------------------------------

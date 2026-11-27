@@ -19,6 +19,10 @@
 // those within a step of the walker's own start stay free (so they can walk away from someone beside them).
 //
 // SLIDING DOORS ARE FREE: they open as anyone comes near, so the way goes straight through a doorway.
+//
+// CHAIRS MOVE (v0.2.182, homeChairs.ts): the boxes in `movable` are not laid into the grid once; they are laid into a
+// second layer of their own, laid again whenever their `version` changes (a chair pulled out or pushed in), and a square
+// must be free in both.
 // ============================================================================
 import type { Vec2 } from '../../mind/types';
 import { LET_IN, type Person } from './homeBlocks';
@@ -54,6 +58,12 @@ export class HomeNav {
   private readonly owners = new Map<number, Set<number>>();
   /** each thing's kin, by id (a chair's table, a table's chairs: SmartObject `partOf`): walking to one lets you through the other */
   private readonly kin = new Map<string, Set<string>>();
+  /** THE MOVING BOXES' LAYER (the chairs): as `owner` and `owners`, laid again when their version changes */
+  private readonly moveOwner: Int16Array;
+  private readonly moveOwners = new Map<number, Set<number>>();
+  private moveLaid: number[] = [];
+  private moveVersion = -1;
+  private readonly moveIndex: number[] = [];
   // (the search's own arrays, kept between searches)
   private readonly cost: Float32Array;
   private readonly from: Int32Array;
@@ -61,7 +71,9 @@ export class HomeNav {
   private heap: number[] = [];
 
   constructor(boxes: readonly NavBox[], bounds: { x0: number; z0: number; x1: number; z1: number }, private readonly radius: number,
-    objects: readonly { readonly id: string; readonly partOf?: string }[] = []) {
+    objects: readonly { readonly id: string; readonly partOf?: string }[] = [],
+    /** boxes that move (the chairs that pull out: homeChairs.ts), and a number that changes whenever any of them has */
+    private readonly movable: { readonly boxes: readonly NavBox[]; version(): number } | null = null) {
     this.x0 = bounds.x0; this.z0 = bounds.z0;
     for (const o of objects) {
       if (!o.partOf) continue;
@@ -79,41 +91,66 @@ export class HomeNav {
     this.cost = new Float32Array(n);
     this.from = new Int32Array(n);
     this.closed = new Uint8Array(n);
+    this.moveOwner = new Int16Array(n).fill(-1);
+    const moving = new Set(movable?.boxes ?? []);
     for (const b of boxes) {
-      if (b.door) continue;
+      if (b.door || moving.has(b)) continue;
       const idx = b.objectId === null ? -1 : this.ids.push(b.objectId) - 1;
-      // (the squares within the box's reach and a body's radius, tested one by one)
-      const reach = Math.hypot(b.hx, b.hz) + radius;
-      const i0 = Math.max(0, Math.floor((b.cx - reach - this.x0) / CELL)), i1 = Math.min(this.nx - 1, Math.ceil((b.cx + reach - this.x0) / CELL));
-      const j0 = Math.max(0, Math.floor((b.cz - reach - this.z0) / CELL)), j1 = Math.min(this.nz - 1, Math.ceil((b.cz + reach - this.z0) / CELL));
-      for (let j = j0; j <= j1; j++) {
-        for (let i = i0; i <= i1; i++) {
-          const x = this.x0 + (i + 0.5) * CELL, z = this.z0 + (j + 0.5) * CELL;
-          const dx = x - b.cx, dz = z - b.cz;
-          const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
-          const ox = Math.max(0, Math.abs(lx) - b.hx), oz = Math.max(0, Math.abs(lz) - b.hz);
-          if (Math.hypot(ox, oz) >= radius) continue;
-          const k = j * this.nx + i;
-          if (idx < 0) this.wall[k] = 1;
-          else if (this.owner[k] === -1 || this.owner[k] === idx) this.owner[k] = idx;
-          else {
-            // (a second thing on this square: which ones are kept, so walking to all of them at once can still pass)
-            const set = this.owners.get(k) ?? new Set<number>(this.owner[k] >= 0 ? [this.owner[k]] : []);
-            set.add(idx);
-            this.owners.set(k, set);
-            this.owner[k] = -2;
-          }
+      this.lay(b, idx, this.owner, this.owners, null);
+    }
+    // (the moving boxes: an index each, laid in their own layer at the first walk)
+    for (const b of movable?.boxes ?? []) this.moveIndex.push(this.ids.push(b.objectId ?? '') - 1);
+  }
+
+  /** Lay one box into a layer (`owner`/`owners`; a wall's box, idx -1, into the walls): the squares a body there would touch. */
+  private lay(b: NavBox, idx: number, owner: Int16Array, owners: Map<number, Set<number>>, laid: number[] | null): void {
+    // (the squares within the box's reach and a body's radius, tested one by one)
+    const radius = this.radius;
+    const reach = Math.hypot(b.hx, b.hz) + radius;
+    const i0 = Math.max(0, Math.floor((b.cx - reach - this.x0) / CELL)), i1 = Math.min(this.nx - 1, Math.ceil((b.cx + reach - this.x0) / CELL));
+    const j0 = Math.max(0, Math.floor((b.cz - reach - this.z0) / CELL)), j1 = Math.min(this.nz - 1, Math.ceil((b.cz + reach - this.z0) / CELL));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = this.x0 + (i + 0.5) * CELL, z = this.z0 + (j + 0.5) * CELL;
+        const dx = x - b.cx, dz = z - b.cz;
+        const lx = dx * b.cos - dz * b.sin, lz = dx * b.sin + dz * b.cos;
+        const ox = Math.max(0, Math.abs(lx) - b.hx), oz = Math.max(0, Math.abs(lz) - b.hz);
+        if (Math.hypot(ox, oz) >= radius) continue;
+        const k = j * this.nx + i;
+        laid?.push(k);
+        if (idx < 0) this.wall[k] = 1;
+        else if (owner[k] === -1 || owner[k] === idx) owner[k] = idx;
+        else {
+          // (a second thing on this square: which ones are kept, so walking to all of them at once can still pass)
+          const set = owners.get(k) ?? new Set<number>(owner[k] >= 0 ? [owner[k]] : []);
+          set.add(idx);
+          owners.set(k, set);
+          owner[k] = -2;
         }
       }
     }
+  }
+
+  /** The moving boxes laid again where they are now, if any has moved since they were last laid. */
+  private layMovable(): void {
+    if (!this.movable) return;
+    const v = this.movable.version();
+    if (v === this.moveVersion) return;
+    this.moveVersion = v;
+    for (const k of this.moveLaid) this.moveOwner[k] = -1;
+    this.moveOwners.clear();
+    this.moveLaid = [];
+    this.movable.boxes.forEach((b, n) => this.lay(b, this.moveIndex[n], this.moveOwner, this.moveOwners, this.moveLaid));
   }
 
   /**
    * THE WAY from `start` to `end` round the walls and furniture (`using`: the thing being walked to, let in within
    * LET_IN of `letInAt` -- its spot, `end` if not given -- and the things it belongs with: a dining chair's table), and
    * round the people in `avoid`, as a few points after `start`, the last of them `end` itself; null if there is no way.
+   * `chairsAside`: the chairs that pull out left out of it (laid where they are, they are in their own layer).
    */
-  path(start: Vec2, end: Vec2, using: string | null = null, letInAt: Vec2 = end, avoid: readonly Person[] = []): Vec2[] | null {
+  path(start: Vec2, end: Vec2, using: string | null = null, letInAt: Vec2 = end, avoid: readonly Person[] = [], chairsAside = false): Vec2[] | null {
+    this.layMovable();
     // (the thing walked to, and its kin, let through near its spot: every index of a box of theirs)
     const use = new Set<number>();
     if (using !== null) {
@@ -131,11 +168,15 @@ export class HomeNav {
           for (const p of avoid) if (Math.hypot(c.x - p.x, c.z - p.z) < p.apart) return false;
         }
       }
-      const o = this.owner[k];
-      if (o === -1) return true;
-      if (o >= 0) return use.has(o) && near(k);
-      for (const i of this.owners.get(k) ?? []) if (!use.has(i)) return false;
-      return use.size > 0 && near(k);
+      // (free of the furniture that stands, and of the chairs where they are now)
+      const clear = (o: number, owners: Map<number, Set<number>>): boolean => {
+        if (o === -1) return true;
+        if (o >= 0) return use.has(o) && near(k);
+        for (const i of owners.get(k) ?? []) if (!use.has(i)) return false;
+        return use.size > 0 && near(k);
+      };
+      // (`chairsAside`: as if every chair were tucked in: is a chair someone is using all that stands in the way?)
+      return clear(this.owner[k], this.owners) && (chairsAside || clear(this.moveOwner[k], this.moveOwners));
     };
     const s = this.nearestFree(this.cellOf(start), free), e = this.nearestFree(this.cellOf(end), free);
     if (s < 0 || e < 0) return null;
@@ -166,7 +207,8 @@ export class HomeNav {
   /** How many squares are free and stopped (for tests). */
   counts(): { cells: number; walls: number; furniture: number } {
     let walls = 0, furniture = 0;
-    for (let k = 0; k < this.wall.length; k++) { if (this.wall[k]) walls++; else if (this.owner[k] !== -1) furniture++; }
+    this.layMovable();
+    for (let k = 0; k < this.wall.length; k++) { if (this.wall[k]) walls++; else if (this.owner[k] !== -1 || this.moveOwner[k] !== -1) furniture++; }
     return { cells: this.wall.length, walls, furniture };
   }
 
@@ -200,6 +242,14 @@ export class HomeNav {
       if (best >= 0) return best;
     }
     return -1;
+  }
+
+  /**
+   * Whether nothing but open floor and furniture is between a and b: no wall (talking across a table is fine; through a
+   * wall is not). For a walk up to someone (homeMindBody.ts `walk` with `within`).
+   */
+  noWallBetween(a: Vec2, b: Vec2): boolean {
+    return this.sees(a, b, (k) => k < 0 || this.wall[k] === 0);
   }
 
   /** Whether a straight line from a to b crosses only free squares (looked at every third of a square). */

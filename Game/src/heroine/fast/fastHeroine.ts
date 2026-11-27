@@ -1827,6 +1827,7 @@ if (uHideHead > 0.5) {
       },
       keepOff: (face) => { keepFace = face; },
       bellyAhead: () => { const e = armClear.eggs[0]; return e ? e.cz + e.rz : 0.15; },
+      bellyFurthest: (direction, out) => armClear.bellyFurthest(direction, out),
       gun: (hand) => guns[hand].object,
       gunClip: (hand) => guns[hand].clip,
       gunSeat: (hand, out) => out.copy(seat[hand]),
@@ -1911,6 +1912,12 @@ if (uHideHead > 0.5) {
         top: standing.ankleHeight + shape.hipsAboveAnkles - SIT.pad,
         back: shape.anklesAhead - SIT.tuck - standing.anklesAheadOfHips - standing.hipsAhead,
       };
+    },
+    carry(dx: number, dz: number): void {
+      // (CARRIED on a chair she sits on, scooted in or out (v0.2.182): her planted feet and the seat she sat down on go
+      //  with her; the game has moved her root already)
+      ground.carry(dx, dz);
+      sitSeat.x += dx; sitSeat.z += dz;
     },
     sitFor(seconds: number, open = false): void {
       if (open) sitOpenNow = true;

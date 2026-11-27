@@ -73,7 +73,8 @@ import type { HomeScene } from './world/home/homeScene';
 import type { Interaction, Mind, MindWorld } from './mind';
 import { FoodPanel } from './ui/foodPanel';
 import { needsFromReading } from './world/home/mindBridge';
-import { PEOPLE_APART, PLAYER_APART } from './world/home/homeBlocks';
+import { BODY_RADIUS as HOME_BODY_RADIUS, PEOPLE_APART, PLAYER_APART } from './world/home/homeBlocks';
+import type { GripShape } from '@charb/actor/handGrip';
 import { KNEE_PILLOW, LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
 import type { HomeMindBody } from './world/home/homeMindBody';
 /** The home's walls and ceilings, metres (homeScene.ts WALL_HEIGHT; a number here so the module loads only on its map). */
@@ -1787,6 +1788,11 @@ async function start(): Promise<void> {
       const profile = c === john ? JOHN_PROFILE : MARY_PROFILE;
       const walls = k.homeWalls;
       if (!walls) continue;
+      // (a hand on a chair's backrest, v0.2.182: its pose each frame, kept for the hand's job; which hands hold one now)
+      const railPose = { left: new THREE.Matrix4(), right: new THREE.Matrix4() };
+      const railHeld = { left: false, right: false };
+      const railAt = new THREE.Vector3(), railAxis = new THREE.Vector3(), railPalm = new THREE.Vector3(), railWrap = new THREE.Vector3();
+      const bellyWay = new THREE.Vector3(), bellyPoint = new THREE.Vector3();
       const mb = new HomeMindBody({
         id: profile.id, vitals: c.vitals, walls,
         position: () => ({ x: k.motion.x, z: k.motion.z }),
@@ -1797,7 +1803,45 @@ async function start(): Promise<void> {
         lieOn: (spot) => c.body.lieOn?.(spot),
         lieShare: () => c.body.lieInfo?.() ?? 0,
         kneePillow: () => graphics.kneePillow,
-      }, h.layout, h.nav);
+        // HER BELLY AT A CHAIR AND A COUNTER (v0.2.182): how far it stands out, and where its front is now (seated)
+        bellyAhead: () => c.body.hands?.bellyAhead() ?? 0.15,
+        bellyFurthest: (dx, dz) => {
+          const p = c.body.hands?.bellyFurthest?.(bellyWay.set(dx, 0, dz).normalize(), bellyPoint);
+          return p ? { x: p.x, z: p.z } : null;
+        },
+        // CARRIED WITH THE CHAIR she sits on, scooting in or out: her place, and her planted feet with her
+        carry: (dx, dz) => { k.motion.x += dx; k.motion.z += dz; c.body.carry?.(dx, dz); },
+        // A HAND ON THE CHAIR'S BACKREST (as on a bar: grabBars.ts): its grip on the rail, moved with it as it slides
+        grip: (hand, rail) => {
+          const hands = c.body.hands;
+          if (!hands) return;
+          if (!rail) {
+            if (railHeld[hand]) { hands.hold(hand, null); hands.reach(hand, null); railHeld[hand] = false; }
+            return;
+          }
+          // (a gun in that hand: no hold, she moves the chair with her body)
+          if (hands.hasGun(hand)) return;
+          railAt.set(rail.at.x, rail.at.y, rail.at.z);
+          railAxis.set(rail.b.x - rail.a.x, rail.b.y - rail.a.y, rail.b.z - rail.a.z).normalize();
+          railPalm.set(rail.palm.x, rail.palm.y, rail.palm.z);
+          railWrap.set(rail.wrap.x, rail.wrap.y, rail.wrap.z);
+          hands.gripPose(hand, railAt, railAxis, railPalm, railWrap, rail.radius, railPose[hand]);
+          const shape: GripShape = { kind: 'cylinder', a: [rail.a.x, rail.a.y, rail.a.z], b: [rail.b.x, rail.b.y, rail.b.z], radius: rail.radius };
+          // (the first time a reach to it, her body staying up; after, the same job moved to where the rail is now)
+          if (!railHeld[hand]) { hands.reach(hand, railPose[hand], undefined, true); hands.hold(hand, shape); railHeld[hand] = true; }
+          else { hands.moveReach(hand, railPose[hand]); hands.hold(hand, shape, true); }
+        },
+        gripped: (hand) => c.body.hands?.reached(hand) ?? 1,
+      }, h.layout, h.nav, h.chairs);
+      // HER BELLY IS SOLID TOO (v0.2.182; Joshua: "make sure with Mary's large belly, her belly doesn't clip the table or
+      // even like standing at the sink"): where it stands out past her body's circle, a second circle at its front is
+      // kept off the walls and furniture (homeBlocks.ts BELLY_RADIUS), standing only
+      walls.belly = () => {
+        // (the one played keeps their stance in the frame's own variable, the one standing by in their kit)
+        if ((k === playing?.kit ? stance : k.state.stance) !== 'stand') return null;
+        const ahead = c.body.hands?.bellyAhead() ?? 0;
+        return ahead > HOME_BODY_RADIUS ? { ahead, yaw: k.turn.base } : null;
+      };
       c.mindBody = mb;
       c.mind = new Mind(profile, mb, world, society, { mode: c === playing ? 'manual' : 'autonomous' });
       // THE OTHER PERSON IS SOLID (v0.2.181; Joshua: "set collisions with each other"): each step of theirs is kept off
@@ -1805,10 +1849,12 @@ async function start(): Promise<void> {
       // by keeps the one played PEOPLE_APART off (and so is shouldered aside: main.ts pushes them each frame); the one
       // played is stopped a little nearer (PLAYER_APART), so they make way rather than stand off.
       walls.people = () => {
-        const out: { x: number; z: number; apart: number; yieldTo: boolean }[] = [];
+        const out: { x: number; z: number; apart: number; yieldTo: boolean; passing: boolean }[] = [];
         for (const o of [blaze, john]) {
           if (!o || o === c || (o.body.sitShare?.() ?? 0) > 0 || (o.body.lieInfo?.() ?? 0) > 0) continue;
-          out.push({ x: o.kit.motion.x, z: o.kit.motion.z, apart: c === playing ? PLAYER_APART : PEOPLE_APART, yieldTo: o === playing });
+          // (passing, not staying: the one played moving, or anyone on a walk their mind sent them on)
+          const passing = (o === playing && o.kit.motion.speed > 0.2) || !!o.mindBody?.going;
+          out.push({ x: o.kit.motion.x, z: o.kit.motion.z, apart: c === playing ? PLAYER_APART : PEOPLE_APART, yieldTo: o === playing, passing });
         }
         return out;
       };
@@ -2008,6 +2054,8 @@ async function start(): Promise<void> {
   let homeChoiceKey = '';
   /** The one played is doing what they asked for at home (their mind runs it: walking, sitting, lying). */
   const askedNow = (): boolean => !!playing?.mind?.asked && !!playing.mindBody;
+  /** Getting up from a chair and putting it back, once what they asked for is over (homeMindBody.ts `leaving`, v0.2.182). */
+  const leavingNow = (): boolean => !!playing?.mindBody?.leaving;
   /** Let go of what they asked for: the plan stopped, and they get up from where they sit or lie. */
   const stopAsked = (): void => { playing?.mind?.stopNow(); playing?.mindBody?.release(); };
   /**
@@ -2019,12 +2067,18 @@ async function start(): Promise<void> {
    */
   const thingLook = (c: Character, at: THREE.Vector3): { yaw: number; hold: number | null; atOn: boolean } | null => {
     const mb = c.mindBody, mind = c.mind;
-    if (!mb || !mind || !mind.activity) return null;
+    // (doing something for their mind, or putting a chair back once it has let go: v0.2.182)
+    if (!mb || !mind || (!mind.activity && !mb.leaving)) return null;
     const m = c.kit.motion;
-    const thing = mind.thing;
-    if (thing) at.set(thing.at.x, THING_LOOK_HEIGHT[thing.type] ?? 0.8, thing.at.z);
-    const toThing = thing ? Math.atan2(thing.at.x - m.x, thing.at.z - m.z) : null;
+    // (a chair being used is where it is now, pulled out or tucked in: homeChairs.ts; looked at by its backrest)
+    const chair = mb.chairNow;
+    const thing = chair?.object ?? mind.thing;
+    const place = chair?.at ?? thing?.at ?? null;
+    if (thing && place) at.set(place.x, chair ? CHAIR_LOOK_HEIGHT : THING_LOOK_HEIGHT[thing.type] ?? 0.8, place.z);
+    const toThing = place ? Math.atan2(place.x - m.x, place.z - m.z) : null;
     const walkTo = mb.walkTo;
+    // (backing up with a chair as they pull it out, or walking it back in: facing the table, looking at the chair)
+    if (walkTo && mb.faceWalking !== null) return { yaw: toThing ?? mb.faceWalking, hold: mb.faceWalking, atOn: toThing !== null };
     if (walkTo) {
       const hold = Math.atan2(walkTo.x - m.x, walkTo.z - m.z);
       return toThing !== null && mb.walkLeft() < ASKED_LOOK_NEAR ? { yaw: toThing, hold, atOn: true } : { yaw: hold, hold, atOn: false };
@@ -2032,6 +2086,25 @@ async function start(): Promise<void> {
     if (mb.lookYaw !== null) return { yaw: mb.lookYaw, hold: mb.holdYaw, atOn: !!thing && !SEATS.has(thing.type) };
     if (!thing || SEATS.has(thing.type) || toThing === null) return { yaw: mb.holdYaw ?? c.kit.turn.base, hold: mb.holdYaw, atOn: false };
     return { yaw: toThing, hold: mb.holdYaw, atOn: true };
+  };
+  /** A chair being pulled out or pushed in is looked at by its backrest's top, metres over the floor. */
+  const CHAIR_LOOK_HEIGHT = 0.85;
+  /**
+   * HER BELLY KEPT OFF the counter, the sink or the table's edge her mind has her stand at (homeMindBody.ts `keepFace`,
+   * v0.2.182): fastHeroine.ts holds her hips back if her belly would still touch it, as at the weapons table. Each
+   * character's own face (the body keeps the object it is given).
+   */
+  const keptOff = new Map<Character, { point: THREE.Vector3; outward: THREE.Vector3; top: number; on: boolean }>();
+  const keepBellyOff = (c: Character): void => {
+    const hands = c.body.hands;
+    if (!hands || !c.mindBody) return;
+    const face = c.mindBody.keepFace;
+    let mine = keptOff.get(c);
+    if (!mine) { mine = { point: new THREE.Vector3(), outward: new THREE.Vector3(), top: 0, on: false }; keptOff.set(c, mine); }
+    if (face) {
+      mine.point.set(face.x, 0, face.z); mine.outward.set(face.outX, 0, face.outZ); mine.top = face.top;
+      if (!mine.on) { hands.keepOff(mine); mine.on = true; }
+    } else if (mine.on) { hands.keepOff(null); mine.on = false; }
   };
   /** She is side-stepping this frame (crab steps: her stamina pays a little more per metre). */
   let sideStepping = false;
@@ -2312,10 +2385,16 @@ async function start(): Promise<void> {
     const walkTo = busy ? ask.walkTo : k.wants.walkTo && s.bathroomLeft <= 0 && s.stance === 'stand' ? k.wants.walkTo : null;
     k.pace.carrying = carryingOf(c);
     k.pace.step(dt, 0, s.limits);
+    // (pulling or pushing a chair at home: backing up or going on with it, facing the table, at the chair's pace; her
+    //  facing held, her feet step any way under her: v0.2.182)
+    const chairPace = !busy ? mb?.walkSpeed ?? null : null;
+    body.setSideSteps?.(!busy && mb?.faceWalking !== null && mb?.faceWalking !== undefined ? 1 : null);
     if (walkTo) {
       const away = Math.hypot(walkTo.x - m.x, walkTo.z - m.z), toward = Math.atan2(walkTo.x - m.x, walkTo.z - m.z);
-      m.update(dt, 0, 1, toward, dt > 0 ? Math.min(k.pace.paceSpeed(0), away / dt) : 0);
+      m.update(dt, 0, 1, toward, dt > 0 ? Math.min(k.pace.paceSpeed(0), chairPace ?? Infinity, away / dt) : 0);
     } else m.update(dt, 0, 0, k.turn.base, 0);
+    // (her belly kept off the counter or the table's edge she stands at: fastHeroine.ts holds her hips back)
+    keepBellyOff(c);
     // (AT HOME, standing: shouldered aside by the one played walking into them, v0.2.181)
     if (mb && (body.sitShare?.() ?? 0) <= 0 && (body.lieInfo?.() ?? 0) <= 0) m.nudge();
     // (the door: holding it they stay on its rail; otherwise it is solid to them too)
@@ -2613,18 +2692,22 @@ async function start(): Promise<void> {
         const toward = Math.atan2(ask.walkTo.x - motion.x, ask.walkTo.z - motion.z);
         motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
-    } else if (askedNow()) {
+    } else if (askedNow() || leavingNow()) {
       // AT HOME, DOING WHAT THEY ASKED FOR (the prompt: mind/interact.ts): their mind walks them, the way round the
       // furniture (world/home/homeMindBody.ts), at a walk, as it walks the one standing by. The stick pushed lets go of
       // it: from the next frame it is theirs again (sitting or lying, once they are up: HER STANCE above holds them).
-      heroine.setSideSteps?.(null);
+      // AT A CHAIR (v0.2.182) they scoot out and get up whatever, then put it back in unless the stick takes them.
+      const mb = playing?.mindBody ?? null;
+      heroine.setSideSteps?.(mb?.faceWalking !== null && mb?.faceWalking !== undefined ? 1 : null);
       pace.step(dt, 0, limits);
-      const walkTo = playing?.mindBody?.walkTo ?? null;
-      if (controls.moveX !== 0 || controls.moveY !== 0) { stopAsked(); motion.update(dt, 0, 0, turn.base, 0); }
-      else if (walkTo) {
+      const walkTo = mb?.walkTo ?? null;
+      if (controls.moveX !== 0 || controls.moveY !== 0) {
+        if (askedNow()) stopAsked(); else mb?.stopLeaving();
+        motion.update(dt, 0, 0, turn.base, 0);
+      } else if (walkTo) {
         const away = Math.hypot(walkTo.x - motion.x, walkTo.z - motion.z);
         const toward = Math.atan2(walkTo.x - motion.x, walkTo.z - motion.z);
-        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), away / dt) : 0);
+        motion.update(dt, 0, 1, toward, dt > 0 ? Math.min(pace.paceSpeed(0), mb?.walkSpeed ?? Infinity, away / dt) : 0);
       } else motion.update(dt, 0, 0, turn.base, 0);
     } else if (rig.mode === 'third' && rig.style === 'drone') {
       // THE DRONE CAMERA: the stick flies the camera (src/camera/cameraRig.ts) and she stands where she is
@@ -2794,7 +2877,7 @@ async function start(): Promise<void> {
     const seatedYaw = playing?.kit.toilet.inUse ? playing.kit.toilet.yaw : null;
     // (AT HOME, doing what they asked for: their mind turns them to the seat, the sink, the bed, and holds them square
     //  to it while they sit; where it looks (the screen) they look, in third person)
-    const askedBody = askedNow() ? playing?.mindBody ?? null : null;
+    const askedBody = askedNow() || leavingNow() ? playing?.mindBody ?? null : null;
     // (AT HOME, DOING WHAT THEY ASKED FOR, her head and body move by themselves until it is done, as on the toilet: her
     //  head looks the way she walks, and near the thing, at it (the fridge, the sink, the seat); her body faces the way
     //  she walks and then squares up to the thing, so she never walks backwards to it; her head alone turns from there
@@ -3191,7 +3274,7 @@ async function start(): Promise<void> {
       // (at home the one played keeps their own mind too, in 'manual': it plans nothing, but their feelings and their
       //  day's counts go on, and the one standing by finds them where they are to talk to)
       //  ... and what the player asks of them at home is run by it: their body asked first for the pose it keeps
-      if (playing?.mind) { playing.mindBody?.frame(dt); playing.mind.tick(dt, clockTime(), needsFromReading(playing.vitals.reading)); }
+      if (playing?.mind) { playing.mindBody?.frame(dt); playing.mind.tick(dt, clockTime(), needsFromReading(playing.vitals.reading)); keepBellyOff(playing); }
     }
     if (reading.bathroomEta === 0 && bathroomLeft <= 0) mustGoNow = true;
     limits = reading;

@@ -45,8 +45,12 @@ const COMPANION_REACH = 5;
 const SWITCH_RATIO = 1.3, SWITCH_MARGIN = 8;
 /** A need must score at least this to stop a pastime at all. */
 const NEED_INTERRUPTS_FROM = 55;
-/** Real seconds a walk may take before it is given up as stuck; a pose, before it is given up. */
-const WALK_GIVE_UP = 90, POSE_GIVE_UP = 15;
+/**
+ * Real seconds a walk may take before it is given up as stuck; a pose, before it is given up (30: standing up from a
+ * chair that pulls out is scooting out, getting up, stepping out and pushing it back in, 10-20 s with someone in the
+ * way: at 15 John, asked to talk at the desk, gave up on it, v0.2.182).
+ */
+const WALK_GIVE_UP = 90, POSE_GIVE_UP = 30;
 /**
  * A NEED THAT KEEPS FAILING (Joshua, 2026-11-26: John's meal failed nine times while his water ran down, the meal at
  * 99 always beating the drink at 60): each failure of it in the last FRUSTRATION_MINUTES game minutes multiplies its

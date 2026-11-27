@@ -27,6 +27,7 @@
 // ============================================================================
 import type { ActorId, Motion, ObjectSlot, ObjectType, SmartObject, Vec2 } from '../../mind/types';
 import { START_STOCK } from '../../mind/food';
+import { CHAIR } from './homeChairs';
 
 /** The kinds of room a home is made of. */
 export type RoomKind = 'mainBedroom' | 'bedroom' | 'bathroom' | 'ensuite' | 'living' | 'entry' | 'kitchen' | 'hall';
@@ -153,8 +154,9 @@ export const SEAT_BACK = 0.37;
  *  front edge 0.42 m out) and the armchair (0.8 m) on the front of their cushions, the toilet over its middle (the
  *  pop-up toilet's own model: its hips 6 cm in front of its middle). The feet then stand 12 cm clear of the front. */
 const SOFA_HIPS = 0.2, ARMCHAIR_HIPS = 0.15, TOILET_HIPS = 0.06;
-/** A dining chair's middle is pulled out this far from the table's edge, metres (its sitter stands 0.21 m off the edge). */
-const CHAIR_OUT = 0.6;
+// (A dining chair's place: TUCKED IN at its table, homeChairs.ts CHAIR.tuck from its edge, pulled out to be sat on:
+//  v0.2.182. It stood pulled out 0.6 m for good before, and its sitter's spot was between it and the table, reached
+//  only by walking through it: Joshua, "it walks through the chair from behind it".)
 
 /**
  * BUILDS A HOME from its room list, in the world at `origin` (the house's own south-west corner). Every number here
@@ -261,7 +263,7 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
   const used = new Map<string, number>();
   /** A thing at (x, z) in house metres, facing `facing`, with its slots (also in house metres). */
   /** Put a thing in the home; returns its id (a chair is put `partOf` its table by that id). */
-  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { items?: SmartObject['items']; tags?: string[]; partOf?: string } = {}): string => {
+  const put = (type: ObjectType, name: string, room: string, x: number, z: number, facing: number, w: number, d: number, slots: SlotSpec[], extra: { items?: SmartObject['items']; tags?: string[]; partOf?: string; pullSide?: [number, number] } = {}): string => {
     const n = (used.get(type) ?? 0) + 1;
     used.set(type, n);
     const id = `${type}-${n}`;
@@ -271,6 +273,7 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
       ...(extra.items ? { items: extra.items } : {}),
       ...(extra.tags ? { tags: extra.tags } : {}),
       ...(extra.partOf ? { partOf: extra.partOf } : {}),
+      ...(extra.pullSide ? { pullsOut: { side: { x: extra.pullSide[0], z: extra.pullSide[1] } } } : {}),
     });
     return id;
   };
@@ -292,16 +295,19 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
     return { id, use: [x + s * u, z + c * u], facing, approach: [x + s * (u + 0.55), z + c * (u + 0.55)], motion: 'sit', owner };
   };
   /**
-   * A CHAIR AT A TABLE (a dining chair, the desk chair): pulled out from it (`out` metres from the table's edge to the
-   * chair's middle), facing it. The hips rest just behind the chair's middle; the body stands SEAT_BACK in front of
-   * that, between the chair and the table, and comes at it from BEHIND the chair (the table's in front). The chair is
-   * put `partOf` the table, so whoever uses it may stand over the table's edge (homeBlocks.ts): a body is kept 0.3 m
-   * off anything solid, and the chairs' spots were 12 cm from the table's edge, so nobody could ever sit at the table
-   * (Joshua, 2026-11-26: they "didn't fill up with food or water").
+   * A CHAIR AT A TABLE (a dining chair, the desk chair), TUCKED IN at (cx, cz), facing the table, pulled out from its free
+   * side `side` (a unit way in the world: homeChairs.ts). Its slot is come at from BESIDE ITS BACK on that side (where a
+   * body takes hold of it to pull it out: `grabSpot`), and used from in front of its seat once it is pulled out the
+   * least (`standSpot` at CHAIR.pullLeast: the body works out its own, for its belly, homeMindBody.ts). The chair is put
+   * `partOf` the table, so whoever sits on it may stand over the table's edge (homeBlocks.ts).
    */
-  const tableSeat = (cx: number, cz: number, facing: number): SlotSpec => {
-    const s = Math.sin(facing), c = Math.cos(facing), u = -0.02 + SEAT_BACK;
-    return { id: 'seat', use: [cx + s * u, cz + c * u], facing, approach: [cx - s * 0.55, cz - c * 0.55], motion: 'sit' };
+  const tableSeat = (cx: number, cz: number, facing: number, side: [number, number]): SlotSpec => {
+    const s = Math.sin(facing), c = Math.cos(facing);
+    const u = -CHAIR.pullLeast + CHAIR.hipsAt + CHAIR.seatBack;
+    return {
+      id: 'seat', use: [cx + s * u, cz + c * u], facing, motion: 'sit',
+      approach: [cx + side[0] * CHAIR.grabSide - s * CHAIR.grabBack, cz + side[1] * CHAIR.grabSide - c * CHAIR.grabBack],
+    };
   };
   const spots = (room: string, ...pts: [number, number][]): void => { standSpots[room] = pts.map(([x, z]) => at(x, z)); };
 
@@ -346,16 +352,18 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         ], { tags: ['single', 'guest'] });
         if (bedroomIndex % 2 === 1) put('wardrobe', 'Wardrobe', room.id, r.x0 + 0.3, r.z0 + 1.6, EAST, 1.2, 0.6, [front('front', r.x0 + 0.3, r.z0 + 1.6, EAST, 0.65)]);
         else {
-          // (the desk, 1.2 long against the west wall; tidied from its south end, where the chair is not)
-          const dz = r.z1 - 1.6;
+          // (the desk, 1.2 long against the west wall; tidied from its NORTH end (v0.2.182: its south end was where the
+          //  chair is pulled out from, the very same spot, and one tidying there kept the other from the chair, and from
+          //  the way past it to the window, until both gave up). Since v0.2.182 nearer the door, its chair beside the
+          //  foot of the bed rather than across from its side: between them was 1 m, too narrow for two to pass, and the
+          //  only way to the window)
+          const dz = r.z1 - 2.6;
           const desk = put('desk', 'Desk', room.id, r.x0 + 0.3, dz, EAST, 1.2, 0.6, [{
-            id: 'front', use: [r.x0 + 0.95, dz - 0.55], facing: WEST, approach: [r.x0 + 1.45, dz - 0.55], motion: 'stand',
+            id: 'front', use: [r.x0 + 0.95, dz + 0.55], facing: WEST, approach: [r.x0 + 1.45, dz + 0.55], motion: 'stand',
           }]);
-          // (the chair at the desk, pulled out 0.4 m from its edge: she sits facing the desk, west; further out, it closed
-          //  the way between it and the bed to the window: the walk grid's squares are 15 cm, and a gap must be wider
-          //  than a body's 0.6 m by about a square)
-          const chairX = r.x0 + 0.6 + 0.4;
-          put('deskChair', 'Desk chair', room.id, chairX, dz, WEST, 0.5, 0.5, [tableSeat(chairX, dz, WEST)], { tags: ['read'], partOf: desk });
+          // (the chair at the desk, tucked in under it, facing it (west), pulled out from its south side: v0.2.182)
+          const chairX = r.x0 + 0.6 + CHAIR.tuck;
+          put('deskChair', 'Desk chair', room.id, chairX, dz, WEST, 0.5, 0.5, [tableSeat(chairX, dz, WEST, [0, -1])], { tags: ['read'], partOf: desk, pullSide: [0, -1] });
         }
         // (the window toward the room's middle: at its west end the desk stood in the way of looking out)
         put('window', `Window (${room.name.toLowerCase()})`, room.id, r.x0 + 1.6, r.z1 - 0.05, SOUTH, 1.0, 0.1, [front('look', r.x0 + 1.6, r.z1 - 0.05, SOUTH, 0.55)]);
@@ -398,10 +406,12 @@ export function generateHome(spec: HomeSpec = FISHER_HOME, origin: Vec2 = { x: -
         // (the table, 1.6 x 0.9; tidied from its east end, clear of the chairs)
         const table = put('diningTable', 'Dining table', room.id, tx, tz, NORTH, 1.6, 0.9, [front('side', tx, tz, EAST, 1.15)]);
         // (the chairs: two on the north side facing south, two on the south side facing north, each facing the table,
-        //  pulled out CHAIR_OUT from its edge)
-        const chairZ = 0.45 + CHAIR_OUT;
+        //  TUCKED IN under its edge (homeChairs.ts CHAIR.tuck); each pulled out from its side toward the table's end:
+        //  between two chairs there is no room to stand)
+        const chairZ = 0.45 + CHAIR.tuck;
         for (const [x, z, facing] of [[tx - 0.4, tz + chairZ, SOUTH], [tx + 0.4, tz + chairZ, SOUTH], [tx - 0.4, tz - chairZ, NORTH], [tx + 0.4, tz - chairZ, NORTH]] as const) {
-          put('diningChair', 'Dining chair', room.id, x, z, facing, 0.45, 0.45, [tableSeat(x, z, facing)], { tags: ['table'], partOf: table });
+          const side: [number, number] = [Math.sign(x - tx), 0];
+          put('diningChair', 'Dining chair', room.id, x, z, facing, 0.45, 0.45, [tableSeat(x, z, facing, side)], { tags: ['table'], partOf: table, pullSide: side });
         }
         // (the window over the sink: looked out of from in front of the sink, the sink between; at 0.55 m out the body
         //  stood in the sink)

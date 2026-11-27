@@ -387,6 +387,11 @@ export class FootGround {
   private turnQuiet = 0;
 
   private readonly legs: readonly [LegBones, LegBones];
+  /** CARRIED (v0.2.182: a chair she sits on scooted in or out): her planted feet's spots go with her by (dx, dz). */
+  carry(dx: number, dz: number): void {
+    for (const f of this.feet) { f.lockX += dx; f.lockZ += dz; }
+  }
+
   private readonly feet: readonly [Foot, Foot] = [
     { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0, ankle: new THREE.Vector3(), knee: new THREE.Vector3(), lie: new THREE.Quaternion(), raise: 0, homeX: 0, homeZ: 0 },
     { locked: false, lockX: 0, lockZ: 0, offX: 0, offZ: 0, ankle: new THREE.Vector3(), knee: new THREE.Vector3(), lie: new THREE.Quaternion(), raise: 0, homeX: 0, homeZ: 0 },

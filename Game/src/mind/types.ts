@@ -140,4 +140,9 @@ export interface SmartObject {
    * other's box too (homeBlocks.ts), as a chair is pulled out from its table
    */
   readonly partOf?: string;
+  /**
+   * A CHAIR TUCKED IN AT ITS TABLE (v0.2.182): pulled out to be sat on and pushed back in after (world/home/homeChairs.ts),
+   * from its free side: `side`, a unit way in the world from its middle (the table's end, not the next chair).
+   */
+  readonly pullsOut?: { readonly side: Vec2 };
 }

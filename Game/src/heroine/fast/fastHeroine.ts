@@ -38,6 +38,7 @@
 // this file's factory (`createFastHeroine`), and in the report that came with it.
 // ============================================================================
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { type BodyFacing, type BodyVitals, type FrameInfo, type Hand, type HeroineBody } from '../../core/contracts';
 import { ArmAim, findKnuckles, type ArmBones } from '../aimArms';
 import { createGun, seatGunInHand, type Gun } from '../guns';
@@ -59,7 +60,7 @@ import { smoothBand } from '../liveBand';
 import { measureHandPads } from './handPads';
 import { SkinPatch } from './skinPatch';
 import { LIE, SIT, SIT_HANDS, SIT_LOOK, seatShape, seatedTurns, sitPhase, type SitPhase } from './sitPose';
-import { LIE_POSE, SIDE_POSE, STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, lieTurns, sideTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
+import { KNEE_PILLOW, LIE_POSE, SIDE_POSE, STANCE, WINDED, downSteps, foursHips, kneelHips, kneelTip, kneelTurns, lieTurns, sideTurns, stanceTurns, tipOf, type BodySizes, type Stance } from './groundPose';
 import type { MutableJointTurn } from '@charb/actor/humanRig';
 import { DetailLevels, DetailMaker, handPart, headPart, sharpParts, shoulderPart, skinImportance, type Detail } from './detailLevels';
 import { PLAIN_KEY, detailOfKey } from './shapedBody';
@@ -598,13 +599,21 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
    * LYING DOWN ON A BED (LIE; `lieOn`): where her hip joints lie (world), and the way her feet point; how far lying she
    * is (0 sitting on the edge .. LIE.seconds lying), and the spot kept while she sits up again after `lieOn(null)`.
    */
-  type LieSpot = { x: number; y: number; z: number; yaw: number; side?: number };
+  type LieSpot = { x: number; y: number; z: number; yaw: number; side?: number; pillow?: boolean };
   let lieSpot: LieSpot | null = null, lieLast: LieSpot | null = null, lieW = 0;
   /**
    * LYING ON HER SIDE OR BACK (the spot's `side`: +1 her LEFT side down, -1 her right, 0 her back): where she is now
    * between them (-1..1), and a turn over in hand (from, to, how far through it 0..1, over LIE.turnSeconds).
    */
-  const lieSide = { now: 0, from: 0, to: 0, t: 1 };
+  const lieSide = { now: 0, from: 0, to: 0, t: 1, pillow: false };
+  /**
+   * THE PILLOW BETWEEN HER KNEES (groundPose.ts KNEE_PILLOW): made the first time it is wanted, set each frame between
+   * her knees in the world, grown in over KNEE_PILLOW.growSeconds once she is on her side, gone as she turns from it.
+   */
+  let kneePillow: THREE.Mesh | null = null;
+  let kneePillowGrow = 0;
+  const pillowX = new THREE.Vector3(), pillowY = new THREE.Vector3(), pillowZ = new THREE.Vector3(), pillowBasis = new THREE.Matrix4();
+  const pillowKnees = [new THREE.Vector3(), new THREE.Vector3()], pillowHips = [new THREE.Vector3(), new THREE.Vector3()];
   const lieRollQ = new THREE.Quaternion();
   /** Her side pose's turns, written each frame she lies on a side (groundPose.ts `sideTurns`). */
   const sideOut: MutableJointTurn[] = [];
@@ -617,7 +626,7 @@ export async function createFastHeroine(options: FastHeroineOptions): Promise<Fa
   /** Her legs' bones, and their turns as her pose leaves them before her feet are set on the floor (see LIE, feet). */
   const lieLegBones: THREE.Bone[] = [];
   const lieLegKeep: THREE.Quaternion[] = [];
-  const lieHips = new THREE.Vector3(), lieQ = new THREE.Quaternion(), lieTurnQ = new THREE.Quaternion(), lieTipQ = new THREE.Quaternion(), lieFlipQ = new THREE.Quaternion(), lieAt = new THREE.Vector3();
+  const lieShift = new THREE.Vector3(), lieHips = new THREE.Vector3(), lieQ = new THREE.Quaternion(), lieTurnQ = new THREE.Quaternion(), lieTipQ = new THREE.Quaternion(), lieFlipQ = new THREE.Quaternion(), lieAt = new THREE.Vector3();
   const Y_UP = new THREE.Vector3(0, 1, 0);
   const sitOut: MutableJointTurn[] = [];
   const sitNow: SitPhase = { legs: 0, lean: 0, apart: [0, 0], lift: [0, 0], ahead: 0 };
@@ -2079,6 +2088,9 @@ if (uHideHead > 0.5) {
         const want = Math.max(-1, Math.min(1, lieSpot.side ?? 0));
         if (lieW <= 0) { lieSide.now = lieSide.from = lieSide.to = want; lieSide.t = 1; }
         else if (want !== lieSide.to) { lieSide.from = lieSide.now; lieSide.to = want; lieSide.t = 0; }
+        // (the pillow between her knees, or none, is taken up only while she is on her back or lying down: so her legs
+        //  never jump while she lies on a side)
+        if (lieW <= 0 || Math.abs(lieSide.now) < 0.02) lieSide.pillow = lieSpot.pillow ?? false;
         if (lieSide.t < 1) {
           lieSide.t = Math.min(1, lieSide.t + frame.dt / LIE.turnSeconds);
           lieSide.now = lieSide.from + (lieSide.to - lieSide.from) * smooth(lieSide.t);
@@ -2147,7 +2159,7 @@ if (uHideHead > 0.5) {
       if (lieS > 0) motion.overlay(lieTurns(male ? LIE_POSE.male : LIE_POSE.female, motion.measure, motion.bind, lieOut), lieS);
       // (on her side: her side pose over that, by how far over she is; mirrored for her right side)
       const sideShare = Math.abs(lieSide.now);
-      if (lieS > 0 && sideShare > 0) motion.overlay(sideTurns(male ? SIDE_POSE.male : SIDE_POSE.female, lieSide.now > 0, motion.measure, motion.bind, sideOut), lieS * sideShare);
+      if (lieS > 0 && sideShare > 0) motion.overlay(sideTurns(male ? SIDE_POSE.male : SIDE_POSE.female, lieSide.now > 0, lieSide.pillow, motion.measure, motion.bind, sideOut), lieS * sideShare);
       // (from the first moment, for her feet's step out, though her hips have not begun to go down)
       ground.seat = sitT > 0 ? Math.max(sitS, 1e-4) : 0;
       ground.seatSpread[0] = sitNow.apart[0]; ground.seatSpread[1] = sitNow.apart[1];
@@ -2278,10 +2290,16 @@ if (uHideHead > 0.5) {
         root.updateMatrixWorld(true);
         // (the spot is on the top of what she lies on: her hip joints lie her own flesh over it, LIE_POSE)
         // (on her side, her hips' own half width and flesh under them instead, by how far over she is)
-        const backOver = (male ? LIE_POSE.male : LIE_POSE.female).hipsOver, sideOver = (male ? SIDE_POSE.male : SIDE_POSE.female).hipsOver;
+        const sidePose = male ? SIDE_POSE.male : SIDE_POSE.female;
+        const backOver = (male ? LIE_POSE.male : LIE_POSE.female).hipsOver, sideOver = sidePose.hipsOver;
         lieAt.set(lieLast.x, lieLast.y + backOver + (sideOver - backOver) * Math.abs(lieSide.now), lieLast.z);
         root.worldToLocal(lieAt);
         const turn = Math.atan2(Math.sin(lieLast.yaw - root.rotation.y), Math.cos(lieLast.yaw - root.rotation.y));
+        // (on a side, her hips moved toward her back, SIDE_POSE.backShift: in her root's frame her left is +X, and rolled
+        //  onto her left (+1) she faces it, so her back is -X; turned with her to lie along the bed)
+        lieTurnQ.setFromAxisAngle(Y_UP, turn);
+        lieShift.set(-lieSide.now * sidePose.backShift / Math.max(1e-6, root.scale.x), 0, 0).applyQuaternion(lieTurnQ);
+        lieAt.add(lieShift);
         lieTurnQ.setFromAxisAngle(Y_UP, turn * lieS);
         lieTipQ.setFromAxisAngle(X_AXIS, -(LIE.tip - LIE.incline) * lieS);
         lieFlipQ.setFromAxisAngle(Y_UP, fitFlip);
@@ -2544,6 +2562,39 @@ if (uHideHead > 0.5) {
       // Her shirt's live hem (liveDrape.ts), over her finished pose: her belly's motion carried over, and fitted again
       // once she has stood a moment in a stance other than the one it was fitted to.
       drape?.update(frame.dt, moving);
+      // THE PILLOW BETWEEN HER KNEES (KNEE_PILLOW): on her side, asked for, it grows in between her knees: along her
+      // thighs, as thick as the gap between them less a knee's own flesh, its middle a little up her thighs from them
+      {
+        const wantPillow = lieSide.pillow && lieW >= 1 && Math.abs(lieSide.now) > 0.9;
+        kneePillowGrow = Math.max(0, Math.min(1, kneePillowGrow + (wantPillow ? 1 : -1) * frame.dt / KNEE_PILLOW.growSeconds));
+        if (kneePillowGrow > 0 && !kneePillow && root.parent) {
+          kneePillow = new THREE.Mesh(new RoundedBoxGeometry(1, 1, 1, 3, 0.35), new THREE.MeshStandardMaterial({ color: 0xeef0f3, roughness: 0.92 }));
+          kneePillow.name = 'knee-pillow';
+          kneePillow.castShadow = true; kneePillow.receiveShadow = true;
+          root.parent.add(kneePillow);
+        }
+        if (kneePillow) {
+          kneePillow.visible = kneePillowGrow > 0;
+          if (kneePillow.visible) {
+            root.updateMatrixWorld(true);
+            bone(joints.kneeL).getWorldPosition(pillowKnees[0]); bone(joints.kneeR).getWorldPosition(pillowKnees[1]);
+            bone(joints.hipL).getWorldPosition(pillowHips[0]); bone(joints.hipR).getWorldPosition(pillowHips[1]);
+            // (its length along her thighs, its thickness from her lower knee to her upper, its width across)
+            pillowX.copy(pillowKnees[0]).add(pillowKnees[1]).sub(pillowHips[0]).sub(pillowHips[1]).normalize();
+            const top = pillowKnees[0].y > pillowKnees[1].y ? 0 : 1;
+            pillowY.copy(pillowKnees[top]).sub(pillowKnees[1 - top]);
+            const gap = pillowY.length();
+            pillowY.normalize();
+            pillowZ.crossVectors(pillowX, pillowY).normalize();
+            pillowY.crossVectors(pillowZ, pillowX);
+            pillowBasis.makeBasis(pillowX, pillowY, pillowZ);
+            kneePillow.quaternion.setFromRotationMatrix(pillowBasis);
+            kneePillow.position.copy(pillowKnees[0]).add(pillowKnees[1]).multiplyScalar(0.5).addScaledVector(pillowX, -KNEE_PILLOW.upThighs);
+            const grow = smooth(kneePillowGrow);
+            kneePillow.scale.set(KNEE_PILLOW.length * grow, Math.max(KNEE_PILLOW.thinnest, gap - KNEE_PILLOW.kneeFlesh) * grow, KNEE_PILLOW.width * grow);
+          }
+        }
+      }
 
 
       // Her detail level: the fixed one asked for, or AUTO's.
@@ -2579,6 +2630,8 @@ if (uHideHead > 0.5) {
       if (disposed) return;
       disposed = true;
       root.removeFromParent();
+      // (the pillow between her knees, if one was made)
+      if (kneePillow) { kneePillow.removeFromParent(); kneePillow.geometry.dispose(); (kneePillow.material as THREE.Material).dispose(); kneePillow = null; }
       // (her hidden live body too: the Character Builder's whole room, the largest thing she holds)
       live?.dispose();
       live = null;

@@ -848,6 +848,8 @@ export class Hud {
     }
     // (THE BRAIN'S THOUGHTS over the one standing by: Joshua, 2026-11-21, "so I can know what it's 'Thinking'")
     choiceRow('AI thoughts', 'npcThoughts', [['Show', 'on'], ['Hide', 'off']], 'A bubble over the one you are not playing (John while you play Blaze, Blaze while you play John): who, AUTO or MANUAL and their rounds; what their brain is doing now; why (🎯 its fight, 🩺 its needs); what is next; how the last order ended (✓ done, ⏸ stopped, ✗ failed and why); and their needs as it sees them (🚽 💧 🍽️ 🔋, ⚠️ danger). Changes at once.');
+    // (A PILLOW BETWEEN THEIR KNEES asleep on a side: Joshua, 2026-11-26)
+    choiceRow('Knee pillow', 'kneePillow', [['Mixed', 'mixed'], ['Always', 'always'], ['Never', 'never']], 'Asleep on a side at home: a pillow between their knees, or their legs together, the top knee on the lower one. Mixed: chosen each time they settle on a side (Mary late in her pregnancy mostly with one). Shown from their next turn over.');
 
     this.setView('third');
   }

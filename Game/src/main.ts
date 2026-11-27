@@ -72,7 +72,7 @@ import type { Tunnel } from './world/prologue/tunnel';
 import type { HomeScene } from './world/home/homeScene';
 import type { Mind } from './mind';
 import { needsFromReading } from './world/home/mindBridge';
-import { LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
+import { KNEE_PILLOW, LIE_POSE, SIDE_POSE } from './heroine/fast/groundPose';
 import type { HomeMindBody } from './world/home/homeMindBody';
 /** The home's walls and ceilings, metres (homeScene.ts WALL_HEIGHT; a number here so the module loads only on its map). */
 const HOME_WALL_HEIGHT = 2.7;
@@ -1761,6 +1761,7 @@ async function start(): Promise<void> {
         sitShare: () => c.body.sitShare?.() ?? 0,
         lieOn: (spot) => c.body.lieOn?.(spot),
         lieShare: () => c.body.lieInfo?.() ?? 0,
+        kneePillow: () => graphics.kneePillow,
       }, h.layout, h.nav);
       c.mindBody = mb;
       c.mind = new Mind(profile, mb, world, society, { mode: c === playing ? 'manual' : 'autonomous' });
@@ -1850,6 +1851,9 @@ async function start(): Promise<void> {
       else if (key === 'skyEvent' || key === 'clouds') { /* live: read every frame (stepSky) */ }
       // (the first-person eye's place is read every frame: nothing more to do. They used to fall through to a restart.)
       else if (key === 'eyeForward' || key === 'eyeHigher' || key === 'lookSensitivity' || key === 'moveSensitivity' || key === 'paceCap') { /* live: read every frame */ }
+      // (the AI's thought bubble and the knee pillow are read every frame too: the bubble's setting had fallen through to
+      //  a restart, its note's "Changes at once" untrue)
+      else if (key === 'npcThoughts' || key === 'kneePillow') { /* live: read every frame */ }
       // (her outfit, and the choices that make her a different body of the same kind, change while the game runs)
       else if (OUTFIT_CHANGE_KEYS.includes(key)) void changeOutfit();
       else restart();
@@ -1994,7 +1998,7 @@ async function start(): Promise<void> {
   if (debug) {
     // Lets the browser console (and test scripts) reach the parts of the game.
     // (the played one's things are read when asked: a swap points them at the other one's kit)
-    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, home, homeWorld, homeSociety, liePose: LIE_POSE, sidePose: SIDE_POSE, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
+    (window as unknown as Record<string, unknown>).gdm = { cast: () => ({ blaze, john, playing }), swap: () => swapCharacter(), renderer, scene, dome, city, heroine, rig, controls, targets, walls, table, bars, door, island, home, homeWorld, homeSociety, liePose: LIE_POSE, sidePose: SIDE_POSE, kneePillowSize: KNEE_PILLOW, plan, hud, intake, vitalsPanel, tunnel, story, flashlight, flashProp, groundArrows, miniMap,
       get motion() { return motion; }, get turn() { return turn; }, get pace() { return pace; }, get vitals() { return vitals; },
       // (the game's own clock, seconds of play: for test pages that time things in game time, not the browser's)
       get elapsed() { return elapsed; },

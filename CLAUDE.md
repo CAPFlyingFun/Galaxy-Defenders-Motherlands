@@ -1721,8 +1721,10 @@ use the game's single copy of three.js.
   laid straight her lower shoulder went 6-11 cm into the bed), her head bent back down onto the pillow (`neckDown`), the
   arm she lies on forward and IN (`bottomOut`: her standing arm's 17 degrees out was down into the bed, its hand 16 cm
   into the pillow), its hand by her face, the top arm in front of her (over her belly when it is big), knees bent, the
-  top one further forward, the lower leg out onto the bed (Mary). Hips over the duvet by half their width (Mary 0.185,
-  John 0.205). MEASURED as the back pose: John on his left side head -0.4 / back 0.7 / hips 0.5 / thighs -0.2 / shins
+  lower leg out onto the bed (Mary). Hips over the duvet by half their width (Mary 0.185, John 0.205), and moved 0.16 m
+  toward her BACK (`backShift`: curled up she reaches about half a metre in front of her hips; laid at the middle of
+  her half of the bed and facing its edge, Mary's knees and hands went over it; now nothing over either side, either
+  way round). MEASURED as the back pose (before the legs below): John on his left side head -0.4 / back 0.7 / hips 0.5 / thighs -0.2 / shins
   -2.5 / feet 2.4 cm into the bed, on his right 0.3 / 1.6 / 1.6 / 1.0 / -0.9 / 4.6; Mary (10 and 150 %) 3.2 / 1.6 / 1.2 /
   -1.0 / -3.0 / -1.3 (heads sink 0-4 cm into the pillow); the holster under the lower thigh 5-7 cm into the duvet;
   turning over, the skin never more than 1.5 cm in. TURNING OVER (LIE `turnSeconds` 3): asleep, every 30-90 GAME minutes
@@ -1730,8 +1732,27 @@ use the game's single copy of three.js.
   35 / 35 %); from 28 weeks pregnant mostly her side, her left the most (5 / 70 / 25 %: off her back, the left best for
   the baby's blood flow); from one side to the other she rolls through her back. The thought bubble says "on the back",
   "on the left side", "turning over". Test pages: `gdm.sidePose.female/male` live, a body's `mindBody.sleepSide` and
-  `turnOverIn` (game minutes). (Not yet: a pillow between her knees; two of them in the bed at once, as one is always
-  played.) THE CAMERA UNDER THE CEILING (cameraRig.ts `cameraCeiling`, 2.58 m at home): looking down at her in a room
+  `turnOverIn` (game minutes).
+  HER LEGS TOGETHER, OR A PILLOW BETWEEN HER KNEES (Joshua, 2026-11-26: "add a pillow between the legs but also the
+  option for no pillow and the legs touching for both of them"): Settings -> TEST TOOLS -> Knee pillow (`gdm.kneePillow`,
+  `?knee_pillow=`, live): MIXED (the default: chosen each time they settle on a side, 45 % of the time, from 28 weeks
+  80 %; homeMindBody.ts `SLEEP_SIDES.pillow`, `pillowLate`), ALWAYS or NEVER. Taken up only on her back or as she lies
+  down (`lieSide.pillow`), so her legs never jump on a side. NO PILLOW: the top leg a little further forward and more
+  bent than the lower (38 / 48 degrees against 35 / 45), across onto it (`topOut` John -18, Mary -17) and TURNED IN
+  (`topTurnOut` John -6, Mary -14: its bent knee swings its foot up off the lower one; without it her top shoe went
+  3 cm into the lower). MEASURED skin to skin (a script that finds each leg's skin by its bones and how far each point
+  of the top leg is outside the lower): John's knees 0.5 cm apart, the top knee 1.3 cm into the soft of his lower thigh,
+  his shoes 0.6 cm apart; Mary at 10 and 150 % her top knee 1.4 cm into the leg under it, shoes touching (0.8 cm in).
+  THE PILLOW (groundPose.ts `KNEE_PILLOW`; fastHeroine.ts, `knee-pillow`): a soft rounded white cushion made in code,
+  32 x 30 cm, set each frame between her knees along her thighs, as thick as the gap between her knee joints less 14 cm
+  of knee (so it squashes a little), grown in over 0.3 s once she is on her side, gone as she turns off it; the top leg
+  held up on it (`pillowOut` John -4, Mary 0) and NOT turned in (turned in, her top foot rose 6-9 cm off the lower).
+  MEASURED: John's knees' skin 8.4-9.3 cm apart, the pillow 9.2 cm, 1.2 / 1.7 cm into his legs either side (a square
+  pillow against round legs); Mary 8.8 cm apart, the pillow 8.1, 1.0 / 1.6 cm. A bug found on the way: a new side asked
+  for while she lay on her back never started its turn (the pillow's check swallowed it); fixed. Test pages:
+  `gdm.kneePillowSize` live, a body's `mindBody.kneePillow`.
+  (Not yet, Joshua's "later": their belt and guns taken off before bed, onto a table or rack, and put back on after;
+  both of them in the bed at once, as one is always played.) THE CAMERA UNDER THE CEILING (cameraRig.ts `cameraCeiling`, 2.58 m at home): looking down at her in a room
   the third-person camera rose over the ceiling (one-sided, unseen from above) and showed the house over its walls; now
   it is brought in along its line of sight to stay under it.
   (5) AN OPEN SIT (fastHeroine.ts `sitFor(seconds, open)`, SIT_LOOK `openGapLeast`/`openGapMost`): the mind's sits
@@ -1823,7 +1844,8 @@ use the game's single copy of three.js.
   page element over the one STANDING BY's head (their eye + 0.3 m, projected each frame; words 10 a second), never
   below 55% of the screen, under every control, no touch. OUT OF VIEW (aside, behind, past 80 m) it DOCKS at the top
   middle with ◀ or ▶ their way (pushed to the edge it hid under the vitals card or 🔄/⚙️ at 932 x 430). Settings ->
-  TEST TOOLS -> AI thoughts (`gdm.npcThoughts`, `?thoughts=off`; on by default while the brain is tested; live).
+  TEST TOOLS -> AI thoughts (`gdm.npcThoughts`, `?thoughts=off`; on by default while the brain is tested; live: until
+  v0.2.179 a change to it fell through to a restart).
   HOW FAR, AND HOW THEY ARE DRAWN (v0.2.145; Joshua, 2026-11-22: "distance to other character so I can get where I
   want the better quality to be so I can test pregnant and not"): two more lines, `📏 8.4 m to John · 📷 9.1 m` (from
   the one played, and from the camera to their middle, worked out in main.ts every frame) and `🔍 30% · sharp · live ✓`

@@ -43,7 +43,9 @@ export interface HomeBodyHooks {
   sitFor(seconds: number, open?: boolean): void;
   sitShare(): number;
   /** the body's own lie (fastHeroine.ts `lieOn`) and how far lying it is (0..1) */
-  lieOn(spot: { x: number; y: number; z: number; yaw: number; side?: number } | null): void;
+  lieOn(spot: { x: number; y: number; z: number; yaw: number; side?: number; pillow?: boolean } | null): void;
+  /** Settings -> TEST TOOLS -> Knee pillow: a pillow between their knees on a side, mixed, always or never */
+  kneePillow?(): 'mixed' | 'always' | 'never';
   lieShare(): number;
 }
 
@@ -65,6 +67,8 @@ const SLEEP_SIDES = {
   late: { back: 0.05, left: 0.7, right: 0.25 },
   lateFrom: 28,
   turnLeast: 30, turnMost: 90,
+  /** how often, settling on a side, a pillow goes between their knees (Knee pillow: Mixed), and late in a pregnancy */
+  pillow: 0.45, pillowLate: 0.8,
 } as const;
 /** At a bed's edge she stands this far out from the mattress's side, so her hips land just on it as she sits. */
 const BED_EDGE_OUT = 0.24;
@@ -106,6 +110,8 @@ export class HomeMindBody implements MindBody {
   /** Lying: her side now (+1 her left, -1 her right, 0 her back; public for test pages) and game minutes to her next turn. */
   sleepSide = 0;
   turnOverIn = 0;
+  /** On a side, a pillow between her knees (chosen with the side, `SLEEP_SIDES.pillow`; public for test pages). */
+  kneePillow = false;
   private tries = 0;
   private lastAt: Vec2 = { x: 0, z: 0 };
   private dt = 0;
@@ -271,24 +277,30 @@ export class HomeMindBody implements MindBody {
     return { object: o, edge, sitYaw: Math.atan2(outX, outZ), hips, feetYaw: o.facing, under };
   }
 
-  private lieSpot(b: BedPlan): { x: number; y: number; z: number; yaw: number; side: number } {
+  private lieSpot(b: BedPlan): { x: number; y: number; z: number; yaw: number; side: number; pillow: boolean } {
     // (on the top of what her hips lie on: her body lays her own flesh over it, groundPose.ts LIE_POSE)
-    return { x: b.hips.x, y: this.hooks.floorY() + b.under, z: b.hips.z, yaw: b.feetYaw, side: this.sleepSide };
+    // (the knee pillow: the setting's Always or Never at once, else as chosen with her side)
+    const setting = this.hooks.kneePillow?.() ?? 'mixed';
+    const pillow = setting === 'always' ? true : setting === 'never' ? false : this.kneePillow;
+    return { x: b.hips.x, y: this.hooks.floorY() + b.under, z: b.hips.z, yaw: b.feetYaw, side: this.sleepSide, pillow };
   }
 
   /**
    * WHICH WAY SHE SLEEPS (Joshua, 2026-11-26: "Are they both sleeping on their sides yet or just back?"): her back, her
    * left side or her right (`SLEEP_SIDES`), at random by those weights, never the one she is on when she turns over.
    * From 28 weeks pregnant mostly on her side, her left the most (as she is told to then: off her back, the left best for
-   * the baby's blood flow).
+   * the baby's blood flow). With a side, whether a pillow goes between her knees (more often late in a pregnancy).
    */
   private pickSide(now: number | null): number {
     const late = this.hooks.vitals.weeksPregnant >= SLEEP_SIDES.lateFrom;
     const w = late ? SLEEP_SIDES.late : SLEEP_SIDES.usual;
     const choices = ([[0, w.back], [1, w.left], [-1, w.right]] as const).filter(([side]) => side !== now);
     let roll = Math.random() * choices.reduce((sum, [, weight]) => sum + weight, 0);
-    for (const [side, weight] of choices) { roll -= weight; if (roll <= 0) return side; }
-    return choices[choices.length - 1][0];
+    let side: number = choices[choices.length - 1][0];
+    for (const [s, weight] of choices) { roll -= weight; if (roll <= 0) { side = s; break; } }
+    // (and, on a side, a pillow between her knees or her legs together: Joshua, 2026-11-26, "for both of them")
+    this.kneePillow = side !== 0 && Math.random() < (late ? SLEEP_SIDES.pillowLate : SLEEP_SIDES.pillow);
+    return side;
   }
 
   /** Game minutes until her next turn over. */

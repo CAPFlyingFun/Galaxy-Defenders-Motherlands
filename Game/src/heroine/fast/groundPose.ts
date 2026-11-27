@@ -333,12 +333,18 @@ export function lieTurns(pose: LiePose, measure: HumanMeasure, bind: readonly Bi
  * and add first"): a relaxed side sleeper's pose, written in her own standing frame as if she lay on her LEFT side (the
  * bottom arm and leg her left); `sideTurns` mirrors it for her right. Her whole body is then rolled onto that side and
  * tipped back (fastHeroine.ts LIE). Her back a little rounded, her bottom arm forward with its hand by her face, her top
- * arm resting in front of her (late in a pregnancy, over her belly), her knees bent, the top one further forward; her
- * head resting on the pillow, bent down toward it a little. GAME TUNING, degrees and metres.
+ * arm resting in front of her (late in a pregnancy, over her belly), her knees bent and together, the top one resting on
+ * the lower (or a pillow between them: Joshua, "add a pillow between the legs but also the option for no pillow and the
+ * legs touching for both of them"); her head resting on the pillow, bent down toward it a little. GAME TUNING, degrees
+ * and metres.
  */
 export interface SidePose {
   /** her hip joints over the top of what she lies on, metres (half her hips' width, and her flesh, under them) */
   hipsOver: number;
+  /** her hip joints moved toward her BACK, metres, from the spot she lies on: curled on her side she reaches about half a
+   *  metre in front of them (knees, hands) and only her back's depth behind, so laid at the middle of her half of the
+   *  bed and facing its edge, her knees and hands went over it (Mary at the main bed's west side) */
+  backShift: number;
   /** her back rounded forward, low and high */
   spine: number; chest: number;
   /** her back bent UP toward her top side, degrees, shared low and high: her shoulders are wider than her hips, so
@@ -354,18 +360,40 @@ export interface SidePose {
   /** the leg she lies on: thigh forward, knee bent, and out to her side (DOWN onto the bed: her hip joint stands over it
    *  by half her hips' width, so her knee and ankle come down to it) */
   bottomHips: number; bottomKnee: number; bottomLegOut: number;
-  /** the leg on top: further forward, its knee more bent, a little across the other (negative out) */
+  /** the leg on top: a little further forward, its knee a little more bent, and across onto the other (negative out):
+   *  her legs together, the top knee resting on the lower one (MEASURED skin to skin, John and Mary at 10 and 150 %:
+   *  her top knee 0-1.5 cm into the soft of the leg under it, their shoes touching) */
   topHips: number; topKnee: number; topOut: number;
+  /** the top leg turned about its own length, degrees (both legs are turned out 6 lying on her back): turned IN (negative)
+   *  its bent knee swings its foot UP, off the lower ankle, so her knees can rest together without her ankles crossing
+   *  (laid across without it, her top shoe went 3 cm into the lower one). Not with a pillow (6, as the lower leg): held
+   *  up by it, turned in her top foot rose 6-9 cm off the lower one */
+  topTurnOut: number;
+  /** ...or, with a PILLOW BETWEEN HER KNEES (`KNEE_PILLOW`), held up off the other by it: her knees' skin about 9 cm
+   *  apart (a squashed knee pillow), so the out is per body (Mary's knees are narrower than John's) */
+  pillowOut: number;
   /** her feet relaxed, toes pointed a little */
   point: number;
 }
 export const SIDE_POSE: { female: SidePose; male: SidePose } = {
-  female: { hipsOver: 0.185, spine: 8, chest: 6, lift: 16, neck: 8, neckDown: 34, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 4, topHips: 55, topKnee: 70, topOut: -6, point: 20 },
-  male: { hipsOver: 0.205, spine: 8, chest: 6, lift: 12, neck: 8, neckDown: 30, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 0, topHips: 55, topKnee: 70, topOut: -6, point: 20 },
+  female: { hipsOver: 0.185, backShift: 0.16, spine: 8, chest: 6, lift: 16, neck: 8, neckDown: 34, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 4, topHips: 38, topKnee: 48, topOut: -17, topTurnOut: -14, pillowOut: 0, point: 20 },
+  male: { hipsOver: 0.205, backShift: 0.16, spine: 8, chest: 6, lift: 12, neck: 8, neckDown: 30, bottomArm: 60, bottomElbow: 70, bottomOut: -5, topArm: 35, topElbow: 55, topArmOut: -15, bottomHips: 35, bottomKnee: 45, bottomLegOut: 0, topHips: 38, topKnee: 48, topOut: -18, topTurnOut: -6, pillowOut: -4, point: 20 },
 };
 
-/** Her pose lying on her side (SIDE_POSE): `onLeft` her left side down, else her right; turns from her bind pose. */
-export function sideTurns(pose: SidePose, onLeft: boolean, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
+/**
+ * THE PILLOW BETWEEN HER KNEES (Joshua, 2026-11-26: "add a pillow between the legs but also the option for no pillow and
+ * the legs touching for both of them"): its size, metres (along her thighs, across them, and as thick as it lies
+ * squashed between her knees: worked out each frame from the gap between them, never under `thinnest`), and how far it
+ * sits up her thighs from her knees.
+ */
+export const KNEE_PILLOW = { length: 0.32, width: 0.3, thinnest: 0.05, upThighs: 0.02, growSeconds: 0.3,
+  /** a knee's own flesh round its joint, both knees together: the pillow is the gap less this (MEASURED: John 9-10 cm
+   *  thick for a 9.3 cm gap between his knees' skin, Mary 8.8 for 8.9; a square pillow against round legs, it goes
+   *  1-2 cm into the thighs and shins either side of the knees, as a soft one would squash round them) */
+  kneeFlesh: 0.14 };
+
+/** Her pose lying on her side (SIDE_POSE): `onLeft` her left side down, else her right; `pillow` between her knees. */
+export function sideTurns(pose: SidePose, onLeft: boolean, pillow: boolean, measure: HumanMeasure, bind: readonly BindJoint[], out: MutableJointTurn[]): MutableJointTurn[] {
   while (out.length < 17) out.push({ joint: -1, ax: 0, ay: 1, az: 0, radians: 0 });
   const j = measure.joints;
   const left = measure.leftSign < 0 ? -1 : 1;
@@ -394,7 +422,7 @@ export function sideTurns(pose: SidePose, onLeft: boolean, measure: HumanMeasure
     const isLeft = side === 0, bottom = isLeft === onLeft;
     const s = isLeft ? left : -left;
     leg(put, isLeft ? j.hipL : j.hipR, isLeft ? j.kneeL : j.kneeR, isLeft ? j.ankleL : j.ankleR, s,
-      (bottom ? pose.bottomHips : pose.topHips) * DEG, (bottom ? pose.bottomLegOut : pose.topOut) * DEG, 6 * DEG,
+      (bottom ? pose.bottomHips : pose.topHips) * DEG, (bottom ? pose.bottomLegOut : pillow ? pose.pillowOut : pose.topOut) * DEG, (bottom || pillow ? 6 : pose.topTurnOut) * DEG,
       (bottom ? pose.bottomKnee : pose.topKnee) * DEG, pose.point * DEG);
   }
   out.length = n;

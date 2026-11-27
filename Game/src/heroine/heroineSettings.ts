@@ -239,6 +239,12 @@ export interface HeroineSettings {
    * tested. Live.
    */
   npcThoughts: 'on' | 'off';
+  /**
+   * A PILLOW BETWEEN THEIR KNEES lying on a side (Joshua, 2026-11-26: "add a pillow between the legs but also the option
+   * for no pillow and the legs touching for both of them"): MIXED (each time they settle on a side, at random: Mary late
+   * in her pregnancy mostly with one), ALWAYS or NEVER (legs together, the top knee on the lower one). Live.
+   */
+  kneePillow: 'mixed' | 'always' | 'never';
 }
 
 
@@ -369,6 +375,7 @@ export const SETTING_KEYS = Object.freeze({
   vitalsShown: 'gdm.vitalsShown',
   units: 'gdm.units',
   npcThoughts: 'gdm.npcThoughts',
+  kneePillow: 'gdm.kneePillow',
 });
 
 function read(key: string): string | null {
@@ -479,5 +486,6 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     units: ((v) => (v === 'imperial' || v === 'metric' ? v : 'both'))(address.get('units') ?? read(SETTING_KEYS.units)),
     // (on unless hidden: it is for testing the brain)
     npcThoughts: (address.get('thoughts') ?? read(SETTING_KEYS.npcThoughts)) === 'off' ? 'off' : 'on',
+    kneePillow: ((v) => (v === 'always' || v === 'never' ? v : 'mixed'))(address.get('knee_pillow') ?? read(SETTING_KEYS.kneePillow)),
   };
 }

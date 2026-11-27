@@ -75,6 +75,11 @@ export interface Ocean {
    * sea's own fixed one always was (0x9fc6df by day), so the daytime sea looks as before and the night sea goes dark.
    */
   setSky(colour: THREE.Color): void;
+  /**
+   * THE SHARP SHORELINE ROUND WAILUA (v0.2.183): where the 1 m ground is drawn (lidarDetail.ts), the sea meets ITS
+   * beaches (its own shoreline picture, 2 m a pixel) and not the island's coarse one (27 m). Off: the coarse one there.
+   */
+  setDetailCoast(on: boolean): void;
   dispose(): void;
 }
 
@@ -83,7 +88,8 @@ export interface Ocean {
  * @param islandSize the island picture's width, metres (56 km)
  * @param origin     the arrival point in the island's own metres (the game's (0, 0))
  */
-export function createOcean(base: string, islandSize: number, origin: THREE.Vector2): Ocean {
+export function createOcean(base: string, islandSize: number, origin: THREE.Vector2,
+                            detail: { file: string; x0: number; z0: number; size: number } | null = null): Ocean {
   const material = new THREE.MeshStandardMaterial({
     color: 0x1a6389,
     roughness: 0.18,
@@ -105,6 +111,9 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
   flat.needsUpdate = true;
   const uCoast = { value: deep as THREE.Texture };
   const uRipple = { value: flat as THREE.Texture };
+  // (the 1 m ground's shoreline round Wailua, v0.2.183: its square in the island's metres (west, north, side) and on 0/1)
+  const uCoastD = { value: deep as THREE.Texture };
+  const uDetail = { value: new THREE.Vector4(detail?.x0 ?? 0, detail?.z0 ?? 0, detail?.size ?? 1, 0) };
   const uTime = { value: 0 };
   const uOrigin = { value: origin };
   const loader = new THREE.TextureLoader();
@@ -125,7 +134,17 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
       picture.wrapS = picture.wrapT = THREE.RepeatWrapping;
       picture.needsUpdate = true;
       uRipple.value = picture;
-    }).catch(() => { /* no ripples */ });
+    }).catch(() => { /* no ripples */ })
+    // (the 1 m ground's shoreline, read as the coast mask is: one channel, its first row the north edge)
+    .then(() => (detail ? loader.loadAsync(`${base}kauai/${detail.file}`) : null)).then((picture) => {
+      if (!picture) return;
+      picture.colorSpace = THREE.NoColorSpace;
+      picture.format = THREE.RedFormat;
+      picture.wrapS = picture.wrapT = THREE.ClampToEdgeWrapping;
+      picture.flipY = false;
+      picture.needsUpdate = true;
+      uCoastD.value = picture;
+    }).catch(() => { /* the island's own shoreline there */ });
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSky = { value: sky };
@@ -133,6 +152,8 @@ export function createOcean(base: string, islandSize: number, origin: THREE.Vect
     shader.uniforms.uTime = uTime;
     shader.uniforms.uRipple = uRipple;
     shader.uniforms.uOrigin = uOrigin;
+    shader.uniforms.uCoastD = uCoastD;
+    shader.uniforms.uDetail = uDetail;
     // THE SWELL: each point raised by the sum of the waves, with its true slope for the light; faded out far away
     // (where the rings are too far apart to show it)
     shader.vertexShader = shader.vertexShader
@@ -152,6 +173,8 @@ uniform sampler2D uCoast;
 uniform sampler2D uRipple;
 uniform float uTime;
 uniform vec2 uOrigin;
+uniform sampler2D uCoastD;
+uniform vec4 uDetail;
 varying vec3 vOceanWpos;
 mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
       // RIPPLES: the ripple picture at four sizes, each turned a different odd angle so they never line up in a grid;
@@ -175,6 +198,9 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
           // where the ground is above the water there is no sea. Close by the line is tight; far away it opens out
           // over the whole shallow shelf (which would otherwise flicker against the sea at a distance).
           float enc = texture2D(uCoast, (vOceanWpos.xz + uOrigin) / ${islandSize.toFixed(1)} + 0.5).r;
+          // (round Wailua, where the 1 m ground is drawn: its own sharp shoreline, v0.2.183)
+          vec2 dUv = (vOceanWpos.xz + uOrigin - uDetail.xy) / uDetail.z;
+          if (uDetail.w > 0.5 && dUv.x > 0.0 && dUv.x < 1.0 && dUv.y > 0.0 && dUv.y < 1.0) enc = texture2D(uCoastD, dUv).r;
           float ground = -8.0 + enc * 10.0;
           float camDist = distance(vOceanWpos, cameraPosition);
           float f = clamp((camDist - 350.0) / 2650.0, 0.0, 1.0);
@@ -221,6 +247,7 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
     // (the same double reading of the colour as the fixed one above, `new Color(...).convertSRGBToLinear()`, so the
     //  daytime sea is exactly as it was)
     setSky(colour) { sky.copy(colour).convertSRGBToLinear(); },
+    setDetailCoast(on) { uDetail.value.w = on && detail ? 1 : 0; },
     update(seconds, camera) {
       uTime.value += seconds;
       mesh.position.set(camera.position.x, WATER_Y, camera.position.z);
@@ -228,6 +255,7 @@ mat2 rrot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }`)
     dispose() {
       mesh.geometry.dispose();
       material.dispose();
+      if (uCoastD.value !== deep) uCoastD.value.dispose();
     },
   };
 }

@@ -1925,6 +1925,47 @@ use the game's single copy of three.js.
   ten sets of dice: the normal days pass every check on all ten, no failure at all on nine (one invitation to talk
   refused); "she eats more when stressed" flips with the dice: 10-26 %, about 15 % more on average (v0.2.181 17 % on
   eight), under the check's bar of 15 % on seven of the ten; on v0.2.181 it failed three times in eight.
+- v0.2.183: THE 1 M GROUND ROUND WAILUA, FROM MOW & GROW (Joshua, 2026-11-27: "I am having another agent start a new
+  game and it actually got better quality terrain data, so can you replace it in ours as well... at least just do this
+  GDM game with the updated terrain data which looks great"; then "Then start the updated higher resolution terrain").
+  Mow & Grow (CAPFlyingFun/mow-grow-family-lawn-co, f681fa2) baked NOAA's 2013 USACE topobathy lidar, 1 m, for a 3.5 km
+  square round Wailua (island metres x 20125..23625, z -1750..1750; in the game x -1165..2335, z -3038..462: her
+  arrival beach, the river mouth, the homes and hills behind) into 16 Terrarium tiles of 875 m (876 px, edges shared),
+  filled with OUR island's heights where the lidar has none (65.1 % is lidar; none right at her arrival) and blended
+  into them over 40 m, at the square's edge too. `scripts/make_wailua_lidar.py` copies them and the shoreline picture
+  (2 m a pixel) into `public/island/kauai/wailua-1m/` and writes `wailua-1m.json` (9.2 MB; COPIED_FROM.md says where
+  from; never edit by hand). (Beyond Extinction and TRADDOMIUM: the Mow & Grow agent's job, Joshua's call.)
+  HOW IT IS DRAWN (`world/island/lidarDetail.ts` `LidarDetail`, after Mow & Grow's terrainView.ts): 16 x 16 CHUNKS of
+  218.75 m, each built with more points the nearer the camera (`LIDAR_LODS`; distance to the chunk's nearest edge, the
+  camera's height counted): FINE, Mow & Grow's own table, a point every metre within 170 m, then 2 m to 420, 4 to 950, 8
+  to 2.1 km, 16 past; MEDIUM every 2 m within 120 m, then 4, 8, 16, 31 m (from 300, 700, 1600 m). A chunk whose detail
+  should change is built again in play, NEAREST FIRST, up to 2 ms a frame (`LIDAR_BUDGET_MS`; always one). Each hangs a
+  3 m SKIRT facing out from its edges (no cracks between details). Drawn with the tiles' own ground material
+  (groundPaint.ts: the same colours by height and slope), only where the island tile under it is drawn. Heights kept as
+  16-bit numbers (a 256th of a metre from -140 m: 24.6 MB). THE TILES LEAVE A HOLE under the square (tileStreamer.ts
+  `setDetail`: its squares inside it left out of their index; the square's edges fall on every grid's corners, 8 to 64
+  across) and hang a wall down from their ground ALL ALONG THE HOLE'S EDGE (`skirtGeometry`'s `removed`; their own outer
+  walls inside the hole left out: they stood up out of the 1 m ground where it is lower). PICTURED both ways across the
+  west edge: no crack, no wall. HEIGHTS: `heightAt` and `fineHeightAtIsland` give the 1 m ground's height wherever it is
+  drawn, read off the very triangle drawn there (`heightAtIsland`, three.js's split of each square): her feet, John, the
+  walls (wading, slopes), the camera's floor, the trees and the flora stand on it. THE SEA (ocean.ts `setDetailCoast`,
+  `uCoastD`): inside the square the sea meets the 1 m ground's own shoreline (Mow & Grow's coast picture), not the
+  island's 27 m one. LOADING (islandWorld.ts `ready`): after her tile, all 16 of its tiles, one at a time in the tiles'
+  worker (`readTile`, now exported), "The island: the 1 m ground round Wailua, 3 of 16…" on the splash, then every chunk
+  built for the camera (the coarsest where its tile is not in yet), then it is the ground there. Off: nothing fetched.
+  SETTINGS -> WORLD -> WAILUA GROUND (`gdm.lidar`, `?lidar=fine|medium|off`, live): Fine (a computer's default), Medium
+  (a phone's: a touch screen), Off (the old ~14 m ground, to compare). Readout: `1m medium · 227K · 2 ms` (its triangles
+  drawn, chunks left to build, the slowest chunk built last).
+  MEASURED (the built game, software test browser, 932 x 430, the island, her alone): playing 15 s in (16 tiles in);
+  on the bumpiest ground near the beach (x -470, z -70: the lidar has hills of 12-24 m, the old ground there is level at
+  12.6 m) the frame drew 584 K triangles with it Off, 663 K Medium (its own 227 K), 1.12 M Fine (1.34 M); a chunk built
+  in 1.8 ms Medium (110 squares a side), 9-11 ms Fine (220); a live switch builds all 256 chunks at once (about a second
+  here, once). HEIGHTS, 1 m / old: her arrival 1.31 / 1.31 (no lidar there), 320-400 m inland 8.9-12.2 / 6.0-7.6, 700 m
+  north and 40-400 m inland 1.3-4.7 / 4.0-5.7 (the river's low ground). No errors.
+  KNOWN: (1) the ground's colours are by height, and its SAND band is under 3 m: the lawns, roads and low ground behind
+  the beach (1-3 m) read as sand (his palette: his call); (2) with RIVERS & LAKES on (off by default) the channels are cut
+  only into the tiles' heights, not the 1 m ground; (3) trees and flora are planted on the ground as it is when they
+  stream in: switching Wailua ground while they are up leaves them at the old heights until they stream again.
 - JOHN, BLAZE'S HUSBAND (Joshua, 2026-11-21: "Both in game for now... with maybe a 🔄 swap character... like how Beyond
   Extinction does it"; 🔄 next to Settings; his stats exactly as the builder's, no breasts or pregnancy). His export
   `docs/reference/characters/character-john.json` -> `looks/john.ts` (the builder's MALE BASE MODEL, `male-base.glb`:

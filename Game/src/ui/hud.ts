@@ -27,7 +27,7 @@ import './hud.css';
 import type { Controls } from '../input/controls';
 import type { ViewMode } from '../camera/cameraRig';
 import { GROUND_COLOURS, GROUND_KINDS, groundColoursNow, type GroundKind } from '../world/island/groundPaint';
-import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, SKY_CHOICES, GAME_SPEED_CHOICES, SKY_EVENT_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
+import { EYE_HEIGHT_RANGE, EYE_RANGE, FOV_RANGE, SENSITIVITY_RANGE, OUTFIT_CHOICES, CATSUIT_NECKS, LANDSCAPING_CHOICES, GROUND_CHOICES, ISLAND_GRID_CHOICES, LIDAR_CHOICES, SKY_CHOICES, GAME_SPEED_CHOICES, SKY_EVENT_CHOICES, TABLE_RANGE, outfitLook, type HeroineSettings } from '../heroine/heroineSettings';
 import { BELLY_RANGE } from '../heroine/pregnancyPlan';
 import { ZOOM_MIN, thirdPersonDistance } from '../camera/cameraRig';
 import { TARGET_FPS } from '../heroine/fast/autoDetail';
@@ -618,6 +618,7 @@ export class Hud {
     choiceRow('Sky event', 'skyEvent', SKY_EVENT_CHOICES, 'Clear; a tropical storm (slate clouds, dim light, haze, lightning); an aurora (curtains of light, as it gets dark); or alien bands across the sky (faint by day, bright by night). Changes at once.');
     choiceRow('Clouds', 'clouds', [['On', 'on'], ['Off', 'off']], 'A few soft clouds drifting (a storm always has them). Off is a little lighter for the phone. Changes at once.');
     choiceRow('Island grid', 'islandGrid', ISLAND_GRID_CHOICES, 'How many tiles the 56 km island is cut into: the nine round you are loaded in full. Smaller tiles load and build quicker but cover less. To compare on your phone; 16 x 16 is the default. Changing it reloads the game.');
+    choiceRow('Wailua ground', 'lidar', LIDAR_CHOICES, 'The 1 m lidar ground round the arrival beach (a 3.5 km square, from Mow & Grow: the coast and the homes behind it), sharper as you come near. Fine: a point every metre near you. Medium: every 2 m (lighter for the phone). Off: the island\'s old ground (about 14 m) there, to compare. Changes at once.');
     choiceRow('Rivers & lakes', 'rivers', [['Off', 'off'], ['On', 'on']], 'The real island\'s rivers and lakes, cut into the ground and filled. Off until the island\'s own lakes are made. Changing it reloads the game.');
     choiceRow('Landscaping', 'landscaping', LANDSCAPING_CHOICES, 'The island\'s forest, on the real island\'s own vegetation map. Images only: photo trees to 900 m. Hybrid: real 3D trees near you (solid trunks), photos beyond. Objects only: 3D trees to 280 m. Sci-fi flora: the island\'s own giant mushrooms and alien plants (some glow at night). Changes at once.');
     element('h2', 'gd-settings-part', settings, 'HEROINE');

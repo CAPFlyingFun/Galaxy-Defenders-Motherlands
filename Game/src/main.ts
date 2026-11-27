@@ -478,7 +478,7 @@ async function start(): Promise<void> {
     const { createIslandWorld } = await import('./world/island/islandWorld');
     island = await createIslandWorld(`${import.meta.env.BASE_URL}island/`, scene, {
       landscaping: graphics.landscaping, ground: graphics.ground, grid: graphics.islandGrid, rivers: graphics.rivers === 'on',
-      sky: graphics.sky,
+      sky: graphics.sky, lidar: graphics.lidar,
     });
     scene.add(island.group);
     let told = -1;
@@ -488,6 +488,9 @@ async function start(): Promise<void> {
       if (done === told) return;
       told = done;
       meter.step(`island ground ${done}`, done ? 'The island: the ground under her is in' : 'The island: the ground under her…');
+    }, (done, of) => {
+      // (THE 1 M GROUND ROUND WAILUA, v0.2.183: its 16 tiles, one at a time, then built round her)
+      meter.step(`wailua ground ${done}`, done < of ? `The island: the 1 m ground round Wailua, ${done + 1} of ${of}…` : 'The island: laying the 1 m ground…');
     });
     await breathe();
   }
@@ -1939,6 +1942,7 @@ async function start(): Promise<void> {
       else if (key === 'units') vitalsPanel.setUnits(graphics.units);
       else if (key === 'landscaping') island?.setLandscaping(graphics.landscaping); // (live; nothing on the town map)
       else if (key === 'ground') island?.setGround(graphics.ground); // (live: groundPaint.ts)
+      else if (key === 'lidar') island?.setLidar(graphics.lidar); // (live: lidarDetail.ts, v0.2.183)
       // (the sky: live. Back to the picture, the lights go back to the island's own daytime light)
       else if (key === 'sky') { island?.setSkyMode(graphics.sky); if (graphics.sky === 'picture') dayLight(); }
       else if (key === 'skyHour') clock.setHour(graphics.skyHour);
@@ -3403,6 +3407,9 @@ async function start(): Promise<void> {
         // (the island's forest: trees drawn, in how many draws)
         // (the island's grid, ground and rivers as chosen in Settings -> WORLD: v0.2.166)
         if (island) lines.push(`isle ${island.grid}x${island.grid} · ${graphics.ground === 'textures' ? 'tex' : 'colours'} · rivers ${graphics.rivers}`);
+        // (the 1 m ground round Wailua: its level, its triangles drawn, and chunks still to be built again)
+        const lidarNow = island?.lidarCounts();
+        if (lidarNow) lines.push(`1m ${lidarNow.level} · ${Math.round(lidarNow.triangles / 1000)}K${lidarNow.waiting ? ` · ${lidarNow.waiting} left` : ''} · ${lidarNow.buildMs.toFixed(0)} ms`);
         // (the game clock, its speed (FF while everyone sleeps) and the procedural sky's event: v0.2.167, 2026-11-26)
         lines.push(`${clock.text} · ${clock.fastForward ? 'FF ' : ''}${clock.rate}x${island && graphics.sky === 'procedural' ? ` · ${graphics.skyEvent}` : ''}`);
         const forest = island?.treeCounts();

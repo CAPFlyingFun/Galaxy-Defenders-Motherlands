@@ -1,0 +1,103 @@
+{
+ "_what": "The 1 m ground round Wailua (v0.2.183), copied from Mow & Grow by scripts/make_wailua_lidar.py: see COPIED_FROM.md",
+ "source": "Mow & Grow: Family Lawn Co. (CAPFlyingFun/Mow-Grow-Family-Lawn-Co, f681fa2), public/terrain/: NOAA 2013 USACE 1 m lidar (data/lidar/wailua/), the island where it has none, blended over 40 m",
+ "lidarPercent": 65.1,
+ "box": {
+  "x0": 20125,
+  "z0": -1750,
+  "x1": 23625.0,
+  "z1": 1750.0
+ },
+ "tileM": 875,
+ "tilePixels": 876,
+ "tiles": [
+  {
+   "file": "wailua-1m/c55_r30.png",
+   "x0": 20125,
+   "z0": -1750
+  },
+  {
+   "file": "wailua-1m/c56_r30.png",
+   "x0": 21000,
+   "z0": -1750
+  },
+  {
+   "file": "wailua-1m/c57_r30.png",
+   "x0": 21875,
+   "z0": -1750
+  },
+  {
+   "file": "wailua-1m/c58_r30.png",
+   "x0": 22750,
+   "z0": -1750
+  },
+  {
+   "file": "wailua-1m/c55_r31.png",
+   "x0": 20125,
+   "z0": -875
+  },
+  {
+   "file": "wailua-1m/c56_r31.png",
+   "x0": 21000,
+   "z0": -875
+  },
+  {
+   "file": "wailua-1m/c57_r31.png",
+   "x0": 21875,
+   "z0": -875
+  },
+  {
+   "file": "wailua-1m/c58_r31.png",
+   "x0": 22750,
+   "z0": -875
+  },
+  {
+   "file": "wailua-1m/c55_r32.png",
+   "x0": 20125,
+   "z0": 0
+  },
+  {
+   "file": "wailua-1m/c56_r32.png",
+   "x0": 21000,
+   "z0": 0
+  },
+  {
+   "file": "wailua-1m/c57_r32.png",
+   "x0": 21875,
+   "z0": 0
+  },
+  {
+   "file": "wailua-1m/c58_r32.png",
+   "x0": 22750,
+   "z0": 0
+  },
+  {
+   "file": "wailua-1m/c55_r33.png",
+   "x0": 20125,
+   "z0": 875
+  },
+  {
+   "file": "wailua-1m/c56_r33.png",
+   "x0": 21000,
+   "z0": 875
+  },
+  {
+   "file": "wailua-1m/c57_r33.png",
+   "x0": 21875,
+   "z0": 875
+  },
+  {
+   "file": "wailua-1m/c58_r33.png",
+   "x0": 22750,
+   "z0": 875
+  }
+ ],
+ "coast": {
+  "file": "wailua-1m/coast-wailua.png",
+  "x0": 20125,
+  "z0": -1750,
+  "size": 3500.0,
+  "pixels": 1750,
+  "encoding": "ground metres = -8 + value / 255 * 10"
+ }
+}

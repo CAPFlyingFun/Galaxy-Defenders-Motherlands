@@ -50,6 +50,12 @@ export type IslandGrid = 8 | 16 | 32 | 64;
 export const ISLAND_GRID_CHOICES: readonly (readonly [string, IslandGrid])[] = [
   ['8 x 8 (7 km tiles)', 8], ['16 x 16 (3.5 km)', 16], ['32 x 32 (1.75 km)', 32], ['64 x 64 (875 m)', 64],
 ];
+/**
+ * Settings -> WORLD -> Wailua ground (v0.2.183, src/world/island/lidarDetail.ts): the 1 m lidar round her arrival
+ * beach, a point every metre near the camera (Fine), every 2 m (Medium), or the island's old ~13.7 m ground (Off).
+ */
+export type LidarChoice = 'fine' | 'medium' | 'off';
+export const LIDAR_CHOICES: readonly (readonly [string, LidarChoice])[] = [['Fine (1 m)', 'fine'], ['Medium (2 m)', 'medium'], ['Off (old ground)', 'off']];
 /** Settings -> WORLD -> Sky (src/world/island/proceduralSky.ts): drawn by code with a time of day, or the old picture. */
 export type SkyChoice = 'procedural' | 'picture';
 export const SKY_CHOICES: readonly (readonly [string, SkyChoice])[] = [['Procedural (time of day)', 'procedural'], ['Picture (daytime)', 'picture']];
@@ -165,6 +171,12 @@ export interface HeroineSettings {
    * default, no water and no channels cut in. Restarts the game.
    */
   rivers: ShadowChoice;
+  /**
+   * THE 1 M GROUND ROUND WAILUA (v0.2.183; Joshua, 2026-11-27: Mow & Grow's "better quality terrain data... do this GDM
+   * game with the updated terrain data"): Fine (a point every metre near the camera; the default on a computer), Medium
+   * (every 2 m; the default on a phone) or Off (the island's old ground there). Live.
+   */
+  lidar: LidarChoice;
   /**
    * THE SKY (v0.2.167; Joshua, 2026-11-24: "let's create a procedural sky as it gives up more options and saves
    * textures/memory. It can be as a separate option in settings"): `sky` Procedural (the default) or Picture; `skyHour`
@@ -350,6 +362,7 @@ export const SETTING_KEYS = Object.freeze({
   ground: 'gdm.ground',
   islandGrid: 'gdm.islandGrid',
   rivers: 'gdm.rivers',
+  lidar: 'gdm.lidar',
   sky: 'gdm.sky',
   skyHour: 'gdm.skyHour',
   gameSpeed: 'gdm.gameSpeed',
@@ -456,6 +469,9 @@ export function loadHeroineSettings(address: URLSearchParams = new URLSearchPara
     ground: (address.get('ground') ?? read(SETTING_KEYS.ground)) === 'textures' ? 'textures' : 'colours',
     islandGrid: asIslandGrid(address.get('grid')) ?? asIslandGrid(read(SETTING_KEYS.islandGrid)) ?? 16,
     rivers: (address.get('rivers') ?? read(SETTING_KEYS.rivers)) === 'on' ? 'on' : 'off',
+    // (Medium on a phone, Fine on a computer, unless chosen: `?lidar=fine|medium|off`)
+    lidar: ((v) => (v === 'fine' || v === 'medium' || v === 'off' ? v : null))(address.get('lidar') ?? read(SETTING_KEYS.lidar))
+      ?? (('ontouchstart' in globalThis || (navigator.maxTouchPoints || 0) > 0) ? 'medium' : 'fine'),
     sky: (address.get('sky') ?? read(SETTING_KEYS.sky)) === 'picture' ? 'picture' : 'procedural',
     skyHour: asNumber(address.get('hour') ?? read(SETTING_KEYS.skyHour), 0, 24) ?? SKY_TODAY_HOUR,
     gameSpeed: ((v) => ((CLOCK_SPEEDS as readonly number[]).includes(v) ? v : NORMAL_SPEED))(Number(address.get('speed') ?? read(SETTING_KEYS.gameSpeed) ?? NORMAL_SPEED)),

@@ -36,12 +36,20 @@
 //    waterways are still messed up"): no water and no channels cut into the
 //    ground, the real valleys left as the land has them. The code stays, for
 //    the island's own lakes later. Changing it restarts.
+//
+// THE 1 M GROUND ROUND WAILUA (v0.2.183, lidarDetail.ts): Mow & Grow's NOAA
+// lidar of the 3.5 km square round her arrival beach, drawn sharper as the
+// camera nears, the tiles leaving a hole under it; her feet, the walls, the
+// table and the trees stand on it, and the sea's shoreline there comes from it.
+// Loaded with her tile before play (all 16 of its tiles, one at a time). Settings
+// -> WORLD -> Wailua ground: Fine (1 m near), Medium (2 m near) or Off. Live.
 // ============================================================================
 import * as THREE from 'three';
 import type { GroundPoint } from '../collision';
 import type { Walls } from '../../input/playerMotion';
 import { createGroundPaint, type GroundKind, type GroundMode } from './groundPaint';
 import { TileStreamer, type IslandManifest } from './tileStreamer';
+import { LidarDetail, type LidarLevel, type LidarManifest } from './lidarDetail';
 import { createFarIsland } from './farIsland';
 import { createOcean, WATER_Y, type Ocean } from './ocean';
 import { CarveData } from './carve';
@@ -102,8 +110,15 @@ export interface IslandWorld {
   waterAt(x: number, z: number): number | null;
   /** The sea's surface, metres (the game's height, as the ground's). */
   readonly seaLevel: number;
-  /** Wait until the tile she stands on at (x, z) is loaded (v0.2.150: that tile only), telling `say` when it is. */
-  ready(x: number, z: number, say: (done: number, of: number) => void): Promise<void>;
+  /**
+   * Wait until the tile she stands on at (x, z) is loaded (v0.2.150: that tile only), telling `say` when it is; then the
+   * 1 m ground round Wailua (v0.2.183: all its tiles, one at a time, `sayDetail` after each, and every chunk of it built).
+   */
+  ready(x: number, z: number, say: (done: number, of: number) => void, sayDetail?: (done: number, of: number) => void): Promise<void>;
+  /** Settings -> WORLD -> Wailua ground, live (lidarDetail.ts): Fine, Medium or Off (the island's old ground there). */
+  setLidar(level: LidarLevel): void;
+  /** For the readout: the 1 m ground's level, its triangles drawn and its chunks waiting to be built again. */
+  lidarCounts(): { level: LidarLevel; triangles: number; waiting: number; buildMs: number } | null;
   /** She is playing: the rest of the tiles round her, the water and the forest may come in now (v0.2.150). */
   startStreaming(): void;
   /** The forest, for the readout: trees drawn and in how many draws. */
@@ -188,7 +203,15 @@ export interface IslandOptions {
   rivers?: boolean;
   /** The sky: drawn by code (the default) or Beyond Extinction's picture. */
   sky?: SkyMode;
+  /** The 1 m ground round Wailua (v0.2.183): Fine, Medium or Off. */
+  lidar?: LidarLevel;
 }
+
+/**
+ * Milliseconds a frame may spend building the 1 m ground's chunks again as the camera moves (at least one is built
+ * whatever it takes). GAME TUNING.
+ */
+const LIDAR_BUDGET_MS = 2;
 
 /** Settings -> WORLD -> Sky. */
 export type SkyMode = 'procedural' | 'picture';
@@ -213,10 +236,26 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
   const islandSize = manifest.totalM ?? manifest.tileSizeM * tiles.across;
   const far = await createFarIsland(base, islandSize, paint, { shown: tiles.shown, origin, across: tiles.across, tileSize: tiles.tileSize });
   group.add(far);
-  const ocean: Ocean = createOcean(base, islandSize, origin);
+  // THE 1 M GROUND ROUND WAILUA (v0.2.183): its list (its tiles are read in `ready`, with hers); none if it is missing
+  let lidarLevel: LidarLevel = options.lidar ?? 'medium';
+  const lidarList = await fetch(`${base}kauai/wailua-1m.json`).then((r) => (r.ok ? r.json() as Promise<LidarManifest> : null)).catch(() => null);
+  const lidar = lidarList ? new LidarDetail(lidarList, base, origin, paint.material(), lidarLevel, (ix, iz) => tiles.shownAtIsland(ix, iz)) : null;
+  if (lidar) group.add(lidar.group);
+  const ocean: Ocean = createOcean(base, islandSize, origin, lidarList?.coast ?? null);
   group.add(ocean.mesh);
-  // (the sea's two pictures in before anything else: v0.2.151, nothing of the island left loading behind her)
+  // (the sea's pictures in before anything else: v0.2.151, nothing of the island left loading behind her)
   await ocean.ready;
+  /**
+   * The 1 m ground made THE ground there (its tiles in and every chunk built): the tiles leave their hole and stand
+   * things on it, and the sea takes its sharp shoreline; or, Off (or not in), the island's own ground there again.
+   */
+  const useLidar = (on: boolean): void => {
+    const live = on && !!lidar?.ready;
+    tiles.setDetail(live ? lidar!.box : null, live ? lidar : null);
+    ocean.setDetailCoast(live);
+  };
+  /** Where to build the 1 m ground for, before the camera is known: her head, at the arrival. */
+  const lastCamera = new THREE.Vector3(0, 2, 0);
   // THE WATERWAYS (hydro.ts): made in the island's own metres, so their group is shifted by the arrival point
   const waterGroup = new THREE.Group();
   waterGroup.position.set(-origin.x, 0, -origin.y);
@@ -323,23 +362,46 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
     groundAt,
     // (FLORA: its plants and draws when it is the landscaping)
     treeCounts: () => (floraOn ? flora.counts : trees.counts),
-    async ready(x, z, say) {
+    async ready(x, z, say, sayDetail) {
       // (HER TILE ONLY, v0.2.150: the streamer loads nothing else until `startStreaming`)
       tiles.update(x, z);
       for (;;) {
         const done = tiles.herTileReady(x, z);
         say(done ? 1 : 0, 1);
-        if (done) return;
+        if (done) break;
         await new Promise((r) => window.setTimeout(r, 50));
         tiles.update(x, z); // (asks again if it failed)
       }
+      // THE 1 M GROUND (v0.2.183): all its tiles, then every chunk built for the camera at her head, then it is the
+      // ground there (her tile built again with its hole). Off: nothing of it is fetched.
+      if (!lidar || lidarLevel === 'off') return;
+      if (await lidar.load(sayDetail)) {
+        lidar.buildAll(x, 2, z);
+        useLidar(true);
+      }
     },
+    setLidar(level) {
+      lidarLevel = level;
+      if (!lidar) return;
+      lidar.setLevel(level);
+      if (level === 'off') { useLidar(false); return; }
+      // (turned on: read in first if it never was, then built for where the camera is)
+      void lidar.load().then((ok) => {
+        if (!ok || lidarLevel === 'off') return;
+        lidar.buildAll(lastCamera.x, lastCamera.y, lastCamera.z);
+        useLidar(true);
+      });
+    },
+    lidarCounts: () => (lidar ? { level: lidarLevel, triangles: lidar.triangles, waiting: lidar.waiting, buildMs: lidar.buildMs } : null),
     startStreaming() {
       playing = true;
       tiles.startStreaming();
     },
     update(seconds, herX, herZ, camera) {
       tiles.update(herX, herZ);
+      // (the 1 m ground's chunks sharper as the camera nears, a few a frame)
+      lastCamera.copy(camera.position);
+      lidar?.update(camera.position.x, camera.position.y, camera.position.z, LIDAR_BUDGET_MS);
       // (nothing of the water is built, nor the forest started, before she is playing)
       if (!playing) { ocean.update(seconds, camera); return; }
       hydro?.update(seconds, hydroGround);
@@ -354,6 +416,7 @@ export async function createIslandWorld(base: string, scene: THREE.Scene, option
       ocean.update(seconds, camera);
     },
     dispose() {
+      lidar?.dispose();
       tiles.dispose();
       hydro?.dispose();
       paint.dispose();

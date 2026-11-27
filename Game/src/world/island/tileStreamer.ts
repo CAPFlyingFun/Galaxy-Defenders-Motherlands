@@ -38,6 +38,12 @@
 //   * One ground material for all tiles, and they take her shadow.
 //   * The rivers and lakes are cut into each tile's heights as it arrives
 //     (carve.ts), as in Beyond Extinction.
+//
+// THE 1 M GROUND ROUND WAILUA (v0.2.183, lidarDetail.ts): where it is drawn,
+// a tile leaves a HOLE (`setHole`: the squares of its grid inside that square
+// are not drawn at all; the hole's edges fall on the grid's own corners for
+// every grid the game offers), and the heights she and the trees stand on are
+// read from it (`setDetail`) instead of the tile's.
 // ============================================================================
 import * as THREE from 'three';
 import { FAR_TILE_SEG, SEG, renderedSurfaceHeight, tileIdOf } from './terrainSampling';
@@ -52,6 +58,12 @@ export interface IslandManifest {
   tilePixels: number;
   tiles: { id: string; col: number; row: number; file: string }[];
   spawn?: { tile?: string; x?: number; z?: number };
+}
+
+/** Sharper ground drawn over part of the island (lidarDetail.ts): where it is, and its heights there (island metres). */
+export interface GroundDetail {
+  covers(ix: number, iz: number): boolean;
+  heightAtIsland(ix: number, iz: number): number;
 }
 
 /** How far each tile's edge hangs a wall down behind it, metres: hides any hairline gap between two tiles. */
@@ -125,6 +137,13 @@ export class TileStreamer {
   private herX = 0;
   private herZ = 0;
   private curRow = -99;
+  /**
+   * THE HOLE (v0.2.183): a square in the island's metres where the 1 m ground (lidarDetail.ts) is drawn instead; every
+   * tile's grid squares inside it are left out. Null: none.
+   */
+  private hole: { x0: number; z0: number; x1: number; z1: number } | null = null;
+  /** Where the 1 m ground is drawn (and so stood on): its heights, in the island's metres. Null: none. */
+  private detail: GroundDetail | null = null;
 
   /**
    * @param base    where the island's files are (the game's address + "island/")
@@ -168,7 +187,10 @@ export class TileStreamer {
   heightAt(gameX: number, gameZ: number): number {
     const t = this.tiles.get(TileStreamer.key(this.colOf(gameX), this.rowOf(gameZ)));
     if (!t?.heights) return NaN;
-    return renderedSurfaceHeight(t.heights, this.P, this.S, gameX + this.origin.x - t.cx, gameZ + this.origin.y - t.cz, t.seg);
+    const ix = gameX + this.origin.x, iz = gameZ + this.origin.y;
+    // (the 1 m ground where it is drawn: v0.2.183)
+    if (this.detail?.covers(ix, iz)) return this.detail.heightAtIsland(ix, iz);
+    return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, t.seg);
   }
 
   /**
@@ -178,7 +200,31 @@ export class TileStreamer {
   fineHeightAtIsland(ix: number, iz: number): number {
     const t = this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)));
     if (!t?.heights) return 0;
+    // (the 1 m ground where it is drawn: the trees and flora stand on it too, v0.2.183)
+    if (this.detail?.covers(ix, iz)) return this.detail.heightAtIsland(ix, iz);
     return renderedSurfaceHeight(t.heights, this.P, this.S, ix - t.cx, iz - t.cz, this.fineSeg);
+  }
+
+  /** Is the tile at a place in the island's metres drawn now (loaded, with its mesh)? The 1 m ground is drawn only there. */
+  shownAtIsland(ix: number, iz: number): boolean {
+    return !!this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)))?.mesh;
+  }
+
+  /**
+   * THE 1 M GROUND ROUND WAILUA (v0.2.183): `hole`, the square it is drawn over (island metres), left out of every
+   * tile's grid; `detail`, its heights for anything standing there. Both null: the tiles' own ground everywhere again.
+   * Every tile loaded is built again at once (a few hundredths of a second each: only when this changes).
+   */
+  setDetail(hole: { x0: number; z0: number; x1: number; z1: number } | null, detail: GroundDetail | null): void {
+    this.hole = hole;
+    this.detail = detail;
+    for (const t of this.tiles.values()) {
+      if (!t.mesh) continue;
+      this.group.remove(t.mesh);
+      disposeMesh(t.mesh);
+      t.mesh = this.buildMesh(t);
+      this.group.add(t.mesh);
+    }
   }
   tileReadyAtIsland(ix: number, iz: number): boolean {
     return !!this.tiles.get(TileStreamer.key(this.colAtIsland(ix), this.colAtIsland(iz)))?.heights;
@@ -356,11 +402,31 @@ export class TileStreamer {
     const elevation = new Float32Array(position.count);
     for (let i = 0; i < position.count; i++) elevation[i] = position.getY(i);
     geometry.setAttribute('aElev', new THREE.BufferAttribute(elevation, 1));
+    // THE HOLE UNDER THE 1 M GROUND (v0.2.183): the grid's squares inside it are left out of the drawing (their
+    // corners stay, for the skirt and the normals at its edge). PlaneGeometry lists each square's two triangles in turn,
+    // 6 indices a square, row by row from the north-west.
+    let removed: Uint8Array | null = null;
+    if (this.hole) {
+      const b = this.hole, step = S / seg, west = tile.cx - S / 2, north = tile.cz - S / 2, e = step * 0.01;
+      const index = geometry.index!, kept: number[] = [];
+      removed = new Uint8Array(seg * seg);
+      for (let iy = 0; iy < seg; iy++) {
+        const z0 = north + iy * step;
+        const zIn = z0 >= b.z0 - e && z0 + step <= b.z1 + e;
+        for (let ix = 0; ix < seg; ix++) {
+          const x0 = west + ix * step;
+          if (zIn && x0 >= b.x0 - e && x0 + step <= b.x1 + e) { removed[iy * seg + ix] = 1; continue; }
+          const k = (iy * seg + ix) * 6;
+          for (let q = 0; q < 6; q++) kept.push(index.getX(k + q));
+        }
+      }
+      if (kept.length < index.count) geometry.setIndex(kept); else removed = null;
+    }
     const mesh = new THREE.Mesh(geometry, this.material);
     mesh.position.set(tile.cx - this.origin.x, 0, tile.cz - this.origin.y);
     mesh.name = `island-${tile.id}`;
     mesh.receiveShadow = true; // (her real shadow falls on the ground itself)
-    const skirt = new THREE.Mesh(skirtGeometry(geometry, seg, SKIRT_DROP), this.material);
+    const skirt = new THREE.Mesh(skirtGeometry(geometry, seg, SKIRT_DROP, removed), this.material);
     mesh.add(skirt);
     mesh.updateMatrixWorld(true);
     return mesh;
@@ -412,7 +478,8 @@ function workerPool(): Worker[] | null {
   return workers;
 }
 
-async function readTile(url: string, P: number): Promise<Float32Array> {
+/** A Terrarium height picture of P x P read to metres (in a worker when it can): the tiles', and the 1 m ground's. */
+export async function readTile(url: string, P: number): Promise<Float32Array> {
   const pool = workerPool();
   if (pool) {
     try {
@@ -452,7 +519,7 @@ async function readTile(url: string, P: number): Promise<Float32Array> {
  * ground at the edge above (its normals and its colour height), so it reads as more of the same ground. It sits just
  * behind the join with the next tile and fills any hairline gap there, without ever sticking out sideways.
  */
-function skirtGeometry(grid: THREE.PlaneGeometry, seg: number, drop: number): THREE.BufferGeometry {
+function skirtGeometry(grid: THREE.PlaneGeometry, seg: number, drop: number, removed: Uint8Array | null = null): THREE.BufferGeometry {
   const p = grid.attributes.position as THREE.BufferAttribute;
   const n = grid.attributes.normal as THREE.BufferAttribute;
   const across = seg + 1;
@@ -476,11 +543,29 @@ function skirtGeometry(grid: THREE.PlaneGeometry, seg: number, drop: number): TH
     normals.push(...An, ...Bn, ...Bn, ...An, ...An, ...Bn);
     heights.push(A[1], B[1], B[1], A[1], A[1], B[1]);
   };
+  // (a square left out for the 1 m ground, v0.2.183: `removed`, row by row from the north-west)
+  const gone = (ix: number, iz: number): boolean => !!removed && removed[iz * seg + ix] === 1;
   for (let i = 0; i < seg; i++) {
-    wall(i, 0, i + 1, 0);       // north edge
-    wall(i, seg, i + 1, seg);   // south
-    wall(0, i, 0, i + 1);       // west
-    wall(seg, i, seg, i + 1);   // east
+    // (no wall along an edge whose square is in the hole: hung from this tile's own heights, it would stand up out of
+    //  the 1 m ground wherever that is lower)
+    if (!gone(i, 0)) wall(i, 0, i + 1, 0);                   // north edge
+    if (!gone(i, seg - 1)) wall(i, seg, i + 1, seg);         // south
+    if (!gone(0, i)) wall(0, i, 0, i + 1);                   // west
+    if (!gone(seg - 1, i)) wall(seg, i, seg, i + 1);         // east
+  }
+  // THE HOLE'S OWN EDGE (v0.2.183): a wall down from this tile's ground all along where it stops for the 1 m ground, so
+  // wherever its edge stands a little higher than the 1 m ground's, no crack shows from inside the square (where the
+  // 1 m ground's edge is the higher, its own wall covers it from outside: lidarDetail.ts)
+  if (removed) {
+    for (let iz = 0; iz < seg; iz++) {
+      for (let ix = 0; ix < seg; ix++) {
+        if (!gone(ix, iz)) continue;
+        if (ix > 0 && !gone(ix - 1, iz)) wall(ix, iz, ix, iz + 1);
+        if (ix < seg - 1 && !gone(ix + 1, iz)) wall(ix + 1, iz, ix + 1, iz + 1);
+        if (iz > 0 && !gone(ix, iz - 1)) wall(ix, iz, ix + 1, iz);
+        if (iz < seg - 1 && !gone(ix, iz + 1)) wall(ix, iz + 1, ix + 1, iz + 1);
+      }
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
